@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import {
   Select,
   SelectContent,
@@ -35,7 +36,14 @@ import {
   Globe,
   MessageSquare,
   LayoutList,
+  Copy,
+  RotateCcw,
+  Save,
 } from 'lucide-react';
+import { useArticleGeneration } from '@/hooks/useArticleGeneration';
+import { useArticles } from '@/hooks/useArticles';
+import { useProjects } from '@/hooks/useProjects';
+import { useToast } from '@/hooks/use-toast';
 
 type ArticleType = 'blog' | 'sales';
 
@@ -46,7 +54,6 @@ interface GeneratorConfig {
   tone: string;
   pointOfView: string;
   language: string;
-  // Sales page specific
   companyName: string;
   companyPhone: string;
   companyAddress: string;
@@ -54,22 +61,17 @@ interface GeneratorConfig {
   painPoints: string;
   differentials: string;
   ctaObjective: string;
-  // Structure
   includeFaq: boolean;
   faqCount: number;
   includeTable: boolean;
   includeList: boolean;
   includeConclusion: boolean;
-  // Images
   imageCount: number;
   imageStyle: string;
-  // SEO
   seoOptimization: boolean;
   internalLinking: boolean;
-  // Research
   useWebResearch: boolean;
   researchDepth: 'basic' | 'moderate' | 'deep';
-  // Advanced
   customInstructions: string;
   aiModel: string;
 }
@@ -130,9 +132,14 @@ const pointsOfView = [
 export default function ArticleGenerator() {
   const { type } = useParams<{ type: ArticleType }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [config, setConfig] = useState<GeneratorConfig>(defaultConfig);
-  const [generating, setGenerating] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  
+  const { content, isGenerating, progress, generateArticle, resetGeneration } = useArticleGeneration();
+  const { createArticle } = useArticles();
+  const { projects } = useProjects();
 
   const articleType = type || 'blog';
   const isSalesPage = articleType === 'sales';
@@ -149,11 +156,69 @@ export default function ArticleGenerator() {
   };
 
   const handleGenerate = async () => {
-    setGenerating(true);
-    // Simulate generation
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-    setGenerating(false);
-    navigate('/articles');
+    const result = await generateArticle({
+      ...config,
+      type: articleType as 'blog' | 'sales',
+    });
+
+    if (result) {
+      setStep(4); // Move to result step
+    }
+  };
+
+  const handleSaveArticle = async () => {
+    if (!content) return;
+
+    // Extract title from content (first H1)
+    const titleMatch = content.match(/^#\s+(.+)$/m);
+    const title = titleMatch ? titleMatch[1] : config.keyword;
+    
+    // Generate slug from keyword
+    const slug = config.keyword
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    const wordCount = content.split(/\s+/).length;
+    const secondaryKeywords = config.secondaryKeywords
+      .split('\n')
+      .map(k => k.trim())
+      .filter(k => k.length > 0);
+
+    try {
+      await createArticle.mutateAsync({
+        keyword: config.keyword,
+        title,
+        slug,
+        content,
+        type: articleType as 'blog' | 'sales',
+        status: 'ready',
+        word_count: wordCount,
+        secondary_keywords: secondaryKeywords.length > 0 ? secondaryKeywords : null,
+        project_id: selectedProjectId || null,
+        config: JSON.parse(JSON.stringify(config)),
+      });
+      
+      navigate('/articles');
+    } catch (error) {
+      console.error('Error saving article:', error);
+    }
+  };
+
+  const handleCopyContent = async () => {
+    await navigator.clipboard.writeText(content);
+    toast({
+      title: 'Copiado!',
+      description: 'O conteúdo foi copiado para a área de transferência.',
+    });
+  };
+
+  const handleNewArticle = () => {
+    resetGeneration();
+    setConfig(defaultConfig);
+    setStep(1);
   };
 
   return (
@@ -163,11 +228,11 @@ export default function ArticleGenerator() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate('/articles/new')}
+          onClick={() => step === 4 ? handleNewArticle() : navigate('/articles/new')}
           className="mb-4"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Voltar
+          {step === 4 ? 'Novo Artigo' : 'Voltar'}
         </Button>
 
         <div className="flex items-center gap-4 mb-4">
@@ -183,44 +248,46 @@ export default function ArticleGenerator() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-foreground">
-              {isSalesPage ? 'Criar Página de Vendas' : 'Criar Artigo de Blog'}
+              {step === 4 ? 'Artigo Gerado' : isSalesPage ? 'Criar Página de Vendas' : 'Criar Artigo de Blog'}
             </h1>
             <p className="text-muted-foreground">
-              Configure seu conteúdo e deixe a IA fazer o resto
+              {step === 4 ? 'Revise e salve o conteúdo gerado' : 'Configure seu conteúdo e deixe a IA fazer o resto'}
             </p>
           </div>
         </div>
 
         {/* Progress Steps */}
-        <div className="flex items-center gap-2">
-          {[1, 2, 3].map((s) => (
-            <div key={s} className="flex items-center">
-              <div
-                className={cn(
-                  'flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors',
-                  step >= s
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground'
-                )}
-              >
-                {step > s ? <CheckCircle2 className="w-4 h-4" /> : s}
-              </div>
-              {s < 3 && (
+        {step < 4 && (
+          <div className="flex items-center gap-2">
+            {[1, 2, 3].map((s) => (
+              <div key={s} className="flex items-center">
                 <div
                   className={cn(
-                    'w-12 lg:w-24 h-1 mx-2 rounded-full transition-colors',
-                    step > s ? 'bg-primary' : 'bg-muted'
+                    'flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors',
+                    step >= s
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground'
                   )}
-                />
-              )}
-            </div>
-          ))}
-          <span className="ml-4 text-sm text-muted-foreground">
-            {step === 1 && 'Configuração Principal'}
-            {step === 2 && (isSalesPage ? 'Informações do Negócio' : 'Configurações Avançadas')}
-            {step === 3 && 'Revisão e Geração'}
-          </span>
-        </div>
+                >
+                  {step > s ? <CheckCircle2 className="w-4 h-4" /> : s}
+                </div>
+                {s < 3 && (
+                  <div
+                    className={cn(
+                      'w-12 lg:w-24 h-1 mx-2 rounded-full transition-colors',
+                      step > s ? 'bg-primary' : 'bg-muted'
+                    )}
+                  />
+                )}
+              </div>
+            ))}
+            <span className="ml-4 text-sm text-muted-foreground">
+              {step === 1 && 'Configuração Principal'}
+              {step === 2 && (isSalesPage ? 'Informações do Negócio' : 'Configurações Avançadas')}
+              {step === 3 && 'Revisão e Geração'}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Step 1: Main Configuration */}
@@ -259,6 +326,28 @@ export default function ArticleGenerator() {
                   rows={4}
                 />
               </div>
+
+              {projects.length > 0 && (
+                <div>
+                  <Label className="text-base font-semibold">Projeto (Opcional)</Label>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Associar este artigo a um projeto
+                  </p>
+                  <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecionar projeto..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Sem projeto</SelectItem>
+                      {projects.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -637,23 +726,6 @@ export default function ArticleGenerator() {
                       rows={4}
                     />
                   </div>
-
-                  <div>
-                    <Label>Modelo de IA</Label>
-                    <Select
-                      value={config.aiModel}
-                      onValueChange={(v) => updateConfig('aiModel', v)}
-                    >
-                      <SelectTrigger className="mt-2">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="gpt-4o">GPT-4o (Recomendado)</SelectItem>
-                        <SelectItem value="gpt-4o-mini">GPT-4o Mini (Rápido)</SelectItem>
-                        <SelectItem value="claude-sonnet">Claude Sonnet</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
@@ -724,48 +796,116 @@ export default function ArticleGenerator() {
                     )}
                   </div>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Modelo de IA</p>
-                  <p className="font-medium">{config.aiModel}</p>
-                </div>
               </div>
             </div>
           </div>
 
-          <div className="bg-gradient-hero rounded-2xl p-8 text-center">
-            <Sparkles className="w-12 h-12 text-primary mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-primary-foreground mb-2">
-              Pronto para Gerar!
-            </h3>
-            <p className="text-primary-foreground/70 mb-6 max-w-md mx-auto">
-              A IA irá criar seu artigo com base nas configurações selecionadas.
-              O processo leva aproximadamente 2-5 minutos.
-            </p>
-            <Button
-              size="lg"
-              onClick={handleGenerate}
-              disabled={generating}
-              className="bg-gradient-accent hover:opacity-90 text-accent-foreground shadow-glow-accent/30"
-            >
-              {generating ? (
-                <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Gerando Artigo...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5 mr-2" />
-                  Gerar Artigo
-                </>
+          {isGenerating ? (
+            <div className="bg-card rounded-2xl p-8 text-center">
+              <Loader2 className="w-12 h-12 text-primary mx-auto mb-4 animate-spin" />
+              <h3 className="text-xl font-bold mb-2">Gerando seu artigo...</h3>
+              <p className="text-muted-foreground mb-4">
+                A IA está escrevendo seu conteúdo. Isso pode levar alguns minutos.
+              </p>
+              <Progress value={progress} className="max-w-md mx-auto mb-4" />
+              <p className="text-sm text-muted-foreground">{Math.round(progress)}% concluído</p>
+              
+              {content && (
+                <div className="mt-6 text-left bg-muted/50 rounded-lg p-4 max-h-64 overflow-y-auto">
+                  <pre className="whitespace-pre-wrap text-sm font-mono">{content}</pre>
+                </div>
               )}
-            </Button>
+            </div>
+          ) : (
+            <div className="bg-gradient-hero rounded-2xl p-8 text-center">
+              <Sparkles className="w-12 h-12 text-primary mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-primary-foreground mb-2">
+                Pronto para Gerar!
+              </h3>
+              <p className="text-primary-foreground/70 mb-6 max-w-md mx-auto">
+                A IA irá criar seu artigo com base nas configurações selecionadas.
+                O processo leva aproximadamente 1-3 minutos.
+              </p>
+              <Button
+                size="lg"
+                onClick={handleGenerate}
+                className="bg-gradient-accent hover:opacity-90 text-accent-foreground shadow-glow-accent/30"
+              >
+                <Sparkles className="w-5 h-5 mr-2" />
+                Gerar Artigo
+              </Button>
+            </div>
+          )}
+
+          {!isGenerating && (
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setStep(2)}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Voltar
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Step 4: Result */}
+      {step === 4 && content && (
+        <div className="space-y-6">
+          <div className="bg-card rounded-2xl p-6 shadow-card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-success" />
+                Artigo Gerado com Sucesso!
+              </h3>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleCopyContent}>
+                  <Copy className="w-4 h-4 mr-2" />
+                  Copiar
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleNewArticle}>
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Novo Artigo
+                </Button>
+              </div>
+            </div>
+
+            <div className="text-sm text-muted-foreground mb-4">
+              {content.split(/\s+/).length} palavras
+            </div>
+
+            <div className="bg-muted/30 rounded-lg p-6 max-h-[500px] overflow-y-auto">
+              <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed">
+                {content}
+              </pre>
+            </div>
           </div>
 
-          <div className="flex justify-between">
-            <Button variant="outline" onClick={() => setStep(2)}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Voltar
-            </Button>
+          <div className="bg-gradient-hero rounded-2xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-primary-foreground">Salvar Artigo</h3>
+                <p className="text-sm text-primary-foreground/70">
+                  O artigo será salvo como "pronto para publicar"
+                </p>
+              </div>
+              <Button
+                onClick={handleSaveArticle}
+                disabled={createArticle.isPending}
+                className="bg-gradient-accent hover:opacity-90"
+              >
+                {createArticle.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Salvar Artigo
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       )}
