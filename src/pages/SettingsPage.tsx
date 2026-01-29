@@ -25,19 +25,41 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useProfile } from '@/hooks/useProfile';
+import { useSettings } from '@/hooks/useSettings';
+import { useProjects } from '@/hooks/useProjects';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function SettingsPage() {
+  const { user } = useAuth();
+  const { profile, updateProfile } = useProfile();
+  const { settings, apiStatus, updateSettings } = useSettings();
+  const { projects } = useProjects();
+  
   const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
-  const [saving, setSaving] = useState(false);
+  const [fullName, setFullName] = useState(profile?.full_name || '');
+  const [emailNotifications, setEmailNotifications] = useState(settings?.email_notifications ?? true);
+  
+  // API Keys state
+  const [openaiKey, setOpenaiKey] = useState(settings?.openai_api_key || '');
+  const [anthropicKey, setAnthropicKey] = useState(settings?.anthropic_api_key || '');
+  const [serperKey, setSerperKey] = useState(settings?.serper_api_key || '');
 
   const toggleShowApiKey = (key: string) => {
     setShowApiKeys((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setSaving(false);
+  const handleSaveProfile = async () => {
+    await updateProfile.mutateAsync({ full_name: fullName });
+  };
+
+  const handleSaveSettings = async () => {
+    await updateSettings.mutateAsync({
+      openai_api_key: openaiKey || null,
+      anthropic_api_key: anthropicKey || null,
+      serper_api_key: serperKey || null,
+      email_notifications: emailNotifications,
+    });
   };
 
   return (
@@ -82,11 +104,15 @@ export default function SettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label>Nome Completo</Label>
-                  <Input defaultValue="Rândalos Dias Madeira" />
+                  <Input 
+                    value={fullName} 
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Seu nome"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Email</Label>
-                  <Input defaultValue="gestor@gruposeomkt.com.br" disabled />
+                  <Input value={user?.email || ''} disabled />
                   <p className="text-xs text-muted-foreground">
                     Entre em contato com o suporte para alterar seu email
                   </p>
@@ -100,11 +126,17 @@ export default function SettingsPage() {
                     Receber atualizações sobre artigos e publicações
                   </p>
                 </div>
-                <Switch defaultChecked />
+                <Switch 
+                  checked={emailNotifications} 
+                  onCheckedChange={setEmailNotifications}
+                />
               </div>
 
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? (
+              <Button 
+                onClick={handleSaveProfile} 
+                disabled={updateProfile.isPending}
+              >
+                {updateProfile.isPending ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
                   <Save className="w-4 h-4 mr-2" />
@@ -126,9 +158,12 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-2 mb-4">
-                <Badge className="bg-success/10 text-success">
-                  <CheckCircle2 className="w-3 h-3 mr-1" />
-                  Conectado
+                <Badge className={apiStatus.openai ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}>
+                  {apiStatus.openai ? (
+                    <><CheckCircle2 className="w-3 h-3 mr-1" />Conectado</>
+                  ) : (
+                    <><AlertCircle className="w-3 h-3 mr-1" />Não Configurado</>
+                  )}
                 </Badge>
               </div>
               <div className="space-y-2">
@@ -136,7 +171,9 @@ export default function SettingsPage() {
                 <div className="flex gap-2">
                   <Input
                     type={showApiKeys.openai ? 'text' : 'password'}
-                    defaultValue="sk-proj-xxxxxxxxxxxxxxxxxxxx"
+                    value={openaiKey}
+                    onChange={(e) => setOpenaiKey(e.target.value)}
+                    placeholder="sk-proj-..."
                     className="font-mono"
                   />
                   <Button
@@ -164,9 +201,12 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-2 mb-4">
-                <Badge className="bg-muted text-muted-foreground">
-                  <AlertCircle className="w-3 h-3 mr-1" />
-                  Não Configurado
+                <Badge className={apiStatus.anthropic ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}>
+                  {apiStatus.anthropic ? (
+                    <><CheckCircle2 className="w-3 h-3 mr-1" />Conectado</>
+                  ) : (
+                    <><AlertCircle className="w-3 h-3 mr-1" />Não Configurado</>
+                  )}
                 </Badge>
               </div>
               <div className="space-y-2">
@@ -174,6 +214,8 @@ export default function SettingsPage() {
                 <div className="flex gap-2">
                   <Input
                     type={showApiKeys.anthropic ? 'text' : 'password'}
+                    value={anthropicKey}
+                    onChange={(e) => setAnthropicKey(e.target.value)}
                     placeholder="sk-ant-..."
                     className="font-mono"
                   />
@@ -202,9 +244,12 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-2 mb-4">
-                <Badge className="bg-success/10 text-success">
-                  <CheckCircle2 className="w-3 h-3 mr-1" />
-                  Conectado
+                <Badge className={apiStatus.serper ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}>
+                  {apiStatus.serper ? (
+                    <><CheckCircle2 className="w-3 h-3 mr-1" />Conectado</>
+                  ) : (
+                    <><AlertCircle className="w-3 h-3 mr-1" />Não Configurado</>
+                  )}
                 </Badge>
               </div>
               <div className="space-y-2">
@@ -212,7 +257,9 @@ export default function SettingsPage() {
                 <div className="flex gap-2">
                   <Input
                     type={showApiKeys.serper ? 'text' : 'password'}
-                    defaultValue="xxxxxxxxxxxxxxxxxx"
+                    value={serperKey}
+                    onChange={(e) => setSerperKey(e.target.value)}
+                    placeholder="Sua chave Serper"
                     className="font-mono"
                   />
                   <Button
@@ -231,8 +278,11 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? (
+          <Button 
+            onClick={handleSaveSettings} 
+            disabled={updateSettings.isPending}
+          >
+            {updateSettings.isPending ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             ) : (
               <Save className="w-4 h-4 mr-2" />
@@ -251,40 +301,42 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {[
-                { name: 'RDM Advogados', domain: 'rdmadvogados.com.br', connected: true },
-                { name: 'Grupo SEO Marketing', domain: 'gruposeomkt.com.br', connected: true },
-                { name: 'Portal Jurídico', domain: 'portaljuridico.com.br', connected: false },
-              ].map((site) => (
-                <div
-                  key={site.domain}
-                  className="flex items-center justify-between p-4 border rounded-lg"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-muted">
-                      <Globe className="w-5 h-5 text-muted-foreground" />
+              {projects.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  Nenhum projeto criado ainda. Crie um projeto para configurar integrações.
+                </p>
+              ) : (
+                projects.map((project) => (
+                  <div
+                    key={project.id}
+                    className="flex items-center justify-between p-4 border rounded-lg"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-muted">
+                        <Globe className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{project.name}</p>
+                        <p className="text-sm text-muted-foreground">{project.domain}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{site.name}</p>
-                      <p className="text-sm text-muted-foreground">{site.domain}</p>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        className={cn(
+                          project.is_connected
+                            ? 'bg-success/10 text-success'
+                            : 'bg-muted text-muted-foreground'
+                        )}
+                      >
+                        {project.is_connected ? 'Conectado' : 'Desconectado'}
+                      </Badge>
+                      <Button variant="outline" size="sm">
+                        {project.is_connected ? 'Configurar' : 'Conectar'}
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      className={cn(
-                        site.connected
-                          ? 'bg-success/10 text-success'
-                          : 'bg-muted text-muted-foreground'
-                      )}
-                    >
-                      {site.connected ? 'Conectado' : 'Desconectado'}
-                    </Badge>
-                    <Button variant="outline" size="sm">
-                      {site.connected ? 'Configurar' : 'Conectar'}
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
         </TabsContent>
