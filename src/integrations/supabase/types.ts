@@ -14,7 +14,197 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      articles: {
+        Row: {
+          config: Json | null
+          content: string | null
+          created_at: string
+          error_message: string | null
+          excerpt: string | null
+          featured_image_url: string | null
+          id: string
+          keyword: string
+          project_id: string | null
+          published_at: string | null
+          published_url: string | null
+          secondary_keywords: string[] | null
+          seo_score: number | null
+          slug: string | null
+          status: Database["public"]["Enums"]["article_status"]
+          title: string | null
+          type: Database["public"]["Enums"]["article_type"]
+          updated_at: string
+          user_id: string
+          word_count: number | null
+        }
+        Insert: {
+          config?: Json | null
+          content?: string | null
+          created_at?: string
+          error_message?: string | null
+          excerpt?: string | null
+          featured_image_url?: string | null
+          id?: string
+          keyword: string
+          project_id?: string | null
+          published_at?: string | null
+          published_url?: string | null
+          secondary_keywords?: string[] | null
+          seo_score?: number | null
+          slug?: string | null
+          status?: Database["public"]["Enums"]["article_status"]
+          title?: string | null
+          type?: Database["public"]["Enums"]["article_type"]
+          updated_at?: string
+          user_id: string
+          word_count?: number | null
+        }
+        Update: {
+          config?: Json | null
+          content?: string | null
+          created_at?: string
+          error_message?: string | null
+          excerpt?: string | null
+          featured_image_url?: string | null
+          id?: string
+          keyword?: string
+          project_id?: string | null
+          published_at?: string | null
+          published_url?: string | null
+          secondary_keywords?: string[] | null
+          seo_score?: number | null
+          slug?: string | null
+          status?: Database["public"]["Enums"]["article_status"]
+          title?: string | null
+          type?: Database["public"]["Enums"]["article_type"]
+          updated_at?: string
+          user_id?: string
+          word_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "articles_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          created_at: string
+          description: string | null
+          domain: string
+          id: string
+          is_connected: boolean
+          name: string
+          updated_at: string
+          user_id: string
+          wordpress_app_password: string | null
+          wordpress_url: string | null
+          wordpress_username: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          domain: string
+          id?: string
+          is_connected?: boolean
+          name: string
+          updated_at?: string
+          user_id: string
+          wordpress_app_password?: string | null
+          wordpress_url?: string | null
+          wordpress_username?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          domain?: string
+          id?: string
+          is_connected?: boolean
+          name?: string
+          updated_at?: string
+          user_id?: string
+          wordpress_app_password?: string | null
+          wordpress_url?: string | null
+          wordpress_username?: string | null
+        }
+        Relationships: []
+      }
+      user_settings: {
+        Row: {
+          anthropic_api_key: string | null
+          created_at: string
+          default_ai_model: string | null
+          default_language: string | null
+          default_point_of_view: string | null
+          default_tone: string | null
+          email_notifications: boolean | null
+          id: string
+          openai_api_key: string | null
+          serper_api_key: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          anthropic_api_key?: string | null
+          created_at?: string
+          default_ai_model?: string | null
+          default_language?: string | null
+          default_point_of_view?: string | null
+          default_tone?: string | null
+          email_notifications?: boolean | null
+          id?: string
+          openai_api_key?: string | null
+          serper_api_key?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          anthropic_api_key?: string | null
+          created_at?: string
+          default_ai_model?: string | null
+          default_language?: string | null
+          default_point_of_view?: string | null
+          default_tone?: string | null
+          email_notifications?: boolean | null
+          id?: string
+          openai_api_key?: string | null
+          serper_api_key?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +213,8 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      article_status: "draft" | "generating" | "ready" | "published" | "error"
+      article_type: "blog" | "sales" | "review" | "comparison"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +341,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      article_status: ["draft", "generating", "ready", "published", "error"],
+      article_type: ["blog", "sales", "review", "comparison"],
+    },
   },
 } as const
