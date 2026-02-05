@@ -88,6 +88,10 @@ serve(async (req) => {
     }
 
     let baseUrl = wordpress_url.replace(/\/$/, "");
+    
+    // Clean up URL: remove any existing wp-json paths that may have been incorrectly included
+    baseUrl = baseUrl.replace(/\/wp-json(\/.*)?$/, "");
+    console.log(`Cleaned base URL: ${baseUrl}`);
 
     // Plugin-based authentication
     if (use_plugin && api_key) {
