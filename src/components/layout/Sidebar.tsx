@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import { PrefetchLink } from '@/components/PrefetchLink';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
@@ -55,8 +56,9 @@ export function Sidebar() {
     const Icon = item.icon;
 
     const linkContent = (
-      <Link
+      <PrefetchLink
         to={item.href}
+        prefetchOnHover
         className={cn(
           'flex flex-col items-center gap-1 px-2 py-3 rounded-lg transition-all duration-200',
           'hover:bg-sidebar-accent group relative',
@@ -77,7 +79,7 @@ export function Sidebar() {
         {active && (
           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-sidebar-primary rounded-r-full" />
         )}
-      </Link>
+      </PrefetchLink>
     );
 
     return linkContent;
