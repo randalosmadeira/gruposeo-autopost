@@ -2,3 +2,6 @@ project_id = "munojeshxsnwgfkztndb"
 
 [functions.generate-article]
 verify_jwt = false
+
+[functions.news-agent]
+verify_jwt = false

@@ -1,17 +1,15 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Newspaper, 
   Plus, 
   RefreshCw, 
   Settings2,
   Activity,
-  FileText,
-  Calendar,
   Play,
   Pause,
   Trash2,
   MoreVertical,
-  CheckCircle2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -33,13 +31,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { useNewsAgents, NewsAgent } from '@/hooks/useNewsAgents';
-import { CreateAgentDialog } from '@/components/news-agents/CreateAgentDialog';
 import { AgentConfigPanel } from '@/components/news-agents/AgentConfigPanel';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function NewsAgents() {
+  const navigate = useNavigate();
   const { 
     agents, 
     isLoading, 
@@ -49,7 +47,7 @@ export default function NewsAgents() {
     deleteAgent 
   } = useNewsAgents();
   
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  
   const [selectedAgent, setSelectedAgent] = useState<NewsAgent | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [agentToDelete, setAgentToDelete] = useState<string | null>(null);
@@ -164,7 +162,7 @@ export default function NewsAgents() {
               </p>
               <Button 
                 className="mt-6 gap-2" 
-                onClick={() => setCreateDialogOpen(true)}
+                onClick={() => navigate('/news-agents/new')}
                 disabled={agents && agents.length >= maxAgents}
               >
                 <Plus className="w-4 h-4" />
@@ -179,7 +177,7 @@ export default function NewsAgents() {
               <Button 
                 size="sm" 
                 className="gap-2"
-                onClick={() => setCreateDialogOpen(true)}
+                onClick={() => navigate('/news-agents/new')}
                 disabled={agents.length >= maxAgents}
               >
                 <Plus className="w-4 h-4" />
@@ -279,12 +277,6 @@ export default function NewsAgents() {
           onClose={() => setSelectedAgent(null)}
         />
       )}
-
-      {/* Create Dialog */}
-      <CreateAgentDialog 
-        open={createDialogOpen} 
-        onOpenChange={setCreateDialogOpen}
-      />
 
       {/* Delete Confirmation */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
