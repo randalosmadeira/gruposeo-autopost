@@ -5,7 +5,6 @@ import { useNewsAgents } from '@/hooks/useNewsAgents';
 import { Loader2 } from 'lucide-react';
 import { DashboardStats } from '@/components/dashboard/DashboardStats';
 import { ActivityChart } from '@/components/dashboard/ActivityChart';
-import { PlanCard } from '@/components/dashboard/PlanCard';
 import { EconomyCard } from '@/components/dashboard/EconomyCard';
 import { NewsAgentsSummary } from '@/components/dashboard/NewsAgentsSummary';
 import { AuthorityPlannerSummary } from '@/components/dashboard/AuthorityPlannerSummary';
@@ -39,27 +38,14 @@ export default function Dashboard() {
       <DashboardStats 
         totalArticles={totalArticles}
         todayArticles={todayArticles}
-        imagesGenerated={totalArticles * 4} // Estimate
+        imagesGenerated={totalArticles * 4}
         todayImages={todayArticles * 4}
         linkExtractions={0}
         maxLinkExtractions={100}
       />
 
-      {/* Chart + Plan Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <ActivityChart articles={articles || []} />
-        </div>
-        <div className="lg:col-span-1">
-          <PlanCard 
-            planName="Plano Starter - Ilimitado"
-            articlesUsed={totalArticles}
-            sitesUsed={projects?.length || 0}
-            maxSites={3}
-            queueLimit={10}
-          />
-        </div>
-      </div>
+      {/* Chart Row - Full Width */}
+      <ActivityChart articles={articles || []} />
 
       {/* Economy Card */}
       <EconomyCard 
