@@ -2,13 +2,15 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 interface TestConnectionRequest {
   wordpress_url: string;
-  wordpress_username: string;
-  wordpress_app_password: string;
+  wordpress_username?: string;
+  wordpress_app_password?: string;
+  use_plugin?: boolean;
+  api_key?: string;
 }
 
 serve(async (req) => {
@@ -17,23 +19,114 @@ serve(async (req) => {
   }
 
   try {
-    const { wordpress_url, wordpress_username, wordpress_app_password }: TestConnectionRequest = await req.json();
+    const body: TestConnectionRequest = await req.json();
+    const { wordpress_url, use_plugin, api_key, wordpress_username, wordpress_app_password } = body;
 
-    if (!wordpress_url || !wordpress_username || !wordpress_app_password) {
+    if (!wordpress_url) {
       return new Response(
-        JSON.stringify({ success: false, error: "Missing required credentials" }),
+        JSON.stringify({ success: false, error: "URL do WordPress não fornecida" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Clean URL and build API endpoint
     const baseUrl = wordpress_url.replace(/\/$/, "");
-    const apiUrl = `${baseUrl}/wp-json/wp/v2/posts?per_page=1`;
 
-    // Build Basic Auth header
+    // Plugin-based authentication
+    if (use_plugin && api_key) {
+      console.log(`Testing plugin connection to: ${baseUrl}/wp-json/cfrdm/v1/test`);
+      
+      try {
+        const pluginResponse = await fetch(`${baseUrl}/wp-json/cfrdm/v1/test`, {
+          method: "GET",
+          headers: {
+            "X-CFRDM-API-Key": api_key,
+            "Accept": "application/json",
+          },
+        });
+
+        const contentType = pluginResponse.headers.get("content-type") || "";
+        const responseText = await pluginResponse.text();
+        
+        console.log(`Plugin response status: ${pluginResponse.status}, Content-Type: ${contentType}`);
+        console.log(`Plugin response preview: ${responseText.substring(0, 300)}`);
+
+        if (!contentType.includes("application/json")) {
+          // Try health check endpoint first (doesn't require auth)
+          const healthResponse = await fetch(`${baseUrl}/wp-json/cfrdm/v1/health`, {
+            method: "GET",
+            headers: { "Accept": "application/json" },
+          });
+
+          const healthContentType = healthResponse.headers.get("content-type") || "";
+          
+          if (!healthContentType.includes("application/json")) {
+            return new Response(
+              JSON.stringify({ 
+                success: false, 
+                error: "Plugin ContentFactory RDM não encontrado ou não ativado.",
+                hint: "Verifique se o plugin está instalado e ativo no WordPress."
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: "API Key inválida ou expirada.",
+              hint: "Verifique a API Key no WordPress em ContentFactory → Dashboard."
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const pluginData = JSON.parse(responseText);
+
+        if (pluginResponse.ok && pluginData.success) {
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              message: "Conexão via plugin estabelecida",
+              site: pluginData.site,
+              canPublish: true
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } else {
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: pluginData.message || "Falha na autenticação via plugin.",
+              hint: "Verifique se a API Key está correta."
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      } catch (pluginError) {
+        console.error("Plugin connection error:", pluginError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: "Não foi possível conectar via plugin.",
+            hint: "Verifique se o plugin ContentFactory RDM está instalado e ativo."
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // Standard Application Password authentication
+    if (!wordpress_username || !wordpress_app_password) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Credenciais não fornecidas" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const apiUrl = `${baseUrl}/wp-json/wp/v2/posts?per_page=1`;
     const auth = btoa(`${wordpress_username}:${wordpress_app_password}`);
 
-    console.log(`Testing connection to: ${apiUrl}`);
+    console.log(`Testing standard connection to: ${apiUrl}`);
 
     const response = await fetch(apiUrl, {
       method: "GET",
@@ -50,19 +143,17 @@ serve(async (req) => {
     console.log(`Response preview: ${responseText.substring(0, 200)}`);
 
     if (response.ok) {
-      // Verify the response is actually JSON (not an HTML error page)
       if (!contentType.includes("application/json")) {
-        // Check if it's a login page or blocked by security plugin
         let detailedError = "WordPress REST API retornou HTML ao invés de JSON.";
         
         if (responseText.includes("login") || responseText.includes("wp-login")) {
           detailedError = "REST API requer autenticação. Verifique se as credenciais estão corretas.";
         } else if (responseText.includes("security") || responseText.includes("blocked") || responseText.includes("firewall")) {
-          detailedError = "Um plugin de segurança pode estar bloqueando a REST API. Desative temporariamente ou adicione exceção.";
+          detailedError = "Um plugin de segurança pode estar bloqueando a REST API. Tente usar a conexão via Plugin.";
         } else if (responseText.includes("rest_disabled") || responseText.includes("disabled")) {
-          detailedError = "A REST API do WordPress está desabilitada. Verifique nas configurações do WordPress.";
+          detailedError = "A REST API do WordPress está desabilitada. Tente usar a conexão via Plugin.";
         } else {
-          detailedError = "REST API retornou HTML. Possíveis causas: plugin de segurança, cache, ou REST API desabilitada.";
+          detailedError = "REST API retornou HTML. Possíveis causas: plugin de segurança, cache, ou REST API desabilitada. Tente usar a conexão via Plugin.";
         }
         
         return new Response(
@@ -76,7 +167,6 @@ serve(async (req) => {
         );
       }
 
-      // Try to parse the response as JSON
       let postsData;
       try {
         postsData = JSON.parse(responseText);
@@ -90,7 +180,7 @@ serve(async (req) => {
         );
       }
 
-      let canPublish = true; // Assume true if we can read posts
+      let canPublish = true;
       let userInfo = null;
 
       try {
@@ -107,14 +197,12 @@ serve(async (req) => {
         if (userResponse.ok && userContentType.includes("application/json")) {
           const userData = await userResponse.json();
           userInfo = userData;
-          // Check if user can publish posts
           canPublish = userData.capabilities?.publish_posts === true || 
                        userData.roles?.includes('administrator') ||
                        userData.roles?.includes('editor') ||
                        userData.roles?.includes('author');
         }
       } catch (userError) {
-        // User info fetch failed, but posts endpoint worked - connection is valid
         console.log("User info fetch failed (non-critical):", userError);
       }
 
