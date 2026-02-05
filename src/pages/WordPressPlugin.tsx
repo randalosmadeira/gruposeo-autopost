@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '1.0.0';
+const PLUGIN_VERSION = '2.0.0';
 
 const features = [
   {
@@ -88,6 +88,10 @@ export default function WordPressPluginPage() {
         { path: 'includes/class-cfrdm-webhooks.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-webhooks.php' },
         { path: 'includes/class-cfrdm-articles.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-articles.php' },
         { path: 'includes/class-cfrdm-admin.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-admin.php' },
+        { path: 'includes/class-cfrdm-logger.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-logger.php' },
+        { path: 'includes/class-cfrdm-image-optimizer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-image-optimizer.php' },
+        { path: 'includes/class-cfrdm-sync.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-sync.php' },
+        { path: 'includes/class-cfrdm-internal-links.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-internal-links.php' },
         { path: 'assets/css/admin.css', url: '/wordpress-plugin/contentfactory-rdm/assets/css/admin.css' },
         { path: 'assets/js/admin.js', url: '/wordpress-plugin/contentfactory-rdm/assets/js/admin.js' },
       ];

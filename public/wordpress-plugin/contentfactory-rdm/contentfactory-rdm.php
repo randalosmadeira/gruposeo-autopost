@@ -35,6 +35,7 @@ require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-admin.php';
 require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-logger.php';
 require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-image-optimizer.php';
 require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-sync.php';
+require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-internal-links.php';
 
 /**
  * Main plugin class
@@ -78,6 +79,9 @@ class ContentFactory_RDM {
         // Auto-correction hooks
         add_action('save_post', array('CFRDM_Sync', 'auto_correct_post'), 20, 3);
         
+        // Internal linking hooks
+        new CFRDM_Internal_Links();
+        
         // Plugin action links
         add_filter('plugin_action_links_' . CFRDM_PLUGIN_BASENAME, array($this, 'add_action_links'));
         
@@ -87,6 +91,8 @@ class ContentFactory_RDM {
         add_action('wp_ajax_cfrdm_sync_stats', array('CFRDM_Admin', 'ajax_sync_stats'));
         add_action('wp_ajax_cfrdm_dismiss_news', array('CFRDM_Admin', 'ajax_dismiss_news'));
         add_action('wp_ajax_cfrdm_run_autocorrect', array('CFRDM_Admin', 'ajax_run_autocorrect'));
+        add_action('wp_ajax_cfrdm_analyze_links', array('CFRDM_Admin', 'ajax_analyze_links'));
+        add_action('wp_ajax_cfrdm_generate_links', array('CFRDM_Admin', 'ajax_generate_links'));
         
         // Cron jobs
         add_action('cfrdm_daily_cleanup', array($this, 'daily_cleanup'));
