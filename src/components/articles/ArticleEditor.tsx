@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { 
   Save, 
   Eye, 
@@ -19,10 +20,12 @@ import {
   Settings,
   Search as SearchIcon,
   Download,
-  AlertTriangle
+  AlertTriangle,
+  FolderOpen
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { WordPressCategorySelector } from './WordPressCategorySelector';
 
 interface Article {
   id: string;
@@ -35,6 +38,7 @@ interface Article {
   status: string;
   word_count: number | null;
   project_id?: string | null;
+  wordpress_categories?: number[];
 }
 
 interface ArticleEditorProps {
@@ -387,6 +391,23 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
                     Recriar Conteúdo com IA
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* WordPress Categories */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FolderOpen className="w-4 h-4" />
+                  Publicação WordPress
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <WordPressCategorySelector
+                  projectId={editedArticle.project_id || null}
+                  selectedCategories={editedArticle.wordpress_categories || []}
+                  onCategoriesChange={(categories) => updateField('wordpress_categories', categories)}
+                />
               </CardContent>
             </Card>
           </TabsContent>
