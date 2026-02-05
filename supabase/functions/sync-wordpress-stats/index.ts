@@ -125,24 +125,79 @@ serve(async (req) => {
     // Handle different actions
     switch (action) {
       case "sync": {
-        // Store stats in project metadata or a dedicated stats table
-        const { stats, seo_health, internal_links_data, autocorrect_results, timestamp } = body;
+        // Store stats in wordpress_stats table
+        const { stats, seo_health, internal_links_data, autocorrect_results, logs, timestamp } = body;
         
-        // Update project with latest sync info
-        const { error: updateError } = await supabase
-          .from("projects")
-          .update({
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", project.id);
+        // Prepare stats data for database
+        const statsData = {
+          project_id: project.id,
+          user_id: project.user_id,
+          total_articles: stats.total_posts || 0,
+          published_articles: stats.published || 0,
+          draft_articles: stats.draft || 0,
+          pending_articles: stats.pending || 0,
+          synced_articles: stats.synced || 0,
+          sync_errors: stats.errors || 0,
+          total_internal_links: stats.internal_links || 0,
+          total_comments: stats.comments || 0,
+          articles_needing_attention: seo_health?.issues?.filter((i: { severity: string }) => i.severity === 'error').length || 0,
+          seo_issues: seo_health?.issues?.length || 0,
+          broken_links: internal_links_data?.orphan_pages?.length || 0,
+          articles_without_links: internal_links_data?.orphan_pages?.length || 0,
+          auto_corrections_applied: autocorrect_results?.issues_fixed || 0,
+          missing_featured_images: 0, // To be calculated
+          pending_comments: 0, // To be calculated
+          approved_comments: stats.comments || 0,
+          publishing_trend: [] as { date: string; count: number }[],
+          raw_data: {
+            stats,
+            seo_health,
+            internal_links_data,
+            autocorrect_results,
+            logs_count: logs?.length || 0,
+            synced_at: timestamp,
+          },
+          last_sync_at: new Date().toISOString(),
+        };
 
-        if (updateError) {
-          console.error("Failed to update project:", updateError);
+        // Upsert wordpress_stats
+        const { data: existingStats } = await supabase
+          .from("wordpress_stats")
+          .select("id")
+          .eq("project_id", project.id)
+          .maybeSingle();
+
+        if (existingStats) {
+          const { error: updateError } = await supabase
+            .from("wordpress_stats")
+            .update(statsData)
+            .eq("id", existingStats.id);
+          
+          if (updateError) {
+            console.error("Failed to update wordpress_stats:", updateError);
+            throw updateError;
+          }
+        } else {
+          const { error: insertError } = await supabase
+            .from("wordpress_stats")
+            .insert(statsData);
+          
+          if (insertError) {
+            console.error("Failed to insert wordpress_stats:", insertError);
+            throw insertError;
+          }
         }
 
+        // Update project timestamp
+        await supabase
+          .from("projects")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", project.id);
+
         // Log the sync event
-        console.log("Stats received:", {
+        console.log("Stats synced to database:", {
           project_id: project.id,
+          project_name: project.name,
           total_posts: stats.total_posts,
           published: stats.published,
           synced: stats.synced,
@@ -153,7 +208,6 @@ serve(async (req) => {
         // Process internal link opportunities if provided
         if (internal_links_data?.opportunities && internal_links_data.opportunities.length > 0) {
           console.log(`Found ${internal_links_data.opportunities.length} internal link opportunities`);
-          // These can be stored for the Authority Planner to use
         }
 
         // Process SEO health issues if provided
@@ -171,12 +225,13 @@ serve(async (req) => {
             success: true,
             message: "Stats synced successfully",
             project_id: project.id,
+            project_name: project.name,
             received: {
               stats: true,
               seo_health: !!seo_health,
               internal_links_data: !!internal_links_data,
               autocorrect_results: !!autocorrect_results,
-              logs_count: body.logs?.length || 0,
+              logs_count: logs?.length || 0,
             },
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
