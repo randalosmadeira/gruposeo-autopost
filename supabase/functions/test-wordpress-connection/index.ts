@@ -39,39 +39,70 @@ serve(async (req) => {
       method: "GET",
       headers: {
         Authorization: `Basic ${auth}`,
-        "Content-Type": "application/json",
+        "Accept": "application/json",
       },
     });
 
-    console.log(`Response status: ${response.status}`);
+    const contentType = response.headers.get("content-type") || "";
+    const responseText = await response.text();
+    
+    console.log(`Response status: ${response.status}, Content-Type: ${contentType}`);
+    console.log(`Response preview: ${responseText.substring(0, 200)}`);
 
     if (response.ok) {
       // Verify the response is actually JSON (not an HTML error page)
-      const contentType = response.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
+        // Check if it's a login page or blocked by security plugin
+        let detailedError = "WordPress REST API retornou HTML ao invés de JSON.";
+        
+        if (responseText.includes("login") || responseText.includes("wp-login")) {
+          detailedError = "REST API requer autenticação. Verifique se as credenciais estão corretas.";
+        } else if (responseText.includes("security") || responseText.includes("blocked") || responseText.includes("firewall")) {
+          detailedError = "Um plugin de segurança pode estar bloqueando a REST API. Desative temporariamente ou adicione exceção.";
+        } else if (responseText.includes("rest_disabled") || responseText.includes("disabled")) {
+          detailedError = "A REST API do WordPress está desabilitada. Verifique nas configurações do WordPress.";
+        } else {
+          detailedError = "REST API retornou HTML. Possíveis causas: plugin de segurança, cache, ou REST API desabilitada.";
+        }
+        
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: "WordPress REST API returned invalid response. Ensure REST API is enabled." 
+            error: detailedError,
+            contentType,
+            hint: "Acesse " + baseUrl + "/wp-json/ no navegador para verificar se a REST API está ativa."
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Try to parse the response to ensure it's valid JSON
+      // Try to parse the response as JSON
+      let postsData;
       try {
-        await response.json();
+        postsData = JSON.parse(responseText);
       } catch {
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: "WordPress returned invalid JSON. Check if REST API is working correctly." 
+            error: "WordPress retornou resposta inválida. Verifique se a REST API está funcionando." 
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Also try to fetch user info to verify write permissions (optional check)
+      // Try to parse the response as JSON
+      let postsData;
+      try {
+        postsData = JSON.parse(responseText);
+      } catch {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: "WordPress retornou resposta inválida. Verifique se a REST API está funcionando." 
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       let canPublish = true; // Assume true if we can read posts
       let userInfo = null;
 
@@ -110,17 +141,18 @@ serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } else {
-      const errorText = await response.text();
-      console.error("WordPress API error:", response.status, errorText);
+      console.error("WordPress API error:", response.status, responseText.substring(0, 500));
 
-      let errorMessage = "Connection failed";
+      let errorMessage = "Falha na conexão";
       
       if (response.status === 401) {
-        errorMessage = "Authentication failed. Check your username and application password.";
+        errorMessage = "Autenticação falhou. Verifique usuário e senha de aplicação.";
       } else if (response.status === 403) {
-        errorMessage = "Access denied. Ensure the user has proper permissions.";
+        errorMessage = "Acesso negado. Verifique se o usuário tem permissões adequadas.";
       } else if (response.status === 404) {
-        errorMessage = "WordPress REST API not found. Ensure REST API is enabled.";
+        errorMessage = "REST API não encontrada. Verifique se está ativada no WordPress.";
+      } else {
+        errorMessage = `Erro ${response.status}: ${responseText.substring(0, 100)}`;
       }
 
       return new Response(
