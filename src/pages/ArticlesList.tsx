@@ -8,6 +8,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { 
   FileText, 
   Plus, 
   Search, 
@@ -20,13 +30,14 @@ import {
   ImageIcon,
   ChevronLeft,
   ChevronRight,
-  Loader2
+  Loader2,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useArticles } from '@/hooks/useArticles';
 import { useProjects } from '@/hooks/useProjects';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { useWordPressPublish } from '@/hooks/useWordPressPublish';
+import { useToast } from '@/hooks/use-toast';
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   draft: { label: 'Rascunho', className: 'bg-muted text-muted-foreground' },
@@ -51,12 +62,17 @@ const statusTabs = [
 export default function ArticlesList() {
   const { articles, isLoading, deleteArticle } = useArticles();
   const { projects } = useProjects();
+  const { publishMultiple, isPublishing } = useWordPressPublish();
+  const { toast } = useToast();
+  
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [projectFilter, setProjectFilter] = useState('all');
   const [selectedArticles, setSelectedArticles] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Filter articles
   const filteredArticles = useMemo(() => {
@@ -71,7 +87,7 @@ export default function ArticlesList() {
   }, [articles, search, statusFilter, projectFilter]);
 
   // Pagination
-  const totalPages = Math.ceil(filteredArticles.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredArticles.length / itemsPerPage) || 1;
   const paginatedArticles = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return filteredArticles.slice(start, start + itemsPerPage);
@@ -101,6 +117,55 @@ export default function ArticlesList() {
     setSelectedArticles(newSelected);
   };
 
+  const clearSelection = () => {
+    setSelectedArticles(new Set());
+  };
+
+  // Bulk publish
+  const handleBulkPublish = async () => {
+    const selectedItems = articles.filter(a => selectedArticles.has(a.id));
+    const articlesToPublish = selectedItems
+      .filter(a => a.project_id && a.status !== 'published')
+      .map(a => ({ id: a.id, title: a.title, project_id: a.project_id }));
+
+    if (articlesToPublish.length === 0) {
+      toast({
+        title: 'Nenhum artigo para publicar',
+        description: 'Selecione artigos vinculados a projetos WordPress.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    await publishMultiple(articlesToPublish);
+    clearSelection();
+  };
+
+  // Bulk delete
+  const handleBulkDelete = async () => {
+    setIsDeleting(true);
+    let deleted = 0;
+    let failed = 0;
+
+    for (const id of selectedArticles) {
+      try {
+        await deleteArticle.mutateAsync(id);
+        deleted++;
+      } catch {
+        failed++;
+      }
+    }
+
+    setIsDeleting(false);
+    setShowDeleteDialog(false);
+    clearSelection();
+
+    toast({
+      title: 'Exclusão concluída',
+      description: `${deleted} artigos excluídos${failed > 0 ? `, ${failed} falharam` : ''}.`,
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -126,6 +191,50 @@ export default function ArticlesList() {
           </Link>
         </Button>
       </div>
+
+      {/* Bulk Actions Bar */}
+      {selectedArticles.size > 0 && (
+        <div className="bg-primary/10 border border-primary/30 rounded-xl p-4 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <Badge className="bg-primary text-primary-foreground">
+              {selectedArticles.size} selecionado{selectedArticles.size > 1 ? 's' : ''}
+            </Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearSelection}
+              className="text-muted-foreground"
+            >
+              <X className="w-4 h-4 mr-1" />
+              Limpar
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleBulkPublish}
+              disabled={isPublishing}
+              className="bg-primary"
+            >
+              {isPublishing ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Upload className="w-4 h-4 mr-2" />
+              )}
+              Publicar Selecionados
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setShowDeleteDialog(true)}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Excluir Selecionados
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-card rounded-xl p-4 shadow-sm space-y-4">
@@ -218,7 +327,13 @@ export default function ArticlesList() {
                 {paginatedArticles.map((article) => {
                   const status = statusConfig[article.status] || statusConfig.draft;
                   return (
-                    <TableRow key={article.id} className="group hover:bg-muted/30">
+                    <TableRow 
+                      key={article.id} 
+                      className={cn(
+                        "group hover:bg-muted/30",
+                        selectedArticles.has(article.id) && "bg-primary/5"
+                      )}
+                    >
                       <TableCell>
                         <Checkbox
                           checked={selectedArticles.has(article.id)}
@@ -348,6 +463,39 @@ export default function ArticlesList() {
           </>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir artigos selecionados?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você está prestes a excluir {selectedArticles.size} artigo{selectedArticles.size > 1 ? 's' : ''}. 
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Excluindo...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Excluir {selectedArticles.size} artigo{selectedArticles.size > 1 ? 's' : ''}
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
