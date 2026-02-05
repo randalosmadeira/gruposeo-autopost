@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { 
+  Dialog,
+  DialogContent,
+} from '@/components/ui/dialog';
+import { 
   FileText, 
   Plus, 
   Search, 
@@ -31,7 +35,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  X
+  X,
+  CheckCircle2,
+  PartyPopper
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useArticles } from '@/hooks/useArticles';
@@ -59,6 +65,134 @@ const statusTabs = [
   { value: 'error', label: 'Erro' },
 ];
 
+// Success Modal Component
+function SuccessModal({ 
+  isOpen, 
+  onClose, 
+  successCount, 
+  failedCount 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  successCount: number; 
+  failedCount: number;
+}) {
+  useEffect(() => {
+    if (isOpen) {
+      const timer = setTimeout(() => {
+        onClose();
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, onClose]);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md text-center border-0 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/50 dark:to-emerald-950/50">
+        <div className="flex flex-col items-center py-6 space-y-4">
+          {/* Animated Icon */}
+          <div className="relative">
+            <div className="absolute inset-0 animate-ping bg-green-400/30 rounded-full" />
+            <div className="relative bg-gradient-to-br from-green-500 to-emerald-600 p-4 rounded-full animate-scale-in">
+              <CheckCircle2 className="w-12 h-12 text-white" />
+            </div>
+          </div>
+
+          {/* Confetti Animation */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {[...Array(12)].map((_, i) => (
+              <div
+                key={i}
+                className="absolute animate-fade-in"
+                style={{
+                  left: `${10 + (i % 6) * 15}%`,
+                  top: `${20 + Math.floor(i / 6) * 30}%`,
+                  animationDelay: `${i * 0.1}s`,
+                }}
+              >
+                <PartyPopper 
+                  className="w-5 h-5 text-amber-500 opacity-60" 
+                  style={{ transform: `rotate(${i * 30}deg)` }}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Success Message */}
+          <div className="space-y-2 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+            <h3 className="text-2xl font-bold text-green-700 dark:text-green-400">
+              Publicação Concluída! 🎉
+            </h3>
+            <p className="text-green-600 dark:text-green-300">
+              {successCount} artigo{successCount > 1 ? 's' : ''} publicado{successCount > 1 ? 's' : ''} com sucesso
+              {failedCount > 0 && (
+                <span className="block text-sm text-amber-600 dark:text-amber-400 mt-1">
+                  {failedCount} artigo{failedCount > 1 ? 's' : ''} não {failedCount > 1 ? 'puderam' : 'pôde'} ser publicado{failedCount > 1 ? 's' : ''}
+                </span>
+              )}
+            </p>
+          </div>
+
+          {/* Progress Bar Animation */}
+          <div className="w-full max-w-xs h-1.5 bg-green-200 dark:bg-green-800 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full transition-all duration-[3500ms] ease-linear"
+              style={{ width: isOpen ? '100%' : '0%' }}
+            />
+          </div>
+
+          <Button 
+            variant="outline" 
+            onClick={onClose}
+            className="mt-2 border-green-300 text-green-700 hover:bg-green-100 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-900/50"
+          >
+            Continuar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Publishing Progress Component
+function PublishingProgress({ 
+  isPublishing, 
+  current, 
+  total 
+}: { 
+  isPublishing: boolean; 
+  current: number; 
+  total: number;
+}) {
+  if (!isPublishing) return null;
+
+  const progress = total > 0 ? (current / total) * 100 : 0;
+
+  return (
+    <div className="fixed bottom-6 right-6 z-50 animate-fade-in">
+      <div className="bg-card border shadow-lg rounded-xl p-4 min-w-[280px]">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="relative">
+            <Loader2 className="w-6 h-6 text-primary animate-spin" />
+          </div>
+          <div>
+            <p className="font-medium text-sm">Publicando artigos...</p>
+            <p className="text-xs text-muted-foreground">
+              {current} de {total} concluído{current > 1 ? 's' : ''}
+            </p>
+          </div>
+        </div>
+        <div className="h-2 bg-muted rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-primary rounded-full transition-all duration-300 ease-out"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ArticlesList() {
   const { articles, isLoading, deleteArticle } = useArticles();
   const { projects } = useProjects();
@@ -73,6 +207,16 @@ export default function ArticlesList() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Success modal state
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [publishResult, setPublishResult] = useState({ success: 0, failed: 0 });
+  
+  // Publishing progress state
+  const [publishProgress, setPublishProgress] = useState({ current: 0, total: 0 });
+  
+  // Recently published articles for highlight animation
+  const [recentlyPublished, setRecentlyPublished] = useState<Set<string>>(new Set());
 
   // Filter articles
   const filteredArticles = useMemo(() => {
@@ -121,7 +265,7 @@ export default function ArticlesList() {
     setSelectedArticles(new Set());
   };
 
-  // Bulk publish
+  // Bulk publish with progress tracking
   const handleBulkPublish = async () => {
     const selectedItems = articles.filter(a => selectedArticles.has(a.id));
     const articlesToPublish = selectedItems
@@ -137,8 +281,24 @@ export default function ArticlesList() {
       return;
     }
 
-    await publishMultiple(articlesToPublish);
+    setPublishProgress({ current: 0, total: articlesToPublish.length });
+
+    const result = await publishMultiple(articlesToPublish);
+    
+    // Set recently published for animation
+    const publishedIds = new Set(articlesToPublish.slice(0, result.success).map(a => a.id));
+    setRecentlyPublished(publishedIds);
+    
+    // Show success modal
+    setPublishResult(result);
+    setShowSuccessModal(true);
+    
     clearSelection();
+
+    // Clear recently published highlight after animation
+    setTimeout(() => {
+      setRecentlyPublished(new Set());
+    }, 3000);
   };
 
   // Bulk delete
@@ -194,7 +354,7 @@ export default function ArticlesList() {
 
       {/* Bulk Actions Bar */}
       {selectedArticles.size > 0 && (
-        <div className="bg-primary/10 border border-primary/30 rounded-xl p-4 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+        <div className="bg-primary/10 border border-primary/30 rounded-xl p-4 flex items-center justify-between animate-fade-in">
           <div className="flex items-center gap-3">
             <Badge className="bg-primary text-primary-foreground">
               {selectedArticles.size} selecionado{selectedArticles.size > 1 ? 's' : ''}
@@ -326,19 +486,29 @@ export default function ArticlesList() {
               <TableBody>
                 {paginatedArticles.map((article) => {
                   const status = statusConfig[article.status] || statusConfig.draft;
+                  const isRecentlyPublished = recentlyPublished.has(article.id);
+                  
                   return (
                     <TableRow 
                       key={article.id} 
                       className={cn(
-                        "group hover:bg-muted/30",
-                        selectedArticles.has(article.id) && "bg-primary/5"
+                        "group hover:bg-muted/30 transition-all duration-500",
+                        selectedArticles.has(article.id) && "bg-primary/5",
+                        isRecentlyPublished && "bg-green-100 dark:bg-green-900/30 animate-pulse"
                       )}
                     >
                       <TableCell>
-                        <Checkbox
-                          checked={selectedArticles.has(article.id)}
-                          onCheckedChange={() => toggleSelect(article.id)}
-                        />
+                        <div className="relative">
+                          <Checkbox
+                            checked={selectedArticles.has(article.id)}
+                            onCheckedChange={() => toggleSelect(article.id)}
+                          />
+                          {isRecentlyPublished && (
+                            <div className="absolute -right-1 -top-1">
+                              <CheckCircle2 className="w-4 h-4 text-green-600 animate-scale-in" />
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {article.featured_image_url ? (
@@ -369,8 +539,14 @@ export default function ArticlesList() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge className={cn('font-normal', status.className)}>
-                          {status.label}
+                        <Badge 
+                          className={cn(
+                            'font-normal transition-all duration-300',
+                            status.className,
+                            isRecentlyPublished && 'bg-green-500 text-white animate-scale-in'
+                          )}
+                        >
+                          {isRecentlyPublished ? '✓ Publicado!' : status.label}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -463,6 +639,21 @@ export default function ArticlesList() {
           </>
         )}
       </div>
+
+      {/* Success Modal */}
+      <SuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        successCount={publishResult.success}
+        failedCount={publishResult.failed}
+      />
+
+      {/* Publishing Progress */}
+      <PublishingProgress
+        isPublishing={isPublishing}
+        current={publishProgress.current}
+        total={publishProgress.total}
+      />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
