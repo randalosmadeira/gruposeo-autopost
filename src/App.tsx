@@ -18,6 +18,7 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const AuthorityPlanner = lazy(() => import("./pages/AuthorityPlanner"));
 const NewsAgents = lazy(() => import("./pages/NewsAgents"));
 const CreateNewsAgent = lazy(() => import("./pages/CreateNewsAgent"));
+const WordPressPlugin = lazy(() => import("./pages/WordPressPlugin"));
 const Auth = lazy(() => import("./pages/Auth"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -59,6 +60,7 @@ const App = () => (
                 <Route path="/internal-links" element={<Dashboard />} />
                 <Route path="/topical-maps" element={<Dashboard />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/wordpress-plugin" element={<WordPressPlugin />} />
                 <Route path="/help" element={<Dashboard />} />
               </Route>
               <Route path="*" element={<NotFound />} />
