@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Zap,
   BarChart3,
+  Crown,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -29,6 +30,7 @@ const mainNavItems: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
   { label: 'Novo Artigo', icon: PenTool, href: '/articles/new', badge: 'IA', badgeVariant: 'accent' },
   { label: 'Artigos', icon: FileText, href: '/articles' },
+  { label: 'Plano Autoridade', icon: Crown, href: '/authority-planner', badge: 'Novo', badgeVariant: 'premium' },
   { label: 'Geração em Massa', icon: Zap, href: '/articles/bulk', badge: 'Beta', badgeVariant: 'premium' },
   { label: 'Projetos', icon: FolderKanban, href: '/projects' },
   { label: 'Links Internos', icon: Link2, href: '/internal-links' },
