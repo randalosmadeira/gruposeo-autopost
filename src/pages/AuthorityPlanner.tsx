@@ -3,14 +3,28 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Sparkles, ArrowRight, Loader2, CheckCircle2, FileText, Image } from 'lucide-react';
+import { 
+  Sparkles, 
+  ArrowRight, 
+  Loader2, 
+  CheckCircle2, 
+  FileText, 
+  Image as ImageIcon,
+  X,
+  Edit3,
+  Upload
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuthorityPlanGeneration } from '@/hooks/useAuthorityPlanGeneration';
+import { useWordPressPublish } from '@/hooks/useWordPressPublish';
 import { ThemeCard, WordPressCard, PublicationModeCard, LocaleCard } from '@/components/authority-planner';
+import { ArticleEditor } from '@/components/articles/ArticleEditor';
 
 const formSchema = z.object({
   centralTheme: z.string().min(3, 'O tema central deve ter pelo menos 3 caracteres'),
@@ -25,10 +39,38 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
+interface Article {
+  id: string;
+  title: string | null;
+  keyword: string;
+  content: string | null;
+  excerpt: string | null;
+  slug: string | null;
+  featured_image_url: string | null;
+  status: string;
+  word_count: number | null;
+  project_id: string | null;
+}
+
 export default function AuthorityPlanner() {
   const navigate = useNavigate();
   const { projects, isLoading: projectsLoading } = useProjects();
-  const { generatePlan, isGenerating, progress, generatedPlan } = useAuthorityPlanGeneration();
+  const { 
+    generatePlan, 
+    cancel,
+    reset,
+    isGenerating, 
+    progress, 
+    pillarPlan,
+    satellitePlans,
+    generatedArticles,
+    generatedPlan,
+    logs 
+  } = useAuthorityPlanGeneration();
+  const { publishArticle, isPublishing } = useWordPressPublish();
+  
+  const [editingArticle, setEditingArticle] = useState<Article | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -47,7 +89,8 @@ export default function AuthorityPlanner() {
   const satelliteCount = form.watch('satelliteCount');
 
   const onSubmit = async (data: FormData) => {
-    const result = await generatePlan({
+    setSelectedProjectId(data.projectId);
+    await generatePlan({
       centralTheme: data.centralTheme,
       satelliteCount: data.satelliteCount,
       projectId: data.projectId,
@@ -55,16 +98,39 @@ export default function AuthorityPlanner() {
       country: data.country,
       publicationMode: data.publicationMode,
     });
+  };
 
-    if (result?.success) {
-      // Stay on page to show results
+  const handlePublish = async (article: Article) => {
+    if (selectedProjectId) {
+      await publishArticle({ ...article, project_id: selectedProjectId });
     }
   };
+
+  // Show editor if editing an article
+  if (editingArticle) {
+    return (
+      <div className="container max-w-4xl py-8 space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold">Editando Artigo</h1>
+          <Button variant="outline" onClick={() => setEditingArticle(null)}>
+            <X className="w-4 h-4 mr-2" />
+            Fechar Editor
+          </Button>
+        </div>
+        <ArticleEditor 
+          article={editingArticle}
+          onSave={(updated) => setEditingArticle(updated as Article)}
+          onPublish={handlePublish}
+          isPublishing={isPublishing}
+        />
+      </div>
+    );
+  }
 
   // Show results if plan was generated
   if (generatedPlan?.success) {
     return (
-      <div className="container max-w-3xl py-8 space-y-6">
+      <div className="container max-w-4xl py-8 space-y-6">
         <div className="space-y-1">
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <CheckCircle2 className="w-6 h-6 text-green-500" />
@@ -79,22 +145,40 @@ export default function AuthorityPlanner() {
         <Card className="border-primary/50 bg-primary/5">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <span className="px-2 py-1 text-xs font-bold bg-primary text-primary-foreground rounded">PILAR</span>
+              <Badge className="bg-primary text-primary-foreground">PILAR</Badge>
               Artigo Principal
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent>
             <div className="flex items-start gap-4">
               {generatedPlan.pillar.featured_image_url && (
                 <img 
                   src={generatedPlan.pillar.featured_image_url} 
-                  alt={generatedPlan.pillar.title || 'Imagem do artigo'}
-                  className="w-24 h-16 object-cover rounded-lg"
+                  alt={generatedPlan.pillar.title || 'Imagem'}
+                  className="w-32 h-20 object-cover rounded-lg"
                 />
               )}
               <div className="flex-1">
                 <h3 className="font-semibold">{generatedPlan.pillar.title}</h3>
                 <p className="text-sm text-muted-foreground">Keyword: {generatedPlan.pillar.keyword}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditingArticle(generatedPlan.pillar as unknown as Article)}
+                >
+                  <Edit3 className="w-4 h-4 mr-1" />
+                  Editar
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => handlePublish(generatedPlan.pillar as unknown as Article)}
+                  disabled={isPublishing}
+                >
+                  <Upload className="w-4 h-4 mr-1" />
+                  Publicar
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -111,22 +195,37 @@ export default function AuthorityPlanner() {
           <CardContent>
             <div className="space-y-3">
               {generatedPlan.satellites.map((article, index) => (
-                <div key={article.id} className="flex items-start gap-4 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                <div key={article.id} className="flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
                   {article.featured_image_url ? (
                     <img 
                       src={article.featured_image_url} 
-                      alt={article.title || 'Imagem do artigo'}
+                      alt={article.title || 'Imagem'}
                       className="w-16 h-12 object-cover rounded"
                     />
                   ) : (
                     <div className="w-16 h-12 bg-muted rounded flex items-center justify-center">
-                      <Image className="w-6 h-6 text-muted-foreground" />
+                      <ImageIcon className="w-5 h-5 text-muted-foreground" />
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-muted-foreground mb-1">Satélite {index + 1}</p>
+                    <p className="text-xs text-muted-foreground">Satélite {index + 1}</p>
                     <h4 className="font-medium text-sm truncate">{article.title}</h4>
-                    <p className="text-xs text-muted-foreground">Keyword: {article.keyword}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingArticle(article as unknown as Article)}
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handlePublish(article as unknown as Article)}
+                      disabled={isPublishing}
+                    >
+                      <Upload className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -139,7 +238,7 @@ export default function AuthorityPlanner() {
           <Button variant="outline" onClick={() => navigate('/articles')}>
             Ver Todos os Artigos
           </Button>
-          <Button onClick={() => window.location.reload()}>
+          <Button onClick={reset}>
             Criar Novo Plano
           </Button>
         </div>
@@ -148,7 +247,7 @@ export default function AuthorityPlanner() {
   }
 
   return (
-    <div className="container max-w-3xl py-8 space-y-6">
+    <div className="container max-w-4xl py-8 space-y-6">
       {/* Header */}
       <div className="space-y-1">
         <h1 className="text-2xl font-bold text-foreground">Novo Plano de Autoridade</h1>
@@ -157,22 +256,104 @@ export default function AuthorityPlanner() {
         </p>
       </div>
 
-      {/* Generation Progress */}
+      {/* Generation Progress Panel */}
       {isGenerating && (
-        <Card className="border-primary/50 bg-primary/5">
-          <CardContent className="pt-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <Loader2 className="w-5 h-5 animate-spin text-primary" />
-              <span className="font-medium">Gerando Plano de Autoridade...</span>
+        <Card className="border-primary/50">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                Gerando Plano de Autoridade
+              </CardTitle>
+              <Button variant="ghost" size="sm" onClick={cancel}>
+                <X className="w-4 h-4 mr-1" />
+                Cancelar
+              </Button>
             </div>
-            <Progress value={undefined} className="h-2" />
-            <p className="text-sm text-muted-foreground">{progress}</p>
-            <div className="text-xs text-muted-foreground space-y-1">
-              <p>✅ Pesquisando tema e palavras-chave</p>
-              <p>✅ Planejando estrutura do pilar</p>
-              <p>✅ Definindo artigos satélites</p>
-              <p>⏳ Gerando conteúdo com IA</p>
-              <p>⏳ Criando imagens</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Progress Bar */}
+            {progress && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{progress.step}</span>
+                  <span className="font-medium">{progress.percentage}%</span>
+                </div>
+                <Progress value={progress.percentage} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  Etapa {progress.current} de {progress.total}
+                </p>
+              </div>
+            )}
+
+            {/* Plans Preview */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Pillar Plan */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">Pilar</Badge>
+                  Artigo Principal
+                </h4>
+                {pillarPlan ? (
+                  <div className="p-3 rounded-lg bg-muted/50 text-sm">
+                    <p className="font-medium truncate">{pillarPlan.title}</p>
+                    <p className="text-xs text-muted-foreground">{pillarPlan.outline.length} seções</p>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-muted/30 text-sm text-muted-foreground">
+                    Aguardando...
+                  </div>
+                )}
+                {generatedArticles.pillar && (
+                  <div className="flex items-center gap-2 text-xs text-green-600">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Criado com sucesso
+                  </div>
+                )}
+              </div>
+
+              {/* Satellite Plans */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">Satélites</Badge>
+                  Artigos de Suporte
+                </h4>
+                <div className="space-y-1">
+                  {satellitePlans.length > 0 ? (
+                    satellitePlans.slice(0, 3).map((plan, i) => (
+                      <div key={i} className="p-2 rounded bg-muted/50 text-xs flex items-center gap-2">
+                        {generatedArticles.satellites.find(s => s.title === plan.title) ? (
+                          <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
+                        ) : (
+                          <div className="w-3 h-3 rounded-full border border-muted-foreground flex-shrink-0" />
+                        )}
+                        <span className="truncate">{plan.title}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-2 rounded bg-muted/30 text-xs text-muted-foreground">
+                      Aguardando...
+                    </div>
+                  )}
+                  {satellitePlans.length > 3 && (
+                    <p className="text-xs text-muted-foreground pl-2">
+                      +{satellitePlans.length - 3} mais...
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Live Logs */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">Log de Execução</h4>
+              <ScrollArea className="h-32 rounded-lg border bg-muted/30 p-3">
+                <div className="space-y-1 font-mono text-xs">
+                  {logs.map((log, i) => (
+                    <p key={i} className="text-muted-foreground">{log}</p>
+                  ))}
+                </div>
+              </ScrollArea>
             </div>
           </CardContent>
         </Card>
