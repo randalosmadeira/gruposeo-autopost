@@ -91,6 +91,77 @@ export type Database = {
           },
         ]
       }
+      news_agents: {
+        Row: {
+          articles_generated: number | null
+          auto_publish: boolean | null
+          cite_sources_footer: boolean | null
+          cite_sources_inline: boolean | null
+          country: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          keywords: string[] | null
+          language: string | null
+          last_run_at: string | null
+          name: string
+          post_type: string | null
+          project_id: string | null
+          search_internal_links: boolean | null
+          topics: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          articles_generated?: number | null
+          auto_publish?: boolean | null
+          cite_sources_footer?: boolean | null
+          cite_sources_inline?: boolean | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          keywords?: string[] | null
+          language?: string | null
+          last_run_at?: string | null
+          name: string
+          post_type?: string | null
+          project_id?: string | null
+          search_internal_links?: boolean | null
+          topics?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          articles_generated?: number | null
+          auto_publish?: boolean | null
+          cite_sources_footer?: boolean | null
+          cite_sources_inline?: boolean | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          keywords?: string[] | null
+          language?: string | null
+          last_run_at?: string | null
+          name?: string
+          post_type?: string | null
+          project_id?: string | null
+          search_internal_links?: boolean | null
+          topics?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "news_agents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
