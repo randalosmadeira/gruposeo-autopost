@@ -212,7 +212,9 @@ export default function AuthorityPlanner() {
                       </FormControl>
                       <SelectContent>
                         {projectsLoading ? (
-                          <SelectItem value="" disabled>Carregando...</SelectItem>
+                          <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+                            Carregando...
+                          </div>
                         ) : projects && projects.length > 0 ? (
                           projects.map((project) => (
                             <SelectItem key={project.id} value={project.id}>
@@ -220,7 +222,9 @@ export default function AuthorityPlanner() {
                             </SelectItem>
                           ))
                         ) : (
-                          <SelectItem value="" disabled>Nenhum projeto encontrado</SelectItem>
+                          <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+                            Nenhum projeto encontrado
+                          </div>
                         )}
                       </SelectContent>
                     </Select>
