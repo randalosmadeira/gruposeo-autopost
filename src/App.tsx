@@ -12,6 +12,7 @@ import ArticleGenerator from "./pages/ArticleGenerator";
 import ArticlesList from "./pages/ArticlesList";
 import ProjectsList from "./pages/ProjectsList";
 import SettingsPage from "./pages/SettingsPage";
+import AuthorityPlanner from "./pages/AuthorityPlanner";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -38,6 +39,7 @@ const App = () => (
               <Route path="/articles/new" element={<ArticleTypeSelection />} />
               <Route path="/articles/new/:type" element={<ArticleGenerator />} />
               <Route path="/articles/bulk" element={<ArticleTypeSelection />} />
+              <Route path="/authority-planner" element={<AuthorityPlanner />} />
               <Route path="/projects" element={<ProjectsList />} />
               <Route path="/internal-links" element={<Dashboard />} />
               <Route path="/topical-maps" element={<Dashboard />} />
