@@ -14,6 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_news: {
+        Row: {
+          agent_id: string
+          article_id: string | null
+          content: string | null
+          created_at: string
+          generated_at: string | null
+          id: string
+          original_title: string | null
+          published_at: string | null
+          source_name: string | null
+          source_url: string | null
+          status: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          article_id?: string | null
+          content?: string | null
+          created_at?: string
+          generated_at?: string | null
+          id?: string
+          original_title?: string | null
+          published_at?: string | null
+          source_name?: string | null
+          source_url?: string | null
+          status?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          article_id?: string | null
+          content?: string | null
+          created_at?: string
+          generated_at?: string | null
+          id?: string
+          original_title?: string | null
+          published_at?: string | null
+          source_name?: string | null
+          source_url?: string | null
+          status?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_news_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "news_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_news_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       articles: {
         Row: {
           config: Json | null
@@ -93,61 +156,94 @@ export type Database = {
       }
       news_agents: {
         Row: {
+          active_days: string[] | null
+          agent_type: string | null
           articles_generated: number | null
           auto_publish: boolean | null
+          category: string | null
           cite_sources_footer: boolean | null
           cite_sources_inline: boolean | null
           country: string | null
           created_at: string
+          execution_times: string[] | null
           id: string
+          image_generation: string | null
           is_active: boolean
           keywords: string[] | null
           language: string | null
+          last_error: string | null
           last_run_at: string | null
           name: string
+          news_per_day: number | null
           post_type: string | null
           project_id: string | null
+          prompt_template: string | null
+          publish_status: string | null
+          rss_feeds: string[] | null
           search_internal_links: boolean | null
+          search_window: string | null
           topics: string[]
           updated_at: string
           user_id: string
         }
         Insert: {
+          active_days?: string[] | null
+          agent_type?: string | null
           articles_generated?: number | null
           auto_publish?: boolean | null
+          category?: string | null
           cite_sources_footer?: boolean | null
           cite_sources_inline?: boolean | null
           country?: string | null
           created_at?: string
+          execution_times?: string[] | null
           id?: string
+          image_generation?: string | null
           is_active?: boolean
           keywords?: string[] | null
           language?: string | null
+          last_error?: string | null
           last_run_at?: string | null
           name: string
+          news_per_day?: number | null
           post_type?: string | null
           project_id?: string | null
+          prompt_template?: string | null
+          publish_status?: string | null
+          rss_feeds?: string[] | null
           search_internal_links?: boolean | null
+          search_window?: string | null
           topics?: string[]
           updated_at?: string
           user_id: string
         }
         Update: {
+          active_days?: string[] | null
+          agent_type?: string | null
           articles_generated?: number | null
           auto_publish?: boolean | null
+          category?: string | null
           cite_sources_footer?: boolean | null
           cite_sources_inline?: boolean | null
           country?: string | null
           created_at?: string
+          execution_times?: string[] | null
           id?: string
+          image_generation?: string | null
           is_active?: boolean
           keywords?: string[] | null
           language?: string | null
+          last_error?: string | null
           last_run_at?: string | null
           name?: string
+          news_per_day?: number | null
           post_type?: string | null
           project_id?: string | null
+          prompt_template?: string | null
+          publish_status?: string | null
+          rss_feeds?: string[] | null
           search_internal_links?: boolean | null
+          search_window?: string | null
           topics?: string[]
           updated_at?: string
           user_id?: string
