@@ -33,6 +33,7 @@ import {
   SchedulingCard,
   ClusterVisualization
 } from '@/components/authority-planner';
+import { InternalLinkingCard } from '@/components/internal-linking';
 import { ArticleEditor } from '@/components/articles/ArticleEditor';
 
 const formSchema = z.object({
@@ -384,6 +385,10 @@ export default function AuthorityPlanner() {
               <PublicationModeCard form={form} />
               <SchedulingCard form={form} isScheduleMode={publicationMode === 'scheduled'} />
               <LocaleCard form={form} />
+              <InternalLinkingCard 
+                projectId={form.watch('projectId')} 
+                onProjectSelect={(id) => form.setValue('projectId', id)}
+              />
 
               {/* Submit Button */}
               <div className="flex justify-end pt-4">

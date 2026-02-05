@@ -1,0 +1,1 @@
+export { InternalLinkingCard } from './InternalLinkingCard';
