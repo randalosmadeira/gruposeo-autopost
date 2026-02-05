@@ -75,6 +75,13 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
     try {
       const wordCount = editedArticle.content?.split(/\s+/).filter(Boolean).length || 0;
       
+      // Build config with WordPress categories
+      const currentConfig = (editedArticle as any).config || {};
+      const updatedConfig = {
+        ...currentConfig,
+        wordpress_categories: editedArticle.wordpress_categories || [],
+      };
+      
       const { error } = await supabase
         .from('articles')
         .update({
@@ -84,6 +91,7 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
           slug: editedArticle.slug,
           featured_image_url: editedArticle.featured_image_url,
           word_count: wordCount,
+          config: updatedConfig,
         })
         .eq('id', editedArticle.id);
 
