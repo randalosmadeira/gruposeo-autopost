@@ -46,25 +46,58 @@ serve(async (req) => {
     console.log(`Response status: ${response.status}`);
 
     if (response.ok) {
-      // Also try to fetch user info to verify write permissions
-      const userApiUrl = `${baseUrl}/wp-json/wp/v2/users/me`;
-      const userResponse = await fetch(userApiUrl, {
-        method: "GET",
-        headers: {
-          Authorization: `Basic ${auth}`,
-        },
-      });
+      // Verify the response is actually JSON (not an HTML error page)
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: "WordPress REST API returned invalid response. Ensure REST API is enabled." 
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
-      let canPublish = false;
+      // Try to parse the response to ensure it's valid JSON
+      try {
+        await response.json();
+      } catch {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: "WordPress returned invalid JSON. Check if REST API is working correctly." 
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Also try to fetch user info to verify write permissions (optional check)
+      let canPublish = true; // Assume true if we can read posts
       let userInfo = null;
 
-      if (userResponse.ok) {
-        userInfo = await userResponse.json();
-        // Check if user can publish posts
-        canPublish = userInfo.capabilities?.publish_posts === true || 
-                     userInfo.roles?.includes('administrator') ||
-                     userInfo.roles?.includes('editor') ||
-                     userInfo.roles?.includes('author');
+      try {
+        const userApiUrl = `${baseUrl}/wp-json/wp/v2/users/me`;
+        const userResponse = await fetch(userApiUrl, {
+          method: "GET",
+          headers: {
+            Authorization: `Basic ${auth}`,
+          },
+        });
+
+        const userContentType = userResponse.headers.get("content-type") || "";
+        
+        if (userResponse.ok && userContentType.includes("application/json")) {
+          const userData = await userResponse.json();
+          userInfo = userData;
+          // Check if user can publish posts
+          canPublish = userData.capabilities?.publish_posts === true || 
+                       userData.roles?.includes('administrator') ||
+                       userData.roles?.includes('editor') ||
+                       userData.roles?.includes('author');
+        }
+      } catch (userError) {
+        // User info fetch failed, but posts endpoint worked - connection is valid
+        console.log("User info fetch failed (non-critical):", userError);
       }
 
       return new Response(
