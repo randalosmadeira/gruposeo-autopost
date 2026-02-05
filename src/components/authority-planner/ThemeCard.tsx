@@ -56,7 +56,7 @@ export function ThemeCard({ form, satelliteCount }: ThemeCardProps) {
                     className="py-2"
                   />
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Limitado pelo seu plano atual (10 satélites máx.)</span>
+                    <span>Quantidade de artigos satélite</span>
                     <span>Máx.: 10</span>
                   </div>
                 </div>

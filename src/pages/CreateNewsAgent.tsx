@@ -571,7 +571,7 @@ export default function CreateNewsAgent() {
                             </SelectContent>
                           </Select>
                           <FormDescription className="text-xs">
-                            Imagens IA consomem seu limite de imagens do plano
+                            Gerar imagens automaticamente para cada artigo
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
