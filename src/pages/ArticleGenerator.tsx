@@ -333,12 +333,12 @@ export default function ArticleGenerator() {
                   <p className="text-sm text-muted-foreground mb-2">
                     Associar este artigo a um projeto
                   </p>
-                  <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                  <Select value={selectedProjectId || 'none'} onValueChange={(v) => setSelectedProjectId(v === 'none' ? '' : v)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecionar projeto..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Sem projeto</SelectItem>
+                      <SelectItem value="none">Sem projeto</SelectItem>
                       {projects.map((project) => (
                         <SelectItem key={project.id} value={project.id}>
                           {project.name}
