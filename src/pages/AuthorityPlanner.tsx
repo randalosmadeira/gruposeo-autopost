@@ -30,7 +30,8 @@ import {
   PublicationModeCard, 
   LocaleCard,
   GenerationHistory,
-  SchedulingCard
+  SchedulingCard,
+  ClusterVisualization
 } from '@/components/authority-planner';
 import { ArticleEditor } from '@/components/articles/ArticleEditor';
 
@@ -59,6 +60,11 @@ interface Article {
   status: string;
   word_count: number | null;
   project_id: string | null;
+  config?: {
+    type?: 'pillar' | 'satellite';
+    pillarId?: string;
+    theme?: string;
+  } | null;
 }
 
 export default function AuthorityPlanner() {
@@ -141,8 +147,36 @@ export default function AuthorityPlanner() {
 
   // Show results if plan was generated
   if (generatedPlan?.success) {
+    const pillarArticle: Article = {
+      id: generatedPlan.pillar.id,
+      title: generatedPlan.pillar.title,
+      keyword: generatedPlan.pillar.keyword,
+      slug: null,
+      status: generatedPlan.pillar.status || 'draft',
+      featured_image_url: generatedPlan.pillar.featured_image_url,
+      word_count: null,
+      content: null,
+      excerpt: null,
+      project_id: selectedProjectId,
+      config: { type: 'pillar' as const },
+    };
+
+    const satelliteArticles: Article[] = generatedPlan.satellites.map((s) => ({
+      id: s.id,
+      title: s.title,
+      keyword: s.keyword,
+      slug: null,
+      status: s.status || 'draft',
+      featured_image_url: s.featured_image_url,
+      word_count: null,
+      content: null,
+      excerpt: null,
+      project_id: selectedProjectId,
+      config: { type: 'satellite' as const, pillarId: generatedPlan.pillar.id },
+    }));
+
     return (
-      <div className="container max-w-4xl py-8 space-y-6">
+      <div className="container max-w-5xl py-8 space-y-6">
         <div className="space-y-1">
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <CheckCircle2 className="w-6 h-6 text-primary" />
@@ -153,89 +187,49 @@ export default function AuthorityPlanner() {
           </p>
         </div>
 
-        {/* Pillar Article */}
-        <Card className="border-primary/50 bg-primary/5">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Badge className="bg-primary text-primary-foreground">PILAR</Badge>
-              Artigo Principal
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-start gap-4">
-              {generatedPlan.pillar.featured_image_url && (
-                <img 
-                  src={generatedPlan.pillar.featured_image_url} 
-                  alt={generatedPlan.pillar.title || 'Imagem'}
-                  className="w-32 h-20 object-cover rounded-lg"
-                />
-              )}
-              <div className="flex-1">
-                <h3 className="font-semibold">{generatedPlan.pillar.title}</h3>
-                <p className="text-sm text-muted-foreground">Keyword: {generatedPlan.pillar.keyword}</p>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditingArticle(generatedPlan.pillar as unknown as Article)}
-                >
-                  <Edit3 className="w-4 h-4 mr-1" />
-                  Editar
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => handlePublish(generatedPlan.pillar as unknown as Article)}
-                  disabled={isPublishing}
-                >
-                  <Upload className="w-4 h-4 mr-1" />
-                  Publicar
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Cluster Visualization */}
+        <ClusterVisualization
+          pillar={pillarArticle}
+          satellites={satelliteArticles}
+          onArticleClick={(article) => setEditingArticle(article as Article)}
+        />
 
-        {/* Satellite Articles */}
+        {/* Quick Actions for Each Article */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <FileText className="w-5 h-5" />
-              Artigos Satélites ({generatedPlan.satellites.length})
+              Ações Rápidas
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
+              {/* Pillar */}
+              <div className="flex items-center gap-4 p-3 rounded-lg border bg-primary/5 border-primary/30">
+                <Badge className="bg-primary text-primary-foreground">PILAR</Badge>
+                <span className="flex-1 font-medium truncate">{generatedPlan.pillar.title}</span>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setEditingArticle(pillarArticle)}>
+                    <Edit3 className="w-4 h-4 mr-1" />
+                    Editar
+                  </Button>
+                  <Button size="sm" onClick={() => handlePublish(pillarArticle)} disabled={isPublishing}>
+                    <Upload className="w-4 h-4 mr-1" />
+                    Publicar
+                  </Button>
+                </div>
+              </div>
+
+              {/* Satellites */}
               {generatedPlan.satellites.map((article, index) => (
                 <div key={article.id} className="flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
-                  {article.featured_image_url ? (
-                    <img 
-                      src={article.featured_image_url} 
-                      alt={article.title || 'Imagem'}
-                      className="w-16 h-12 object-cover rounded"
-                    />
-                  ) : (
-                    <div className="w-16 h-12 bg-muted rounded flex items-center justify-center">
-                      <ImageIcon className="w-5 h-5 text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-muted-foreground">Satélite {index + 1}</p>
-                    <h4 className="font-medium text-sm truncate">{article.title}</h4>
-                  </div>
+                  <Badge variant="secondary">S{index + 1}</Badge>
+                  <span className="flex-1 text-sm truncate">{article.title}</span>
                   <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setEditingArticle(article as unknown as Article)}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => setEditingArticle(satelliteArticles[index])}>
                       <Edit3 className="w-4 h-4" />
                     </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handlePublish(article as unknown as Article)}
-                      disabled={isPublishing}
-                    >
+                    <Button size="sm" onClick={() => handlePublish(satelliteArticles[index])} disabled={isPublishing}>
                       <Upload className="w-4 h-4" />
                     </Button>
                   </div>
