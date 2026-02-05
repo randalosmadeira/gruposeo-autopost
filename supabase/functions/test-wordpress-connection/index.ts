@@ -90,19 +90,6 @@ serve(async (req) => {
         );
       }
 
-      // Try to parse the response as JSON
-      let postsData;
-      try {
-        postsData = JSON.parse(responseText);
-      } catch {
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: "WordPress retornou resposta inválida. Verifique se a REST API está funcionando." 
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
       let canPublish = true; // Assume true if we can read posts
       let userInfo = null;
 
