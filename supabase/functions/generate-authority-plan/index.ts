@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const LOVABLE_AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 interface AuthorityPlanRequest {
   centralTheme: string;
@@ -26,8 +26,8 @@ interface ArticlePlan {
 }
 
 async function callAI(messages: { role: string; content: string }[], useJsonMode = false): Promise<string> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+  const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!AI_API_KEY) throw new Error("AI API key is not configured");
 
   const body: Record<string, unknown> = {
     model: "google/gemini-3-flash-preview",
@@ -38,10 +38,10 @@ async function callAI(messages: { role: string; content: string }[], useJsonMode
     body.response_format = { type: "json_object" };
   }
 
-  const response = await fetch(LOVABLE_AI_URL, {
+  const response = await fetch(AI_GATEWAY_URL, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      Authorization: `Bearer ${AI_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -60,14 +60,14 @@ async function callAI(messages: { role: string; content: string }[], useJsonMode
 }
 
 async function generateImage(prompt: string): Promise<string | null> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) return null;
+  const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!AI_API_KEY) return null;
 
   try {
-    const response = await fetch(LOVABLE_AI_URL, {
+    const response = await fetch(AI_GATEWAY_URL, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${AI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

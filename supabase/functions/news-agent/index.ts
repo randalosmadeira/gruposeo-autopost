@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions"; // AI Gateway
 
 interface NewsSearchResult {
   title: string;
@@ -121,9 +121,9 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!AI_API_KEY) {
+      throw new Error("AI API key is not configured");
     }
 
     const { action, agentId, topics, language, country, promptTemplate, limit } = await req.json();
@@ -155,7 +155,7 @@ serve(async (req) => {
         topic,
         language || "pt-BR",
         promptTemplate || "news_article",
-        LOVABLE_API_KEY
+        AI_API_KEY
       );
 
       if (!article) {
@@ -183,7 +183,7 @@ serve(async (req) => {
             topic,
             language || "pt-BR",
             promptTemplate || "news_article",
-            LOVABLE_API_KEY
+            AI_API_KEY
           );
 
           if (article) {
