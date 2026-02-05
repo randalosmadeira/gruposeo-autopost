@@ -25,6 +25,8 @@ async function publishToWordPress(
     excerpt: string;
     slug: string;
     featured_image_url: string | null;
+    categories?: number[];
+    tags?: number[];
   },
   status: string = "draft"
 ): Promise<{ success: boolean; postId?: number; postUrl?: string; error?: string }> {
@@ -85,6 +87,16 @@ async function publishToWordPress(
       slug: article.slug,
       status: status === "publish" ? "publish" : "draft",
     };
+
+    // Add categories if provided
+    if (article.categories && article.categories.length > 0) {
+      postData.categories = article.categories;
+    }
+
+    // Add tags if provided
+    if (article.tags && article.tags.length > 0) {
+      postData.tags = article.tags;
+    }
 
     if (featuredMediaId) {
       postData.featured_media = featuredMediaId;
@@ -184,6 +196,11 @@ serve(async (req) => {
       );
     }
 
+    // Parse wordpress_categories from article config if exists
+    const config = article.config as { wordpress_categories?: number[]; wordpress_tags?: number[] } | null;
+    const categories = config?.wordpress_categories || [];
+    const tags = config?.wordpress_tags || [];
+
     // Publish to WordPress
     const result = await publishToWordPress(
       {
@@ -197,6 +214,8 @@ serve(async (req) => {
         excerpt: article.excerpt || "",
         slug: article.slug || "",
         featured_image_url: article.featured_image_url,
+        categories,
+        tags,
       },
       "publish"
     );
