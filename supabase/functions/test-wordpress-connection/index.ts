@@ -13,6 +13,64 @@ interface TestConnectionRequest {
   api_key?: string;
 }
 
+// Common WordPress subpaths to try when root fails
+const COMMON_WP_SUBPATHS = [
+  "/blog",
+  "/wordpress",
+  "/wp",
+  "/site",
+  "/news",
+  "/artigos",
+  "/noticias",
+];
+
+/**
+ * Attempts to find WordPress REST API by trying common subpaths
+ */
+async function discoverWordPressPath(baseUrl: string): Promise<{ found: boolean; path: string; wpJsonUrl: string }> {
+  // First try root
+  const rootWpJson = `${baseUrl}/wp-json/`;
+  console.log(`Discovering WP path: trying root ${rootWpJson}`);
+  
+  try {
+    const rootResponse = await fetch(rootWpJson, {
+      method: "GET",
+      headers: { "Accept": "application/json" },
+    });
+    const contentType = rootResponse.headers.get("content-type") || "";
+    
+    if (rootResponse.ok && contentType.includes("application/json")) {
+      console.log("WordPress found at root");
+      return { found: true, path: "", wpJsonUrl: rootWpJson };
+    }
+  } catch (e) {
+    console.log("Root check failed:", e);
+  }
+
+  // Try common subpaths
+  for (const subpath of COMMON_WP_SUBPATHS) {
+    const testUrl = `${baseUrl}${subpath}/wp-json/`;
+    console.log(`Discovering WP path: trying ${testUrl}`);
+    
+    try {
+      const response = await fetch(testUrl, {
+        method: "GET",
+        headers: { "Accept": "application/json" },
+      });
+      const contentType = response.headers.get("content-type") || "";
+      
+      if (response.ok && contentType.includes("application/json")) {
+        console.log(`WordPress found at subpath: ${subpath}`);
+        return { found: true, path: subpath, wpJsonUrl: testUrl };
+      }
+    } catch (e) {
+      console.log(`Subpath ${subpath} check failed:`, e);
+    }
+  }
+
+  return { found: false, path: "", wpJsonUrl: "" };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -29,10 +87,18 @@ serve(async (req) => {
       );
     }
 
-    const baseUrl = wordpress_url.replace(/\/$/, "");
+    let baseUrl = wordpress_url.replace(/\/$/, "");
 
     // Plugin-based authentication
     if (use_plugin && api_key) {
+      // First, discover the WordPress path
+      const discovery = await discoverWordPressPath(baseUrl);
+      
+      if (discovery.found && discovery.path) {
+        baseUrl = `${baseUrl}${discovery.path}`;
+        console.log(`Using discovered WordPress path: ${baseUrl}`);
+      }
+
       console.log(`Testing plugin connection to: ${baseUrl}/wp-json/cfrdm/v1/test`);
       
       try {
@@ -60,11 +126,17 @@ serve(async (req) => {
           const healthContentType = healthResponse.headers.get("content-type") || "";
           
           if (!healthContentType.includes("application/json")) {
+            // If we didn't discover a path earlier, mention that
+            const pathHint = !discovery.found 
+              ? " Se o WordPress está em uma subpasta (ex: /blog), inclua na URL."
+              : "";
+            
             return new Response(
               JSON.stringify({ 
                 success: false, 
                 error: "Plugin ContentFactory RDM não encontrado ou não ativado.",
-                hint: "Verifique se o plugin está instalado e ativo no WordPress."
+                hint: `Verifique se o plugin está instalado e ativo no WordPress.${pathHint}`,
+                discoveredPath: discovery.path || null,
               }),
               { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
@@ -88,7 +160,9 @@ serve(async (req) => {
               success: true, 
               message: "Conexão via plugin estabelecida",
               site: pluginData.site,
-              canPublish: true
+              canPublish: true,
+              discoveredPath: discovery.path || null,
+              correctedUrl: discovery.path ? `${wordpress_url.replace(/\/$/, "")}${discovery.path}` : null,
             }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
@@ -121,6 +195,14 @@ serve(async (req) => {
         JSON.stringify({ success: false, error: "Credenciais não fornecidas" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Discover WordPress path for standard auth too
+    const discovery = await discoverWordPressPath(baseUrl);
+    
+    if (discovery.found && discovery.path) {
+      baseUrl = `${baseUrl}${discovery.path}`;
+      console.log(`Using discovered WordPress path: ${baseUrl}`);
     }
 
     const apiUrl = `${baseUrl}/wp-json/wp/v2/posts?per_page=1`;
@@ -156,12 +238,17 @@ serve(async (req) => {
           detailedError = "REST API retornou HTML. Possíveis causas: plugin de segurança, cache, ou REST API desabilitada. Tente usar a conexão via Plugin.";
         }
         
+        const pathHint = !discovery.found 
+          ? " Se o WordPress está em uma subpasta (ex: /blog), inclua na URL."
+          : "";
+        
         return new Response(
           JSON.stringify({ 
             success: false, 
             error: detailedError,
             contentType,
-            hint: "Acesse " + baseUrl + "/wp-json/ no navegador para verificar se a REST API está ativa."
+            hint: `Acesse ${baseUrl}/wp-json/ no navegador para verificar se a REST API está ativa.${pathHint}`,
+            discoveredPath: discovery.path || null,
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -211,7 +298,9 @@ serve(async (req) => {
           success: true, 
           message: "Connection successful",
           canPublish,
-          user: userInfo ? { name: userInfo.name, roles: userInfo.roles } : null
+          user: userInfo ? { name: userInfo.name, roles: userInfo.roles } : null,
+          discoveredPath: discovery.path || null,
+          correctedUrl: discovery.path ? `${wordpress_url.replace(/\/$/, "")}${discovery.path}` : null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -229,7 +318,10 @@ serve(async (req) => {
         hint = "Verifique se o usuário tem permissões de autor/editor/administrador para criar posts.";
       } else if (response.status === 404) {
         errorMessage = "REST API não encontrada.";
-        hint = "Verifique se a REST API está ativada. Acesse " + baseUrl + "/wp-json/ no navegador para testar.";
+        const pathHint = !discovery.found 
+          ? " Se o WordPress está em uma subpasta (ex: /blog), inclua na URL."
+          : "";
+        hint = `Verifique se a REST API está ativada. Acesse ${baseUrl}/wp-json/ no navegador para testar.${pathHint}`;
       } else if (response.status === 500) {
         errorMessage = "Erro interno do WordPress.";
         hint = "Verifique os logs do WordPress ou desative plugins temporariamente para identificar o problema.";
@@ -239,7 +331,13 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ success: false, error: errorMessage, hint, status: response.status }),
+        JSON.stringify({ 
+          success: false, 
+          error: errorMessage, 
+          hint, 
+          status: response.status,
+          discoveredPath: discovery.path || null, 
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

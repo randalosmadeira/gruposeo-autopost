@@ -164,8 +164,6 @@ export function WordPressSitesCard() {
     try {
       if (isPluginAuth) {
         // Test via ContentFactory RDM Plugin API
-        const apiUrl = `${project.wordpress_url.replace(/\/$/, '')}/wp-json/cfrdm/v1/test`;
-        
         const { data, error } = await supabase.functions.invoke('test-wordpress-connection', {
           body: {
             wordpress_url: project.wordpress_url,
@@ -177,19 +175,39 @@ export function WordPressSitesCard() {
         if (error) throw new Error(error.message);
 
         if (data?.success) {
-          await updateProject.mutateAsync({
-            id: projectId,
-            is_connected: true,
-          });
+          // If a subpath was discovered, update the project URL
+          if (data.correctedUrl && data.correctedUrl !== project.wordpress_url) {
+            await updateProject.mutateAsync({
+              id: projectId,
+              is_connected: true,
+              wordpress_url: data.correctedUrl,
+              domain: new URL(data.correctedUrl).hostname,
+            });
+            
+            toast({
+              title: 'Conexão via Plugin bem-sucedida! ✓',
+              description: `WordPress detectado em ${data.discoveredPath}. URL atualizada automaticamente.`,
+            });
+          } else {
+            await updateProject.mutateAsync({
+              id: projectId,
+              is_connected: true,
+            });
+            
+            toast({
+              title: 'Conexão via Plugin bem-sucedida! ✓',
+              description: `Conectado a: ${data.site?.name || project.wordpress_url}`,
+            });
+          }
+        } else {
+          let errorDescription = data?.error || 'Verifique se o plugin ContentFactory RDM está ativo e a API Key está correta.';
+          if (data?.hint) {
+            errorDescription += ` ${data.hint}`;
+          }
           
           toast({
-            title: 'Conexão via Plugin bem-sucedida! ✓',
-            description: `Conectado a: ${data.site?.name || project.wordpress_url}`,
-          });
-        } else {
-          toast({
             title: 'Falha na conexão via Plugin',
-            description: data?.error || 'Verifique se o plugin ContentFactory RDM está ativo e a API Key está correta.',
+            description: errorDescription,
             variant: 'destructive',
           });
         }
@@ -206,19 +224,38 @@ export function WordPressSitesCard() {
         if (error) throw new Error(error.message);
 
         if (data?.success) {
-          await updateProject.mutateAsync({
-            id: projectId,
-            is_connected: true,
-          });
-          
-          const message = data.canPublish 
-            ? `Conectado com sucesso! Usuário: ${data.user?.name || 'N/A'}`
-            : 'Conectado, mas o usuário pode não ter permissão para publicar.';
-          
-          toast({
-            title: 'Conexão bem-sucedida! ✓',
-            description: message,
-          });
+          // If a subpath was discovered, update the project URL
+          if (data.correctedUrl && data.correctedUrl !== project.wordpress_url) {
+            await updateProject.mutateAsync({
+              id: projectId,
+              is_connected: true,
+              wordpress_url: data.correctedUrl,
+              domain: new URL(data.correctedUrl).hostname,
+            });
+            
+            const message = data.canPublish 
+              ? `WordPress detectado em ${data.discoveredPath}. URL atualizada. Usuário: ${data.user?.name || 'N/A'}`
+              : `WordPress detectado em ${data.discoveredPath}. Usuário pode não ter permissão para publicar.`;
+            
+            toast({
+              title: 'Conexão bem-sucedida! ✓',
+              description: message,
+            });
+          } else {
+            await updateProject.mutateAsync({
+              id: projectId,
+              is_connected: true,
+            });
+            
+            const message = data.canPublish 
+              ? `Conectado com sucesso! Usuário: ${data.user?.name || 'N/A'}`
+              : 'Conectado, mas o usuário pode não ter permissão para publicar.';
+            
+            toast({
+              title: 'Conexão bem-sucedida! ✓',
+              description: message,
+            });
+          }
         } else {
           let errorDescription = data?.error || 'Erro desconhecido';
           if (data?.hint) {
