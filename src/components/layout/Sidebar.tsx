@@ -32,6 +32,7 @@ const mainNavItems: NavItem[] = [
   { label: 'Geração em Massa', icon: Zap, href: '/articles/bulk' },
   { label: 'Autoridade', icon: Crown, href: '/authority-planner' },
   { label: 'Agente de notícias', icon: Newspaper, href: '/news-agents' },
+  { label: 'Projetos', icon: FolderKanban, href: '/projects' },
   { label: 'Histórico', icon: History, href: '/articles' },
 ];
 
