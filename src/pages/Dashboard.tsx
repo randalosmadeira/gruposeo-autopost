@@ -9,6 +9,7 @@ import { EconomyCard } from '@/components/dashboard/EconomyCard';
 import { NewsAgentsSummary } from '@/components/dashboard/NewsAgentsSummary';
 import { AuthorityPlannerSummary } from '@/components/dashboard/AuthorityPlannerSummary';
 import { RecentArticlesList } from '@/components/dashboard/RecentArticlesList';
+import { WordPressProjectStats } from '@/components/dashboard/WordPressProjectStats';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -52,6 +53,9 @@ export default function Dashboard() {
         totalArticles={totalArticles}
         totalImages={totalArticles * 4}
       />
+
+      {/* WordPress Stats por Projeto */}
+      <WordPressProjectStats />
 
       {/* Agents + Authority Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

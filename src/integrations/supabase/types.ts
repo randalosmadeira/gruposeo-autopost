@@ -477,6 +477,95 @@ export type Database = {
         }
         Relationships: []
       }
+      wordpress_stats: {
+        Row: {
+          approved_comments: number | null
+          articles_needing_attention: number | null
+          articles_without_links: number | null
+          auto_corrections_applied: number | null
+          broken_links: number | null
+          created_at: string
+          draft_articles: number | null
+          id: string
+          last_sync_at: string | null
+          missing_featured_images: number | null
+          pending_articles: number | null
+          pending_comments: number | null
+          project_id: string
+          published_articles: number | null
+          publishing_trend: Json | null
+          raw_data: Json | null
+          seo_issues: number | null
+          sync_errors: number | null
+          synced_articles: number | null
+          total_articles: number | null
+          total_comments: number | null
+          total_internal_links: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          approved_comments?: number | null
+          articles_needing_attention?: number | null
+          articles_without_links?: number | null
+          auto_corrections_applied?: number | null
+          broken_links?: number | null
+          created_at?: string
+          draft_articles?: number | null
+          id?: string
+          last_sync_at?: string | null
+          missing_featured_images?: number | null
+          pending_articles?: number | null
+          pending_comments?: number | null
+          project_id: string
+          published_articles?: number | null
+          publishing_trend?: Json | null
+          raw_data?: Json | null
+          seo_issues?: number | null
+          sync_errors?: number | null
+          synced_articles?: number | null
+          total_articles?: number | null
+          total_comments?: number | null
+          total_internal_links?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          approved_comments?: number | null
+          articles_needing_attention?: number | null
+          articles_without_links?: number | null
+          auto_corrections_applied?: number | null
+          broken_links?: number | null
+          created_at?: string
+          draft_articles?: number | null
+          id?: string
+          last_sync_at?: string | null
+          missing_featured_images?: number | null
+          pending_articles?: number | null
+          pending_comments?: number | null
+          project_id?: string
+          published_articles?: number | null
+          publishing_trend?: Json | null
+          raw_data?: Json | null
+          seo_issues?: number | null
+          sync_errors?: number | null
+          synced_articles?: number | null
+          total_articles?: number | null
+          total_comments?: number | null
+          total_internal_links?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wordpress_stats_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
