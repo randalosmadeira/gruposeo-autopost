@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.news-agent]
 verify_jwt = false
+
+[functions.generate-authority-plan]
+verify_jwt = false
