@@ -16,6 +16,7 @@ import {
   GraduationCap,
   History,
   User,
+  Plug,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -35,6 +36,7 @@ const mainNavItems: NavItem[] = [
   { label: 'Agente de notícias', icon: Newspaper, href: '/news-agents' },
   { label: 'Projetos', icon: FolderKanban, href: '/projects' },
   { label: 'Histórico', icon: History, href: '/articles' },
+  { label: 'Plugin WP', icon: Plug, href: '/wordpress-plugin' },
 ];
 
 const bottomNavItems: NavItem[] = [
