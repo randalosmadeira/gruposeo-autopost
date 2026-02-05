@@ -154,6 +154,51 @@ export type Database = {
           },
         ]
       }
+      generation_logs: {
+        Row: {
+          completed_at: string | null
+          completed_steps: number | null
+          created_at: string
+          current_step: string | null
+          error_message: string | null
+          generation_type: string
+          id: string
+          metadata: Json | null
+          started_at: string
+          status: string
+          total_steps: number | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_steps?: number | null
+          created_at?: string
+          current_step?: string | null
+          error_message?: string | null
+          generation_type?: string
+          id?: string
+          metadata?: Json | null
+          started_at?: string
+          status?: string
+          total_steps?: number | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          completed_steps?: number | null
+          created_at?: string
+          current_step?: string | null
+          error_message?: string | null
+          generation_type?: string
+          id?: string
+          metadata?: Json | null
+          started_at?: string
+          status?: string
+          total_steps?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       news_agents: {
         Row: {
           active_days: string[] | null

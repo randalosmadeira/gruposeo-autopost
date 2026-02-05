@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.generate-authority-plan]
 verify_jwt = false
+
+[functions.generate-authority-plan-stream]
+verify_jwt = false
+
+[functions.publish-to-wordpress]
+verify_jwt = false
