@@ -131,9 +131,18 @@ export function WordPressSitesCard() {
           description: message,
         });
       } else {
+        // Build detailed error message with troubleshooting steps
+        let errorTitle = 'Falha na conexão';
+        let errorDescription = data?.error || 'Erro desconhecido';
+        
+        // Add hint if available
+        if (data?.hint) {
+          errorDescription += ` ${data.hint}`;
+        }
+        
         toast({
-          title: 'Falha na conexão',
-          description: data?.error || 'Verifique as credenciais e se o plugin Application Passwords está instalado.',
+          title: errorTitle,
+          description: errorDescription,
           variant: 'destructive',
         });
       }
@@ -194,14 +203,33 @@ export function WordPressSitesCard() {
           </div>
         </div>
 
-        {/* Error Warning */}
-        <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5" />
-            <p className="text-sm text-amber-800 dark:text-amber-200">
-              <strong>Erro de conexão?</strong> Se aparecer "Network Error" ou "Failed to fetch", 
-              instale o plugin <strong>"Application Passwords"</strong> ou um plugin de CORS no seu WordPress.
-            </p>
+        {/* Troubleshooting Guide */}
+        <div className="p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm space-y-3">
+              <p className="font-medium text-amber-900 dark:text-amber-100">
+                Problemas de conexão? Verifique:
+              </p>
+              <ul className="space-y-2 text-amber-800 dark:text-amber-200">
+                <li className="flex items-start gap-2">
+                  <span className="font-bold text-amber-600">1.</span>
+                  <span><strong>REST API ativa:</strong> Acesse <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded text-xs">seusite.com/wp-json/</code> no navegador - deve retornar JSON</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="font-bold text-amber-600">2.</span>
+                  <span><strong>Plugins de segurança:</strong> Wordfence, iThemes, etc. podem bloquear a API - adicione exceção ou desative temporariamente</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="font-bold text-amber-600">3.</span>
+                  <span><strong>Senha de Aplicação:</strong> Certifique-se que criou em <em>Usuários → Perfil → Senhas de Aplicação</em> (não é a senha do login)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="font-bold text-amber-600">4.</span>
+                  <span><strong>URL correta:</strong> Use a URL base do site (ex: https://meusite.com), sem <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded text-xs">/wp-admin</code></span>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
 

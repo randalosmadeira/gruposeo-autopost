@@ -131,36 +131,50 @@ serve(async (req) => {
       console.error("WordPress API error:", response.status, responseText.substring(0, 500));
 
       let errorMessage = "Falha na conexão";
+      let hint = "";
       
       if (response.status === 401) {
-        errorMessage = "Autenticação falhou. Verifique usuário e senha de aplicação.";
+        errorMessage = "Autenticação falhou.";
+        hint = "Verifique se o usuário e a Senha de Aplicação estão corretos. A senha deve ser criada em Usuários → Perfil → Senhas de Aplicação.";
       } else if (response.status === 403) {
-        errorMessage = "Acesso negado. Verifique se o usuário tem permissões adequadas.";
+        errorMessage = "Acesso negado.";
+        hint = "Verifique se o usuário tem permissões de autor/editor/administrador para criar posts.";
       } else if (response.status === 404) {
-        errorMessage = "REST API não encontrada. Verifique se está ativada no WordPress.";
+        errorMessage = "REST API não encontrada.";
+        hint = "Verifique se a REST API está ativada. Acesse " + baseUrl + "/wp-json/ no navegador para testar.";
+      } else if (response.status === 500) {
+        errorMessage = "Erro interno do WordPress.";
+        hint = "Verifique os logs do WordPress ou desative plugins temporariamente para identificar o problema.";
       } else {
-        errorMessage = `Erro ${response.status}: ${responseText.substring(0, 100)}`;
+        errorMessage = `Erro HTTP ${response.status}.`;
+        hint = "Verifique se o site está acessível e a REST API está funcionando.";
       }
 
       return new Response(
-        JSON.stringify({ success: false, error: errorMessage, status: response.status }),
+        JSON.stringify({ success: false, error: errorMessage, hint, status: response.status }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
   } catch (error) {
     console.error("Connection test error:", error);
     
-    let errorMessage = "Could not connect to the WordPress site.";
+    let errorMessage = "Não foi possível conectar ao site WordPress.";
+    let hint = "Verifique se a URL está correta e o site está acessível.";
+    
     if (error instanceof Error) {
-      if (error.message.includes("fetch")) {
-        errorMessage = "Could not reach the WordPress site. Check if the URL is correct and accessible.";
+      if (error.message.includes("fetch") || error.message.includes("network")) {
+        errorMessage = "Não foi possível acessar o site.";
+        hint = "Verifique se a URL está correta, incluindo https://. Confirme que o site está online.";
+      } else if (error.message.includes("certificate") || error.message.includes("SSL")) {
+        errorMessage = "Erro de certificado SSL.";
+        hint = "O site pode ter problemas com o certificado HTTPS. Verifique se o SSL está configurado corretamente.";
       } else {
         errorMessage = error.message;
       }
     }
 
     return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
+      JSON.stringify({ success: false, error: errorMessage, hint }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
