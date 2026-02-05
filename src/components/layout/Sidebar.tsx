@@ -36,7 +36,7 @@ const mainNavItems: NavItem[] = [
   { label: 'Agente de notícias', icon: Newspaper, href: '/news-agents' },
   { label: 'Projetos', icon: FolderKanban, href: '/projects' },
   { label: 'Histórico', icon: History, href: '/articles' },
-  { label: 'Plugin WP', icon: Plug, href: '/wordpress-plugin' },
+  { label: 'Plugin WP', icon: Plug, href: '/wordpress-plugin', badge: 'Novo', badgeVariant: 'accent' },
 ];
 
 const bottomNavItems: NavItem[] = [
@@ -57,6 +57,12 @@ export function Sidebar() {
     const active = isActive(item.href);
     const Icon = item.icon;
 
+    const badgeColors = {
+      default: 'bg-muted text-muted-foreground',
+      accent: 'bg-primary text-primary-foreground',
+      premium: 'bg-amber-500 text-white',
+    };
+
     const linkContent = (
       <PrefetchLink
         to={item.href}
@@ -68,10 +74,20 @@ export function Sidebar() {
           !active && 'text-sidebar-foreground/70 hover:text-sidebar-foreground'
         )}
       >
-        <Icon className={cn(
-          'w-5 h-5 flex-shrink-0 transition-colors',
-          active && 'text-sidebar-primary'
-        )} />
+        <div className="relative">
+          <Icon className={cn(
+            'w-5 h-5 flex-shrink-0 transition-colors',
+            active && 'text-sidebar-primary'
+          )} />
+          {item.badge && (
+            <span className={cn(
+              'absolute -top-1.5 -right-2.5 px-1 py-0.5 text-[8px] font-bold rounded-full leading-none',
+              badgeColors[item.badgeVariant || 'default']
+            )}>
+              {item.badge}
+            </span>
+          )}
+        </div>
         <span className={cn(
           'text-[10px] font-medium text-center leading-tight',
           collapsed && 'max-w-[60px] truncate'
