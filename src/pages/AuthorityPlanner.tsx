@@ -20,10 +20,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuthorityPlanGeneration } from '@/hooks/useAuthorityPlanGeneration';
 import { useWordPressPublish } from '@/hooks/useWordPressPublish';
-import { ThemeCard, WordPressCard, PublicationModeCard, LocaleCard } from '@/components/authority-planner';
+import { 
+  ThemeCard, 
+  WordPressCard, 
+  PublicationModeCard, 
+  LocaleCard,
+  GenerationHistory,
+  SchedulingCard
+} from '@/components/authority-planner';
 import { ArticleEditor } from '@/components/articles/ArticleEditor';
 
 const formSchema = z.object({
@@ -35,6 +43,7 @@ const formSchema = z.object({
   publicationMode: z.enum(['draft', 'pending', 'publish', 'scheduled']),
   language: z.string(),
   country: z.string(),
+  scheduledTimes: z.array(z.string()).optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -71,6 +80,7 @@ export default function AuthorityPlanner() {
   
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [activeTab, setActiveTab] = useState('new');
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -83,10 +93,12 @@ export default function AuthorityPlanner() {
       publicationMode: 'draft',
       language: 'pt-BR',
       country: 'BR',
+      scheduledTimes: [],
     },
   });
 
   const satelliteCount = form.watch('satelliteCount');
+  const publicationMode = form.watch('publicationMode');
 
   const onSubmit = async (data: FormData) => {
     setSelectedProjectId(data.projectId);
@@ -133,7 +145,7 @@ export default function AuthorityPlanner() {
       <div className="container max-w-4xl py-8 space-y-6">
         <div className="space-y-1">
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <CheckCircle2 className="w-6 h-6 text-green-500" />
+            <CheckCircle2 className="w-6 h-6 text-primary" />
             Plano de Autoridade Gerado!
           </h1>
           <p className="text-muted-foreground">
@@ -247,149 +259,164 @@ export default function AuthorityPlanner() {
   }
 
   return (
-    <div className="container max-w-4xl py-8 space-y-6">
+    <div className="container max-w-5xl py-8 space-y-6">
       {/* Header */}
       <div className="space-y-1">
-        <h1 className="text-2xl font-bold text-foreground">Novo Plano de Autoridade</h1>
+        <h1 className="text-2xl font-bold text-foreground">Planejador de Autoridade</h1>
         <p className="text-muted-foreground">
-          Defina o tema central e configurações do plano
+          Crie clusters de conteúdo para fortalecer sua autoridade temática
         </p>
       </div>
 
-      {/* Generation Progress Panel */}
-      {isGenerating && (
-        <Card className="border-primary/50">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                Gerando Plano de Autoridade
-              </CardTitle>
-              <Button variant="ghost" size="sm" onClick={cancel}>
-                <X className="w-4 h-4 mr-1" />
-                Cancelar
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Progress Bar */}
-            {progress && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">{progress.step}</span>
-                  <span className="font-medium">{progress.percentage}%</span>
+      {/* Tabs for New Plan / History */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="new">Novo Plano</TabsTrigger>
+          <TabsTrigger value="history">Histórico</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="history" className="space-y-4">
+          <GenerationHistory />
+        </TabsContent>
+
+        <TabsContent value="new" className="space-y-6">
+          {/* Generation Progress Panel */}
+          {isGenerating && (
+            <Card className="border-primary/50">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                    Gerando Plano de Autoridade
+                  </CardTitle>
+                  <Button variant="ghost" size="sm" onClick={cancel}>
+                    <X className="w-4 h-4 mr-1" />
+                    Cancelar
+                  </Button>
                 </div>
-                <Progress value={progress.percentage} className="h-2" />
-                <p className="text-xs text-muted-foreground">
-                  Etapa {progress.current} de {progress.total}
-                </p>
-              </div>
-            )}
-
-            {/* Plans Preview */}
-            <div className="grid grid-cols-2 gap-4">
-              {/* Pillar Plan */}
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">Pilar</Badge>
-                  Artigo Principal
-                </h4>
-                {pillarPlan ? (
-                  <div className="p-3 rounded-lg bg-muted/50 text-sm">
-                    <p className="font-medium truncate">{pillarPlan.title}</p>
-                    <p className="text-xs text-muted-foreground">{pillarPlan.outline.length} seções</p>
-                  </div>
-                ) : (
-                  <div className="p-3 rounded-lg bg-muted/30 text-sm text-muted-foreground">
-                    Aguardando...
-                  </div>
-                )}
-                {generatedArticles.pillar && (
-                  <div className="flex items-center gap-2 text-xs text-green-600">
-                    <CheckCircle2 className="w-3 h-3" />
-                    Criado com sucesso
-                  </div>
-                )}
-              </div>
-
-              {/* Satellite Plans */}
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">Satélites</Badge>
-                  Artigos de Suporte
-                </h4>
-                <div className="space-y-1">
-                  {satellitePlans.length > 0 ? (
-                    satellitePlans.slice(0, 3).map((plan, i) => (
-                      <div key={i} className="p-2 rounded bg-muted/50 text-xs flex items-center gap-2">
-                        {generatedArticles.satellites.find(s => s.title === plan.title) ? (
-                          <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
-                        ) : (
-                          <div className="w-3 h-3 rounded-full border border-muted-foreground flex-shrink-0" />
-                        )}
-                        <span className="truncate">{plan.title}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-2 rounded bg-muted/30 text-xs text-muted-foreground">
-                      Aguardando...
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Progress Bar */}
+                {progress && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">{progress.step}</span>
+                      <span className="font-medium">{progress.percentage}%</span>
                     </div>
-                  )}
-                  {satellitePlans.length > 3 && (
-                    <p className="text-xs text-muted-foreground pl-2">
-                      +{satellitePlans.length - 3} mais...
+                    <Progress value={progress.percentage} className="h-2" />
+                    <p className="text-xs text-muted-foreground">
+                      Etapa {progress.current} de {progress.total}
                     </p>
+                  </div>
+                )}
+
+                {/* Plans Preview */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Pillar Plan */}
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">Pilar</Badge>
+                      Artigo Principal
+                    </h4>
+                    {pillarPlan ? (
+                      <div className="p-3 rounded-lg bg-muted/50 text-sm">
+                        <p className="font-medium truncate">{pillarPlan.title}</p>
+                        <p className="text-xs text-muted-foreground">{pillarPlan.outline.length} seções</p>
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-lg bg-muted/30 text-sm text-muted-foreground">
+                        Aguardando...
+                      </div>
+                    )}
+                    {generatedArticles.pillar && (
+                      <div className="flex items-center gap-2 text-xs text-primary">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Criado com sucesso
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Satellite Plans */}
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">Satélites</Badge>
+                      Artigos de Suporte
+                    </h4>
+                    <div className="space-y-1">
+                      {satellitePlans.length > 0 ? (
+                        satellitePlans.slice(0, 3).map((plan, i) => (
+                          <div key={i} className="p-2 rounded bg-muted/50 text-xs flex items-center gap-2">
+                            {generatedArticles.satellites.find(s => s.title === plan.title) ? (
+                              <CheckCircle2 className="w-3 h-3 text-primary flex-shrink-0" />
+                            ) : (
+                              <div className="w-3 h-3 rounded-full border border-muted-foreground flex-shrink-0" />
+                            )}
+                            <span className="truncate">{plan.title}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-2 rounded bg-muted/30 text-xs text-muted-foreground">
+                          Aguardando...
+                        </div>
+                      )}
+                      {satellitePlans.length > 3 && (
+                        <p className="text-xs text-muted-foreground pl-2">
+                          +{satellitePlans.length - 3} mais...
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live Logs */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium">Log de Execução</h4>
+                  <ScrollArea className="h-32 rounded-lg border bg-muted/30 p-3">
+                    <div className="space-y-1 font-mono text-xs">
+                      {logs.map((log, i) => (
+                        <p key={i} className="text-muted-foreground">{log}</p>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <ThemeCard form={form} satelliteCount={satelliteCount} />
+              <WordPressCard form={form} projects={projects} projectsLoading={projectsLoading} />
+              <PublicationModeCard form={form} />
+              <SchedulingCard form={form} isScheduleMode={publicationMode === 'scheduled'} />
+              <LocaleCard form={form} />
+
+              {/* Submit Button */}
+              <div className="flex justify-end pt-4">
+                <Button 
+                  type="submit" 
+                  size="lg"
+                  disabled={isGenerating}
+                  className="gap-2"
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Gerando Plano...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      Gerar Plano de Autoridade
+                      <ArrowRight className="w-4 h-4" />
+                    </>
                   )}
-                </div>
+                </Button>
               </div>
-            </div>
-
-            {/* Live Logs */}
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium">Log de Execução</h4>
-              <ScrollArea className="h-32 rounded-lg border bg-muted/30 p-3">
-                <div className="space-y-1 font-mono text-xs">
-                  {logs.map((log, i) => (
-                    <p key={i} className="text-muted-foreground">{log}</p>
-                  ))}
-                </div>
-              </ScrollArea>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <ThemeCard form={form} satelliteCount={satelliteCount} />
-          <WordPressCard form={form} projects={projects} projectsLoading={projectsLoading} />
-          <PublicationModeCard form={form} />
-          <LocaleCard form={form} />
-
-          {/* Submit Button */}
-          <div className="flex justify-end pt-4">
-            <Button 
-              type="submit" 
-              size="lg"
-              disabled={isGenerating}
-              className="gap-2"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Gerando Plano...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  Gerar Plano de Autoridade
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </Button>
-          </div>
-        </form>
-      </Form>
+            </form>
+          </Form>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
