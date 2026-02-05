@@ -1,0 +1,368 @@
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle 
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuSeparator,
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
+import { 
+  Globe, 
+  FileText, 
+  CheckCircle2, 
+  MoreHorizontal, 
+  Loader2, 
+  Trash2, 
+  Settings,
+  AlertTriangle,
+  Eye,
+  EyeOff
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import type { Tables, TablesUpdate } from '@/integrations/supabase/types';
+
+type Project = Tables<'projects'>;
+
+const SEO_PLUGINS = [
+  { value: 'none', label: 'Nenhum' },
+  { value: 'yoast', label: 'Yoast SEO' },
+  { value: 'rankmath', label: 'Rank Math' },
+  { value: 'aioseo', label: 'All in One SEO' },
+];
+
+interface ProjectCardProps {
+  project: Project;
+  stats: { total: number; published: number };
+  onUpdate: (data: TablesUpdate<'projects'> & { id: string }) => Promise<void>;
+  onDelete: (id: string) => void;
+  isUpdating?: boolean;
+}
+
+export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: ProjectCardProps) {
+  const { toast } = useToast();
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [formData, setFormData] = useState({
+    name: project.name,
+    domain: project.domain,
+    description: project.description || '',
+    wordpress_url: project.wordpress_url || '',
+    wordpress_username: project.wordpress_username || '',
+    wordpress_app_password: project.wordpress_app_password || '',
+    seo_plugin: project.seo_plugin || 'none',
+  });
+
+  const hasCredentials = !!(
+    project.wordpress_url &&
+    project.wordpress_username &&
+    project.wordpress_app_password
+  );
+
+  const handleTestConnection = async () => {
+    if (!formData.wordpress_url || !formData.wordpress_username || !formData.wordpress_app_password) {
+      toast({
+        title: 'Dados incompletos',
+        description: 'Preencha URL, usuário e senha do WordPress.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsTesting(true);
+    try {
+      const response = await fetch(`${formData.wordpress_url}/wp-json/wp/v2/posts?per_page=1`, {
+        headers: {
+          'Authorization': 'Basic ' + btoa(`${formData.wordpress_username}:${formData.wordpress_app_password}`),
+        },
+      });
+
+      if (response.ok) {
+        toast({
+          title: 'Conexão bem-sucedida!',
+          description: 'O WordPress está acessível com essas credenciais.',
+        });
+      } else {
+        toast({
+          title: 'Falha na conexão',
+          description: 'Verifique as credenciais e se o plugin Application Passwords está instalado.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Erro de conexão',
+        description: 'Não foi possível conectar ao site. Verifique a URL e as credenciais.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleSave = async () => {
+    await onUpdate({
+      id: project.id,
+      name: formData.name,
+      domain: formData.domain,
+      description: formData.description || null,
+      wordpress_url: formData.wordpress_url || null,
+      wordpress_username: formData.wordpress_username || null,
+      wordpress_app_password: formData.wordpress_app_password || null,
+      seo_plugin: formData.seo_plugin,
+      is_connected: !!(formData.wordpress_url && formData.wordpress_username && formData.wordpress_app_password),
+    });
+    setIsEditOpen(false);
+  };
+
+  return (
+    <>
+      <Card className="group hover:shadow-card-hover hover:-translate-y-1 transition-all">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-gradient-primary flex items-center justify-center text-primary-foreground">
+                <Globe className="w-6 h-6" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">{project.name}</CardTitle>
+                <CardDescription className="text-xs">{project.domain}</CardDescription>
+              </div>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100">
+                  <MoreHorizontal className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setIsEditOpen(true)}>
+                  <Settings className="w-4 h-4 mr-2" />
+                  Configurar
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  className="text-destructive" 
+                  onClick={() => onDelete(project.id)}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Excluir
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {project.description && (
+            <p className="text-sm text-muted-foreground line-clamp-2">{project.description}</p>
+          )}
+          
+          <div className="flex gap-4">
+            <span className="flex items-center gap-1 text-sm">
+              <FileText className="w-4 h-4" />
+              <strong>{stats.total}</strong> artigos
+            </span>
+            <span className="flex items-center gap-1 text-sm">
+              <CheckCircle2 className="w-4 h-4 text-primary" />
+              <strong>{stats.published}</strong> publicados
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Badge 
+              className={cn(
+                hasCredentials 
+                  ? 'bg-primary/10 text-primary border-primary/30' 
+                  : 'bg-destructive/10 text-destructive border-destructive/30'
+              )}
+            >
+              {hasCredentials ? (
+                <><CheckCircle2 className="w-3 h-3 mr-1" />WordPress Configurado</>
+              ) : (
+                <><AlertTriangle className="w-3 h-3 mr-1" />Sem Credenciais</>
+              )}
+            </Badge>
+            {project.seo_plugin && project.seo_plugin !== 'none' && (
+              <Badge variant="outline" className="text-xs">
+                {SEO_PLUGINS.find(p => p.value === project.seo_plugin)?.label}
+              </Badge>
+            )}
+          </div>
+
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="w-full"
+            onClick={() => setIsEditOpen(true)}
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            Configurar WordPress
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Configurar Projeto</DialogTitle>
+            <DialogDescription>
+              Configure as credenciais WordPress para publicação automática
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+            {/* Basic Info */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium text-muted-foreground uppercase">Informações Básicas</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Nome do Projeto</Label>
+                  <Input 
+                    value={formData.name} 
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Domínio</Label>
+                  <Input 
+                    value={formData.domain} 
+                    onChange={(e) => setFormData({ ...formData, domain: e.target.value })} 
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Descrição (opcional)</Label>
+                <Input 
+                  value={formData.description} 
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
+                />
+              </div>
+            </div>
+
+            {/* WordPress Credentials */}
+            <div className="space-y-4 pt-4 border-t">
+              <h4 className="text-sm font-medium text-muted-foreground uppercase">Credenciais WordPress</h4>
+              
+              <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 text-sm">
+                <p className="text-primary">
+                  <strong>Dica:</strong> Vá em <em>Usuários → Perfil → Senhas de Aplicação</em> no WordPress para gerar uma senha.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>URL do WordPress</Label>
+                <Input 
+                  placeholder="https://meusite.com"
+                  value={formData.wordpress_url} 
+                  onChange={(e) => setFormData({ ...formData, wordpress_url: e.target.value })} 
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Usuário WordPress</Label>
+                <Input 
+                  placeholder="admin"
+                  value={formData.wordpress_username} 
+                  onChange={(e) => setFormData({ ...formData, wordpress_username: e.target.value })} 
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Senha de Aplicação</Label>
+                <div className="relative">
+                  <Input 
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="xxxx xxxx xxxx xxxx"
+                    value={formData.wordpress_app_password} 
+                    onChange={(e) => setFormData({ ...formData, wordpress_app_password: e.target.value })} 
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              <Button 
+                variant="outline" 
+                onClick={handleTestConnection}
+                disabled={isTesting}
+                className="w-full"
+              >
+                {isTesting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Globe className="w-4 h-4 mr-2" />
+                )}
+                Testar Conexão
+              </Button>
+            </div>
+
+            {/* SEO Plugin */}
+            <div className="space-y-4 pt-4 border-t">
+              <h4 className="text-sm font-medium text-muted-foreground uppercase">Plugin SEO</h4>
+              <div className="space-y-2">
+                <Label>Plugin de SEO instalado</Label>
+                <Select 
+                  value={formData.seo_plugin} 
+                  onValueChange={(value) => setFormData({ ...formData, seo_plugin: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEO_PLUGINS.map((plugin) => (
+                      <SelectItem key={plugin.value} value={plugin.value}>
+                        {plugin.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Se configurado, os artigos incluirão meta tags de SEO automaticamente.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSave} disabled={isUpdating || !formData.name || !formData.domain}>
+              {isUpdating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
