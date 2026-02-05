@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import JSZip from 'jszip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +16,7 @@ import {
   Zap,
   CheckCircle,
   Code,
+  Loader2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -64,13 +66,71 @@ const installSteps = [
 
 export default function WordPressPluginPage() {
   const [copied, setCopied] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
   const { toast } = useToast();
 
-  const handleDownload = () => {
-    toast({
-      title: 'Plugin WordPress',
-      description: 'Os arquivos do plugin estão em /public/wordpress-plugin/contentfactory-rdm/',
-    });
+  const handleDownload = async () => {
+    setIsDownloading(true);
+    
+    try {
+      const zip = new JSZip();
+      const pluginFolder = zip.folder('contentfactory-rdm');
+      
+      if (!pluginFolder) {
+        throw new Error('Erro ao criar pasta do plugin');
+      }
+      
+      // Fetch all plugin files
+      const files = [
+        { path: 'contentfactory-rdm.php', url: '/wordpress-plugin/contentfactory-rdm/contentfactory-rdm.php' },
+        { path: 'readme.txt', url: '/wordpress-plugin/contentfactory-rdm/readme.txt' },
+        { path: 'includes/class-cfrdm-api.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-api.php' },
+        { path: 'includes/class-cfrdm-webhooks.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-webhooks.php' },
+        { path: 'includes/class-cfrdm-articles.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-articles.php' },
+        { path: 'includes/class-cfrdm-admin.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-admin.php' },
+        { path: 'assets/css/admin.css', url: '/wordpress-plugin/contentfactory-rdm/assets/css/admin.css' },
+        { path: 'assets/js/admin.js', url: '/wordpress-plugin/contentfactory-rdm/assets/js/admin.js' },
+      ];
+      
+      // Fetch each file and add to zip
+      const fetchPromises = files.map(async (file) => {
+        const response = await fetch(file.url);
+        if (!response.ok) {
+          throw new Error(`Erro ao carregar ${file.path}`);
+        }
+        const content = await response.text();
+        pluginFolder.file(file.path, content);
+      });
+      
+      await Promise.all(fetchPromises);
+      
+      // Generate zip
+      const blob = await zip.generateAsync({ type: 'blob' });
+      
+      // Download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `contentfactory-rdm-${PLUGIN_VERSION}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: 'Download iniciado!',
+        description: 'O arquivo ZIP do plugin está sendo baixado.',
+      });
+    } catch (error) {
+      console.error('Erro ao gerar ZIP:', error);
+      toast({
+        title: 'Erro no download',
+        description: 'Não foi possível gerar o arquivo ZIP do plugin.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -97,9 +157,18 @@ export default function WordPressPluginPage() {
           <Badge variant="secondary" className="text-sm px-3 py-1">
             v{PLUGIN_VERSION}
           </Badge>
-          <Button onClick={handleDownload} size="lg">
-            <Download className="w-5 h-5 mr-2" />
-            Baixar Plugin
+          <Button onClick={handleDownload} size="lg" disabled={isDownloading}>
+            {isDownloading ? (
+              <>
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                Gerando ZIP...
+              </>
+            ) : (
+              <>
+                <Download className="w-5 h-5 mr-2" />
+                Baixar Plugin (.zip)
+              </>
+            )}
           </Button>
         </div>
       </div>
