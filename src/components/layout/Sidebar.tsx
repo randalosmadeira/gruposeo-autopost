@@ -15,6 +15,7 @@ import {
   Zap,
   BarChart3,
   Crown,
+  Newspaper,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -31,6 +32,7 @@ const mainNavItems: NavItem[] = [
   { label: 'Novo Artigo', icon: PenTool, href: '/articles/new', badge: 'IA', badgeVariant: 'accent' },
   { label: 'Artigos', icon: FileText, href: '/articles' },
   { label: 'Plano Autoridade', icon: Crown, href: '/authority-planner', badge: 'Novo', badgeVariant: 'premium' },
+  { label: 'Agente Notícias', icon: Newspaper, href: '/news-agents', badge: 'IA', badgeVariant: 'accent' },
   { label: 'Geração em Massa', icon: Zap, href: '/articles/bulk', badge: 'Beta', badgeVariant: 'premium' },
   { label: 'Projetos', icon: FolderKanban, href: '/projects' },
   { label: 'Links Internos', icon: Link2, href: '/internal-links' },
