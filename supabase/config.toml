@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.regenerate-content]
 verify_jwt = false
+
+[functions.test-wordpress-connection]
+verify_jwt = false

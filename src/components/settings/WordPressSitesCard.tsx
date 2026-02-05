@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const SEO_PLUGINS = [
   { value: 'none', label: 'Nenhum' },
@@ -102,33 +103,45 @@ export function WordPressSitesCard() {
     }
 
     try {
-      // Test the WordPress REST API
-      const response = await fetch(`${project.wordpress_url}/wp-json/wp/v2/posts?per_page=1`, {
-        headers: {
-          'Authorization': 'Basic ' + btoa(`${project.wordpress_username}:${project.wordpress_app_password}`),
+      // Test the WordPress REST API via edge function (avoids CORS)
+      const { data, error } = await supabase.functions.invoke('test-wordpress-connection', {
+        body: {
+          wordpress_url: project.wordpress_url,
+          wordpress_username: project.wordpress_username,
+          wordpress_app_password: project.wordpress_app_password,
         },
       });
 
-      if (response.ok) {
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data?.success) {
         await updateProject.mutateAsync({
           id: projectId,
           is_connected: true,
         });
+        
+        const message = data.canPublish 
+          ? `Conectado com sucesso! Usuário: ${data.user?.name || 'N/A'}`
+          : 'Conectado, mas o usuário pode não ter permissão para publicar.';
+        
         toast({
-          title: 'Conexão bem-sucedida!',
-          description: 'O site WordPress está conectado.',
+          title: 'Conexão bem-sucedida! ✓',
+          description: message,
         });
       } else {
         toast({
           title: 'Falha na conexão',
-          description: 'Verifique as credenciais e se o plugin Application Passwords está instalado.',
+          description: data?.error || 'Verifique as credenciais e se o plugin Application Passwords está instalado.',
           variant: 'destructive',
         });
       }
     } catch (error) {
+      console.error('Connection test error:', error);
       toast({
         title: 'Erro de conexão',
-        description: 'Não foi possível conectar ao site. Verifique a URL e as credenciais.',
+        description: error instanceof Error ? error.message : 'Não foi possível conectar ao site.',
         variant: 'destructive',
       });
     } finally {
