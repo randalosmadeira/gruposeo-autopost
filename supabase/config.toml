@@ -20,3 +20,15 @@ verify_jwt = false
 
 [functions.test-wordpress-connection]
 verify_jwt = false
+
+[functions.wordpress-api]
+verify_jwt = false
+
+[functions.articles-api]
+verify_jwt = false
+
+[functions.webhooks]
+verify_jwt = false
+
+[functions.ai-api]
+verify_jwt = false
