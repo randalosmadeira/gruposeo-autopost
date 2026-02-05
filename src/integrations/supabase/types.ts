@@ -293,6 +293,7 @@ export type Database = {
           id: string
           is_connected: boolean
           name: string
+          seo_plugin: string | null
           updated_at: string
           user_id: string
           wordpress_app_password: string | null
@@ -306,6 +307,7 @@ export type Database = {
           id?: string
           is_connected?: boolean
           name: string
+          seo_plugin?: string | null
           updated_at?: string
           user_id: string
           wordpress_app_password?: string | null
@@ -319,6 +321,7 @@ export type Database = {
           id?: string
           is_connected?: boolean
           name?: string
+          seo_plugin?: string | null
           updated_at?: string
           user_id?: string
           wordpress_app_password?: string | null
@@ -327,46 +330,103 @@ export type Database = {
         }
         Relationships: []
       }
+      prompt_templates: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          prompt: string
+          template_type: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          prompt: string
+          template_type?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          prompt?: string
+          template_type?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_settings: {
         Row: {
+          ai_provider: string | null
           anthropic_api_key: string | null
+          byok_enabled: boolean | null
+          content_model: string | null
           created_at: string
           default_ai_model: string | null
           default_language: string | null
           default_point_of_view: string | null
           default_tone: string | null
           email_notifications: boolean | null
+          gemini_api_key: string | null
           id: string
+          image_model: string | null
           openai_api_key: string | null
           serper_api_key: string | null
+          timezone: string | null
+          title_model: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          ai_provider?: string | null
           anthropic_api_key?: string | null
+          byok_enabled?: boolean | null
+          content_model?: string | null
           created_at?: string
           default_ai_model?: string | null
           default_language?: string | null
           default_point_of_view?: string | null
           default_tone?: string | null
           email_notifications?: boolean | null
+          gemini_api_key?: string | null
           id?: string
+          image_model?: string | null
           openai_api_key?: string | null
           serper_api_key?: string | null
+          timezone?: string | null
+          title_model?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          ai_provider?: string | null
           anthropic_api_key?: string | null
+          byok_enabled?: boolean | null
+          content_model?: string | null
           created_at?: string
           default_ai_model?: string | null
           default_language?: string | null
           default_point_of_view?: string | null
           default_tone?: string | null
           email_notifications?: boolean | null
+          gemini_api_key?: string | null
           id?: string
+          image_model?: string | null
           openai_api_key?: string | null
           serper_api_key?: string | null
+          timezone?: string | null
+          title_model?: string | null
           updated_at?: string
           user_id?: string
         }
