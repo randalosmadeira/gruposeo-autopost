@@ -3,13 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Pencil, ExternalLink, Calendar, Tag, FileText, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
-import { sanitizeHTML } from '@/lib/sanitize';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ArticleBreadcrumbs } from '@/components/articles/ArticleBreadcrumbs';
+import { ArticleContentRenderer } from '@/components/articles/ArticleContentRenderer';
 
 interface Article {
   id: string;
@@ -28,10 +27,10 @@ interface Article {
 
 const statusLabels: Record<string, { label: string; className: string }> = {
   draft: { label: 'Rascunho', className: 'bg-muted text-muted-foreground' },
-  generating: { label: 'Em criação', className: 'bg-amber-100 text-amber-700' },
-  ready: { label: 'Pronto', className: 'bg-blue-100 text-blue-700' },
-  published: { label: 'Publicado', className: 'bg-green-100 text-green-700' },
-  error: { label: 'Erro', className: 'bg-red-100 text-red-700' },
+  generating: { label: 'Em criação', className: 'bg-warning/20 text-warning-foreground' },
+  ready: { label: 'Pronto', className: 'bg-info/20 text-info' },
+  published: { label: 'Publicado', className: 'bg-success/20 text-success' },
+  error: { label: 'Erro', className: 'bg-destructive/20 text-destructive' },
 };
 
 export default function ArticleViewPage() {
@@ -154,8 +153,8 @@ export default function ArticleViewPage() {
             <Card className="bg-card">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-500/10">
-                    <Tag className="w-4 h-4 text-blue-500" />
+                  <div className="p-2 rounded-lg bg-info/10">
+                    <Tag className="w-4 h-4 text-info" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Palavra-chave</p>
@@ -168,8 +167,8 @@ export default function ArticleViewPage() {
             <Card className="bg-card">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-green-500/10">
-                    <Calendar className="w-4 h-4 text-green-500" />
+                  <div className="p-2 rounded-lg bg-success/10">
+                    <Calendar className="w-4 h-4 text-success" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Criado em</p>
@@ -184,8 +183,8 @@ export default function ArticleViewPage() {
             <Card className="bg-card">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-amber-500/10">
-                    <BarChart3 className="w-4 h-4 text-amber-500" />
+                  <div className="p-2 rounded-lg bg-accent/10">
+                    <BarChart3 className="w-4 h-4 text-accent" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Tempo de leitura</p>
@@ -200,45 +199,15 @@ export default function ArticleViewPage() {
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-w-4xl mx-auto p-6 space-y-6">
-        {/* Featured Image */}
-        {article.featured_image_url && (
-          <div className="aspect-video rounded-xl overflow-hidden bg-muted shadow-lg">
-            <img
-              src={article.featured_image_url}
-              alt={article.title || ''}
-              className="w-full h-full object-cover"
-            />
-          </div>
-        )}
-
-        {/* Article Header */}
-        <div className="space-y-4">
-          <h1 className="text-3xl font-bold text-foreground">
-            {article.title || article.keyword}
-          </h1>
-
-          {article.excerpt && (
-            <p className="text-lg text-muted-foreground italic border-l-4 border-primary pl-4">
-              {article.excerpt}
-            </p>
-          )}
-        </div>
-
-        {/* Article Content */}
-        <Card>
-          <CardContent className="pt-6">
-            <div 
-              className="prose prose-sm max-w-none"
-              dangerouslySetInnerHTML={{ 
-                __html: sanitizeHTML(
-                  article.content || '<p class="text-muted-foreground">Sem conteúdo</p>'
-                ) 
-              }}
-            />
-          </CardContent>
-        </Card>
+      {/* Article Content */}
+      <div className="max-w-6xl mx-auto p-6">
+        <ArticleContentRenderer
+          content={article.content || ''}
+          title={article.title || article.keyword}
+          excerpt={article.excerpt || undefined}
+          featuredImageUrl={article.featured_image_url || undefined}
+          showTOC={true}
+        />
       </div>
     </div>
   );
