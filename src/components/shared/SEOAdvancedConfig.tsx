@@ -41,6 +41,7 @@ const contentTypes = [
   { value: 'listicle', label: 'Listicle', description: 'Lista numerada' },
   { value: 'pillar', label: 'Conteúdo Pilar', description: 'Guia completo' },
   { value: 'comparative', label: 'Comparativo', description: 'X vs Y' },
+  { value: 'review', label: 'Review de Produto', description: 'Análise detalhada' },
   { value: 'opinion', label: 'Opinião/Análise', description: 'Ponto de vista' },
   { value: 'news', label: 'Notícia', description: 'Atualidade' },
 ];
