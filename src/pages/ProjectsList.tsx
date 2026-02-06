@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,7 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 import { 
   FolderKanban, 
   Plus, 
@@ -19,17 +20,29 @@ import {
   TrendingUp, 
   ExternalLink,
   HelpCircle,
-  Globe
+  Globe,
+  CheckCircle2,
+  FileText,
+  Pencil,
+  Trash2,
+  Save,
+  X,
+  Check
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
+import { useWordPressStats } from '@/hooks/useWordPressStats';
 import { cn } from '@/lib/utils';
 
 export default function ProjectsList() {
-  const { projects, isLoading, createProject, deleteProject } = useProjects();
+  const { projects, isLoading, createProject, updateProject, deleteProject } = useProjects();
+  const { allStats } = useWordPressStats();
   const [search, setSearch] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
   const [newProject, setNewProject] = useState({ name: '', domain: '', description: '' });
   const [selectedSite, setSelectedSite] = useState<string>('');
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const filteredProjects = projects.filter((p) => 
     p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -41,6 +54,16 @@ export default function ProjectsList() {
     .filter(p => p.wordpress_url)
     .map(p => p.wordpress_url!)
     .filter((url, index, self) => self.indexOf(url) === index);
+
+  // Get stats for a project
+  const getProjectStats = (projectId: string) => {
+    const stats = allStats?.find(s => s.project_id === projectId);
+    return {
+      total: stats?.total_articles || 0,
+      published: stats?.published_articles || 0,
+      draft: stats?.draft_articles || 0
+    };
+  };
 
   const handleCreate = async () => {
     if (!newProject.name) return;
@@ -56,13 +79,43 @@ export default function ProjectsList() {
     });
     setNewProject({ name: '', domain: '', description: '' });
     setSelectedSite('');
+    
+    // Show success animation
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
   };
 
   const handleSelectProject = (id: string) => {
+    if (editingProjectId === id) return;
     setSelectedProjectId(id === selectedProjectId ? null : id);
   };
 
-  const handleDeleteProject = (id: string) => {
+  const handleStartEditing = (e: React.MouseEvent, project: { id: string; name: string }) => {
+    e.stopPropagation();
+    setEditingProjectId(project.id);
+    setEditingName(project.name);
+  };
+
+  const handleSaveEdit = async (e: React.MouseEvent, projectId: string) => {
+    e.stopPropagation();
+    if (!editingName.trim()) return;
+    
+    await updateProject.mutateAsync({
+      id: projectId,
+      name: editingName.trim()
+    });
+    setEditingProjectId(null);
+    setEditingName('');
+  };
+
+  const handleCancelEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingProjectId(null);
+    setEditingName('');
+  };
+
+  const handleDeleteProject = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
     if (confirm('Tem certeza que deseja excluir este projeto?')) {
       deleteProject.mutate(id);
       if (selectedProjectId === id) {
@@ -96,6 +149,11 @@ export default function ProjectsList() {
   const projectLimit = 200;
   const projectsUsed = projects.length;
   const progressPercent = (projectsUsed / projectLimit) * 100;
+
+  // Get selected project for editing form
+  const selectedProject = selectedProjectId 
+    ? projects.find(p => p.id === selectedProjectId) 
+    : null;
 
   if (isLoading) {
     return (
@@ -155,28 +213,106 @@ export default function ProjectsList() {
 
           {/* Project Items */}
           <div className="flex-1 overflow-y-auto space-y-1">
-            {filteredProjects.map((project) => (
-              <button
-                key={project.id}
-                onClick={() => handleSelectProject(project.id)}
-                className={cn(
-                  'w-full flex items-center gap-3 p-2.5 rounded-lg transition-colors text-left',
-                  'hover:bg-muted/80',
-                  selectedProjectId === project.id && 'bg-muted'
-                )}
-              >
-                <div className={cn(
-                  'w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-bold',
-                  getProjectColor(project.name)
-                )}>
-                  {getProjectInitials(project.name)}
+            {filteredProjects.map((project) => {
+              const stats = getProjectStats(project.id);
+              const isEditing = editingProjectId === project.id;
+              
+              return (
+                <div
+                  key={project.id}
+                  onClick={() => handleSelectProject(project.id)}
+                  className={cn(
+                    'w-full flex items-start gap-3 p-2.5 rounded-lg transition-all cursor-pointer group',
+                    'hover:bg-muted/80',
+                    selectedProjectId === project.id && 'bg-muted ring-1 ring-primary/20'
+                  )}
+                >
+                  <div className={cn(
+                    'w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0',
+                    getProjectColor(project.name)
+                  )}>
+                    {getProjectInitials(project.name)}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    {isEditing ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          className="h-7 text-sm"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveEdit(e as any, project.id);
+                            if (e.key === 'Escape') handleCancelEdit(e as any);
+                          }}
+                          autoFocus
+                        />
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          className="h-7 w-7 text-green-600"
+                          onClick={(e) => handleSaveEdit(e, project.id)}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          className="h-7 w-7 text-muted-foreground"
+                          onClick={handleCancelEdit}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-1">
+                          <p className="text-sm font-medium truncate">{project.name}</p>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => handleStartEditing(e, project)}
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">{project.domain}</p>
+                      </>
+                    )}
+                    
+                    {/* Stats badges */}
+                    {stats.total > 0 && !isEditing && (
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 gap-1">
+                          <FileText className="w-2.5 h-2.5" />
+                          {stats.total}
+                        </Badge>
+                        {stats.published > 0 && (
+                          <Badge className="text-[10px] px-1.5 py-0 h-4 gap-1 bg-green-500/10 text-green-600 hover:bg-green-500/20">
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            {stats.published}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Delete button */}
+                  {!isEditing && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                      onClick={(e) => handleDeleteProject(e, project.id)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{project.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{project.domain}</p>
-                </div>
-              </button>
-            ))}
+              );
+            })}
 
             {filteredProjects.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
@@ -188,102 +324,135 @@ export default function ProjectsList() {
         </div>
       </aside>
 
-      {/* Main Content - New Project Form */}
+      {/* Main Content - New Project Form or Edit Form */}
       <main className="flex-1 p-8">
-        <Card className="max-w-2xl mx-auto border-border/50 shadow-sm">
+        <Card className="max-w-2xl mx-auto border-border/50 shadow-sm relative overflow-hidden">
+          {/* Success Animation Overlay */}
+          {showSuccess && (
+            <div className="absolute inset-0 bg-background/95 z-10 flex flex-col items-center justify-center animate-fade-in">
+              <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mb-4 animate-scale-in">
+                <CheckCircle2 className="w-8 h-8 text-green-500" />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground">Projeto Criado!</h3>
+              <p className="text-sm text-muted-foreground">Seu projeto foi criado com sucesso.</p>
+            </div>
+          )}
+
           <CardContent className="p-6">
             {/* Header */}
             <div className="flex items-start gap-3 mb-6">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Plus className="w-5 h-5 text-primary" />
+              <div className={cn(
+                "w-10 h-10 rounded-lg flex items-center justify-center",
+                selectedProject ? getProjectColor(selectedProject.name) : "bg-primary/10"
+              )}>
+                {selectedProject ? (
+                  <span className="text-white font-bold text-sm">
+                    {getProjectInitials(selectedProject.name)}
+                  </span>
+                ) : (
+                  <Plus className="w-5 h-5 text-primary" />
+                )}
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-foreground">Novo Projeto</h1>
+                <h1 className="text-xl font-semibold text-foreground">
+                  {selectedProject ? 'Editar Projeto' : 'Novo Projeto'}
+                </h1>
                 <p className="text-sm text-muted-foreground">
-                  Organize seus artigos em projetos dedicados
+                  {selectedProject 
+                    ? 'Atualize as informações do seu projeto' 
+                    : 'Organize seus artigos em projetos dedicados'}
                 </p>
               </div>
             </div>
 
             {/* Form */}
-            <div className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="projectName" className="text-sm font-medium">
-                  Nome do Projeto
-                </Label>
-                <Input 
-                  id="projectName"
-                  placeholder="Ex: Meu Blog de Tecnologia"
-                  value={newProject.name} 
-                  onChange={(e) => setNewProject({ ...newProject, name: e.target.value })} 
-                  className="h-11"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="siteSelect" className="text-sm font-medium">
-                  Site Associado
-                </Label>
-                <Select value={selectedSite} onValueChange={setSelectedSite}>
-                  <SelectTrigger className="h-11">
-                    <SelectValue placeholder="Selecione o site" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {wordpressSites.map((url) => (
-                      <SelectItem key={url} value={url}>
-                        <div className="flex items-center gap-2">
-                          <Globe className="w-4 h-4 text-muted-foreground" />
-                          {url}
-                        </div>
-                      </SelectItem>
-                    ))}
-                    {wordpressSites.length === 0 && (
-                      <div className="px-2 py-3 text-sm text-muted-foreground text-center">
-                        Nenhum site WordPress conectado
-                      </div>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Manual domain input if no site selected */}
-              {!selectedSite && (
+            {selectedProject ? (
+              <EditProjectForm 
+                project={selectedProject} 
+                onUpdate={updateProject.mutateAsync}
+                isUpdating={updateProject.isPending}
+                stats={getProjectStats(selectedProject.id)}
+              />
+            ) : (
+              <div className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="domain" className="text-sm font-medium text-muted-foreground">
-                    Ou digite o domínio manualmente
+                  <Label htmlFor="projectName" className="text-sm font-medium">
+                    Nome do Projeto
                   </Label>
                   <Input 
-                    id="domain"
-                    placeholder="meublog.com.br"
-                    value={newProject.domain} 
-                    onChange={(e) => setNewProject({ ...newProject, domain: e.target.value })} 
+                    id="projectName"
+                    placeholder="Ex: Meu Blog de Tecnologia"
+                    value={newProject.name} 
+                    onChange={(e) => setNewProject({ ...newProject, name: e.target.value })} 
                     className="h-11"
                   />
                 </div>
-              )}
 
-              {/* Configure Integration Link */}
-              <a 
-                href="/settings" 
-                className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
-              >
-                <ExternalLink className="w-4 h-4" />
-                Configurar integração
-              </a>
+                <div className="space-y-2">
+                  <Label htmlFor="siteSelect" className="text-sm font-medium">
+                    Site Associado
+                  </Label>
+                  <Select value={selectedSite} onValueChange={setSelectedSite}>
+                    <SelectTrigger className="h-11">
+                      <SelectValue placeholder="Selecione o site" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {wordpressSites.map((url) => (
+                        <SelectItem key={url} value={url}>
+                          <div className="flex items-center gap-2">
+                            <Globe className="w-4 h-4 text-muted-foreground" />
+                            {url}
+                          </div>
+                        </SelectItem>
+                      ))}
+                      {wordpressSites.length === 0 && (
+                        <div className="px-2 py-3 text-sm text-muted-foreground text-center">
+                          Nenhum site WordPress conectado
+                        </div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              {/* Create Button */}
-              <div className="flex justify-end pt-2">
-                <Button 
-                  onClick={handleCreate} 
-                  disabled={!newProject.name || (!selectedSite && !newProject.domain) || createProject.isPending}
-                  className="bg-gradient-primary hover:opacity-90 px-6"
+                {/* Manual domain input if no site selected */}
+                {!selectedSite && (
+                  <div className="space-y-2">
+                    <Label htmlFor="domain" className="text-sm font-medium text-muted-foreground">
+                      Ou digite o domínio manualmente
+                    </Label>
+                    <Input 
+                      id="domain"
+                      placeholder="meublog.com.br"
+                      value={newProject.domain} 
+                      onChange={(e) => setNewProject({ ...newProject, domain: e.target.value })} 
+                      className="h-11"
+                    />
+                  </div>
+                )}
+
+                {/* Configure Integration Link */}
+                <a 
+                  href="/settings" 
+                  className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
                 >
-                  {createProject.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  <Plus className="w-4 h-4 mr-2" />
-                  Criar Projeto
-                </Button>
+                  <ExternalLink className="w-4 h-4" />
+                  Configurar integração
+                </a>
+
+                {/* Create Button */}
+                <div className="flex justify-end pt-2">
+                  <Button 
+                    onClick={handleCreate} 
+                    disabled={!newProject.name || (!selectedSite && !newProject.domain) || createProject.isPending}
+                    className="bg-gradient-primary hover:opacity-90 px-6"
+                  >
+                    {createProject.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    <Plus className="w-4 h-4 mr-2" />
+                    Criar Projeto
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Help Section */}
             <div className="mt-6 pt-6 border-t border-border">
@@ -305,6 +474,134 @@ export default function ProjectsList() {
           </CardContent>
         </Card>
       </main>
+    </div>
+  );
+}
+
+// Edit Project Form Component
+function EditProjectForm({ 
+  project, 
+  onUpdate, 
+  isUpdating,
+  stats 
+}: { 
+  project: any;
+  onUpdate: (data: any) => Promise<any>;
+  isUpdating: boolean;
+  stats: { total: number; published: number; draft: number };
+}) {
+  const [name, setName] = useState(project.name);
+  const [description, setDescription] = useState(project.description || '');
+  const [hasChanges, setHasChanges] = useState(false);
+
+  useEffect(() => {
+    setName(project.name);
+    setDescription(project.description || '');
+    setHasChanges(false);
+  }, [project]);
+
+  const handleChange = (field: 'name' | 'description', value: string) => {
+    if (field === 'name') setName(value);
+    if (field === 'description') setDescription(value);
+    setHasChanges(true);
+  };
+
+  const handleSave = async () => {
+    await onUpdate({
+      id: project.id,
+      name,
+      description: description || null
+    });
+    setHasChanges(false);
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Stats Card */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="p-3 rounded-lg bg-muted/50 text-center">
+          <p className="text-2xl font-bold text-foreground">{stats.total}</p>
+          <p className="text-xs text-muted-foreground">Total de Artigos</p>
+        </div>
+        <div className="p-3 rounded-lg bg-green-500/10 text-center">
+          <p className="text-2xl font-bold text-green-600">{stats.published}</p>
+          <p className="text-xs text-muted-foreground">Publicados</p>
+        </div>
+        <div className="p-3 rounded-lg bg-orange-500/10 text-center">
+          <p className="text-2xl font-bold text-orange-600">{stats.draft}</p>
+          <p className="text-xs text-muted-foreground">Rascunhos</p>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="editName" className="text-sm font-medium">
+          Nome do Projeto
+        </Label>
+        <Input 
+          id="editName"
+          value={name} 
+          onChange={(e) => handleChange('name', e.target.value)} 
+          className="h-11"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">
+          Domínio
+        </Label>
+        <Input 
+          value={project.domain}
+          disabled
+          className="h-11 bg-muted"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="editDescription" className="text-sm font-medium">
+          Descrição
+        </Label>
+        <Input 
+          id="editDescription"
+          placeholder="Descrição do projeto..."
+          value={description} 
+          onChange={(e) => handleChange('description', e.target.value)} 
+          className="h-11"
+        />
+      </div>
+
+      {/* WordPress Connection Status */}
+      <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
+        <div className={cn(
+          "w-2 h-2 rounded-full",
+          project.is_connected ? "bg-green-500" : "bg-orange-500"
+        )} />
+        <span className="text-sm">
+          {project.is_connected ? 'WordPress conectado' : 'WordPress não conectado'}
+        </span>
+        {project.wordpress_url && (
+          <a 
+            href={project.wordpress_url} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-xs text-primary hover:underline ml-auto"
+          >
+            {project.wordpress_url}
+          </a>
+        )}
+      </div>
+
+      {/* Save Button */}
+      <div className="flex justify-end pt-2">
+        <Button 
+          onClick={handleSave} 
+          disabled={!hasChanges || isUpdating || !name.trim()}
+          className="bg-gradient-primary hover:opacity-90 px-6"
+        >
+          {isUpdating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+          <Save className="w-4 h-4 mr-2" />
+          Salvar Alterações
+        </Button>
+      </div>
     </div>
   );
 }
