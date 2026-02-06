@@ -230,6 +230,134 @@
   }
 }
 
+/* Article Prose Styles */
+.article-prose {
+  @apply text-foreground leading-relaxed;
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.article-prose h1 {
+  @apply text-2xl md:text-3xl font-bold text-foreground mt-8 mb-4 first:mt-0;
+}
+
+.article-prose h2 {
+  @apply text-xl md:text-2xl font-bold text-foreground mt-8 mb-4 pb-2 border-b border-border;
+}
+
+.article-prose h3 {
+  @apply text-lg md:text-xl font-semibold text-foreground mt-6 mb-3;
+}
+
+.article-prose h4 {
+  @apply text-base md:text-lg font-semibold text-foreground mt-4 mb-2;
+}
+
+.article-prose h5,
+.article-prose h6 {
+  @apply text-sm md:text-base font-medium text-foreground mt-4 mb-2;
+}
+
+.article-prose p {
+  @apply mb-4 last:mb-0;
+}
+
+.article-prose strong,
+.article-prose b {
+  @apply font-semibold text-foreground;
+}
+
+.article-prose em,
+.article-prose i {
+  @apply italic;
+}
+
+.article-prose a {
+  @apply text-primary underline underline-offset-2 hover:text-primary/80 transition-colors;
+}
+
+.article-prose ul {
+  @apply list-disc list-outside ml-6 mb-4 space-y-2;
+}
+
+.article-prose ol {
+  @apply list-decimal list-outside ml-6 mb-4 space-y-2;
+}
+
+.article-prose li {
+  @apply pl-1;
+}
+
+.article-prose li > ul,
+.article-prose li > ol {
+  @apply mt-2 mb-0;
+}
+
+.article-prose blockquote {
+  @apply border-l-4 border-primary bg-primary/5 pl-4 py-3 my-4 italic text-muted-foreground rounded-r-lg;
+}
+
+.article-prose code {
+  @apply bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-foreground;
+}
+
+.article-prose pre {
+  @apply bg-muted p-4 rounded-lg overflow-x-auto my-4;
+}
+
+.article-prose pre code {
+  @apply bg-transparent p-0;
+}
+
+.article-prose table {
+  @apply w-full border-collapse my-6 text-sm;
+}
+
+.article-prose thead {
+  @apply bg-muted;
+}
+
+.article-prose th {
+  @apply border border-border px-4 py-3 text-left font-semibold text-foreground;
+}
+
+.article-prose td {
+  @apply border border-border px-4 py-3 text-foreground;
+}
+
+.article-prose tr:nth-child(even) {
+  @apply bg-muted/50;
+}
+
+.article-prose img {
+  @apply max-w-full h-auto rounded-lg my-4 shadow-md;
+}
+
+.article-prose figure {
+  @apply my-6;
+}
+
+.article-prose figcaption {
+  @apply text-center text-sm text-muted-foreground mt-2 italic;
+}
+
+.article-prose hr {
+  @apply border-t border-border my-8;
+}
+
+/* FAQ Section Specific Styles */
+.article-prose .faq-item {
+  @apply mb-4 pb-4 border-b border-border last:border-b-0;
+}
+
+.article-prose .faq-question {
+  @apply font-semibold text-foreground mb-2;
+}
+
+.article-prose .faq-answer {
+  @apply text-muted-foreground;
+}
+
 /* Animations */
 @keyframes float {
   0%, 100% { transform: translateY(0); }
