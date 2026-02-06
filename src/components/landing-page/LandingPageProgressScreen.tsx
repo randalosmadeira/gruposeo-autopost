@@ -37,32 +37,32 @@ const stepIcons: Record<string, typeof Search> = {
 export const defaultLandingPageSteps: GenerationStep[] = [
   {
     id: 'research',
-    title: 'Pesquisando Mercado',
-    description: 'Analisando concorrentes e tendências do nicho',
+    title: 'Pesquisando Mercado e Buscadores',
+    description: 'Analisando concorrentes, tendências e intenção de busca',
     status: 'pending',
   },
   {
     id: 'structure',
-    title: 'Estruturando Página',
-    description: 'Definindo blocos e hierarquia de conteúdo',
+    title: 'Estruturando Artigo de Vendas',
+    description: 'Definindo hierarquia de conteúdo com técnicas AIDA e PAS',
     status: 'pending',
   },
   {
     id: 'copywriting',
-    title: 'Escrevendo Copy',
-    description: 'Criando textos persuasivos otimizados para conversão',
+    title: 'Escrevendo Copy Persuasivo',
+    description: 'Criando conteúdo com gatilhos neurais e autoridade E-E-A-T',
     status: 'pending',
   },
   {
     id: 'images',
-    title: 'Gerando Imagens',
-    description: 'Criando visuais de suporte para o conteúdo',
+    title: 'Gerando Imagens de Suporte',
+    description: 'Criando visuais que reforçam a mensagem de venda',
     status: 'pending',
   },
   {
     id: 'optimization',
-    title: 'Otimizando SEO',
-    description: 'Aplicando otimizações para mecanismos de busca',
+    title: 'Otimizando para SEO e IAs',
+    description: 'Aplicando técnicas para Google, Bing, ChatGPT e Claude',
     status: 'pending',
   },
 ];
@@ -84,10 +84,10 @@ export function LandingPageProgressScreen({
             <Target className="w-8 h-8" style={{ color: colors.primary }} />
           </div>
           <h2 className="text-xl font-semibold" style={{ color: colors.textPrimary }}>
-            Gerando sua Landing Page
+            Gerando seu Artigo de Vendas
           </h2>
           <p className="text-sm" style={{ color: colors.textSecondary }}>
-            {currentStep || 'Iniciando geração...'}
+            {currentStep || 'Iniciando geração com SEO avançado...'}
           </p>
         </div>
 
@@ -157,7 +157,7 @@ export function LandingPageProgressScreen({
           className="p-4 rounded-lg text-center text-sm"
           style={{ backgroundColor: colors.backgroundSecondary, color: colors.textSecondary }}
         >
-          💡 <strong>Dica:</strong> Landing pages otimizadas podem aumentar conversões em até 300%
+          💡 <strong>Dica:</strong> Artigos de vendas com SEO otimizado podem aumentar o tráfego orgânico em até 400% e conversões em 150%
         </div>
       </div>
     </div>

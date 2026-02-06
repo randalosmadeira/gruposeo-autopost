@@ -480,13 +480,13 @@ export default function LandingPageGenerator() {
           </div>
           <div>
             <h1 className="text-lg md:text-xl font-semibold">
-              Gerador de Página de Vendas
+              Gerador de Artigo de Vendas
             </h1>
             <p className="text-xs md:text-sm hidden sm:block text-muted-foreground">
-              {appState === 'form' && 'Crie páginas de alta conversão'}
-              {appState === 'editing-outline' && 'Edite a estrutura da página'}
-              {appState === 'generating-content' && 'Gerando conteúdo...'}
-              {appState === 'editing-content' && 'Edite e publique sua página'}
+              {appState === 'form' && 'Artigos persuasivos com SEO avançado para B2B/B2C'}
+              {appState === 'editing-outline' && 'Edite a estrutura do artigo'}
+              {appState === 'generating-content' && 'Gerando conteúdo otimizado...'}
+              {appState === 'editing-content' && 'Edite e publique seu artigo'}
             </p>
           </div>
         </div>
@@ -585,14 +585,14 @@ export default function LandingPageGenerator() {
                     maxLength={200}
                   />
                   <p className="text-xs text-muted-foreground">
-                    O tópico principal que sua página de vendas focará
+                    Termo de busca que seu público usa no Google, Bing e IAs
                   </p>
                 </div>
 
                 {/* Title */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1">
-                    Título da Página
+                    Título do Artigo
                     <span className="text-red-500">*</span>
                   </Label>
                   <div className="flex gap-2">
@@ -639,11 +639,11 @@ export default function LandingPageGenerator() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Localização</Label>
+                    <Label>Alcance Geográfico</Label>
                     <Input
                       value={config.location}
                       onChange={(e) => updateConfig('location', e.target.value)}
-                      placeholder="ex: Brasil, São Paulo, etc."
+                      placeholder="ex: Nacional, Regional SP, Internacional"
                     />
                   </div>
 
@@ -1067,7 +1067,7 @@ export default function LandingPageGenerator() {
                   </h2>
                 </div>
                 <p className="text-sm mb-6 text-muted-foreground">
-                  Prévia da página de vendas
+                  Artigo persuasivo otimizado para SEO e IAs
                 </p>
 
                 <div className="rounded-lg border p-6 min-h-[500px]">
@@ -1110,7 +1110,7 @@ export default function LandingPageGenerator() {
                       <div className="p-6 rounded-lg border-2 border-dashed text-center">
                         <Target className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                         <p className="text-sm text-muted-foreground">
-                          O conteúdo da landing page aparecerá aqui quando gerado
+                          O artigo de vendas otimizado para SEO aparecerá aqui
                         </p>
                       </div>
                     </div>
@@ -1120,11 +1120,11 @@ export default function LandingPageGenerator() {
                         <Target className="w-8 h-8 text-orange-600" />
                       </div>
                       <h3 className="text-lg font-semibold mb-2">
-                        Gerador de Página de Vendas
+                        Gerador de Artigo de Vendas
                       </h3>
                       <p className="text-sm max-w-sm text-muted-foreground">
-                        Preencha os detalhes à esquerda para ver uma prévia da 
-                        estrutura e conteúdo da sua página de vendas.
+                        Crie artigos persuasivos com técnicas avançadas de SEO para 
+                        ranquear no Google, Bing e ser reconhecido por IAs como ChatGPT e Claude.
                       </p>
                     </div>
                   )}

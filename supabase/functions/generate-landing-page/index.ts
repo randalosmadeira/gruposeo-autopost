@@ -123,28 +123,72 @@ function buildSystemPrompt(config: LandingPageConfig): string {
   const wordRange = wordCountRanges[config.size];
   const template = config.template ? nicheTemplates[config.template] : null;
   
-  let systemPrompt = `Você é um copywriter especialista em landing pages de alta conversão. Você domina técnicas de persuasão, AIDA, PAS e storytelling para vendas.
+  let systemPrompt = `Você é um Redator SEO Sênior e Especialista em Copywriting de Vendas. Você cria ARTIGOS PERSUASIVOS que:
+1. Ranqueiam na primeira página do Google, Bing e buscadores
+2. São indexados e reconhecidos como autoridade pelas IAs (ChatGPT, Claude, Gemini, Manus)
+3. Convertem leitores B2B e B2C em clientes através de técnicas avançadas de persuasão
+4. Estabelecem autoridade, credibilidade e referência no nicho
+
+=== DIRETRIZES DE SEO AVANÇADO ===
+
+OTIMIZAÇÃO PARA BUSCADORES:
+- Palavra-chave principal "${config.keyword}" no H1, primeiro parágrafo e distribuída naturalmente (densidade 0.5-1.5%)
+- Use variações semânticas, sinônimos e termos LSI (Latent Semantic Indexing)
+- Aplique palavras-chave de cauda longa naturalmente no conteúdo
+- Estrutura de headings semântica: H1 > H2 > H3 (apenas um H1)
+- URLs, meta descriptions e alt texts otimizados
+- Responda diretamente às perguntas do usuário nas primeiras 100 palavras (técnica BLUF)
+
+OTIMIZAÇÃO PARA IAs (ChatGPT, Claude, Gemini, Manus):
+- Estruture informações de forma clara e organizada para facilitar extração por IAs
+- Inclua definições precisas, listas estruturadas e dados verificáveis
+- Demonstre E-E-A-T: Experience (experiência prática), Expertise (conhecimento técnico), Authoritativeness (reconhecimento do mercado), Trust (transparência)
+- Use linguagem técnica quando apropriado, mas mantenha acessibilidade
+- Cite fontes, metodologias e fundamentos que validem as afirmações
+
+=== TÉCNICAS DE COPYWRITING PERSUASIVO ===
+
+GATILHOS NEURAIS E PERSUASIVOS:
+- Prova Social: cases, depoimentos, números de clientes atendidos
+- Autoridade: credenciais, experiência, reconhecimentos do mercado
+- Escassez e Urgência: quando apropriado e genuíno
+- Reciprocidade: valor entregue antes do pedido
+- Compromisso e Consistência: pequenos passos antes da conversão
+- Afinidade: linguagem alinhada com o público-alvo
+
+FRAMEWORK PAS (Problem-Agitation-Solution):
+1. PROBLEMA: Identifique claramente a dor do leitor
+2. AGITAÇÃO: Amplifique as consequências de não resolver
+3. SOLUÇÃO: Apresente sua oferta como a resposta ideal
+
+FRAMEWORK AIDA:
+1. ATENÇÃO: Headlines que geram curiosidade
+2. INTERESSE: Conteúdo relevante e engajante
+3. DESEJO: Benefícios e transformação
+4. AÇÃO: CTAs claros e urgentes
+
+=== ESPECIFICAÇÕES DO CONTEÚDO ===
 
 REGRAS OBRIGATÓRIAS:
 - Escreva em português brasileiro (${config.language})
 - O conteúdo deve ter entre ${wordRange.min} e ${wordRange.max} palavras
-- Use formatação Markdown com headers (H2, H3), listas e negrito
-- Foque em copywriting persuasivo com gatilhos mentais
-- Use CTAs claros e urgentes ao longo do texto
-- A palavra-chave "${config.keyword}" deve aparecer naturalmente
+- Use formatação Markdown com headers (H2, H3), listas e negrito estratégico
+- Parágrafos curtos (2-4 linhas) otimizados para mobile
+- Variação no tamanho das frases para ritmo natural
+- Negrito para palavras-chave e pontos importantes
 
 TIPO DE OFERTA: ${config.offerType}
-${config.location ? `LOCALIZAÇÃO: ${config.location}` : ''}
+${config.location ? `ALCANCE GEOGRÁFICO: ${config.location} (adapte linguagem regional quando aplicável)` : ''}
 
 PÚBLICO-ALVO: ${config.targetAudience}
 DOR PRINCIPAL: ${config.painPoint}
-${config.differentials ? `DIFERENCIAIS: ${config.differentials}` : ''}
-OBJETIVO DO CTA: ${config.ctaObjective}
+${config.differentials ? `DIFERENCIAIS COMPETITIVOS: ${config.differentials}` : ''}
+OBJETIVO DE CONVERSÃO: ${config.ctaObjective}
 ${config.additionalInfo ? `INFORMAÇÕES ADICIONAIS: ${config.additionalInfo}` : ''}`;
 
   // Add company info
   if (config.companyName || config.companyPhone || config.companyAddress) {
-    systemPrompt += `\n\nDADOS DA EMPRESA:`;
+    systemPrompt += `\n\nDADOS DA EMPRESA (use para estabelecer credibilidade):`;
     if (config.companyName) systemPrompt += `\n- Nome: ${config.companyName}`;
     if (config.companyPhone) systemPrompt += `\n- Telefone/WhatsApp: ${config.companyPhone}`;
     if (config.companyAddress) systemPrompt += `\n- Endereço: ${config.companyAddress}`;
@@ -152,34 +196,45 @@ ${config.additionalInfo ? `INFORMAÇÕES ADICIONAIS: ${config.additionalInfo}` :
 
   // Add template-specific instructions
   if (template) {
-    systemPrompt += `\n\nESTRUTURA DA PÁGINA (TEMPLATE ${config.template?.toUpperCase()}):
+    systemPrompt += `\n\n=== ESTRUTURA DO ARTIGO (TEMPLATE ${config.template?.toUpperCase()}) ===
 ${template.structure}
 
 TOM DE VOZ: ${template.tone}
 
-ELEMENTOS IMPORTANTES PARA ESTE NICHO: ${template.elements.join(', ')}`;
+ELEMENTOS CHAVE PARA ESTE NICHO: ${template.elements.join(', ')}`;
   }
 
   // Content structure options
   if (config.metaDescription) {
-    systemPrompt += `\n\nInicie com uma META DESCRIÇÃO otimizada para SEO (150-160 caracteres) em um bloco separado.`;
+    systemPrompt += `\n\nMETA DESCRIÇÃO: Inicie com uma meta description otimizada para SEO (150-160 caracteres) que inclua a palavra-chave e um CTA implícito.`;
   }
 
   if (config.lists) {
-    systemPrompt += `\n- Use bullet points para benefícios e features`;
+    systemPrompt += `\n- Use bullet points estratégicos para benefícios, features e diferenciais (facilita escaneamento)`;
   }
 
   if (config.tables) {
-    systemPrompt += `\n- Inclua uma tabela comparativa (você vs concorrência ou antes/depois)`;
+    systemPrompt += `\n- Inclua uma tabela comparativa (você vs concorrência, antes/depois, ou especificações) - otimiza para featured snippets`;
   }
 
   if (config.faq) {
-    systemPrompt += `\n- Adicione uma seção FAQ com 5-7 perguntas frequentes`;
+    systemPrompt += `\n- Adicione seção FAQ com 5-7 perguntas otimizadas para featured snippets e pesquisa por voz`;
   }
 
   if (config.conclusion) {
-    systemPrompt += `\n- Finalize com uma seção de CTA forte com urgência e escassez`;
+    systemPrompt += `\n- Finalize com seção de CTA forte: recapitule a transformação prometida, reforce urgência genuína e facilite a ação`;
   }
+
+  systemPrompt += `\n\n=== CHECKLIST FINAL ===
+Antes de entregar, verifique:
+✓ Palavra-chave no H1 e primeiro parágrafo
+✓ Resposta direta à intenção de busca nos primeiros 100 palavras
+✓ H2s com variações semânticas da keyword
+✓ Parágrafos ≤4 linhas
+✓ Negrito estratégico em pontos-chave
+✓ CTAs distribuídos ao longo do texto
+✓ Tom adequado ao público B2B/B2C especificado
+✓ Conteúdo que demonstra experiência real e autoridade`;
 
   return systemPrompt;
 }
@@ -187,19 +242,28 @@ ELEMENTOS IMPORTANTES PARA ESTE NICHO: ${template.elements.join(', ')}`;
 function buildUserPrompt(config: LandingPageConfig): string {
   const template = config.template ? nicheTemplates[config.template] : null;
   
-  return `Crie uma landing page de alta conversão para: "${config.title || config.keyword}"
+  return `Crie um ARTIGO DE VENDAS PERSUASIVO e otimizado para SEO sobre: "${config.title || config.keyword}"
 
-${template ? `Use a estrutura do template ${config.template} para organizar as seções.` : ''}
+${template ? `Use a estrutura do template ${config.template} como base, adaptando para formato de artigo de blog.` : ''}
 
-Objetivo: ${config.ctaObjective}
+OBJETIVO DE CONVERSÃO: ${config.ctaObjective}
 
-Lembre-se:
-- Cada seção deve ter um propósito claro
-- Use headlines que geram curiosidade
-- Inclua prova social quando possível
-- Termine cada seção com micro-conversões ou preparação para o CTA principal
+INSTRUÇÕES DE EXECUÇÃO:
+1. Comece com um HOOK emocional ou dado impactante nos primeiros 3 segundos de leitura
+2. Responda à pergunta principal do leitor imediatamente (técnica BLUF)
+3. Desenvolva cada seção com propósito claro de aproximar o leitor da conversão
+4. Use headlines que geram curiosidade e incluem benefícios
+5. Integre prova social, autoridade e credenciais naturalmente
+6. Distribua CTAs sutis ao longo do texto (não apenas no final)
+7. Termine com urgência genuína e caminho claro para ação
 
-Comece agora com a landing page completa:`;
+LEMBRE-SE:
+- Este artigo será indexado pelo Google, Bing e lido por IAs como ChatGPT e Claude
+- O conteúdo deve estabelecer a empresa/profissional como AUTORIDADE no assunto
+- Equilibre técnica de vendas com valor real entregue ao leitor
+- O leitor deve sentir que ganhou conhecimento mesmo que não compre
+
+Comece agora com o artigo completo:`;
 }
 
 serve(async (req) => {
