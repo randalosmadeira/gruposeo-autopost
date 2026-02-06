@@ -62,14 +62,16 @@ export function ReportProblemDialog({
         throw new Error('Usuário não autenticado');
       }
 
-      // Store the report - for now we'll update the article with error info
-      // In a real app, you'd have a separate reports table
+      // Insert report into dedicated table
       const { error } = await supabase
-        .from('articles')
-        .update({
-          error_message: `[REPORT] Categoria: ${PROBLEM_CATEGORIES.find(c => c.value === category)?.label} | Descrição: ${description}`,
-        })
-        .eq('id', articleId);
+        .from('article_reports')
+        .insert({
+          article_id: articleId,
+          user_id: session.user.id,
+          category,
+          description,
+          status: 'pending',
+        });
 
       if (error) throw error;
 
