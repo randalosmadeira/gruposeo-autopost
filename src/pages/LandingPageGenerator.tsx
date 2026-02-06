@@ -45,6 +45,12 @@ import {
   Code,
   Settings,
   X,
+  Wand2,
+  Building,
+  Heart,
+  DollarSign,
+  BookOpen,
+  Scale,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
@@ -171,6 +177,24 @@ const articleSizes = [
   { value: 'very-long', label: 'Muito Longo', words: '~4.000 palavras' },
 ];
 
+// Audience type options
+const audienceTypes = [
+  { value: 'b2b', label: 'B2B (Empresas)', description: 'Foco em empresas e negócios' },
+  { value: 'b2c', label: 'B2C (Consumidores)', description: 'Foco em consumidores finais' },
+  { value: 'both', label: 'Ambos', description: 'B2B e B2C simultaneamente' },
+];
+
+// Segment options for compliance
+const segmentOptions = [
+  { value: 'general', label: 'Geral', icon: FileText, color: '#6B7280', description: 'Sem compliance específico' },
+  { value: 'juridico', label: 'Jurídico', icon: Scale, color: '#7C3AED', description: 'Compliance OAB/Res. 02/2015' },
+  { value: 'saude', label: 'Saúde', icon: Heart, color: '#EF4444', description: 'Credenciais médicas, disclaimers' },
+  { value: 'fintech', label: 'Fintech/Finanças', icon: DollarSign, color: '#10B981', description: 'Dados de mercado, glossário' },
+  { value: 'ecommerce', label: 'E-commerce', icon: ShoppingCart, color: '#F59E0B', description: 'Social proof, guias de compra' },
+  { value: 'b2b-saas', label: 'B2B SaaS', icon: Code, color: '#3B82F6', description: 'ROI, cases de uso, demos' },
+  { value: 'educacao', label: 'Educação', icon: BookOpen, color: '#EC4899', description: 'Didático, roadmaps, certificações' },
+];
+
 const defaultConfig: LandingPageConfig = {
   keyword: '',
   title: '',
@@ -199,6 +223,10 @@ const defaultConfig: LandingPageConfig = {
   tone: 'profissional',
   customTone: '',
   pointOfView: 'terceira-singular',
+  // NEW fields
+  audienceType: 'both',
+  secondaryKeywords: '',
+  segment: 'general',
   // Advanced
   usePlatformCredits: true,
   seoOptimization: false,
@@ -219,6 +247,7 @@ export default function LandingPageGenerator() {
   
   const [config, setConfig] = useState<LandingPageConfig>(defaultConfig);
   const [generatingTitle, setGeneratingTitle] = useState(false);
+  const [generatingKeywords, setGeneratingKeywords] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [appState, setAppState] = useState<AppState>('form');
@@ -293,6 +322,37 @@ export default function LandingPageGenerator() {
         description: 'Você pode editar o título se desejar.',
       });
     }, 1500);
+  };
+
+  // Generate secondary keywords with AI
+  const handleGenerateSecondaryKeywords = async () => {
+    if (!config.keyword.trim()) {
+      toast({
+        title: 'Palavra-chave necessária',
+        description: 'Digite uma palavra-chave principal antes de gerar as secundárias.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setGeneratingKeywords(true);
+    setTimeout(() => {
+      // Simulate AI generation of long-tail keywords
+      const keyword = config.keyword.toLowerCase();
+      const generatedKeywords = [
+        `${keyword} como funciona`,
+        `${keyword} preço`,
+        `melhor ${keyword}`,
+        `${keyword} perto de mim`,
+        `${keyword} para iniciantes`,
+        `${keyword} profissional`,
+      ].join(', ');
+      updateConfig('secondaryKeywords', generatedKeywords);
+      setGeneratingKeywords(false);
+      toast({
+        title: 'Keywords secundárias geradas!',
+        description: 'Palavras-chave de cauda longa adicionadas automaticamente.',
+      });
+    }, 2000);
   };
 
   // Validate form before outline generation
@@ -682,8 +742,148 @@ export default function LandingPageGenerator() {
               </div>
 
               {/* Accordion Sections */}
-              <Accordion type="multiple" defaultValue={['sales-config']} className="space-y-4">
+              <Accordion type="multiple" defaultValue={['seo-segmentation', 'sales-config']} className="space-y-4">
                 
+                {/* SEO e Segmentação - NEW */}
+                <AccordionItem value="seo-segmentation" className="border rounded-lg overflow-hidden">
+                  <AccordionTrigger className="px-4 py-3 hover:no-underline bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <Globe className="w-5 h-5 text-green-600" />
+                      <span className="font-semibold">
+                        SEO e Segmentação
+                      </span>
+                      <Badge variant="outline" className="text-xs border-green-500 text-green-600">Novo</Badge>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="p-4 space-y-6 bg-white">
+                    
+                    {/* Tipo de Público (B2B/B2C) */}
+                    <div className="space-y-3">
+                      <Label className="flex items-center gap-2">
+                        <Users2 className="w-4 h-4 text-green-500" />
+                        Tipo de Público
+                      </Label>
+                      <div className="grid grid-cols-3 gap-3">
+                        {audienceTypes.map((type) => {
+                          const isSelected = config.audienceType === type.value;
+                          return (
+                            <button
+                              key={type.value}
+                              type="button"
+                              onClick={() => updateConfig('audienceType', type.value as 'b2b' | 'b2c' | 'both')}
+                              className={cn(
+                                'p-3 rounded-lg border-2 transition-all text-left',
+                                isSelected 
+                                  ? 'border-green-500 bg-green-50 shadow-sm' 
+                                  : 'border-gray-200 bg-white hover:border-gray-300'
+                              )}
+                            >
+                              <p className="font-medium text-sm">{type.label}</p>
+                              <p className="text-xs text-muted-foreground">{type.description}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Palavras-chave Secundárias */}
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <Wand2 className="w-4 h-4 text-green-500" />
+                        Palavras-chave Secundárias (Long-tail)
+                      </Label>
+                      <div className="flex gap-2">
+                        <Textarea
+                          value={config.secondaryKeywords}
+                          onChange={(e) => updateConfig('secondaryKeywords', e.target.value)}
+                          placeholder="ex: como criar landing page, melhor ferramenta de landing page, landing page grátis"
+                          rows={2}
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleGenerateSecondaryKeywords}
+                          disabled={generatingKeywords}
+                          className="h-auto min-h-[60px] border-green-300 hover:bg-green-50"
+                        >
+                          {generatingKeywords ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="w-4 h-4 text-green-600" />
+                          )}
+                          <span className="ml-2 text-xs">
+                            {generatingKeywords ? 'Gerando...' : 'Gerar com IA'}
+                          </span>
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Termos relacionados de cauda longa para melhorar indexação no Google e IAs.
+                      </p>
+                    </div>
+
+                    {/* Segmento para Compliance */}
+                    <div className="space-y-3">
+                      <Label className="flex items-center gap-2">
+                        <Scale className="w-4 h-4 text-green-500" />
+                        Segmento (Compliance Específico)
+                      </Label>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {segmentOptions.map((segment) => {
+                          const IconComponent = segment.icon;
+                          const isSelected = config.segment === segment.value;
+                          return (
+                            <button
+                              key={segment.value}
+                              type="button"
+                              onClick={() => updateConfig('segment', segment.value as LandingPageConfig['segment'])}
+                              className={cn(
+                                'p-3 rounded-lg border-2 transition-all text-left',
+                                isSelected 
+                                  ? 'shadow-sm' 
+                                  : 'border-gray-200 bg-white hover:border-gray-300'
+                              )}
+                              style={{
+                                borderColor: isSelected ? segment.color : undefined,
+                                backgroundColor: isSelected ? `${segment.color}10` : undefined,
+                              }}
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                <IconComponent 
+                                  className="w-4 h-4" 
+                                  style={{ color: segment.color }} 
+                                />
+                                <span className="font-medium text-xs">{segment.label}</span>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground leading-tight">
+                                {segment.description}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {config.segment === 'juridico' && (
+                        <div className="p-3 rounded-lg bg-purple-50 border border-purple-200 flex items-start gap-2">
+                          <Info className="w-4 h-4 text-purple-500 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-purple-700">
+                            <strong>Compliance OAB:</strong> Artigos para advogados seguirão a Resolução 02/2015, 
+                            evitando termos de mercantilização e incluindo disclaimers adequados.
+                          </p>
+                        </div>
+                      )}
+                      {config.segment === 'saude' && (
+                        <div className="p-3 rounded-lg bg-red-50 border border-red-200 flex items-start gap-2">
+                          <Info className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-red-700">
+                            <strong>Área da Saúde:</strong> Conteúdo incluirá disclaimers médicos, 
+                            menção a credenciais e recomendação de consulta com profissionais.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
                 {/* Configuração de Vendas */}
                 <AccordionItem value="sales-config" className="border rounded-lg overflow-hidden">
                   <AccordionTrigger className="px-4 py-3 hover:no-underline bg-orange-50">
