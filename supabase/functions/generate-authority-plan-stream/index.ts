@@ -15,7 +15,6 @@ interface AuthorityPlanRequest {
   language: string;
   country: string;
   publicationMode: string;
-  userId: string;
 }
 
 interface ArticlePlan {
@@ -86,6 +85,31 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // ========== AUTHENTICATION (must happen before streaming) ==========
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) {
+    return new Response(
+      JSON.stringify({ error: "Autorização necessária" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return new Response(
+      JSON.stringify({ error: "Usuário não autenticado" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+  // ========== END AUTHENTICATION ==========
+
   const encoder = new TextEncoder();
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
@@ -97,21 +121,36 @@ serve(async (req) => {
   // Start async processing
   (async () => {
     try {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
+      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
       const body: AuthorityPlanRequest = await req.json();
-      const { centralTheme, satelliteCount, projectId, language, publicationMode, userId } = body;
+      const { centralTheme, satelliteCount, projectId, language, publicationMode } = body;
 
-      const totalSteps = 4 + satelliteCount * 2; // research, pillar plan, pillar content, pillar image + (content + image) per satellite
+      // Validate project ownership if projectId is provided
+      if (projectId) {
+        const { data: project, error: projectError } = await supabaseAdmin
+          .from("projects")
+          .select("id")
+          .eq("id", projectId)
+          .eq("user_id", user.id)
+          .single();
+
+        if (projectError || !project) {
+          await sendEvent("error", { message: "Projeto não encontrado ou acesso negado" });
+          await writer.close();
+          return;
+        }
+      }
+
+      const totalSteps = 4 + satelliteCount * 2;
       let currentStep = 0;
 
       // Create log entry
-      const { data: logEntry } = await supabase
+      const { data: logEntry } = await supabaseAdmin
         .from("generation_logs")
         .insert({
-          user_id: userId,
+          user_id: user.id, // Use authenticated user's ID
           generation_type: "authority_plan",
           status: "running",
           total_steps: totalSteps,
@@ -126,7 +165,7 @@ serve(async (req) => {
         currentStep = completed;
         await sendEvent("progress", { step, current: completed, total: totalSteps, percentage: Math.round((completed / totalSteps) * 100) });
         if (logId) {
-          await supabase.from("generation_logs").update({ current_step: step, completed_steps: completed }).eq("id", logId);
+          await supabaseAdmin.from("generation_logs").update({ current_step: step, completed_steps: completed }).eq("id", logId);
         }
       };
 
@@ -168,10 +207,10 @@ serve(async (req) => {
       await updateProgress("Imagem do pilar gerada", 4);
 
       // Save pillar
-      const { data: pillarArticle, error: pillarError } = await supabase
+      const { data: pillarArticle, error: pillarError } = await supabaseAdmin
         .from("articles")
         .insert({
-          user_id: userId,
+          user_id: user.id, // Use authenticated user's ID
           project_id: projectId,
           keyword: pillarPlan.keyword,
           title: pillarPlan.title,
@@ -231,10 +270,10 @@ serve(async (req) => {
         const image = await generateImage(`Blog featured image for "${plan.title}". Professional, 16:9.`);
 
         // Save
-        const { data: article, error } = await supabase
+        const { data: article, error } = await supabaseAdmin
           .from("articles")
           .insert({
-            user_id: userId,
+            user_id: user.id, // Use authenticated user's ID
             project_id: projectId,
             keyword: plan.keyword,
             title: plan.title,
@@ -260,7 +299,7 @@ serve(async (req) => {
 
       // Complete
       if (logId) {
-        await supabase.from("generation_logs").update({ status: "completed", completed_at: new Date().toISOString(), completed_steps: totalSteps }).eq("id", logId);
+        await supabaseAdmin.from("generation_logs").update({ status: "completed", completed_at: new Date().toISOString(), completed_steps: totalSteps }).eq("id", logId);
       }
 
       await sendEvent("complete", { success: true, pillar: pillarArticle, satellites, totalArticles: 1 + satellites.length });

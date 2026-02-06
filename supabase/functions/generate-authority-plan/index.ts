@@ -15,7 +15,6 @@ interface AuthorityPlanRequest {
   language: string;
   country: string;
   publicationMode: string;
-  userId: string;
 }
 
 interface ArticlePlan {
@@ -226,12 +225,54 @@ serve(async (req) => {
   }
 
   try {
+    // ========== AUTHENTICATION ==========
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Autorização necessária" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Usuário não autenticado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    // ========== END AUTHENTICATION ==========
+
+    // Use service role for database operations
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: AuthorityPlanRequest = await req.json();
-    const { centralTheme, satelliteCount, projectId, language, country, publicationMode, userId } = body;
+    const { centralTheme, satelliteCount, projectId, language, country, publicationMode } = body;
+
+    // Validate project ownership if projectId is provided
+    if (projectId) {
+      const { data: project, error: projectError } = await supabaseAdmin
+        .from("projects")
+        .select("id")
+        .eq("id", projectId)
+        .eq("user_id", user.id)
+        .single();
+
+      if (projectError || !project) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Projeto não encontrado ou acesso negado" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
     console.log(`Starting authority plan generation for: "${centralTheme}" with ${satelliteCount} satellites`);
 
@@ -258,10 +299,10 @@ serve(async (req) => {
 
     // Step 6: Save pillar article to database
     console.log("Step 6: Saving pillar article...");
-    const { data: pillarArticle, error: pillarError } = await supabase
+    const { data: pillarArticle, error: pillarError } = await supabaseAdmin
       .from("articles")
       .insert({
-        user_id: userId,
+        user_id: user.id, // Use authenticated user's ID
         project_id: projectId,
         keyword: pillarPlan.keyword,
         title: pillarPlan.title,
@@ -287,18 +328,15 @@ serve(async (req) => {
       const plan = satellitePlans[i];
       console.log(`  Generating satellite ${i + 1}/${satellitePlans.length}: ${plan.title}`);
 
-      // Generate content
       const content = await generateArticleContent(plan, pillarPlan.title, language);
 
-      // Generate image
       const imagePrompt = `Blog featured image for article: "${plan.title}". Modern, professional style, 16:9 aspect ratio. No text.`;
       const image = await generateImage(imagePrompt);
 
-      // Save to database
-      const { data: article, error } = await supabase
+      const { data: article, error } = await supabaseAdmin
         .from("articles")
         .insert({
-          user_id: userId,
+          user_id: user.id, // Use authenticated user's ID
           project_id: projectId,
           keyword: plan.keyword,
           title: plan.title,

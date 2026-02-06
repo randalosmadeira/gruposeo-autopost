@@ -31,9 +31,6 @@ interface ArticleData {
   focus_keyword?: string;
 }
 
-/**
- * Publish article using ContentFactory RDM Plugin API
- */
 async function publishViaPluginAPI(
   baseUrl: string,
   apiKey: string,
@@ -43,7 +40,6 @@ async function publishViaPluginAPI(
   console.log(`Publishing via Plugin API to: ${baseUrl}/wp-json/cfrdm/v1/articles`);
 
   try {
-    // First, upload featured image if exists
     let featuredMediaId: number | undefined;
 
     if (article.featured_image_url && article.featured_image_url.startsWith("data:image")) {
@@ -74,7 +70,6 @@ async function publishViaPluginAPI(
       }
     }
 
-    // Create the article via Plugin API
     const articleApiUrl = `${baseUrl}/wp-json/cfrdm/v1/articles`;
     
     const postData: Record<string, unknown> = {
@@ -98,7 +93,6 @@ async function publishViaPluginAPI(
       postData.featured_image_id = featuredMediaId;
     }
 
-    // Add SEO meta if available
     if (article.seo_title) {
       postData.seo_title = article.seo_title;
     }
@@ -155,9 +149,6 @@ async function publishViaPluginAPI(
   }
 }
 
-/**
- * Publish article using standard WordPress REST API with Application Password
- */
 async function publishViaStandardAPI(
   credentials: WordPressCredentials,
   article: ArticleData,
@@ -176,7 +167,6 @@ async function publishViaStandardAPI(
   console.log(`Publishing via Standard API to: ${apiUrl}`);
 
   try {
-    // First, upload featured image if exists
     let featuredMediaId: number | undefined;
 
     if (article.featured_image_url && article.featured_image_url.startsWith("data:image")) {
@@ -208,7 +198,6 @@ async function publishViaStandardAPI(
       }
     }
 
-    // Create the post
     const postData: Record<string, unknown> = {
       title: article.title,
       content: article.content,
@@ -275,9 +264,34 @@ serve(async (req) => {
   }
 
   try {
+    // ========== AUTHENTICATION ==========
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Autorização necessária" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Usuário não autenticado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    // ========== END AUTHENTICATION ==========
+
+    // Use service role for database operations (to access all data)
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const { articleId, projectId }: PublishRequest = await req.json();
 
@@ -288,30 +302,32 @@ serve(async (req) => {
       );
     }
 
-    // Fetch article
-    const { data: article, error: articleError } = await supabase
+    // Fetch article and verify ownership
+    const { data: article, error: articleError } = await supabaseAdmin
       .from("articles")
       .select("*")
       .eq("id", articleId)
+      .eq("user_id", user.id) // IMPORTANT: Validate user owns the article
       .single();
 
     if (articleError || !article) {
       return new Response(
-        JSON.stringify({ success: false, error: "Article not found" }),
+        JSON.stringify({ success: false, error: "Article not found or access denied" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Fetch project with WordPress credentials
-    const { data: project, error: projectError } = await supabase
+    // Fetch project and verify ownership
+    const { data: project, error: projectError } = await supabaseAdmin
       .from("projects")
       .select("wordpress_url, wordpress_username, wordpress_app_password")
       .eq("id", projectId)
+      .eq("user_id", user.id) // IMPORTANT: Validate user owns the project
       .single();
 
     if (projectError || !project) {
       return new Response(
-        JSON.stringify({ success: false, error: "Project not found" }),
+        JSON.stringify({ success: false, error: "Project not found or access denied" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -323,7 +339,6 @@ serve(async (req) => {
       );
     }
 
-    // Parse config for categories, tags, and SEO data
     const config = article.config as { 
       wordpress_categories?: number[]; 
       wordpress_tags?: number[];
@@ -349,12 +364,10 @@ serve(async (req) => {
       focus_keyword: config?.focus_keyword || article.keyword,
     };
 
-    // Determine authentication method
     const isPluginAuth = project.wordpress_username === "__CFRDM_PLUGIN__";
     let result: { success: boolean; postId?: number; postUrl?: string; error?: string };
 
     if (isPluginAuth) {
-      // Use Plugin API
       console.log("Using Plugin API authentication");
       result = await publishViaPluginAPI(
         project.wordpress_url.replace(/\/$/, ""),
@@ -363,7 +376,6 @@ serve(async (req) => {
         "publish"
       );
     } else {
-      // Use Standard API with Application Password
       console.log("Using Standard API authentication");
       result = await publishViaStandardAPI(
         {
@@ -377,8 +389,7 @@ serve(async (req) => {
     }
 
     if (result.success) {
-      // Update article status in database
-      await supabase
+      await supabaseAdmin
         .from("articles")
         .update({
           status: "published",
