@@ -17,6 +17,7 @@ import {
   FileEdit,
   Layers,
   Calendar,
+  Activity,
 } from 'lucide-react';
 import logoSeo from '@/assets/logo-grupo-seo.png';
 
@@ -86,6 +87,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: 'Projetos', icon: FolderKanban, href: '/projects' },
       { label: 'Histórico', icon: History, href: '/articles' },
+      { label: 'Monitor WP', icon: Activity, href: '/wordpress-monitor', iconColor: '#10B981' },
       { label: 'Plugin WP', icon: Plug, href: '/wordpress-plugin' },
     ],
   },
