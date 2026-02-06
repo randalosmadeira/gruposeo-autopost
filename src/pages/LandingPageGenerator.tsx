@@ -49,13 +49,23 @@ import {
   Users2,
   Code,
   Copy,
-  Download,
+  Settings,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useLandingPageGeneration, type LandingPageConfig } from '@/hooks/useLandingPageGeneration';
 import { cn } from '@/lib/utils';
+import { 
+  AIModelSelector, 
+  ContentStructureConfig, 
+  AdvancedSettings, 
+  PublishingOptions,
+  PhoneInput,
+  validatePhoneBR,
+  aiModels,
+  getModelByValue,
+} from '@/components/shared';
 
 // Niche templates configuration
 const nicheTemplates = [
@@ -172,6 +182,18 @@ const defaultConfig: LandingPageConfig = {
   internalLinking: true,
   projectId: '',
   template: '',
+  // AI Model
+  aiModel: 'standard',
+  // Advanced settings
+  usePlatformCredits: true,
+  seoOptimization: false,
+  realtimeData: false,
+  humanizeContent: false,
+  generateImages: false,
+  imageCount: 1,
+  imageStyle: 'fotorrealístico',
+  // Publishing
+  autoPublish: false,
 };
 
 export default function LandingPageGenerator() {
@@ -298,50 +320,17 @@ export default function LandingPageGenerator() {
 
   const connectedProjects = projects.filter(p => p.is_connected);
 
-  // Toggle card component
-  const ToggleCard = ({ 
-    icon: Icon, 
-    title, 
-    description, 
-    checked, 
-    onCheckedChange 
-  }: { 
-    icon: React.ElementType;
-    title: string; 
-    description: string; 
-    checked: boolean; 
-    onCheckedChange: (checked: boolean) => void;
-  }) => (
-    <div 
-      className={cn(
-        'flex items-center justify-between p-4 rounded-lg border transition-all cursor-pointer',
-        checked ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white hover:border-gray-300'
-      )}
-      onClick={() => onCheckedChange(!checked)}
-    >
-      <div className="flex items-center gap-3">
-        <div 
-          className={cn(
-            'w-8 h-8 rounded-lg flex items-center justify-center',
-            checked ? 'bg-orange-100' : 'bg-gray-100'
-          )}
-        >
-          <Icon className={cn('w-4 h-4', checked ? 'text-orange-600' : 'text-gray-500')} />
-        </div>
-        <div>
-          <p className={cn('text-sm font-medium', checked ? 'text-orange-900' : 'text-gray-700')}>
-            {title}
-          </p>
-          <p className="text-xs text-gray-500">{description}</p>
-        </div>
-      </div>
-      <Switch 
-        checked={checked} 
-        onCheckedChange={onCheckedChange}
-        className="data-[state=checked]:bg-orange-500"
-      />
-    </div>
-  );
+  // Calculate total credits
+  const selectedModel = getModelByValue(config.aiModel);
+  const calculateTotalCredits = useCallback(() => {
+    let total = selectedModel?.credits || 1;
+    if (config.usePlatformCredits) total += 1;
+    if (config.realtimeData) total += 1;
+    if (config.humanizeContent) total += 1;
+    return total;
+  }, [selectedModel?.credits, config.usePlatformCredits, config.realtimeData, config.humanizeContent]);
+  
+  const totalCredits = calculateTotalCredits();
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -371,8 +360,11 @@ export default function LandingPageGenerator() {
               <Eye className="w-4 h-4" />
             </Button>
           )}
-          <Badge variant="secondary" className="text-xs md:text-sm px-2 md:px-3 py-1 md:py-1.5">
-            1 Crédito
+          <Badge 
+            variant="outline" 
+            className="text-xs md:text-sm px-2 md:px-3 py-1 md:py-1.5 border-orange-500 text-orange-600"
+          >
+            Total: {totalCredits} {totalCredits === 1 ? 'Crédito' : 'Créditos'}
           </Badge>
         </div>
       </header>
@@ -680,11 +672,10 @@ export default function LandingPageGenerator() {
                       <Phone className="w-4 h-4 text-blue-500" />
                       Telefone / WhatsApp
                     </Label>
-                    <Input
+                    <PhoneInput
                       value={config.companyPhone}
-                      onChange={(e) => updateConfig('companyPhone', e.target.value)}
-                      placeholder="ex: (11) 99999-9999"
-                      type="tel"
+                      onChange={(value) => updateConfig('companyPhone', value)}
+                      error={config.companyPhone ? !validatePhoneBR(config.companyPhone) : false}
                     />
                   </div>
 
@@ -713,111 +704,100 @@ export default function LandingPageGenerator() {
                     </span>
                   </div>
                 </AccordionTrigger>
-                <AccordionContent className="p-4 space-y-4 bg-white">
-                  
-                  <p className="text-sm font-medium text-muted-foreground mb-3">Elementos do Conteúdo</p>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <ToggleCard
-                      icon={FileText}
-                      title="Meta Descrição"
-                      description="Meta descrição SEO"
-                      checked={config.metaDescription}
-                      onCheckedChange={(v) => updateConfig('metaDescription', v)}
-                    />
-                    <ToggleCard
-                      icon={List}
-                      title="Listas"
-                      description="Incluir listas organizadas"
-                      checked={config.lists}
-                      onCheckedChange={(v) => updateConfig('lists', v)}
-                    />
-                    <ToggleCard
-                      icon={Table}
-                      title="Tabelas"
-                      description="Tabelas de comparação"
-                      checked={config.tables}
-                      onCheckedChange={(v) => updateConfig('tables', v)}
-                    />
-                    <ToggleCard
-                      icon={CheckCircle2}
-                      title="Conclusão"
-                      description="Resumo com CTA final"
-                      checked={config.conclusion}
-                      onCheckedChange={(v) => updateConfig('conclusion', v)}
-                    />
-                    <ToggleCard
-                      icon={HelpCircle}
-                      title="Seção FAQ"
-                      description="Perguntas frequentes"
-                      checked={config.faq}
-                      onCheckedChange={(v) => updateConfig('faq', v)}
-                    />
+                <AccordionContent className="p-4 bg-white">
+                  <ContentStructureConfig
+                    metaDescription={config.metaDescription}
+                    lists={config.lists}
+                    tables={config.tables}
+                    conclusion={config.conclusion}
+                    faq={config.faq}
+                    internalLinking={config.internalLinking}
+                    projectId={config.projectId}
+                    onMetaDescriptionChange={(v) => updateConfig('metaDescription', v)}
+                    onListsChange={(v) => updateConfig('lists', v)}
+                    onTablesChange={(v) => updateConfig('tables', v)}
+                    onConclusionChange={(v) => updateConfig('conclusion', v)}
+                    onFaqChange={(v) => updateConfig('faq', v)}
+                    onInternalLinkingChange={(v) => updateConfig('internalLinking', v)}
+                    onProjectIdChange={(v) => updateConfig('projectId', v)}
+                    connectedProjects={connectedProjects}
+                    accentColor="#FF6B2B"
+                  />
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Modelo de IA */}
+              <AccordionItem value="ai-model" className="border rounded-lg overflow-hidden">
+                <AccordionTrigger className="px-4 py-3 hover:no-underline bg-purple-50/50">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-purple-500" />
+                    <span className="font-semibold">
+                      Modelo de IA
+                    </span>
+                    <Badge variant="secondary" className="text-xs">
+                      {getModelByValue(config.aiModel)?.credits || 1} crédito(s)
+                    </Badge>
                   </div>
+                </AccordionTrigger>
+                <AccordionContent className="p-4 bg-white">
+                  <AIModelSelector 
+                    value={config.aiModel}
+                    onChange={(v) => updateConfig('aiModel', v)}
+                    accentColor="#FF6B2B"
+                  />
+                </AccordionContent>
+              </AccordionItem>
 
-                  <hr className="my-4" />
-
-                  {/* Internal Linking */}
-                  <div 
-                    className={cn(
-                      'p-4 rounded-lg border transition-all',
-                      config.internalLinking ? 'border-green-300 bg-green-50' : 'border-gray-200'
-                    )}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          'w-10 h-10 rounded-lg flex items-center justify-center',
-                          config.internalLinking ? 'bg-green-100' : 'bg-gray-100'
-                        )}>
-                          <Link2 className={cn(
-                            'w-5 h-5',
-                            config.internalLinking ? 'text-green-600' : 'text-gray-500'
-                          )} />
-                        </div>
-                        <div>
-                          <p className="font-medium">Linkagem Interna</p>
-                          <p className="text-sm text-muted-foreground">
-                            Adicionar automaticamente links internos ao conteúdo
-                          </p>
-                        </div>
-                      </div>
-                      <Switch 
-                        checked={config.internalLinking}
-                        onCheckedChange={(v) => updateConfig('internalLinking', v)}
-                        className="data-[state=checked]:bg-green-500"
-                      />
-                    </div>
-
-                    {config.internalLinking && (
-                      <div className="space-y-2">
-                        <Label className="text-sm text-muted-foreground">Selecione o projeto WordPress</Label>
-                        <Select 
-                          value={config.projectId} 
-                          onValueChange={(v) => updateConfig('projectId', v)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione um projeto..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {connectedProjects.map((project) => (
-                              <SelectItem key={project.id} value={project.id}>
-                                <span className="flex items-center gap-2">
-                                  <Globe className="w-4 h-4" />
-                                  {project.name}
-                                </span>
-                              </SelectItem>
-                            ))}
-                            {connectedProjects.length === 0 && (
-                              <SelectItem value="none" disabled>
-                                Nenhum projeto conectado
-                              </SelectItem>
-                            )}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
+              {/* Configurações Avançadas */}
+              <AccordionItem value="advanced-settings" className="border rounded-lg overflow-hidden">
+                <AccordionTrigger className="px-4 py-3 hover:no-underline bg-gray-50/50">
+                  <div className="flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-gray-600" />
+                    <span className="font-semibold">
+                      Configurações Avançadas
+                    </span>
                   </div>
+                </AccordionTrigger>
+                <AccordionContent className="p-4 bg-white">
+                  <AdvancedSettings
+                    usePlatformCredits={config.usePlatformCredits}
+                    seoOptimization={config.seoOptimization}
+                    realtimeData={config.realtimeData}
+                    humanizeContent={config.humanizeContent}
+                    generateImages={config.generateImages}
+                    imageCount={config.imageCount}
+                    imageStyle={config.imageStyle}
+                    onUsePlatformCreditsChange={(v) => updateConfig('usePlatformCredits', v)}
+                    onSeoOptimizationChange={(v) => updateConfig('seoOptimization', v)}
+                    onRealtimeDataChange={(v) => updateConfig('realtimeData', v)}
+                    onHumanizeContentChange={(v) => updateConfig('humanizeContent', v)}
+                    onGenerateImagesChange={(v) => updateConfig('generateImages', v)}
+                    onImageCountChange={(v) => updateConfig('imageCount', v)}
+                    onImageStyleChange={(v) => updateConfig('imageStyle', v)}
+                    accentColor="#FF6B2B"
+                  />
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Opções de Publicação */}
+              <AccordionItem value="publishing" className="border rounded-lg overflow-hidden">
+                <AccordionTrigger className="px-4 py-3 hover:no-underline bg-green-50/50">
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-5 h-5 text-green-600" />
+                    <span className="font-semibold">
+                      Opções de Publicação
+                    </span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="p-4 bg-white">
+                  <PublishingOptions
+                    autoPublish={config.autoPublish}
+                    projectId={config.projectId}
+                    onAutoPublishChange={(v) => updateConfig('autoPublish', v)}
+                    onProjectIdChange={(v) => updateConfig('projectId', v)}
+                    connectedProjects={connectedProjects}
+                    accentColor="#FF6B2B"
+                  />
                 </AccordionContent>
               </AccordionItem>
             </Accordion>

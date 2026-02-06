@@ -27,6 +27,18 @@ export interface LandingPageConfig {
   internalLinking: boolean;
   projectId: string;
   template?: string;
+  // AI Model
+  aiModel: string;
+  // Advanced settings
+  usePlatformCredits: boolean;
+  seoOptimization: boolean;
+  realtimeData: boolean;
+  humanizeContent: boolean;
+  generateImages: boolean;
+  imageCount: number;
+  imageStyle: string;
+  // Publishing
+  autoPublish: boolean;
 }
 
 export function useLandingPageGeneration() {
