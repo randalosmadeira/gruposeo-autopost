@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -19,32 +18,19 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
   Zap,
   Play,
   Sparkles,
   Bot,
   FileText,
-  List,
-  Table,
-  CheckCircle2,
-  HelpCircle,
-  Link2,
-  Globe,
   Loader2,
   Settings,
-  CreditCard,
-  Search,
-  User,
-  Image,
-  Rocket,
-  Clock,
   RefreshCw,
   Eye,
-  Menu,
   X,
   AlertCircle,
+  Rocket,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useArticleGeneration } from '@/hooks/useArticleGeneration';
@@ -63,6 +49,14 @@ import {
   type OutlineSection,
   type ArticleData
 } from '@/components/article-generator';
+import {
+  AIModelSelector,
+  aiModels,
+  getModelByValue,
+  ContentStructureConfig,
+  AdvancedSettings,
+  PublishingOptions,
+} from '@/components/shared';
 
 // App states as per spec
 type AppState = 
@@ -88,38 +82,6 @@ const colors = {
   success: '#4CAF50',
   warning: '#FF9800',
 };
-
-// AI Models configuration
-const aiModels = [
-  { 
-    value: 'standard', 
-    label: 'Padrão', 
-    description: 'Qualidade boa para uso geral',
-    credits: 1,
-    technical: 'Mix de modelos escolhidos automaticamente'
-  },
-  { 
-    value: 'premium', 
-    label: 'Premium', 
-    description: 'Máxima qualidade e precisão',
-    credits: 2,
-    technical: 'gpt-5 + gpt-5-nano'
-  },
-  { 
-    value: 'advanced', 
-    label: 'Avançado', 
-    description: 'Qualidade superior com modelos avançados',
-    credits: 3,
-    technical: 'gemini-2.5-pro + gemini-2.5-flash'
-  },
-  { 
-    value: 'professional', 
-    label: 'Profissional', 
-    description: 'Qualidade máxima com modelos de ponta',
-    credits: 4,
-    technical: 'gemini-3-pro-preview + gemini-3-flash-preview'
-  },
-];
 
 const tones = [
   'Profissional',
@@ -186,7 +148,6 @@ const defaultConfig: ArticleConfig = {
   faq: false,
   internalLinking: true,
   projectId: '',
-  // Advanced settings
   usePlatformCredits: true,
   seoOptimization: false,
   realtimeData: false,
@@ -194,20 +155,8 @@ const defaultConfig: ArticleConfig = {
   generateImages: false,
   imageCount: 1,
   imageStyle: 'fotorrealístico',
-  // Publishing
   autoPublish: false,
 };
-
-const imageStyles = [
-  'Fotorrealístico',
-  'Ilustração Digital',
-  'Estilo Cartoon',
-  'Minimalista',
-  'Arte Abstrata',
-  'Aquarela',
-  'Estilo Vintage',
-  'Design Moderno',
-];
 
 export default function ArticleGeneratorV2() {
   const navigate = useNavigate();
@@ -247,22 +196,23 @@ export default function ArticleGeneratorV2() {
   // User credits (mock - in real implementation this would come from API)
   const [userCredits] = useState(10);
 
+  // Connected projects for internal linking
+  const connectedProjects = projects.filter(p => p.is_connected);
+
   const updateConfig = <K extends keyof ArticleConfig>(key: K, value: ArticleConfig[K]) => {
     setConfig(prev => ({ ...prev, [key]: value }));
-    // Clear validation errors when user starts typing
     if (validationErrors.length > 0) {
       setValidationErrors([]);
     }
   };
 
-  // Calculate total credits based on selected options (as per spec)
-  const selectedModel = aiModels.find(m => m.value === config.aiModel) || aiModels[0];
+  // Calculate total credits based on selected options
+  const selectedModel = getModelByValue(config.aiModel) || aiModels[0];
   const calculateTotalCredits = useCallback(() => {
     let total = selectedModel.credits;
     if (config.usePlatformCredits) total += 1;
     if (config.realtimeData) total += 1;
     if (config.humanizeContent) total += 1;
-    // Images don't cost extra as per spec (addons.images: 0)
     return total;
   }, [selectedModel.credits, config.usePlatformCredits, config.realtimeData, config.humanizeContent]);
   
@@ -272,25 +222,20 @@ export default function ArticleGeneratorV2() {
   const validateForm = useCallback((): string[] => {
     const errors: string[] = [];
     
-    // Keyword is required
     if (!config.keyword.trim()) {
       errors.push('Palavra-chave principal é obrigatória');
     }
     
-    // Title max 80 chars, warning if > 60
     if (config.title.length > 80) {
       errors.push('Título deve ter no máximo 80 caracteres');
     }
     
-    // Check credits
     if (totalCredits > userCredits) {
       errors.push(`Créditos insuficientes. Necessário: ${totalCredits}, Disponível: ${userCredits}`);
     }
     
-    // Internal linking requires project with 5+ articles
     if (config.internalLinking && config.projectId) {
       const selectedProject = projects.find(p => p.id === config.projectId);
-      // Mock check - in real implementation, check article count from project stats
       if (selectedProject && !selectedProject.is_connected) {
         errors.push('Projeto selecionado não está conectado');
       }
@@ -309,7 +254,6 @@ export default function ArticleGeneratorV2() {
       return;
     }
     setGeneratingTitle(true);
-    // Simulate title generation
     setTimeout(() => {
       const generatedTitle = `${config.keyword}: Guia Completo para ${new Date().getFullYear()}`;
       updateConfig('title', generatedTitle);
@@ -324,10 +268,9 @@ export default function ArticleGeneratorV2() {
   // Simulate generation progress
   const simulateGeneration = useCallback(async () => {
     const steps = [...defaultGenerationSteps];
-    const stepDuration = 1500; // ms per step
+    const stepDuration = 1500;
     
     for (let i = 0; i < steps.length; i++) {
-      // Mark current step as in-progress
       steps[i].status = 'in-progress';
       if (i > 0) steps[i - 1].status = 'completed';
       setGenerationSteps([...steps]);
@@ -336,7 +279,6 @@ export default function ArticleGeneratorV2() {
       
       await new Promise(resolve => setTimeout(resolve, stepDuration));
       
-      // Mark last step as completed
       if (i === steps.length - 1) {
         steps[i].status = 'completed';
         setGenerationSteps([...steps]);
@@ -357,7 +299,6 @@ export default function ArticleGeneratorV2() {
 
     setAppState('generating-article');
     
-    // Start progress simulation
     await simulateGeneration();
 
     const result = await generateArticle({
@@ -377,8 +318,7 @@ export default function ArticleGeneratorV2() {
     });
 
     if (result) {
-      // Convert outline to article sections
-      const articleSections = outlineSections.map((section, idx) => ({
+      const articleSections = outlineSections.map((section) => ({
         id: section.id,
         title: section.title,
         content: `<p>Conteúdo da seção "${section.title}" será gerado aqui.</p>`,
@@ -417,12 +357,10 @@ export default function ArticleGeneratorV2() {
       return;
     }
     
-    // Generate outline sections based on keyword
     const sections = generateDefaultOutline(config.keyword);
     setOutlineSections(sections);
     setAppState('editing-outline');
     
-    // Auto-save the outline
     debouncedSave(sections, {
       keyword: config.keyword,
       title: config.title,
@@ -478,7 +416,6 @@ export default function ArticleGeneratorV2() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Mobile Preview Toggle */}
           {isMobile && appState === 'form' && (
             <Button 
               variant="outline" 
@@ -670,8 +607,9 @@ export default function ArticleGeneratorV2() {
                 </div>
               </div>
 
-              {/* AI Model Section */}
+              {/* Accordion Sections using Shared Components */}
               <Accordion type="single" collapsible defaultValue="ai-model">
+                {/* AI Model Section */}
                 <AccordionItem value="ai-model" className="border rounded-lg px-4" style={{ borderColor: colors.border }}>
                   <AccordionTrigger className="py-4">
                     <div className="flex items-center gap-2">
@@ -680,44 +618,11 @@ export default function ArticleGeneratorV2() {
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pb-4">
-                    <div className="grid grid-cols-2 gap-3">
-                      {aiModels.map((model) => (
-                        <button
-                          key={model.value}
-                          onClick={() => updateConfig('aiModel', model.value)}
-                          className={cn(
-                            'p-4 rounded-lg border text-left transition-all',
-                            config.aiModel === model.value
-                              ? 'ring-2'
-                              : 'hover:border-blue-300'
-                          )}
-                          style={{
-                            borderColor: config.aiModel === model.value ? colors.primary : colors.border,
-                            backgroundColor: config.aiModel === model.value ? `${colors.primary}08` : 'transparent',
-                            ...(config.aiModel === model.value && { '--tw-ring-color': `${colors.primary}40` } as React.CSSProperties)
-                          }}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-medium" style={{ color: colors.textPrimary }}>
-                              {model.label}
-                            </span>
-                            <Badge 
-                              variant="secondary" 
-                              className="text-xs"
-                              style={{ 
-                                backgroundColor: `${colors.primary}15`,
-                                color: colors.primary
-                              }}
-                            >
-                              {model.credits} {model.credits === 1 ? 'crédito' : 'créditos'}
-                            </Badge>
-                          </div>
-                          <p className="text-xs" style={{ color: colors.textSecondary }}>
-                            {model.description}
-                          </p>
-                        </button>
-                      ))}
-                    </div>
+                    <AIModelSelector
+                      value={config.aiModel}
+                      onChange={(v) => updateConfig('aiModel', v)}
+                      accentColor={colors.primary}
+                    />
                     <div 
                       className="mt-4 p-3 rounded-lg text-xs"
                       style={{ backgroundColor: colors.lightBlue, color: colors.textSecondary }}
@@ -736,102 +641,25 @@ export default function ArticleGeneratorV2() {
                       <span className="font-semibold">Estrutura do Conteúdo</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="pb-4 space-y-4">
-                    <p className="text-sm font-medium" style={{ color: colors.textPrimary }}>
-                      Elementos do Conteúdo
-                    </p>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      <ToggleCard
-                        icon={<FileText className="w-4 h-4" />}
-                        title="Meta Descrição"
-                        description="Meta descrição SEO"
-                        enabled={config.metaDescription}
-                        onChange={(v) => updateConfig('metaDescription', v)}
-                      />
-                      <ToggleCard
-                        icon={<List className="w-4 h-4" />}
-                        title="Listas"
-                        description="Incluir listas organizadas"
-                        enabled={config.lists}
-                        onChange={(v) => updateConfig('lists', v)}
-                      />
-                      <ToggleCard
-                        icon={<Table className="w-4 h-4" />}
-                        title="Tabelas"
-                        description="Tabelas de comparação"
-                        enabled={config.tables}
-                        onChange={(v) => updateConfig('tables', v)}
-                      />
-                      <ToggleCard
-                        icon={<CheckCircle2 className="w-4 h-4" />}
-                        title="Conclusão"
-                        description="Resumo do artigo"
-                        enabled={config.conclusion}
-                        onChange={(v) => updateConfig('conclusion', v)}
-                      />
-                      <ToggleCard
-                        icon={<HelpCircle className="w-4 h-4" />}
-                        title="Seção FAQ"
-                        description="Perguntas frequentes"
-                        enabled={config.faq}
-                        onChange={(v) => updateConfig('faq', v)}
-                        className="col-span-2"
-                      />
-                    </div>
-
-                    <div className="border-t pt-4" style={{ borderColor: colors.border }}>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div 
-                            className="w-8 h-8 rounded-lg flex items-center justify-center"
-                            style={{ backgroundColor: colors.secondary }}
-                          >
-                            <Link2 className="w-4 h-4" style={{ color: colors.success }} />
-                          </div>
-                          <div>
-                            <p className="font-medium text-sm" style={{ color: colors.textPrimary }}>
-                              Linkagem Interna
-                            </p>
-                            <p className="text-xs" style={{ color: colors.textSecondary }}>
-                              Adicionar links para conteúdo relacionado
-                            </p>
-                          </div>
-                        </div>
-                        <Switch
-                          checked={config.internalLinking}
-                          onCheckedChange={(v) => updateConfig('internalLinking', v)}
-                        />
-                      </div>
-
-                      {config.internalLinking && projects.length > 0 && (
-                        <div className="ml-11 space-y-2">
-                          <Label className="text-xs">Selecionar Projeto Conectado</Label>
-                          <Select 
-                            value={config.projectId || 'none'} 
-                            onValueChange={(v) => updateConfig('projectId', v === 'none' ? '' : v)}
-                          >
-                            <SelectTrigger className="h-10">
-                              <SelectValue placeholder="Escolha um projeto" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Nenhum projeto</SelectItem>
-                              {projects.map((project) => (
-                                <SelectItem key={project.id} value={project.id}>
-                                  <div className="flex items-center gap-2">
-                                    <Globe className="w-3 h-3" />
-                                    {project.name}
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs" style={{ color: colors.textSecondary }}>
-                            O site precisa ter pelo menos 5 artigos publicados para linkagem automática.
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                  <AccordionContent className="pb-4">
+                    <ContentStructureConfig
+                      metaDescription={config.metaDescription}
+                      lists={config.lists}
+                      tables={config.tables}
+                      conclusion={config.conclusion}
+                      faq={config.faq}
+                      internalLinking={config.internalLinking}
+                      projectId={config.projectId}
+                      onMetaDescriptionChange={(v) => updateConfig('metaDescription', v)}
+                      onListsChange={(v) => updateConfig('lists', v)}
+                      onTablesChange={(v) => updateConfig('tables', v)}
+                      onConclusionChange={(v) => updateConfig('conclusion', v)}
+                      onFaqChange={(v) => updateConfig('faq', v)}
+                      onInternalLinkingChange={(v) => updateConfig('internalLinking', v)}
+                      onProjectIdChange={(v) => updateConfig('projectId', v)}
+                      connectedProjects={connectedProjects}
+                      accentColor={colors.primary}
+                    />
                   </AccordionContent>
                 </AccordionItem>
 
@@ -843,115 +671,28 @@ export default function ArticleGeneratorV2() {
                       <span className="font-semibold">Configurações Avançadas</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="pb-4 space-y-3">
-                    {/* Platform Credits */}
-                    <AdvancedToggleCard
-                      icon={<CreditCard className="w-4 h-4" />}
-                      title="Usar Créditos da Plataforma"
-                      description="Use créditos da plataforma em vez da sua chave de API"
-                      badge="Custo: 1 Crédito"
-                      enabled={config.usePlatformCredits}
-                      onChange={(v) => updateConfig('usePlatformCredits', v)}
-                      highlight
+                  <AccordionContent className="pb-4">
+                    <AdvancedSettings
+                      usePlatformCredits={config.usePlatformCredits}
+                      seoOptimization={config.seoOptimization}
+                      realtimeData={config.realtimeData}
+                      humanizeContent={config.humanizeContent}
+                      generateImages={config.generateImages}
+                      imageCount={config.imageCount}
+                      imageStyle={config.imageStyle}
+                      onUsePlatformCreditsChange={(v) => updateConfig('usePlatformCredits', v)}
+                      onSeoOptimizationChange={(v) => updateConfig('seoOptimization', v)}
+                      onRealtimeDataChange={(v) => updateConfig('realtimeData', v)}
+                      onHumanizeContentChange={(v) => updateConfig('humanizeContent', v)}
+                      onGenerateImagesChange={(v) => updateConfig('generateImages', v)}
+                      onImageCountChange={(v) => updateConfig('imageCount', v)}
+                      onImageStyleChange={(v) => updateConfig('imageStyle', v)}
+                      accentColor={colors.primary}
                     />
-
-                    {/* SEO Optimization */}
-                    <AdvancedToggleCard
-                      icon={<Search className="w-4 h-4" />}
-                      title="Otimização SEO"
-                      description="Analisar concorrentes e otimizar conteúdo para mecanismos de busca"
-                      enabled={config.seoOptimization}
-                      onChange={(v) => updateConfig('seoOptimization', v)}
-                      bgColor={colors.lightBlue}
-                    />
-
-                    {/* Realtime Data */}
-                    <AdvancedToggleCard
-                      icon={<Globe className="w-4 h-4" />}
-                      title="Dados da Internet em Tempo Real"
-                      description="Usar informações atuais da web"
-                      badge="Custo: +1 Crédito"
-                      enabled={config.realtimeData}
-                      onChange={(v) => updateConfig('realtimeData', v)}
-                      bgColor={colors.secondary}
-                    />
-
-                    {/* Humanize Content */}
-                    <AdvancedToggleCard
-                      icon={<User className="w-4 h-4" />}
-                      title="Humanizar Conteúdo"
-                      description="Tornar o texto mais natural e envolvente"
-                      badge="Custo: +1 Crédito"
-                      enabled={config.humanizeContent}
-                      onChange={(v) => updateConfig('humanizeContent', v)}
-                      bgColor={colors.tertiary}
-                    />
-
-                    {/* Generate Images */}
-                    <div>
-                      <AdvancedToggleCard
-                        icon={<Image className="w-4 h-4" />}
-                        title="Gerar Imagens IA"
-                        description="Criar conteúdo visual relevante"
-                        enabled={config.generateImages}
-                        onChange={(v) => updateConfig('generateImages', v)}
-                        bgColor={colors.pink}
-                      />
-                      
-                      {config.generateImages && (
-                        <div className="mt-3 ml-11 space-y-3">
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Número de Imagens</Label>
-                              <Select 
-                                value={String(config.imageCount)} 
-                                onValueChange={(v) => updateConfig('imageCount', parseInt(v))}
-                              >
-                                <SelectTrigger className="h-9">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {[1, 2, 3, 4, 5].map((num) => (
-                                    <SelectItem key={num} value={String(num)}>
-                                      {num} {num === 1 ? 'imagem' : 'imagens'}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Estilo da Imagem</Label>
-                              <Select 
-                                value={config.imageStyle} 
-                                onValueChange={(v) => updateConfig('imageStyle', v)}
-                              >
-                                <SelectTrigger className="h-9">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {imageStyles.map((style) => (
-                                    <SelectItem key={style} value={style.toLowerCase()}>
-                                      {style}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                          <button 
-                            className="text-xs flex items-center gap-1 hover:underline"
-                            style={{ color: colors.primary }}
-                          >
-                            <Image className="w-3 h-3" />
-                            Ver exemplos de estilos
-                          </button>
-                        </div>
-                      )}
-                    </div>
                   </AccordionContent>
                 </AccordionItem>
 
-                {/* Publication Options Section */}
+                {/* Publishing Options Section */}
                 <AccordionItem value="publishing" className="border rounded-lg px-4 mt-4" style={{ borderColor: colors.border }}>
                   <AccordionTrigger className="py-4">
                     <div className="flex items-center gap-2">
@@ -960,43 +701,32 @@ export default function ArticleGeneratorV2() {
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pb-4">
-                    <div className="flex items-center justify-between p-3 rounded-lg border" style={{ borderColor: colors.border }}>
-                      <div className="flex items-center gap-3">
-                        <div 
-                          className="w-8 h-8 rounded-lg flex items-center justify-center"
-                          style={{ backgroundColor: colors.lightBlue }}
-                        >
-                          <Clock className="w-4 h-4" style={{ color: colors.primary }} />
-                        </div>
-                        <div>
-                          <p className="font-medium text-sm" style={{ color: colors.textPrimary }}>
-                            Configurar publicação automática
-                          </p>
-                          <p className="text-xs" style={{ color: colors.textSecondary }}>
-                            Publique artigos diretamente no WordPress ou no Wix
-                          </p>
-                        </div>
-                      </div>
-                      <Switch
-                        checked={config.autoPublish}
-                        onCheckedChange={(v) => updateConfig('autoPublish', v)}
-                      />
-                    </div>
+                    <PublishingOptions
+                      autoPublish={config.autoPublish}
+                      projectId={config.projectId}
+                      onAutoPublishChange={(v) => updateConfig('autoPublish', v)}
+                      onProjectIdChange={(v) => updateConfig('projectId', v)}
+                      connectedProjects={connectedProjects}
+                      accentColor={colors.primary}
+                    />
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
             </div>
           </ScrollArea>
-          
-          {/* Sticky Action Bar */}
+
+          {/* Sticky Action Button */}
           <div 
-            className="sticky bottom-0 border-t p-4 space-y-2"
-            style={{ backgroundColor: colors.background, borderColor: colors.border }}
+            className={cn(
+              "absolute bottom-0 left-0 p-4 border-t bg-white",
+              isMobile ? "w-full" : "w-1/2"
+            )}
+            style={{ borderColor: colors.border }}
           >
             {appState === 'form' && (
               <>
                 {validationErrors.length > 0 && (
-                  <div className="p-3 rounded-lg mb-2 space-y-1 bg-destructive/10 border border-destructive/20 animate-scale-in">
+                  <div className="mb-3 p-3 bg-red-50 rounded-lg space-y-1">
                     {validationErrors.map((error, idx) => (
                       <p key={idx} className="text-sm flex items-center gap-2 text-destructive">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -1016,11 +746,12 @@ export default function ArticleGeneratorV2() {
                   }}
                   disabled={isGenerating || !config.keyword.trim()}
                   className="w-full h-12 text-base transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                  style={{ backgroundColor: colors.primary }}
                 >
                   <Play className="w-5 h-5 mr-2" />
                   Gerar Esboço do Artigo
                 </Button>
-                <p className="text-xs text-center text-muted-foreground">
+                <p className="text-xs text-center text-muted-foreground mt-2">
                   Custo total: {totalCredits} {totalCredits === 1 ? 'crédito' : 'créditos'} • Disponível: {userCredits}
                 </p>
               </>
@@ -1032,6 +763,7 @@ export default function ArticleGeneratorV2() {
                   onClick={handleGenerate}
                   disabled={isGenerating}
                   className="w-full h-12 text-base transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                  style={{ backgroundColor: colors.primary }}
                 >
                   {isGenerating ? (
                     <>
@@ -1048,7 +780,7 @@ export default function ArticleGeneratorV2() {
                 <Button
                   onClick={handleReset}
                   variant="outline"
-                  className="w-full h-10 transition-colors duration-200"
+                  className="w-full h-10 mt-2 transition-colors duration-200"
                 >
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Reiniciar & Começar de Novo
@@ -1089,7 +821,6 @@ export default function ArticleGeneratorV2() {
               sections={outlineSections}
               onSectionsChange={(newSections) => {
                 setOutlineSections(newSections);
-                // Auto-save on outline changes
                 debouncedSave(newSections, {
                   keyword: config.keyword,
                   title: config.title,
@@ -1135,10 +866,8 @@ export default function ArticleGeneratorV2() {
                   return;
                 }
                 
-                // First save the article
                 await saveGeneratedArticle(generatedContent || '', articleData.title);
                 
-                // Then publish to WordPress
                 const result = await publishArticle({
                   id: articleId,
                   title: articleData.title,
@@ -1334,120 +1063,6 @@ export default function ArticleGeneratorV2() {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-// Toggle Card Component for Content Structure
-function ToggleCard({
-  icon,
-  title,
-  description,
-  enabled,
-  onChange,
-  className,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  enabled: boolean;
-  onChange: (value: boolean) => void;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        'p-3 rounded-lg border flex items-center justify-between cursor-pointer transition-all',
-        enabled ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200 hover:border-gray-300',
-        className
-      )}
-      onClick={() => onChange(!enabled)}
-    >
-      <div className="flex items-center gap-3">
-        <div 
-          className="w-8 h-8 rounded-lg flex items-center justify-center"
-          style={{ 
-            backgroundColor: enabled ? '#E3F2FD' : '#F5F5F5',
-            color: enabled ? '#4169E1' : '#666666'
-          }}
-        >
-          {icon}
-        </div>
-        <div>
-          <p className="font-medium text-sm" style={{ color: '#1A1A1A' }}>
-            {title}
-          </p>
-          <p className="text-xs" style={{ color: '#666666' }}>
-            {description}
-          </p>
-        </div>
-      </div>
-      <Switch checked={enabled} onCheckedChange={onChange} />
-    </div>
-  );
-}
-
-// Advanced Toggle Card Component
-function AdvancedToggleCard({
-  icon,
-  title,
-  description,
-  badge,
-  enabled,
-  onChange,
-  bgColor,
-  highlight,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  badge?: string;
-  enabled: boolean;
-  onChange: (value: boolean) => void;
-  bgColor?: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        'p-3 rounded-lg border flex items-center justify-between cursor-pointer transition-all',
-        highlight && enabled ? 'ring-2 ring-blue-200' : '',
-        enabled ? 'border-blue-200' : 'border-gray-200 hover:border-gray-300'
-      )}
-      style={{ backgroundColor: enabled ? bgColor || '#F8FAFC' : 'transparent' }}
-      onClick={() => onChange(!enabled)}
-    >
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <div 
-          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-          style={{ 
-            backgroundColor: enabled ? (bgColor ? `${bgColor}` : '#E3F2FD') : '#F5F5F5',
-            color: enabled ? '#4169E1' : '#666666'
-          }}
-        >
-          {icon}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-medium text-sm" style={{ color: '#1A1A1A' }}>
-              {title}
-            </p>
-            {badge && (
-              <Badge 
-                variant="secondary" 
-                className="text-[10px] px-1.5 py-0"
-                style={{ backgroundColor: '#E3F2FD', color: '#4169E1' }}
-              >
-                {badge}
-              </Badge>
-            )}
-          </div>
-          <p className="text-xs truncate" style={{ color: '#666666' }}>
-            {description}
-          </p>
-        </div>
-      </div>
-      <Switch checked={enabled} onCheckedChange={onChange} className="flex-shrink-0 ml-2" />
     </div>
   );
 }
