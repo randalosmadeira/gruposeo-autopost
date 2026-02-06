@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,7 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
   Zap,
   Play,
@@ -41,10 +42,14 @@ import {
   Clock,
   RefreshCw,
   Eye,
+  Menu,
+  X,
+  AlertCircle,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useArticleGeneration } from '@/hooks/useArticleGeneration';
 import { useToast } from '@/hooks/use-toast';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { 
   ProgressScreen, 
@@ -56,6 +61,15 @@ import {
   type OutlineSection,
   type ArticleData
 } from '@/components/article-generator';
+
+// App states as per spec
+type AppState = 
+  | 'form'                // Initial form filling
+  | 'generating-outline'  // Generating outline
+  | 'editing-outline'     // Editing structure
+  | 'generating-article'  // Generating full article
+  | 'editing-article'     // Editing final article
+  | 'publishing';         // Publishing
 
 // Design system colors
 const colors = {
@@ -198,11 +212,14 @@ export default function ArticleGeneratorV2() {
   const { toast } = useToast();
   const { projects } = useProjects();
   const { isGenerating, generateArticle } = useArticleGeneration();
+  const isMobile = useIsMobile();
   
   const [config, setConfig] = useState<ArticleConfig>(defaultConfig);
   const [showTutorial, setShowTutorial] = useState(true);
   const [generatingTitle, setGeneratingTitle] = useState(false);
-  const [generationPhase, setGenerationPhase] = useState<'idle' | 'outline' | 'generating' | 'complete'>('idle');
+  const [appState, setAppState] = useState<AppState>('form');
+  const [showPreview, setShowPreview] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   
   // Outline state
   const [outlineSections, setOutlineSections] = useState<OutlineSection[]>([]);
@@ -214,17 +231,61 @@ export default function ArticleGeneratorV2() {
   
   // Article editor state
   const [articleData, setArticleData] = useState<ArticleData>(defaultArticleData);
+  
+  // User credits (mock - in real implementation this would come from API)
+  const [userCredits] = useState(10);
 
   const updateConfig = <K extends keyof ArticleConfig>(key: K, value: ArticleConfig[K]) => {
     setConfig(prev => ({ ...prev, [key]: value }));
+    // Clear validation errors when user starts typing
+    if (validationErrors.length > 0) {
+      setValidationErrors([]);
+    }
   };
 
-  // Calculate total credits based on selected options
+  // Calculate total credits based on selected options (as per spec)
   const selectedModel = aiModels.find(m => m.value === config.aiModel) || aiModels[0];
-  let totalCredits = selectedModel.credits;
-  if (config.realtimeData) totalCredits += 1;
-  if (config.humanizeContent) totalCredits += 1;
-  if (config.generateImages) totalCredits += config.imageCount;
+  const calculateTotalCredits = useCallback(() => {
+    let total = selectedModel.credits;
+    if (config.usePlatformCredits) total += 1;
+    if (config.realtimeData) total += 1;
+    if (config.humanizeContent) total += 1;
+    // Images don't cost extra as per spec (addons.images: 0)
+    return total;
+  }, [selectedModel.credits, config.usePlatformCredits, config.realtimeData, config.humanizeContent]);
+  
+  const totalCredits = calculateTotalCredits();
+  
+  // Validate form before generation
+  const validateForm = useCallback((): string[] => {
+    const errors: string[] = [];
+    
+    // Keyword is required
+    if (!config.keyword.trim()) {
+      errors.push('Palavra-chave principal é obrigatória');
+    }
+    
+    // Title max 80 chars, warning if > 60
+    if (config.title.length > 80) {
+      errors.push('Título deve ter no máximo 80 caracteres');
+    }
+    
+    // Check credits
+    if (totalCredits > userCredits) {
+      errors.push(`Créditos insuficientes. Necessário: ${totalCredits}, Disponível: ${userCredits}`);
+    }
+    
+    // Internal linking requires project with 5+ articles
+    if (config.internalLinking && config.projectId) {
+      const selectedProject = projects.find(p => p.id === config.projectId);
+      // Mock check - in real implementation, check article count from project stats
+      if (selectedProject && !selectedProject.is_connected) {
+        errors.push('Projeto selecionado não está conectado');
+      }
+    }
+    
+    return errors;
+  }, [config, totalCredits, userCredits, projects]);
 
   const handleGenerateTitle = async () => {
     if (!config.keyword.trim()) {
@@ -282,7 +343,7 @@ export default function ArticleGeneratorV2() {
       return;
     }
 
-    setGenerationPhase('generating');
+    setAppState('generating-article');
     
     // Start progress simulation
     await simulateGeneration();
@@ -319,13 +380,13 @@ export default function ArticleGeneratorV2() {
         featuredImage: undefined,
       });
       
-      setGenerationPhase('complete');
+      setAppState('editing-article');
       toast({
         title: 'Artigo gerado!',
         description: 'Seu artigo está pronto para edição e publicação.',
       });
     } else {
-      setGenerationPhase('outline');
+      setAppState('editing-outline');
       toast({
         title: 'Erro na geração',
         description: 'Ocorreu um erro. Tente novamente.',
@@ -347,7 +408,7 @@ export default function ArticleGeneratorV2() {
     // Generate outline sections based on keyword
     const sections = generateDefaultOutline(config.keyword);
     setOutlineSections(sections);
-    setGenerationPhase('outline');
+    setAppState('editing-outline');
     
     toast({
       title: 'Esboço gerado!',
@@ -357,7 +418,7 @@ export default function ArticleGeneratorV2() {
 
   const handleReset = () => {
     setConfig(defaultConfig);
-    setGenerationPhase('idle');
+    setAppState('form');
     setOutlineSections([]);
     setGenerationProgress(0);
     setGenerationSteps(defaultGenerationSteps);
@@ -372,40 +433,60 @@ export default function ArticleGeneratorV2() {
     <div className="min-h-screen" style={{ backgroundColor: colors.backgroundSecondary }}>
       {/* Header */}
       <header 
-        className="border-b px-6 py-4 flex items-center justify-between"
+        className="border-b px-4 md:px-6 py-3 md:py-4 flex items-center justify-between"
         style={{ backgroundColor: colors.background, borderColor: colors.border }}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3">
           <div 
-            className="w-10 h-10 rounded-lg flex items-center justify-center"
+            className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center"
             style={{ backgroundColor: `${colors.primary}15` }}
           >
-            <Zap className="w-5 h-5" style={{ color: colors.primary }} />
+            <Zap className="w-4 h-4 md:w-5 md:h-5" style={{ color: colors.primary }} />
           </div>
           <div>
-            <h1 className="text-xl font-semibold" style={{ color: colors.textPrimary }}>
+            <h1 className="text-lg md:text-xl font-semibold" style={{ color: colors.textPrimary }}>
               Gerador de Artigos IA
             </h1>
-            <p className="text-sm" style={{ color: colors.textSecondary }}>
+            <p className="text-xs md:text-sm hidden sm:block" style={{ color: colors.textSecondary }}>
               Crie conteúdo de alta qualidade com inteligência artificial
             </p>
           </div>
         </div>
-        <Badge 
-          variant="outline" 
-          className="text-sm px-3 py-1.5"
-          style={{ borderColor: colors.primary, color: colors.primary }}
-        >
-          Total: {totalCredits} {totalCredits === 1 ? 'Crédito' : 'Créditos'}
-        </Badge>
+        <div className="flex items-center gap-2">
+          {/* Mobile Preview Toggle */}
+          {isMobile && appState === 'form' && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowPreview(true)}
+              className="flex items-center gap-1"
+            >
+              <Eye className="w-4 h-4" />
+              <span className="hidden xs:inline">Prévia</span>
+            </Button>
+          )}
+          <Badge 
+            variant="outline" 
+            className="text-xs md:text-sm px-2 md:px-3 py-1 md:py-1.5"
+            style={{ borderColor: colors.primary, color: colors.primary }}
+          >
+            {userCredits} {userCredits === 1 ? 'Crédito' : 'Créditos'}
+          </Badge>
+        </div>
       </header>
 
       {/* Main Content */}
-      <div className="flex h-[calc(100vh-73px)]">
+      <div className={cn(
+        "flex",
+        isMobile ? "flex-col" : "h-[calc(100vh-73px)]"
+      )}>
         {/* Left Panel - Form */}
-        <div className="w-1/2 border-r overflow-hidden" style={{ borderColor: colors.border }}>
-          <ScrollArea className="h-full">
-            <div className="p-6 space-y-6">
+        <div className={cn(
+          "border-r overflow-hidden",
+          isMobile ? "w-full min-h-screen" : "w-1/2"
+        )} style={{ borderColor: colors.border }}>
+          <ScrollArea className={isMobile ? "h-auto" : "h-full"}>
+            <div className="p-4 md:p-6 space-y-4 md:space-y-6 pb-32">
               {/* Tutorial Banner */}
               {showTutorial && (
                 <div 
@@ -887,24 +968,46 @@ export default function ArticleGeneratorV2() {
             className="sticky bottom-0 border-t p-4 space-y-2"
             style={{ backgroundColor: colors.background, borderColor: colors.border }}
           >
-            {generationPhase === 'idle' && (
-              <Button
-                onClick={handleGenerateOutline}
-                disabled={isGenerating || !config.keyword.trim()}
-                className="w-full h-12 text-base"
-                style={{ backgroundColor: colors.primary }}
-              >
-                <Play className="w-5 h-5 mr-2" />
-                Gerar Esboço do Artigo
-              </Button>
+            {appState === 'form' && (
+              <>
+                {validationErrors.length > 0 && (
+                  <div className="p-3 rounded-lg mb-2 space-y-1" style={{ backgroundColor: '#FEE2E2' }}>
+                    {validationErrors.map((error, idx) => (
+                      <p key={idx} className="text-sm flex items-center gap-2" style={{ color: '#DC2626' }}>
+                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        {error}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                <Button
+                  onClick={() => {
+                    const errors = validateForm();
+                    if (errors.length > 0) {
+                      setValidationErrors(errors);
+                      return;
+                    }
+                    handleGenerateOutline();
+                  }}
+                  disabled={isGenerating || !config.keyword.trim()}
+                  className="w-full h-12 text-base transition-transform hover:-translate-y-0.5"
+                  style={{ backgroundColor: colors.primary }}
+                >
+                  <Play className="w-5 h-5 mr-2" />
+                  Gerar Esboço do Artigo
+                </Button>
+                <p className="text-xs text-center" style={{ color: colors.textSecondary }}>
+                  Custo total: {totalCredits} {totalCredits === 1 ? 'crédito' : 'créditos'} • Disponível: {userCredits}
+                </p>
+              </>
             )}
             
-            {generationPhase === 'outline' && (
+            {appState === 'editing-outline' && (
               <>
                 <Button
                   onClick={handleGenerate}
                   disabled={isGenerating}
-                  className="w-full h-12 text-base"
+                  className="w-full h-12 text-base transition-transform hover:-translate-y-0.5"
                   style={{ backgroundColor: colors.primary }}
                 >
                   {isGenerating ? (
@@ -929,19 +1032,27 @@ export default function ArticleGeneratorV2() {
                 </Button>
               </>
             )}
-
-            {generationPhase === 'idle' && (
-              <p className="text-xs text-center" style={{ color: colors.textSecondary }}>
-                Custo total: {totalCredits} {totalCredits === 1 ? 'crédito' : 'créditos'}
-              </p>
-            )}
           </div>
         </div>
 
-        {/* Right Panel - Dynamic based on phase */}
-        <div className="w-1/2 overflow-hidden" style={{ backgroundColor: colors.background }}>
+        {/* Right Panel - Dynamic based on app state */}
+        <div className={cn(
+          "overflow-hidden transition-all duration-300",
+          isMobile ? "fixed inset-0 z-50" : "w-1/2",
+          isMobile && !showPreview && "hidden"
+        )} style={{ backgroundColor: colors.background }}>
+          {/* Mobile close button */}
+          {isMobile && showPreview && (
+            <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: colors.border }}>
+              <span className="font-medium">Prévia</span>
+              <Button variant="ghost" size="icon" onClick={() => setShowPreview(false)}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+          )}
+          
           {/* Show Progress Screen during generation */}
-          {generationPhase === 'generating' && (
+          {appState === 'generating-article' && (
             <ProgressScreen
               currentStep={currentGenerationStep}
               progress={generationProgress}
@@ -950,7 +1061,7 @@ export default function ArticleGeneratorV2() {
           )}
 
           {/* Show Outline Editor after outline is generated */}
-          {generationPhase === 'outline' && (
+          {appState === 'editing-outline' && (
             <OutlineEditor
               sections={outlineSections}
               onSectionsChange={setOutlineSections}
@@ -962,7 +1073,7 @@ export default function ArticleGeneratorV2() {
           )}
 
           {/* Show Article Editor when complete */}
-          {generationPhase === 'complete' && (
+          {appState === 'editing-article' && (
             <ArticleEditor
               title={articleData.title}
               intro={articleData.intro}
@@ -979,6 +1090,7 @@ export default function ArticleGeneratorV2() {
                 }));
               }}
               onPublish={() => {
+                setAppState('publishing');
                 toast({
                   title: 'Publicação',
                   description: 'Funcionalidade de publicação em desenvolvimento.',
@@ -987,8 +1099,8 @@ export default function ArticleGeneratorV2() {
             />
           )}
 
-          {/* Show Preview in idle mode */}
-          {generationPhase === 'idle' && (
+          {/* Show Preview in form mode */}
+          {appState === 'form' && (
             <ScrollArea className="h-full">
               <div className="p-6">
                 {/* Preview Header */}
