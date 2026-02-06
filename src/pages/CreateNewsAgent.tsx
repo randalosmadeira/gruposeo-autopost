@@ -15,7 +15,8 @@ import {
   Globe,
   MapPin,
   Image as ImageIcon,
-  FileText
+  FileText,
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +41,7 @@ import {
 } from '@/components/ui/form';
 import { useNewsAgents } from '@/hooks/useNewsAgents';
 import { useProjects } from '@/hooks/useProjects';
+import { RSSFeedManager } from '@/components/news-agents/RSSFeedManager';
 import { cn } from '@/lib/utils';
 
 const formSchema = z.object({
@@ -142,7 +144,11 @@ export default function CreateNewsAgent() {
   };
 
   const onSubmit = (data: FormData) => {
-    if (topics.length === 0 && agentType === 'news') {
+    // For news type, require topics; for rss type, require feeds
+    if (agentType === 'news' && topics.length === 0) {
+      return;
+    }
+    if (agentType === 'rss' && rssFeeds.length === 0) {
       return;
     }
 
@@ -150,7 +156,8 @@ export default function CreateNewsAgent() {
       name: data.name,
       project_id: data.project_id || undefined,
       topics,
-      keywords: rssFeeds,
+      keywords: [],
+      rss_feeds: rssFeeds,
       search_internal_links: data.search_internal_links,
       cite_sources_inline: true,
       auto_publish: data.publish_status === 'publish',
@@ -504,39 +511,23 @@ export default function CreateNewsAgent() {
                   </CardContent>
                 </Card>
 
-                {/* RSS Feeds */}
+                {/* RSS Feeds - Enhanced with new manager */}
                 <Card>
                   <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">Feeds RSS *</CardTitle>
-                      <span className="text-sm text-muted-foreground">{rssFeeds.length}/3</span>
+                    <div className="flex items-center gap-2">
+                      <Rss className="w-5 h-5 text-primary" />
+                      <CardTitle className="text-base">Feeds RSS</CardTitle>
                     </div>
+                    <p className="text-sm text-muted-foreground">
+                      Monitore portais e blogs automaticamente via RSS
+                    </p>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="https://exemplo.com/feed.xml"
-                        value={rssFeedInput}
-                        onChange={(e) => setRssFeedInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addRssFeed())}
-                      />
-                      <Button type="button" variant="outline" size="icon" onClick={addRssFeed}>
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    {rssFeeds.length > 0 && (
-                      <div className="space-y-2">
-                        {rssFeeds.map((feed) => (
-                          <div key={feed} className="flex items-center gap-2 text-sm">
-                            <Rss className="w-4 h-4 text-muted-foreground" />
-                            <span className="flex-1 truncate">{feed}</span>
-                            <button type="button" onClick={() => setRssFeeds(rssFeeds.filter(f => f !== feed))}>
-                              <X className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                  <CardContent>
+                    <RSSFeedManager
+                      feeds={rssFeeds}
+                      onFeedsChange={setRssFeeds}
+                      maxFeeds={5}
+                    />
                   </CardContent>
                 </Card>
 

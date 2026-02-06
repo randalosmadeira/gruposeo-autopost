@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.rewrite-news]
 verify_jwt = false
+
+[functions.parse-rss]
+verify_jwt = false
