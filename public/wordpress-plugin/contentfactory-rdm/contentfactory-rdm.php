@@ -42,6 +42,8 @@ function cfrdm_load_dependencies() {
     
     // Core classes - always needed
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-logger.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-diagnostics.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-webhooks.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-api.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-articles.php';
 }
@@ -61,12 +63,12 @@ function cfrdm_load_admin_dependencies() {
     $admin_loaded = true;
     
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-admin.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-diagnostics-page.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-image-optimizer.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-sync.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-internal-links.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-indexing.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-schema-validator.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-webhooks.php';
 }
 
 /**
@@ -91,6 +93,8 @@ class ContentFactory_RDM {
     
     private static $instance = null;
     private $tables_verified = false;
+    private $operational_hooks_enabled = true;
+    private $diagnostics_report = null;
     
     public static function get_instance() {
         if (null === self::$instance) {
@@ -129,11 +133,24 @@ class ContentFactory_RDM {
         add_action('cfrdm_fetch_news', array($this, 'fetch_news_callback'));
     }
     
-    private function init_admin_hooks() {
+private function init_admin_hooks() {
+        // Run diagnostics BEFORE enabling operational hooks
+        cfrdm_load_dependencies();
+        if (class_exists('CFRDM_Diagnostics')) {
+            $this->diagnostics_report = CFRDM_Diagnostics::get_report();
+            $status = $this->diagnostics_report['status'] ?? 'ok';
+            $this->operational_hooks_enabled = ($status !== CFRDM_Diagnostics::STATUS_CRITICAL);
+        } else {
+            $this->operational_hooks_enabled = true;
+        }
+
+        add_action('admin_notices', array($this, 'show_diagnostics_notice'));
+
+        // Admin UI hooks
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
         add_action('admin_init', array($this, 'register_settings'));
-        
+
         // AJAX handlers - load dependencies only when AJAX is called
         add_action('wp_ajax_cfrdm_clear_logs', array($this, 'handle_ajax_clear_logs'));
         add_action('wp_ajax_cfrdm_export_logs', array($this, 'handle_ajax_export_logs'));
@@ -143,17 +160,59 @@ class ContentFactory_RDM {
         add_action('wp_ajax_cfrdm_analyze_links', array($this, 'handle_ajax_analyze_links'));
         add_action('wp_ajax_cfrdm_generate_links', array($this, 'handle_ajax_generate_links'));
         add_action('wp_ajax_cfrdm_validate_schema', array($this, 'handle_ajax_validate_schema'));
-        
-        // Webhook hooks - only for posts, exclude Elementor and other page builders
-        add_action('transition_post_status', array($this, 'handle_post_status_change'), 100, 3);
-        add_action('before_delete_post', array($this, 'handle_post_delete'), 100);
-        
-        // Image optimization hooks - lower priority to avoid conflicts
-        add_action('add_attachment', array($this, 'handle_attachment_upload'), 100);
-        add_filter('wp_generate_attachment_metadata', array($this, 'handle_attachment_metadata'), 100, 2);
-        
-        // Auto-correction hooks - only for regular posts, lower priority
-        add_action('save_post_post', array($this, 'handle_save_post'), 100, 3);
+
+        // Operational hooks (disabled in safe mode)
+        if ($this->operational_hooks_enabled) {
+            // Webhook hooks - only for posts, exclude Elementor and other page builders
+            add_action('transition_post_status', array($this, 'handle_post_status_change'), 100, 3);
+            add_action('before_delete_post', array($this, 'handle_post_delete'), 100);
+
+            // Image optimization hooks - lower priority to avoid conflicts
+            add_action('add_attachment', array($this, 'handle_attachment_upload'), 100);
+            add_filter('wp_generate_attachment_metadata', array($this, 'handle_attachment_metadata'), 100, 2);
+
+            // Auto-correction hooks - only for regular posts, lower priority
+            add_action('save_post_post', array($this, 'handle_save_post'), 100, 3);
+        }
+    }
+
+    public function show_diagnostics_notice() {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
+        if (empty($this->diagnostics_report)) {
+            return;
+        }
+
+        $status = $this->diagnostics_report['status'] ?? 'ok';
+        $operational = $this->diagnostics_report['operational_hooks']['enabled'] ?? true;
+
+        if ($status === 'ok') {
+            return;
+        }
+
+        $class = ($status === 'critical') ? 'notice notice-error' : 'notice notice-warning';
+        $title = ($status === 'critical') ? 'ContentFactory: Diagnóstico CRÍTICO' : 'ContentFactory: Avisos de Diagnóstico';
+
+        echo '<div class="' . esc_attr($class) . '"><p><strong>' . esc_html($title) . '</strong></p>';
+
+        if (!$operational) {
+            echo '<p>Modo seguro ativado: hooks operacionais foram desabilitados para evitar tela branca/conflitos.</p>';
+        }
+
+        $crit = $this->diagnostics_report['issues']['critical'] ?? array();
+        $warn = $this->diagnostics_report['issues']['warnings'] ?? array();
+
+        if (!empty($crit)) {
+            echo '<p><strong>Críticos:</strong> ' . esc_html(implode(' | ', array_slice($crit, 0, 3))) . '</p>';
+        }
+        if (!empty($warn)) {
+            echo '<p><strong>Avisos:</strong> ' . esc_html(implode(' | ', array_slice($warn, 0, 3))) . '</p>';
+        }
+
+        echo '<p><a href="' . esc_url(admin_url('admin.php?page=cfrdm-diagnostics')) . '">Abrir Diagnóstico</a></p>';
+        echo '</div>';
     }
     
     /**
@@ -509,6 +568,15 @@ class ContentFactory_RDM {
             'manage_options',
             'cfrdm-logs',
             array('CFRDM_Admin', 'render_logs')
+        );
+
+        add_submenu_page(
+            'cfrdm-dashboard',
+            __('Diagnóstico', 'contentfactory-rdm'),
+            __('Diagnóstico', 'contentfactory-rdm'),
+            'manage_options',
+            'cfrdm-diagnostics',
+            array('CFRDM_Diagnostics_Page', 'render')
         );
         
         add_submenu_page(

@@ -16,6 +16,13 @@ class CFRDM_API {
             'callback' => array(__CLASS__, 'health_check'),
             'permission_callback' => '__return_true',
         ));
+
+        // Healthcheck (full diagnostics) - requires auth
+        register_rest_route('cfrdm/v1', '/healthcheck', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'health_check_full'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
         
         // Connection test (requires auth)
         register_rest_route('cfrdm/v1', '/test', array(
@@ -124,6 +131,25 @@ class CFRDM_API {
             'wordpress' => get_bloginfo('version'),
             'php' => PHP_VERSION,
             'timestamp' => current_time('c'),
+        ), 200);
+    }
+
+    /**
+     * Full healthcheck with diagnostics (requires API key)
+     */
+    public static function health_check_full($request) {
+        $diagnostics = null;
+        if (class_exists('CFRDM_Diagnostics')) {
+            $diagnostics = CFRDM_Diagnostics::get_report();
+        }
+
+        return new WP_REST_Response(array(
+            'success' => true,
+            'version' => CFRDM_VERSION,
+            'wordpress' => get_bloginfo('version'),
+            'php' => PHP_VERSION,
+            'timestamp' => current_time('c'),
+            'diagnostics' => $diagnostics,
         ), 200);
     }
     
