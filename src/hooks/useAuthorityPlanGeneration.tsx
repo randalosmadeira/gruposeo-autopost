@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useToast } from './use-toast';
 import { useAuth } from './useAuth';
-
+import { supabase } from '@/integrations/supabase/client';
 interface AuthorityPlanData {
   centralTheme: string;
   satelliteCount: number;
@@ -84,13 +84,24 @@ export function useAuthorityPlanGeneration() {
     try {
       addLog('Iniciando geração do plano de autoridade...');
       
+      // Get the user's session token
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        toast({
+          title: 'Erro de autenticação',
+          description: 'Sua sessão expirou. Por favor, faça login novamente.',
+          variant: 'destructive',
+        });
+        return null;
+      }
+      
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-authority-plan-stream`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${sessionData.session.access_token}`,
           },
           body: JSON.stringify({
             ...data,
