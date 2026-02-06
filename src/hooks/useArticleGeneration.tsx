@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useToast } from './use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-article`;
 
@@ -39,11 +40,24 @@ export function useArticleGeneration() {
     setProgress(0);
 
     try {
+      // Get the user's session token
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session?.access_token) {
+        toast({
+          title: 'Sessão expirada',
+          description: 'Por favor, faça login novamente.',
+          variant: 'destructive',
+        });
+        setIsGenerating(false);
+        return null;
+      }
+
       const response = await fetch(GENERATE_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ config }),
       });
@@ -61,6 +75,12 @@ export function useArticleGeneration() {
           toast({
             title: 'Créditos insuficientes',
             description: 'Adicione créditos à sua conta para continuar gerando artigos.',
+            variant: 'destructive',
+          });
+        } else if (response.status === 401) {
+          toast({
+            title: 'Sessão expirada',
+            description: 'Por favor, faça login novamente.',
             variant: 'destructive',
           });
         } else {
