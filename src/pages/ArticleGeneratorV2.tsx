@@ -38,6 +38,7 @@ import { useProjects } from '@/hooks/useProjects';
 import { useArticleGeneration } from '@/hooks/useArticleGeneration';
 import { useArticleAutoSave } from '@/hooks/useArticleAutoSave';
 import { useWordPressPublish } from '@/hooks/useWordPressPublish';
+import { useImageGeneration } from '@/hooks/useImageGeneration';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
@@ -180,6 +181,7 @@ export default function ArticleGeneratorV2() {
   const { projects } = useProjects();
   const { isGenerating, generateArticle, content: generatedContent } = useArticleGeneration();
   const { publishArticle, isPublishing } = useWordPressPublish();
+  const { generateImage, isGenerating: isGeneratingImage, generatedImage } = useImageGeneration();
   const { 
     articleId, 
     isSaving, 
@@ -211,6 +213,10 @@ export default function ArticleGeneratorV2() {
   // Article editor state
   const [articleData, setArticleData] = useState<ArticleData>(defaultArticleData);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  
+  // Featured image state
+  const [featuredImageUrl, setFeaturedImageUrl] = useState<string | null>(null);
+  const [isImageLoading, setIsImageLoading] = useState(false);
   
   // User credits (mock - in real implementation this would come from API)
   const [userCredits] = useState(10);
@@ -318,36 +324,63 @@ export default function ArticleGeneratorV2() {
 
     setAppState('generating-article');
     
-    await simulateGeneration();
+    // Start generating the article and image in parallel if enabled
+    const articlePromise = (async () => {
+      await simulateGeneration();
+      return await generateArticle({
+        keyword: config.keyword,
+        title: config.title,
+        secondaryKeywords: '',
+        wordCount: config.size as 'short' | 'medium' | 'long' | 'very-long',
+        tone: config.tone,
+        pointOfView: config.pointOfView,
+        language: config.language,
+        type: 'blog',
+        // Advanced SEO fields
+        contentType: config.contentType as 'how-to' | 'listicle' | 'pillar' | 'comparative' | 'opinion' | 'news',
+        segment: config.segment as 'legal' | 'health' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'education' | 'general',
+        goal: config.goal as 'inform' | 'convert' | 'educate' | 'engage',
+        intentType: config.intentType as 'informational' | 'navigational' | 'transactional' | 'commercial',
+        // Content elements
+        includeFaq: config.faq,
+        faqCount: 5,
+        includeTable: config.tables,
+        includeList: config.lists,
+        includeConclusion: config.conclusion,
+        includeMetaDescription: config.metaDescription,
+        // SEO options
+        seoOptimization: config.seoOptimization,
+        humanizeContent: config.humanizeContent,
+        realtimeData: config.realtimeData,
+        // Internal links
+        internalLinks: internalLinks.map(link => ({ anchor: link.anchor, url: link.url })),
+      });
+    })();
 
-    const result = await generateArticle({
-      keyword: config.keyword,
-      title: config.title,
-      secondaryKeywords: '',
-      wordCount: config.size as 'short' | 'medium' | 'long' | 'very-long',
-      tone: config.tone,
-      pointOfView: config.pointOfView,
-      language: config.language,
-      type: 'blog',
-      // Advanced SEO fields
-      contentType: config.contentType as 'how-to' | 'listicle' | 'pillar' | 'comparative' | 'opinion' | 'news',
-      segment: config.segment as 'legal' | 'health' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'education' | 'general',
-      goal: config.goal as 'inform' | 'convert' | 'educate' | 'engage',
-      intentType: config.intentType as 'informational' | 'navigational' | 'transactional' | 'commercial',
-      // Content elements
-      includeFaq: config.faq,
-      faqCount: 5,
-      includeTable: config.tables,
-      includeList: config.lists,
-      includeConclusion: config.conclusion,
-      includeMetaDescription: config.metaDescription,
-      // SEO options
-      seoOptimization: config.seoOptimization,
-      humanizeContent: config.humanizeContent,
-      realtimeData: config.realtimeData,
-      // Internal links
-      internalLinks: internalLinks.map(link => ({ anchor: link.anchor, url: link.url })),
-    });
+    // Generate featured image automatically if enabled
+    let imageResult: { image: string } | null = null;
+    if (config.generateImages) {
+      setIsImageLoading(true);
+      try {
+        imageResult = await generateImage({
+          title: config.title || config.keyword,
+          keywords: config.keyword,
+          segment: config.segment as 'legal' | 'health' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'education' | 'general',
+          style: config.imageStyle === 'fotorrealístico' ? 'photorealistic' : 
+                 config.imageStyle === 'ilustração' ? 'illustration' : 'abstract',
+          quality: config.aiModel === 'premium' ? 'high' : 'standard',
+        });
+        if (imageResult?.image) {
+          setFeaturedImageUrl(imageResult.image);
+        }
+      } catch (error) {
+        console.error('Error generating image:', error);
+      } finally {
+        setIsImageLoading(false);
+      }
+    }
+
+    const result = await articlePromise;
 
     if (result) {
       const articleSections = outlineSections.map((section) => ({
@@ -361,13 +394,15 @@ export default function ArticleGeneratorV2() {
         title: config.title || `${config.keyword}: Guia Completo`,
         intro: result.substring(0, 500) || '<p>Introdução do artigo...</p>',
         sections: articleSections,
-        featuredImage: undefined,
+        featuredImage: imageResult?.image || featuredImageUrl || undefined,
       });
       
       setAppState('editing-article');
       toast({
         title: 'Artigo gerado!',
-        description: 'Seu artigo está pronto para edição e publicação.',
+        description: config.generateImages && imageResult?.image 
+          ? 'Artigo e imagem destacada gerados com sucesso.' 
+          : 'Seu artigo está pronto para edição e publicação.',
       });
     } else {
       setAppState('editing-outline');

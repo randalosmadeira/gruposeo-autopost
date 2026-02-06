@@ -1,18 +1,18 @@
 === ContentFactory RDM ===
 Contributors: gruposeomarketing
-Tags: content, seo, articles, automation, ai, image-optimization
+Tags: content, seo, articles, automation, ai, image-optimization, indexing
 Requires at least: 5.8
-Tested up to: 6.5
+Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.0.0
+Stable tag: 2.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Integração completa com a plataforma ContentFactory RDM para gestão de artigos SEO, publicação automática, sincronização bidirecional, otimização de imagens e logging avançado.
+Integração avançada com ContentFactory para publicação automática de artigos SEO, sincronização bidirecional, otimização de imagens, links internos, indexação automática Google/Bing e schema markup.
 
 == Description ==
 
-O **ContentFactory RDM** é um plugin WordPress desenvolvido pelo GRUPO SEO MARKETING que conecta seu site à plataforma ContentFactory RDM, permitindo:
+O **ContentFactory RDM** é um plugin WordPress desenvolvido pelo GRUPO SEO MARKETING que conecta seu site à plataforma ContentFactory, permitindo:
 
 * **Publicação Automática**: Artigos criados na plataforma são publicados automaticamente no seu WordPress
 * **Sincronização Bidirecional**: Alterações no WordPress são refletidas na plataforma e vice-versa
@@ -24,6 +24,8 @@ O **ContentFactory RDM** é um plugin WordPress desenvolvido pelo GRUPO SEO MARK
 * **Links Internos Inteligentes**: Análise e sugestão de links internos semanticamente relacionados
 * **Logging Avançado**: Registro detalhado de todas as operações com exportação CSV
 * **Auto-correções SEO**: Detecção e correção automática de problemas de SEO
+* **Indexação Automática**: Notificação automática para Google e Bing quando artigos são publicados
+* **Schema Markup**: JSON-LD automático para artigos, imagens e FAQs
 
 == Installation ==
 
@@ -48,13 +50,31 @@ Quando um post é criado, editado ou excluído no WordPress, o plugin envia uma 
 
 = O plugin otimiza imagens automaticamente? =
 
-Sim! Na versão 2.0, o plugin comprime, redimensiona e gera versões WebP das imagens automaticamente para melhorar a performance do site.
+Sim! O plugin comprime, redimensiona e gera versões WebP das imagens automaticamente para melhorar a performance do site.
 
 = Como funciona o sistema de links internos? =
 
 O plugin analisa o conteúdo do seu site e sugere links internos semanticamente relacionados para melhorar a arquitetura de SEO.
 
+= O plugin envia artigos para indexação no Google? =
+
+Sim! Na versão 2.1, o plugin notifica automaticamente o Google e o Bing quando um artigo é publicado, acelerando a indexação.
+
+= O plugin gera schema markup automaticamente? =
+
+Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject schema) e FAQs automaticamente.
+
 == Changelog ==
+
+= 2.1.0 =
+* **NOVO**: Indexação automática - notificação para Google e Bing ao publicar
+* **NOVO**: Schema markup JSON-LD automático para artigos
+* **NOVO**: Schema markup para imagens destacadas (ImageObject)
+* **NOVO**: Extração automática de FAQ schema do conteúdo
+* **NOVO**: API endpoint para verificar status de indexação
+* **NOVO**: Meta tag de disclosure para conteúdo gerado por IA
+* **MELHORADO**: Compatibilidade com WordPress 6.7
+* **MELHORADO**: Branding atualizado para GRUPO SEO MARKETING
 
 = 2.0.0 =
 * **NOVO**: Sistema de logging detalhado com exportação CSV
@@ -80,6 +100,9 @@ O plugin analisa o conteúdo do seu site e sugere links internos semanticamente 
 
 == Upgrade Notice ==
 
+= 2.1.0 =
+Nova versão com indexação automática para Google/Bing e schema markup JSON-LD. Recomendado para todos os usuários.
+
 = 2.0.0 =
 Atualização importante com novas funcionalidades de otimização de imagens, links internos e logging avançado. Faça backup antes de atualizar.
 
@@ -93,3 +116,4 @@ Primeira versão do plugin.
 3. Lista de artigos sincronizados
 4. Sistema de logs detalhado
 5. Análise de links internos
+6. Status de indexação dos artigos
