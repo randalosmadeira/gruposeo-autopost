@@ -91,11 +91,32 @@ class CFRDM_API {
             'permission_callback' => array(__CLASS__, 'verify_api_key'),
         ));
         
+        // Media import from URL (with deduplication)
+        register_rest_route('cfrdm/v1', '/media/import', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'import_media'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
         // Regenerate API key
         register_rest_route('cfrdm/v1', '/regenerate-key', array(
             'methods' => 'POST',
             'callback' => array(__CLASS__, 'regenerate_api_key'),
             'permission_callback' => array(__CLASS__, 'verify_admin'),
+        ));
+        
+        // Token verification callback (for platform connection verification)
+        register_rest_route('cfrdm/v1', '/verify-connection', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'verify_connection_callback'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // SEO plugin info
+        register_rest_route('cfrdm/v1', '/seo-info', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'get_seo_info'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
         ));
     }
     
@@ -166,18 +187,35 @@ class CFRDM_API {
     }
     
     public static function get_site_info($request) {
-        $active_plugins = get_option('active_plugins', array());
-        $seo_plugin = 'none';
+        // Load SEO class if available
+        if (class_exists('CFRDM_SEO')) {
+            $seo_info = CFRDM_SEO::get_plugin_info();
+        } else {
+            // Fallback detection
+            $active_plugins = get_option('active_plugins', array());
+            $seo_plugin = 'none';
+            
+            foreach ($active_plugins as $plugin) {
+                if (strpos($plugin, 'wordpress-seo') !== false) {
+                    $seo_plugin = 'yoast';
+                    break;
+                }
+                if (strpos($plugin, 'seo-by-rank-math') !== false) {
+                    $seo_plugin = 'rankmath';
+                    break;
+                }
+                if (strpos($plugin, 'all-in-one-seo') !== false) {
+                    $seo_plugin = 'aioseo';
+                    break;
+                }
+            }
+            $seo_info = array('plugin' => $seo_plugin);
+        }
         
-        foreach ($active_plugins as $plugin) {
-            if (strpos($plugin, 'wordpress-seo') !== false) {
-                $seo_plugin = 'yoast';
-                break;
-            }
-            if (strpos($plugin, 'seo-by-rank-math') !== false) {
-                $seo_plugin = 'rankmath';
-                break;
-            }
+        // Get media deduplication stats
+        $media_stats = array();
+        if (class_exists('CFRDM_Media')) {
+            $media_stats = CFRDM_Media::get_stats();
         }
         
         return new WP_REST_Response(array(
@@ -191,16 +229,23 @@ class CFRDM_API {
                 'timezone' => get_option('timezone_string') ?: 'UTC',
                 'wordpress_version' => get_bloginfo('version'),
                 'php_version' => PHP_VERSION,
-                'seo_plugin' => $seo_plugin,
+                'seo_plugin' => $seo_info['plugin'],
+                'seo_plugin_name' => $seo_info['name'] ?? '',
+                'seo_plugin_version' => $seo_info['version'] ?? '',
                 'plugin_version' => CFRDM_VERSION,
+                'default_author' => intval(get_option('cfrdm_default_author', 0)),
             ),
             'capabilities' => array(
                 'posts' => true,
                 'categories' => true,
                 'tags' => true,
                 'media' => true,
+                'media_deduplication' => class_exists('CFRDM_Media'),
+                'seo_meta' => class_exists('CFRDM_SEO'),
                 'webhooks' => get_option('cfrdm_webhook_enabled', true),
+                'schemas' => array('Article', 'Product', 'Review', 'HowTo', 'FAQPage', 'BreadcrumbList'),
             ),
+            'media_stats' => $media_stats,
         ), 200);
     }
     
@@ -310,12 +355,61 @@ class CFRDM_API {
             set_post_thumbnail($post_id, intval($params['featured_image_id']));
         }
         
-        // Set SEO meta
-        self::set_seo_meta($post_id, $params);
+        // Set SEO meta using new SEO class
+        if (class_exists('CFRDM_SEO')) {
+            $seo_meta = array();
+            if (!empty($params['seo_title'])) $seo_meta['title'] = $params['seo_title'];
+            if (!empty($params['seo_description'])) $seo_meta['description'] = $params['seo_description'];
+            if (!empty($params['focus_keyword'])) $seo_meta['focus_keyword'] = $params['focus_keyword'];
+            if (!empty($params['og_title'])) $seo_meta['og_title'] = $params['og_title'];
+            if (!empty($params['og_description'])) $seo_meta['og_description'] = $params['og_description'];
+            if (!empty($params['og_image'])) $seo_meta['og_image'] = $params['og_image'];
+            if (!empty($params['twitter_title'])) $seo_meta['twitter_title'] = $params['twitter_title'];
+            if (!empty($params['twitter_description'])) $seo_meta['twitter_description'] = $params['twitter_description'];
+            if (!empty($params['twitter_image'])) $seo_meta['twitter_image'] = $params['twitter_image'];
+            
+            if (!empty($seo_meta)) {
+                CFRDM_SEO::set_meta($post_id, $seo_meta);
+            }
+        } else {
+            // Fallback to old method
+            self::set_seo_meta($post_id, $params);
+        }
         
         // Store ContentFactory ID if provided
         if (!empty($params['cfrdm_id'])) {
             update_post_meta($post_id, '_cfrdm_article_id', sanitize_text_field($params['cfrdm_id']));
+        }
+        
+        // Store article type for schema generation
+        if (!empty($params['article_type'])) {
+            update_post_meta($post_id, '_cfrdm_article_type', sanitize_text_field($params['article_type']));
+        }
+        
+        // Store HowTo data if provided
+        if (!empty($params['howto_steps'])) {
+            update_post_meta($post_id, '_cfrdm_is_howto', true);
+            update_post_meta($post_id, '_cfrdm_howto_steps', $params['howto_steps']);
+            if (!empty($params['howto_time'])) {
+                update_post_meta($post_id, '_cfrdm_howto_time', intval($params['howto_time']));
+            }
+            if (!empty($params['howto_supplies'])) {
+                update_post_meta($post_id, '_cfrdm_howto_supplies', $params['howto_supplies']);
+            }
+            if (!empty($params['howto_tools'])) {
+                update_post_meta($post_id, '_cfrdm_howto_tools', $params['howto_tools']);
+            }
+        }
+        
+        // Store Review data if provided
+        if (!empty($params['review_rating'])) {
+            update_post_meta($post_id, '_cfrdm_review_rating', floatval($params['review_rating']));
+        }
+        if (!empty($params['review_pros'])) {
+            update_post_meta($post_id, '_cfrdm_review_pros', $params['review_pros']);
+        }
+        if (!empty($params['review_cons'])) {
+            update_post_meta($post_id, '_cfrdm_review_cons', $params['review_cons']);
         }
         
         // Log action
@@ -615,6 +709,12 @@ class CFRDM_API {
     }
     
     private static function get_seo_meta($post_id) {
+        // Use new SEO class if available
+        if (class_exists('CFRDM_SEO')) {
+            return CFRDM_SEO::get_meta($post_id);
+        }
+        
+        // Fallback
         $seo = array(
             'title' => '',
             'description' => '',
@@ -659,5 +759,124 @@ class CFRDM_API {
             // Rank Math
             update_post_meta($post_id, 'rank_math_focus_keyword', sanitize_text_field($params['focus_keyword']));
         }
+    }
+    
+    /**
+     * Import media from URL with deduplication
+     */
+    public static function import_media($request) {
+        $params = $request->get_json_params();
+        
+        if (empty($params['url'])) {
+            return new WP_Error(
+                'missing_url',
+                __('URL da imagem não fornecida.', 'contentfactory-rdm'),
+                array('status' => 400)
+            );
+        }
+        
+        // Check if CFRDM_Media class exists
+        if (!class_exists('CFRDM_Media')) {
+            return new WP_Error(
+                'class_not_found',
+                __('Classe de mídia não encontrada.', 'contentfactory-rdm'),
+                array('status' => 500)
+            );
+        }
+        
+        $post_id = intval($params['post_id'] ?? 0);
+        $options = array(
+            'alt' => sanitize_text_field($params['alt'] ?? ''),
+            'title' => sanitize_text_field($params['title'] ?? ''),
+            'filename' => sanitize_file_name($params['filename'] ?? ''),
+        );
+        
+        $result = CFRDM_Media::import_image($params['url'], $post_id, $options);
+        
+        if (is_wp_error($result)) {
+            return new WP_Error(
+                'import_failed',
+                $result->get_error_message(),
+                array('status' => 400)
+            );
+        }
+        
+        // Set as featured image if requested
+        if (!empty($params['set_featured']) && $post_id) {
+            set_post_thumbnail($post_id, $result['attachment_id']);
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => $result['deduplicated'] 
+                ? __('Imagem existente reutilizada (deduplicada).', 'contentfactory-rdm')
+                : __('Imagem importada com sucesso!', 'contentfactory-rdm'),
+            'data' => array(
+                'id' => $result['attachment_id'],
+                'url' => $result['url'],
+                'deduplicated' => $result['deduplicated'],
+            ),
+        ), 201);
+    }
+    
+    /**
+     * Verify connection callback - called by platform when token is saved
+     */
+    public static function verify_connection_callback($request) {
+        $params = $request->get_json_params();
+        
+        // Store the API URL from the platform
+        if (!empty($params['api_url'])) {
+            update_option('cfrdm_api_url', esc_url_raw($params['api_url']));
+        }
+        
+        // Store project ID if provided
+        if (!empty($params['project_id'])) {
+            update_option('cfrdm_project_id', sanitize_text_field($params['project_id']));
+        }
+        
+        // Log the connection verification
+        CFRDM_Webhooks::log('connection_verified', array(
+            'api_url' => $params['api_url'] ?? '',
+            'project_id' => $params['project_id'] ?? '',
+            'timestamp' => current_time('c'),
+        ));
+        
+        // Return site info for platform to store
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => __('Conexão verificada com sucesso!', 'contentfactory-rdm'),
+            'site' => array(
+                'name' => get_bloginfo('name'),
+                'url' => get_site_url(),
+                'rest_url' => rest_url('cfrdm/v1/'),
+                'wordpress_version' => get_bloginfo('version'),
+                'plugin_version' => CFRDM_VERSION,
+                'seo_plugin' => class_exists('CFRDM_SEO') ? CFRDM_SEO::detect_seo_plugin() : 'none',
+                'capabilities' => array(
+                    'media_deduplication' => class_exists('CFRDM_Media'),
+                    'advanced_seo' => class_exists('CFRDM_SEO'),
+                    'schemas' => class_exists('CFRDM_Schema_Validator'),
+                ),
+            ),
+        ), 200);
+    }
+    
+    /**
+     * Get SEO plugin info
+     */
+    public static function get_seo_info($request) {
+        if (!class_exists('CFRDM_SEO')) {
+            return new WP_REST_Response(array(
+                'success' => true,
+                'plugin' => 'none',
+                'features' => array(),
+            ), 200);
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'data' => CFRDM_SEO::get_plugin_info(),
+        ), 200);
     }
 }
