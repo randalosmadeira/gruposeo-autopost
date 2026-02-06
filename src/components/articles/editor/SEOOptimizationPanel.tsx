@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sparkles, FileText, AlignLeft, Heading, Search, Check, X, AlertCircle } from 'lucide-react';
+import { Sparkles, FileText, AlignLeft, Heading, Search, X } from 'lucide-react';
 import { marked } from 'marked';
 
 interface SEOOptimizationPanelProps {
@@ -18,12 +18,6 @@ interface KeywordAnalysis {
   target: number;
   percentage: number;
   status: 'good' | 'warning' | 'bad';
-}
-
-interface SEOCheck {
-  label: string;
-  passed: boolean;
-  message: string;
 }
 
 export function SEOOptimizationPanel({ content, keyword, title, excerpt }: SEOOptimizationPanelProps) {
@@ -48,10 +42,6 @@ export function SEOOptimizationPanel({ content, keyword, title, excerpt }: SEOOp
     const h3Count = (htmlContent.match(/<h3[^>]*>/gi) || []).length;
     const headings = h2Count + h3Count + (htmlContent.match(/<h[4-6][^>]*>/gi) || []).length;
     
-    // Link and image counts
-    const internalLinks = (htmlContent.match(/<a[^>]*href=["'][^"']*["'][^>]*>/gi) || []).length;
-    const images = (htmlContent.match(/<img[^>]*>/gi) || []).length;
-    
     // Extract keywords and count occurrences
     const wordFrequency: Record<string, number> = {};
     words.forEach(word => {
@@ -66,82 +56,24 @@ export function SEOOptimizationPanel({ content, keyword, title, excerpt }: SEOOp
     const keywordCount = (text.match(new RegExp(mainKeyword.replace(/\s+/g, '\\s+'), 'gi')) || []).length;
     const keywordDensity = wordCount > 0 ? (keywordCount / wordCount) * 100 : 0;
     
-    // SEO Checks
-    const seoChecks: SEOCheck[] = [
-      {
-        label: 'Palavra-chave no título',
-        passed: title?.toLowerCase().includes(mainKeyword) || false,
-        message: title?.toLowerCase().includes(mainKeyword) 
-          ? 'A palavra-chave está presente no título' 
-          : 'Adicione a palavra-chave ao título',
-      },
-      {
-        label: 'Palavra-chave na meta descrição',
-        passed: excerpt?.toLowerCase().includes(mainKeyword) || false,
-        message: excerpt?.toLowerCase().includes(mainKeyword) 
-          ? 'A palavra-chave está na meta descrição' 
-          : 'Adicione a palavra-chave à meta descrição',
-      },
-      {
-        label: 'Tamanho da meta descrição',
-        passed: (excerpt?.length || 0) >= 120 && (excerpt?.length || 0) <= 160,
-        message: (excerpt?.length || 0) < 120 
-          ? 'Meta descrição muito curta (mín. 120 caracteres)'
-          : (excerpt?.length || 0) > 160 
-            ? 'Meta descrição muito longa (máx. 160 caracteres)'
-            : 'Tamanho ideal da meta descrição',
-      },
-      {
-        label: 'Densidade da palavra-chave',
-        passed: keywordDensity >= 0.5 && keywordDensity <= 2.5,
-        message: keywordDensity < 0.5 
-          ? `Densidade baixa (${keywordDensity.toFixed(1)}%). Adicione mais ocorrências`
-          : keywordDensity > 2.5 
-            ? `Densidade alta (${keywordDensity.toFixed(1)}%). Reduza ocorrências`
-            : `Densidade ideal: ${keywordDensity.toFixed(1)}%`,
-      },
-      {
-        label: 'Subtítulos H2',
-        passed: h2Count >= 3,
-        message: h2Count >= 3 
-          ? `${h2Count} subtítulos H2 encontrados` 
-          : `Apenas ${h2Count} H2. Adicione mais subtítulos`,
-      },
-      {
-        label: 'Conteúdo mínimo',
-        passed: wordCount >= 1500,
-        message: wordCount >= 1500 
-          ? `${wordCount} palavras - conteúdo extenso` 
-          : `${wordCount} palavras. Recomendado: 1500+`,
-      },
-      {
-        label: 'Links internos',
-        passed: internalLinks >= 2,
-        message: internalLinks >= 2 
-          ? `${internalLinks} links encontrados` 
-          : `Apenas ${internalLinks} link(s). Adicione mais`,
-      },
-      {
-        label: 'Imagens no conteúdo',
-        passed: images >= 1,
-        message: images >= 1 
-          ? `${images} imagem(ns) encontrada(s)` 
-          : 'Adicione imagens ao conteúdo',
-      },
-    ];
-    
-    // Calculate SEO score based on checks
-    const passedChecks = seoChecks.filter(c => c.passed).length;
-    let score = Math.round((passedChecks / seoChecks.length) * 100);
+    // Calculate SEO score
+    let score = 0;
+    if (title?.toLowerCase().includes(mainKeyword)) score += 15;
+    if (excerpt?.toLowerCase().includes(mainKeyword)) score += 10;
+    if ((excerpt?.length || 0) >= 120 && (excerpt?.length || 0) <= 160) score += 10;
+    if (keywordDensity >= 0.5 && keywordDensity <= 2.5) score += 15;
+    if (h2Count >= 3) score += 15;
+    if (wordCount >= 1500) score += 20;
+    if (wordCount >= 500) score += 15;
     
     // Generate keyword suggestions with targets
-    const targetDensity = 1.5; // Ideal keyword density percentage
+    const targetDensity = 1.5;
     const topKeywords: KeywordAnalysis[] = Object.entries(wordFrequency)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 15)
+      .slice(0, 50)
       .map(([word, count]) => {
         const idealCount = Math.round((wordCount * targetDensity) / 100);
-        const target = Math.max(3, idealCount);
+        const target = Math.max(2, idealCount);
         const percentage = Math.min(100, (count / target) * 100);
         return {
           word,
@@ -153,20 +85,18 @@ export function SEOOptimizationPanel({ content, keyword, title, excerpt }: SEOOp
       });
     
     return {
-      score,
+      score: Math.min(100, score),
       wordCount,
       paragraphs,
       headings,
       keywords: topKeywords,
-      seoChecks,
       analyzedTerms: topKeywords.length,
-      keywordDensity,
     };
   }, [content, keyword, title, excerpt]);
 
   const getScoreColor = (score: number) => {
     if (score >= 70) return 'text-green-500';
-    if (score >= 40) return 'text-yellow-500';
+    if (score >= 40) return 'text-amber-500';
     return 'text-red-500';
   };
 
@@ -176,12 +106,10 @@ export function SEOOptimizationPanel({ content, keyword, title, excerpt }: SEOOp
     return 'RUIM';
   };
 
-  const getStatusColor = (status: 'good' | 'warning' | 'bad') => {
-    switch (status) {
-      case 'good': return 'bg-green-500';
-      case 'warning': return 'bg-yellow-500';
-      case 'bad': return 'bg-red-500';
-    }
+  const getScoreStrokeColor = (score: number) => {
+    if (score >= 70) return '#22c55e';
+    if (score >= 40) return '#f59e0b';
+    return '#ef4444';
   };
 
   const filteredKeywords = analysis.keywords
@@ -199,151 +127,150 @@ export function SEOOptimizationPanel({ content, keyword, title, excerpt }: SEOOp
           <Sparkles className="w-5 h-5 text-primary" />
           <h3 className="font-semibold">Otimização SEO</h3>
         </div>
-        <span className="text-xs text-muted-foreground">
+        <Badge variant="secondary" className="text-xs font-normal">
           {analysis.analyzedTerms} termo(s) analisado(s)
-        </span>
+        </Badge>
       </div>
 
-      {/* Score Circle */}
-      <div className="flex flex-col items-center py-4">
-        <div className="relative w-28 h-28">
+      {/* Score Circle - Matching reference design */}
+      <div className="flex flex-col items-center py-6">
+        <div className="relative w-32 h-32">
           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+            {/* Background circle */}
             <circle
               cx="50"
               cy="50"
-              r="40"
+              r="42"
               fill="none"
-              stroke="currentColor"
-              strokeWidth="8"
-              className="text-muted/20"
+              stroke="hsl(var(--muted))"
+              strokeWidth="6"
+              opacity="0.3"
             />
+            {/* Progress arc */}
             <circle
               cx="50"
               cy="50"
-              r="40"
+              r="42"
               fill="none"
-              stroke="currentColor"
-              strokeWidth="8"
+              stroke={getScoreStrokeColor(analysis.score)}
+              strokeWidth="6"
               strokeLinecap="round"
-              strokeDasharray={`${analysis.score * 2.51} 251`}
-              className={getScoreColor(analysis.score)}
+              strokeDasharray={`${analysis.score * 2.64} 264`}
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className={`text-2xl font-bold ${getScoreColor(analysis.score)}`}>
+            <span className={`text-3xl font-bold ${getScoreColor(analysis.score)}`}>
               {analysis.score}%
             </span>
-            <span className={`text-xs font-medium ${getScoreColor(analysis.score)}`}>
+            <span className={`text-sm font-semibold ${getScoreColor(analysis.score)}`}>
               {getScoreLabel(analysis.score)}
             </span>
           </div>
         </div>
-        <span className="text-xs text-muted-foreground mt-2">Nível de otimização</span>
+        <span className="text-sm text-muted-foreground mt-3">Nível de otimização</span>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 text-center">
-        <div className="flex flex-col items-center p-2 bg-muted/30 rounded-lg">
-          <FileText className="w-4 h-4 text-muted-foreground mb-1" />
-          <span className="text-lg font-semibold">{analysis.wordCount}</span>
-          <span className="text-xs text-muted-foreground">Palavras</span>
+      {/* Stats - Horizontal layout matching reference */}
+      <div className="flex justify-between gap-2">
+        <div className="flex-1 flex flex-col items-center py-3 px-2 bg-muted/40 rounded-lg border">
+          <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+            <FileText className="w-3.5 h-3.5" />
+            <span className="text-xs">Palavras</span>
+          </div>
+          <span className="text-xl font-bold">{analysis.wordCount.toLocaleString()}</span>
         </div>
-        <div className="flex flex-col items-center p-2 bg-muted/30 rounded-lg">
-          <AlignLeft className="w-4 h-4 text-muted-foreground mb-1" />
-          <span className="text-lg font-semibold">{analysis.paragraphs}</span>
-          <span className="text-xs text-muted-foreground">Parágrafos</span>
+        <div className="flex-1 flex flex-col items-center py-3 px-2 bg-muted/40 rounded-lg border">
+          <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+            <AlignLeft className="w-3.5 h-3.5" />
+            <span className="text-xs">Parágrafos</span>
+          </div>
+          <span className="text-xl font-bold">{analysis.paragraphs}</span>
         </div>
-        <div className="flex flex-col items-center p-2 bg-muted/30 rounded-lg">
-          <Heading className="w-4 h-4 text-muted-foreground mb-1" />
-          <span className="text-lg font-semibold">{analysis.headings}</span>
-          <span className="text-xs text-muted-foreground">Subtítulos</span>
-        </div>
-      </div>
-
-      {/* SEO Checklist */}
-      <div className="space-y-2">
-        <h4 className="text-sm font-medium flex items-center gap-2">
-          <AlertCircle className="w-4 h-4" />
-          Verificações SEO
-        </h4>
-        <div className="space-y-1.5 max-h-32 overflow-y-auto">
-          {analysis.seoChecks.map((check, index) => (
-            <div 
-              key={index} 
-              className={`flex items-start gap-2 text-xs p-2 rounded ${
-                check.passed ? 'bg-green-500/10' : 'bg-red-500/10'
-              }`}
-            >
-              {check.passed ? (
-                <Check className="w-3.5 h-3.5 text-green-600 mt-0.5 shrink-0" />
-              ) : (
-                <X className="w-3.5 h-3.5 text-red-600 mt-0.5 shrink-0" />
-              )}
-              <div>
-                <span className={`font-medium ${check.passed ? 'text-green-700' : 'text-red-700'}`}>
-                  {check.label}
-                </span>
-                <p className="text-muted-foreground">{check.message}</p>
-              </div>
-            </div>
-          ))}
+        <div className="flex-1 flex flex-col items-center py-3 px-2 bg-muted/40 rounded-lg border">
+          <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+            <Heading className="w-3.5 h-3.5" />
+            <span className="text-xs">Subtítulos</span>
+          </div>
+          <span className="text-xl font-bold">{analysis.headings}</span>
         </div>
       </div>
 
-      {/* Keywords Section */}
+      {/* Keywords Section - Full height scroll */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium">Palavras-chave</span>
+          <span className="text-sm font-semibold">Palavras-chave</span>
           <div className="flex gap-1">
-            <Badge 
-              variant={filterMode === 'all' ? 'default' : 'outline'}
-              className="text-xs cursor-pointer"
+            <button
               onClick={() => setFilterMode('all')}
+              className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                filterMode === 'all' 
+                  ? 'bg-muted text-foreground font-medium' 
+                  : 'text-muted-foreground hover:bg-muted/50'
+              }`}
             >
               Todas
-            </Badge>
-            <Badge 
-              variant={filterMode === 'improve' ? 'default' : 'outline'}
-              className="text-xs cursor-pointer"
+            </button>
+            <button
               onClick={() => setFilterMode('improve')}
+              className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                filterMode === 'improve' 
+                  ? 'bg-primary text-primary-foreground font-medium' 
+                  : 'text-muted-foreground hover:bg-muted/50'
+              }`}
             >
               Melhorar
-            </Badge>
+            </button>
           </div>
         </div>
 
+        {/* Search */}
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Buscar palavra-chave..."
-            className="pl-8 h-8 text-sm"
+            className="pl-9 h-9 text-sm bg-muted/30"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
 
-        <ScrollArea className="h-40">
-          <div className="space-y-2.5 pr-2">
+        {/* Keywords List - Scrollable */}
+        <ScrollArea className="h-[300px]">
+          <div className="space-y-2 pr-3">
             {filteredKeywords.map((kw, index) => (
-              <div key={index} className="space-y-1">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="truncate">{kw.word}</span>
-                  <span className={`text-xs flex items-center gap-1 ${
-                    kw.status === 'good' ? 'text-green-600' : 
-                    kw.status === 'warning' ? 'text-yellow-600' : 'text-red-600'
-                  }`}>
-                    {kw.status === 'good' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
-                    {kw.count}/{kw.target}
-                  </span>
-                </div>
-                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+              <div 
+                key={index} 
+                className="flex items-center gap-3 py-2.5 px-3 bg-card border rounded-lg"
+              >
+                <span className="flex-1 text-sm truncate font-medium">{kw.word}</span>
+                
+                {/* Progress bar */}
+                <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
                   <div 
-                    className={`h-full rounded-full transition-all ${getStatusColor(kw.status)}`}
+                    className={`h-full rounded-full transition-all ${
+                      kw.status === 'good' ? 'bg-green-500' : 
+                      kw.status === 'warning' ? 'bg-amber-500' : 'bg-red-400'
+                    }`}
                     style={{ width: `${Math.min(100, kw.percentage)}%` }}
                   />
                 </div>
+                
+                {/* Count indicator */}
+                <span className={`text-xs flex items-center gap-1 min-w-[40px] justify-end ${
+                  kw.status === 'good' ? 'text-green-600' : 
+                  kw.status === 'warning' ? 'text-amber-600' : 'text-red-500'
+                }`}>
+                  <X className="w-3 h-3" />
+                  {kw.count}/{kw.target}
+                </span>
               </div>
             ))}
+            
+            {filteredKeywords.length === 0 && (
+              <div className="text-center py-8 text-sm text-muted-foreground">
+                Nenhuma palavra-chave encontrada
+              </div>
+            )}
           </div>
         </ScrollArea>
       </div>

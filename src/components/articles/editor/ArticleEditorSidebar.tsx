@@ -5,7 +5,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { 
   Sparkles,
   RefreshCw,
@@ -15,7 +14,8 @@ import {
   Wand2,
   Eye,
   Code,
-  FolderOpen
+  FolderOpen,
+  Save
 } from 'lucide-react';
 import { SEOOptimizationPanel } from './SEOOptimizationPanel';
 import { WordPressCategorySelector } from '../WordPressCategorySelector';
@@ -38,6 +38,9 @@ interface ArticleEditorSidebarProps {
   onFieldUpdate: <K extends keyof Article>(field: K, value: Article[K]) => void;
   onRegenerate: (type: 'title' | 'excerpt' | 'image' | 'content') => void;
   isRegenerating: 'title' | 'excerpt' | 'image' | 'content' | null;
+  onSave?: () => void;
+  isSaving?: boolean;
+  hasChanges?: boolean;
 }
 
 export function ArticleEditorSidebar({
@@ -47,6 +50,9 @@ export function ArticleEditorSidebar({
   onFieldUpdate,
   onRegenerate,
   isRegenerating,
+  onSave,
+  isSaving,
+  hasChanges,
 }: ArticleEditorSidebarProps) {
   const [configTab, setConfigTab] = useState<'config' | 'seo'>('config');
   const excerptLength = article.excerpt?.length || 0;
@@ -72,8 +78,8 @@ export function ArticleEditorSidebar({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="config" className="flex-1 m-0">
-          <ScrollArea className="h-[calc(100vh-280px)]">
+        <TabsContent value="config" className="flex-1 m-0 overflow-hidden">
+          <ScrollArea className="h-full">
             <div className="p-4 space-y-6">
               {/* Configurations Header */}
               <div className="flex items-center gap-2">
@@ -172,9 +178,7 @@ export function ArticleEditorSidebar({
               </div>
 
               {/* WordPress Categories */}
-              <Separator />
-              
-              <div className="space-y-2">
+              <div className="space-y-2 pt-2 border-t">
                 <div className="flex items-center gap-2">
                   <FolderOpen className="w-4 h-4 text-primary" />
                   <Label className="text-sm font-medium">Publicação WordPress</Label>
@@ -189,8 +193,8 @@ export function ArticleEditorSidebar({
           </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="seo" className="flex-1 m-0">
-          <ScrollArea className="h-[calc(100vh-280px)]">
+        <TabsContent value="seo" className="flex-1 m-0 overflow-hidden">
+          <ScrollArea className="h-full">
             <div className="p-4">
               <SEOOptimizationPanel 
                 content={article.content} 
@@ -203,8 +207,8 @@ export function ArticleEditorSidebar({
         </TabsContent>
       </Tabs>
 
-      {/* Editor/HTML Toggle */}
-      <div className="border-t p-3">
+      {/* Editor/HTML Toggle + Save Button */}
+      <div className="border-t p-3 space-y-3">
         <Tabs value={activeTab} onValueChange={(v) => onActiveTabChange(v as 'visual' | 'html')}>
           <TabsList className="w-full">
             <TabsTrigger value="visual" className="flex-1 gap-2">
@@ -217,6 +221,21 @@ export function ArticleEditorSidebar({
             </TabsTrigger>
           </TabsList>
         </Tabs>
+        
+        {/* Save Button */}
+        <Button 
+          onClick={onSave} 
+          disabled={!hasChanges || isSaving}
+          className="w-full gap-2"
+          size="lg"
+        >
+          {isSaving ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Save className="w-4 h-4" />
+          )}
+          Salvar Alterações
+        </Button>
       </div>
     </div>
   );

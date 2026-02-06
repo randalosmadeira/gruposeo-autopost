@@ -2,143 +2,157 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
+import { 
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { 
-  Bold, 
-  Italic, 
-  Link, 
-  Strikethrough, 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { 
+  Bold,
+  Italic,
+  Strikethrough,
   Underline,
+  Link,
+  Link2Off,
   List,
   ListOrdered,
-  IndentIncrease,
-  IndentDecrease,
-  Image as ImageIcon,
-  Table,
+  Heading1,
+  Heading2,
+  Heading3,
   ChevronDown,
-  Check,
-  Unlink
+  Image,
+  Table,
+  CheckCircle2,
+  Loader2,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
 } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 
 interface ArticleEditorToolbarProps {
   hasChanges: boolean;
   isSaving: boolean;
-  onFormat?: (command: string, value?: string) => void;
-  isEditMode?: boolean;
+  lastSaved?: string | null;
+  editorRef?: React.RefObject<HTMLDivElement>;
 }
 
 export function ArticleEditorToolbar({ 
   hasChanges, 
-  isSaving, 
-  onFormat,
-  isEditMode = false 
+  isSaving,
+  lastSaved,
+  editorRef,
 }: ArticleEditorToolbarProps) {
   const [linkUrl, setLinkUrl] = useState('');
-  const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
+  const [isLinkPopoverOpen, setIsLinkPopoverOpen] = useState(false);
 
-  const handleFormat = (command: string, value?: string) => {
-    if (onFormat) {
-      onFormat(command, value);
-    } else {
-      // Fallback to execCommand for contenteditable
-      document.execCommand(command, false, value);
-    }
+  // Execute command on the contentEditable element
+  const execCommand = (command: string, value?: string) => {
+    document.execCommand(command, false, value);
+    editorRef?.current?.focus();
+  };
+
+  const handleFormatHeading = (level: string) => {
+    execCommand('formatBlock', level);
   };
 
   const handleInsertLink = () => {
     if (linkUrl) {
-      handleFormat('createLink', linkUrl);
+      execCommand('createLink', linkUrl);
       setLinkUrl('');
-      setLinkPopoverOpen(false);
+      setIsLinkPopoverOpen(false);
     }
   };
 
   const handleRemoveLink = () => {
-    handleFormat('unlink');
-    setLinkPopoverOpen(false);
+    execCommand('unlink');
   };
 
   return (
-    <div className="flex items-center gap-1 p-2 border-b bg-card">
-      {/* Heading Selector */}
+    <div className="flex items-center gap-1 px-4 py-2 bg-card border-b overflow-x-auto">
+      {/* Heading Dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 gap-2 px-3 text-sm font-normal">
+          <Button variant="ghost" size="sm" className="gap-1 h-8 px-2 text-sm">
             Título 1 (H1)
             <ChevronDown className="w-3 h-3" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-48">
-          <DropdownMenuItem className="gap-2" onClick={() => handleFormat('formatBlock', 'h1')}>
-            <span className="w-6 h-6 rounded bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium">H1</span>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem onClick={() => handleFormatHeading('h1')}>
+            <Heading1 className="w-4 h-4 mr-2" />
             Título 1 (H1)
           </DropdownMenuItem>
-          <DropdownMenuItem className="gap-2" onClick={() => handleFormat('formatBlock', 'h2')}>
-            <span className="w-6 h-6 rounded bg-muted text-muted-foreground flex items-center justify-center text-xs font-medium">H2</span>
-            Subtítulo 2 (H2)
+          <DropdownMenuItem onClick={() => handleFormatHeading('h2')}>
+            <Heading2 className="w-4 h-4 mr-2" />
+            Título 2 (H2)
           </DropdownMenuItem>
-          <DropdownMenuItem className="gap-2" onClick={() => handleFormat('formatBlock', 'h3')}>
-            <span className="w-6 h-6 rounded bg-muted text-muted-foreground flex items-center justify-center text-xs font-medium">H3</span>
-            Subtítulo 3 (H3)
+          <DropdownMenuItem onClick={() => handleFormatHeading('h3')}>
+            <Heading3 className="w-4 h-4 mr-2" />
+            Título 3 (H3)
           </DropdownMenuItem>
-          <DropdownMenuItem className="gap-2" onClick={() => handleFormat('formatBlock', 'h4')}>
-            <span className="w-6 h-6 rounded bg-muted text-muted-foreground flex items-center justify-center text-xs font-medium">H4</span>
-            Subtítulo 4 (H4)
-          </DropdownMenuItem>
-          <DropdownMenuItem className="gap-2" onClick={() => handleFormat('formatBlock', 'h5')}>
-            <span className="w-6 h-6 rounded bg-muted text-muted-foreground flex items-center justify-center text-xs font-medium">H5</span>
-            Subtítulo 5 (H5)
-          </DropdownMenuItem>
-          <DropdownMenuItem className="gap-2" onClick={() => handleFormat('formatBlock', 'h6')}>
-            <span className="w-6 h-6 rounded bg-muted text-muted-foreground flex items-center justify-center text-xs font-medium">H6</span>
-            Subtítulo 6 (H6)
-          </DropdownMenuItem>
-          <DropdownMenuItem className="gap-2" onClick={() => handleFormat('formatBlock', 'p')}>
-            <span className="w-6 h-6 rounded bg-muted text-muted-foreground flex items-center justify-center text-xs font-medium">P</span>
+          <DropdownMenuItem onClick={() => handleFormatHeading('p')}>
+            <AlignLeft className="w-4 h-4 mr-2" />
             Parágrafo
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <div className="h-6 w-px bg-border mx-1" />
+      <Separator orientation="vertical" className="h-6 mx-1" />
 
       {/* Text Formatting */}
       <Button 
         variant="ghost" 
-        size="sm" 
-        className="h-8 w-8 p-0"
-        onClick={() => handleFormat('bold')}
+        size="icon" 
+        className="h-8 w-8"
+        onClick={() => execCommand('bold')}
         title="Negrito (Ctrl+B)"
       >
         <Bold className="w-4 h-4" />
       </Button>
       <Button 
         variant="ghost" 
-        size="sm" 
-        className="h-8 w-8 p-0"
-        onClick={() => handleFormat('italic')}
+        size="icon" 
+        className="h-8 w-8"
+        onClick={() => execCommand('italic')}
         title="Itálico (Ctrl+I)"
       >
         <Italic className="w-4 h-4" />
       </Button>
-      
-      {/* Link Popover */}
-      <Popover open={linkPopoverOpen} onOpenChange={setLinkPopoverOpen}>
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        className="h-8 w-8"
+        onClick={() => execCommand('strikeThrough')}
+        title="Tachado"
+      >
+        <Strikethrough className="w-4 h-4" />
+      </Button>
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        className="h-8 w-8"
+        onClick={() => execCommand('underline')}
+        title="Sublinhado (Ctrl+U)"
+      >
+        <Underline className="w-4 h-4" />
+      </Button>
+
+      <Separator orientation="vertical" className="h-6 mx-1" />
+
+      {/* Link */}
+      <Popover open={isLinkPopoverOpen} onOpenChange={setIsLinkPopoverOpen}>
         <PopoverTrigger asChild>
           <Button 
             variant="ghost" 
-            size="sm" 
-            className="h-8 w-8 p-0"
+            size="icon" 
+            className="h-8 w-8"
             title="Inserir link"
           >
             <Link className="w-4 h-4" />
@@ -146,123 +160,129 @@ export function ArticleEditorToolbar({
         </PopoverTrigger>
         <PopoverContent className="w-80" align="start">
           <div className="space-y-3">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">URL do link</label>
-              <Input
-                placeholder="https://exemplo.com"
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleInsertLink()}
-              />
-            </div>
+            <label className="text-sm font-medium">URL do link</label>
+            <Input
+              placeholder="https://exemplo.com"
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleInsertLink()}
+            />
             <div className="flex gap-2">
               <Button size="sm" onClick={handleInsertLink} className="flex-1">
-                <Link className="w-3 h-3 mr-1" />
                 Inserir
               </Button>
-              <Button size="sm" variant="outline" onClick={handleRemoveLink}>
-                <Unlink className="w-3 h-3 mr-1" />
-                Remover
+              <Button size="sm" variant="outline" onClick={() => setIsLinkPopoverOpen(false)}>
+                Cancelar
               </Button>
             </div>
           </div>
         </PopoverContent>
       </Popover>
-
       <Button 
         variant="ghost" 
-        size="sm" 
-        className="h-8 w-8 p-0"
-        onClick={() => handleFormat('strikeThrough')}
-        title="Tachado"
+        size="icon" 
+        className="h-8 w-8"
+        onClick={handleRemoveLink}
+        title="Remover link"
       >
-        <Strikethrough className="w-4 h-4" />
-      </Button>
-      <Button 
-        variant="ghost" 
-        size="sm" 
-        className="h-8 w-8 p-0"
-        onClick={() => handleFormat('underline')}
-        title="Sublinhado (Ctrl+U)"
-      >
-        <Underline className="w-4 h-4" />
+        <Link2Off className="w-4 h-4" />
       </Button>
 
-      <div className="h-6 w-px bg-border mx-1" />
+      <Separator orientation="vertical" className="h-6 mx-1" />
 
       {/* Lists */}
       <Button 
         variant="ghost" 
-        size="sm" 
-        className="h-8 w-8 p-0"
-        onClick={() => handleFormat('insertUnorderedList')}
+        size="icon" 
+        className="h-8 w-8"
+        onClick={() => execCommand('insertUnorderedList')}
         title="Lista com marcadores"
       >
         <List className="w-4 h-4" />
       </Button>
       <Button 
         variant="ghost" 
-        size="sm" 
-        className="h-8 w-8 p-0"
-        onClick={() => handleFormat('insertOrderedList')}
+        size="icon" 
+        className="h-8 w-8"
+        onClick={() => execCommand('insertOrderedList')}
         title="Lista numerada"
       >
         <ListOrdered className="w-4 h-4" />
       </Button>
+
+      <Separator orientation="vertical" className="h-6 mx-1" />
+
+      {/* Alignment */}
       <Button 
         variant="ghost" 
-        size="sm" 
-        className="h-8 w-8 p-0"
-        onClick={() => handleFormat('indent')}
-        title="Aumentar recuo"
+        size="icon" 
+        className="h-8 w-8"
+        onClick={() => execCommand('justifyLeft')}
+        title="Alinhar à esquerda"
       >
-        <IndentIncrease className="w-4 h-4" />
+        <AlignLeft className="w-4 h-4" />
       </Button>
       <Button 
         variant="ghost" 
-        size="sm" 
-        className="h-8 w-8 p-0"
-        onClick={() => handleFormat('outdent')}
-        title="Diminuir recuo"
+        size="icon" 
+        className="h-8 w-8"
+        onClick={() => execCommand('justifyCenter')}
+        title="Centralizar"
       >
-        <IndentDecrease className="w-4 h-4" />
+        <AlignCenter className="w-4 h-4" />
+      </Button>
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        className="h-8 w-8"
+        onClick={() => execCommand('justifyRight')}
+        title="Alinhar à direita"
+      >
+        <AlignRight className="w-4 h-4" />
       </Button>
 
-      <div className="h-6 w-px bg-border mx-1" />
+      <Separator orientation="vertical" className="h-6 mx-1" />
 
       {/* Media */}
       <Button 
         variant="ghost" 
-        size="sm" 
-        className="h-8 w-8 p-0"
+        size="icon" 
+        className="h-8 w-8"
         title="Inserir imagem"
       >
-        <ImageIcon className="w-4 h-4" />
+        <Image className="w-4 h-4" />
       </Button>
       <Button 
         variant="ghost" 
-        size="sm" 
-        className="h-8 w-8 p-0"
+        size="icon" 
+        className="h-8 w-8"
         title="Inserir tabela"
       >
         <Table className="w-4 h-4" />
       </Button>
 
+      {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Status Badge */}
+      {/* Status indicator */}
       {isSaving ? (
-        <Badge variant="outline" className="text-muted-foreground border-muted">
+        <Badge variant="secondary" className="gap-1 font-normal">
+          <Loader2 className="w-3 h-3 animate-spin" />
           Salvando...
         </Badge>
       ) : hasChanges ? (
-        <Badge variant="outline" className="text-destructive border-destructive/30">
-          Não salvo
+        <Badge variant="outline" className="gap-1 font-normal text-chart-4 border-chart-4/30">
+          Alterações pendentes
+        </Badge>
+      ) : lastSaved ? (
+        <Badge variant="outline" className="gap-1 font-normal text-chart-2 border-chart-2/30">
+          <CheckCircle2 className="w-3 h-3" />
+          {lastSaved}
         </Badge>
       ) : (
-        <Badge variant="outline" className="text-primary border-primary/30 bg-primary/10 gap-1">
-          <Check className="w-3 h-3" />
-          Salvo!
+        <Badge variant="outline" className="gap-1 font-normal text-chart-2 border-chart-2/30">
+          <CheckCircle2 className="w-3 h-3" />
+          Pronto
         </Badge>
       )}
     </div>
