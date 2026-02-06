@@ -26,6 +26,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { WordPressCategorySelector } from './WordPressCategorySelector';
+import { sanitizeHTML } from '@/lib/sanitize';
 
 interface Article {
   id: string;
@@ -86,7 +87,7 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
         .from('articles')
         .update({
           title: editedArticle.title,
-          content: editedArticle.content,
+          content: sanitizeHTML(editedArticle.content || ''),
           excerpt: editedArticle.excerpt,
           slug: editedArticle.slug,
           featured_image_url: editedArticle.featured_image_url,
@@ -256,7 +257,11 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
               <ScrollArea className="h-full">
                 <div 
                   className="p-6 prose prose-sm max-w-none"
-                  dangerouslySetInnerHTML={{ __html: editedArticle.content || '<p class="text-muted-foreground">Sem conteúdo</p>' }}
+                  dangerouslySetInnerHTML={{ 
+                    __html: sanitizeHTML(
+                      editedArticle.content || '<p class="text-muted-foreground">Sem conteúdo</p>'
+                    ) 
+                  }}
                 />
               </ScrollArea>
             )}
