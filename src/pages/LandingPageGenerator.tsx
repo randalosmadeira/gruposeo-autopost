@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -324,7 +325,7 @@ export default function LandingPageGenerator() {
     }, 1500);
   };
 
-  // Generate secondary keywords with AI
+  // Generate secondary keywords with AI (real integration)
   const handleGenerateSecondaryKeywords = async () => {
     if (!config.keyword.trim()) {
       toast({
@@ -334,25 +335,92 @@ export default function LandingPageGenerator() {
       });
       return;
     }
+    
     setGeneratingKeywords(true);
-    setTimeout(() => {
-      // Simulate AI generation of long-tail keywords
-      const keyword = config.keyword.toLowerCase();
-      const generatedKeywords = [
-        `${keyword} como funciona`,
-        `${keyword} preço`,
-        `melhor ${keyword}`,
-        `${keyword} perto de mim`,
-        `${keyword} para iniciantes`,
-        `${keyword} profissional`,
-      ].join(', ');
-      updateConfig('secondaryKeywords', generatedKeywords);
-      setGeneratingKeywords(false);
+    
+    try {
+      // Get the user's session token
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session?.access_token) {
+        toast({
+          title: 'Sessão expirada',
+          description: 'Por favor, faça login novamente.',
+          variant: 'destructive',
+        });
+        setGeneratingKeywords(false);
+        return;
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-secondary-keywords`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            keyword: config.keyword,
+            segment: config.segment,
+            audienceType: config.audienceType,
+            language: config.language,
+            count: 8,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
+        
+        if (response.status === 429) {
+          toast({
+            title: 'Limite excedido',
+            description: 'Muitas requisições. Aguarde alguns segundos e tente novamente.',
+            variant: 'destructive',
+          });
+        } else if (response.status === 402) {
+          toast({
+            title: 'Créditos insuficientes',
+            description: 'Adicione créditos à sua conta para continuar.',
+            variant: 'destructive',
+          });
+        } else {
+          toast({
+            title: 'Erro na geração',
+            description: errorData.error || 'Falha ao gerar palavras-chave',
+            variant: 'destructive',
+          });
+        }
+        setGeneratingKeywords(false);
+        return;
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.keywords) {
+        updateConfig('secondaryKeywords', data.keywords);
+        toast({
+          title: 'Keywords secundárias geradas!',
+          description: `${data.count || 8} palavras-chave de cauda longa geradas com IA.`,
+        });
+      } else {
+        toast({
+          title: 'Erro na geração',
+          description: data.error || 'Falha ao gerar palavras-chave',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error generating keywords:', error);
       toast({
-        title: 'Keywords secundárias geradas!',
-        description: 'Palavras-chave de cauda longa adicionadas automaticamente.',
+        title: 'Erro na geração',
+        description: error instanceof Error ? error.message : 'Erro desconhecido',
+        variant: 'destructive',
       });
-    }, 2000);
+    } finally {
+      setGeneratingKeywords(false);
+    }
   };
 
   // Validate form before outline generation
