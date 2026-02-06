@@ -117,7 +117,8 @@ export function useArticleAutoSave(options: UseArticleAutoSaveOptions = {}) {
   // Update article with generated content
   const saveGeneratedArticle = useCallback(async (
     content: string,
-    title: string
+    title: string,
+    featuredImageUrl?: string | null
   ): Promise<boolean> => {
     if (!articleId) return false;
 
@@ -125,15 +126,29 @@ export function useArticleAutoSave(options: UseArticleAutoSaveOptions = {}) {
       setIsSaving(true);
       const wordCount = content.split(/\s+/).filter(Boolean).length;
 
+      const updateData: {
+        content: string;
+        title: string;
+        word_count: number;
+        status: 'ready';
+        updated_at: string;
+        featured_image_url?: string | null;
+      } = {
+        content,
+        title,
+        word_count: wordCount,
+        status: 'ready' as const,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Include featured image if provided
+      if (featuredImageUrl !== undefined) {
+        updateData.featured_image_url = featuredImageUrl;
+      }
+
       const { error } = await supabase
         .from('articles')
-        .update({
-          content,
-          title,
-          word_count: wordCount,
-          status: 'ready' as const,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', articleId);
 
       if (error) throw error;
@@ -157,6 +172,24 @@ export function useArticleAutoSave(options: UseArticleAutoSaveOptions = {}) {
       setIsSaving(false);
     }
   }, [articleId, toast]);
+
+  // Update article status to generating
+  const setGeneratingStatus = useCallback(async (): Promise<boolean> => {
+    if (!articleId) return false;
+
+    try {
+      const { error } = await supabase
+        .from('articles')
+        .update({ status: 'generating', updated_at: new Date().toISOString() })
+        .eq('id', articleId);
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Set generating status error:', error);
+      return false;
+    }
+  }, [articleId]);
 
   // Load existing draft
   const loadDraft = useCallback(async (draftId: string) => {
@@ -192,6 +225,7 @@ export function useArticleAutoSave(options: UseArticleAutoSaveOptions = {}) {
     saveOutline,
     debouncedSave,
     saveGeneratedArticle,
+    setGeneratingStatus,
     loadDraft,
     setArticleId,
   };
