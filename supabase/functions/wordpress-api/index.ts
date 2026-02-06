@@ -75,7 +75,8 @@ serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const action = url.searchParams.get("action");
+    // Support action from query params OR body
+    let action = url.searchParams.get("action");
     log.requestStart(req.method, action || undefined);
 
     // Health check doesn't need authentication
@@ -121,7 +122,12 @@ serve(async (req) => {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = req.method !== "GET" ? await req.json() : {};
-    const { projectId, ...params } = body;
+    const { projectId, action: bodyAction, ...params } = body;
+    
+    // If action was not in query params, use body action
+    if (!action && bodyAction) {
+      action = bodyAction;
+    }
 
     if (!projectId) {
       return new Response(
