@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.generate-landing-page]
 verify_jwt = false
+
+[functions.rewrite-news]
+verify_jwt = false

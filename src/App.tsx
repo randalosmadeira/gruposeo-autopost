@@ -25,6 +25,7 @@ const CreateNewsAgent = lazy(() => import("./pages/CreateNewsAgent"));
 const WordPressPlugin = lazy(() => import("./pages/WordPressPlugin"));
 const LandingPageGenerator = lazy(() => import("./pages/LandingPageGenerator"));
 const Auth = lazy(() => import("./pages/Auth"));
+const HelpPage = lazy(() => import("./pages/HelpPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -69,7 +70,7 @@ const App = () => (
                 <Route path="/topical-maps" element={<Dashboard />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/wordpress-plugin" element={<WordPressPlugin />} />
-                <Route path="/help" element={<Dashboard />} />
+                <Route path="/help" element={<HelpPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
