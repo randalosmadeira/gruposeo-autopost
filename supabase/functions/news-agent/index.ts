@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createLogger, createRequestId } from "../_shared/logger.ts";
+
+const FUNCTION_NAME = "news-agent";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -115,14 +118,21 @@ Formato de saída em Markdown.`;
 }
 
 serve(async (req) => {
+  const requestId = createRequestId();
+  const log = createLogger(FUNCTION_NAME, requestId);
+  const startTime = Date.now();
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    log.requestStart(req.method);
+
     // ========== AUTHENTICATION ==========
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
+      log.authFailure("missing_or_invalid_header");
       return new Response(
         JSON.stringify({ error: "Autorização necessária" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -136,13 +146,16 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) {
+      log.authFailure(authError?.message || "user_not_found");
       return new Response(
         JSON.stringify({ error: "Usuário não autenticado" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    log.authSuccess(user.id);
     // ========== END AUTHENTICATION ==========
 
     const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -164,6 +177,8 @@ serve(async (req) => {
         index === self.findIndex(t => t.title === item.title)
       ).slice(0, limit || 10);
 
+      log.info("search_complete", { topics_count: topics.length, results: uniqueNews.length });
+      log.requestEnd(200, Date.now() - startTime);
       return new Response(JSON.stringify({ news: uniqueNews }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -181,9 +196,12 @@ serve(async (req) => {
       );
 
       if (!article) {
+        log.error("generation_failed", { topic });
         throw new Error("Failed to generate article");
       }
 
+      log.info("article_generated", { topic });
+      log.requestEnd(200, Date.now() - startTime);
       return new Response(JSON.stringify({ article }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -218,6 +236,8 @@ serve(async (req) => {
         if (results.length >= (limit || 1)) break;
       }
 
+      log.info("run_complete", { generated: results.length });
+      log.requestEnd(200, Date.now() - startTime);
       return new Response(JSON.stringify({ 
         success: true, 
         generated: results.length,
@@ -227,13 +247,16 @@ serve(async (req) => {
       });
     }
 
+    log.warn("invalid_action", { action });
+    log.requestEnd(400, Date.now() - startTime);
     return new Response(JSON.stringify({ error: "Invalid action" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (error) {
-    console.error("News agent error:", error);
+    log.error("news_agent_error", { error: error instanceof Error ? error.message : "unknown" });
+    log.requestEnd(500, Date.now() - startTime);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

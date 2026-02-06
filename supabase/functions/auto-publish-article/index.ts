@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createLogger, createRequestId } from "../_shared/logger.ts";
+
+const FUNCTION_NAME = "auto-publish-article";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +28,10 @@ const wordCountRanges = {
 };
 
 serve(async (req) => {
+  const requestId = createRequestId();
+  const log = createLogger(FUNCTION_NAME, requestId);
+  const startTime = Date.now();
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -35,6 +42,8 @@ serve(async (req) => {
   const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
   if (!AI_API_KEY) {
+    log.error("missing_ai_key");
+    log.requestEnd(500, Date.now() - startTime);
     return new Response(
       JSON.stringify({ success: false, error: "AI API key not configured" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -42,6 +51,8 @@ serve(async (req) => {
   }
 
   try {
+    log.requestStart(req.method);
+
     const body: AutoPublishRequest = await req.json();
     const {
       projectId,
@@ -55,6 +66,8 @@ serve(async (req) => {
     } = body;
 
     if (!projectId || !keyword) {
+      log.warn("missing_required_fields", { projectId: !!projectId, keyword: !!keyword });
+      log.requestEnd(400, Date.now() - startTime);
       return new Response(
         JSON.stringify({ success: false, error: "projectId and keyword are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -69,13 +82,16 @@ serve(async (req) => {
       .single();
 
     if (projectError || !project) {
+      log.warn("project_not_found", { projectId });
+      log.requestEnd(404, Date.now() - startTime);
       return new Response(
         JSON.stringify({ success: false, error: "Project not found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Starting article generation for project: ${project.name}, keyword: ${keyword}`);
+    log.setUserId(project.user_id);
+    log.info("auto_publish_start", { project: project.name, keyword });
 
     // Create article record in database
     const { data: article, error: insertError } = await supabase
@@ -98,14 +114,15 @@ serve(async (req) => {
       .single();
 
     if (insertError || !article) {
-      console.error("Failed to create article:", insertError);
+      log.error("article_create_failed", { error: insertError?.message });
+      log.requestEnd(500, Date.now() - startTime);
       return new Response(
         JSON.stringify({ success: false, error: "Failed to create article record" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Article record created: ${article.id}`);
+    log.info("article_created", { article_id: article.id });
 
     // Generate article content using Lovable AI
     const wordRange = wordCountRanges[wordCount];
@@ -134,7 +151,7 @@ Estrutura esperada:
 
 Comece agora:`;
 
-    console.log("Calling Lovable AI for content generation...");
+    log.info("generating_content", { model: "google/gemini-3-flash-preview" });
 
     const contentResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -153,8 +170,9 @@ Comece agora:`;
 
     if (!contentResponse.ok) {
       const error = await contentResponse.text();
-      console.error("AI content generation failed:", error);
+      log.error("ai_generation_failed", { status: contentResponse.status });
       await supabase.from("articles").update({ status: "error", error_message: "AI generation failed" }).eq("id", article.id);
+      log.requestEnd(500, Date.now() - startTime);
       return new Response(
         JSON.stringify({ success: false, error: "AI content generation failed" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -163,7 +181,7 @@ Comece agora:`;
 
     const contentData = await contentResponse.json();
     const content = contentData.choices?.[0]?.message?.content || "";
-    console.log(`Content generated: ${content.length} characters`);
+    log.info("content_generated", { length: content.length });
 
     // Extract title from content (first H1)
     const titleMatch = content.match(/^#\s+(.+)$/m);
@@ -184,7 +202,7 @@ Comece agora:`;
     // Generate image if requested
     let featuredImageUrl: string | null = null;
     if (generateImage) {
-      console.log("Generating featured image...");
+      log.info("generating_image");
       try {
         const imagePrompt = `Professional blog header image for an article about "${keyword}". Modern, clean design with subtle gradients. No text in the image. High quality, photorealistic, 16:9 aspect ratio.`;
         
@@ -205,13 +223,13 @@ Comece agora:`;
           const imageParts = imageData.choices?.[0]?.message?.content;
           if (imageParts && typeof imageParts === 'string' && imageParts.startsWith('data:image')) {
             featuredImageUrl = imageParts;
-            console.log("Featured image generated successfully");
+            log.info("image_generated");
           }
         } else {
-          console.warn("Image generation failed, continuing without image");
+          log.warn("image_generation_failed", { status: imageResponse.status });
         }
       } catch (imageError) {
-        console.warn("Image generation error:", imageError);
+        log.warn("image_generation_error", { error: imageError instanceof Error ? imageError.message : "unknown" });
       }
     }
 
@@ -230,12 +248,12 @@ Comece agora:`;
       seo_score: 85, // Placeholder
     }).eq("id", article.id);
 
-    console.log(`Article updated: ${title}`);
+    log.info("article_updated", { title, wordCount: wordCountActual });
 
     // If autoPublish is true, publish to WordPress
     let publishResult = null;
     if (autoPublish && project.wordpress_url && project.wordpress_app_password) {
-      console.log("Auto-publishing to WordPress...");
+      log.info("auto_publishing_to_wordpress");
 
       const isPluginAuth = project.wordpress_username === "__CFRDM_PLUGIN__";
       const baseUrl = project.wordpress_url.replace(/\/$/, "").replace(/\/wp-json(\/.*)?$/, "");
@@ -274,11 +292,11 @@ Comece agora:`;
               const mediaData = await mediaResponse.json();
               if (mediaData.success && mediaData.data?.id) {
                 postData.featured_image_id = mediaData.data.id;
-                console.log("Image uploaded to WordPress:", mediaData.data.id);
+                log.info("image_uploaded_to_wp", { media_id: mediaData.data.id });
               }
             }
           } catch (mediaError) {
-            console.warn("Failed to upload image:", mediaError);
+            log.warn("image_upload_failed", { error: mediaError instanceof Error ? mediaError.message : "unknown" });
           }
         }
 
@@ -299,13 +317,13 @@ Comece agora:`;
             postId: publishData.data?.id,
             postUrl: publishData.data?.link,
           };
-          console.log("Published successfully:", publishData.data?.link);
+          log.info("publish_success", { postUrl: publishData.data?.link });
         } else {
           publishResult = {
             success: false,
             error: publishData.message || "Publish failed",
           };
-          console.error("Publish failed:", publishData);
+          log.warn("publish_failed", { error: publishData.message });
         }
       } else {
         // Standard API publish
@@ -332,12 +350,13 @@ Comece agora:`;
             postId: postData.id,
             postUrl: postData.link,
           };
-          console.log("Published successfully:", postData.link);
+          log.info("publish_success", { postUrl: postData.link });
         } else {
           publishResult = {
             success: false,
             error: `HTTP ${publishResponse.status}`,
           };
+          log.warn("publish_failed", { status: publishResponse.status });
         }
       }
 
@@ -356,6 +375,7 @@ Comece agora:`;
       }
     }
 
+    log.requestEnd(200, Date.now() - startTime);
     return new Response(
       JSON.stringify({
         success: true,
@@ -372,7 +392,8 @@ Comece agora:`;
     );
 
   } catch (error) {
-    console.error("Auto-publish error:", error);
+    log.error("auto_publish_error", { error: error instanceof Error ? error.message : "unknown" });
+    log.requestEnd(500, Date.now() - startTime);
     return new Response(
       JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

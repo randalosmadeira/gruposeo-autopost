@@ -1,4 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createLogger, createRequestId } from "../_shared/logger.ts";
+
+const FUNCTION_NAME = "sync-wordpress-stats";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,17 +9,24 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  const requestId = createRequestId();
+  const log = createLogger(FUNCTION_NAME, requestId);
+  const startTime = Date.now();
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    log.requestStart(req.method);
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     
     // Validate API Key from WordPress plugin
     const apiKey = req.headers.get("x-cfrdm-api-key");
     if (!apiKey) {
+      log.authFailure("missing_api_key");
       return new Response(
         JSON.stringify({ success: false, error: "API Key required" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -27,6 +37,8 @@ serve(async (req) => {
     const siteUrl = body.site_url;
     
     if (!siteUrl) {
+      log.warn("missing_site_url");
+      log.requestEnd(400, Date.now() - startTime);
       return new Response(
         JSON.stringify({ success: false, error: "site_url required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -35,6 +47,7 @@ serve(async (req) => {
 
     // Extract domain from site_url
     const domain = new URL(siteUrl).hostname;
+    log.info("sync_start", { domain });
 
     // Find project using REST API
     const projectRes = await fetch(`${supabaseUrl}/rest/v1/projects?domain=eq.${encodeURIComponent(domain)}&select=id,user_id,name`, {
@@ -47,7 +60,8 @@ serve(async (req) => {
     const projects = await projectRes.json();
     
     if (!projects || projects.length === 0) {
-      console.log("Project not found for domain:", domain);
+      log.warn("project_not_found", { domain });
+      log.requestEnd(404, Date.now() - startTime);
       return new Response(
         JSON.stringify({ success: false, error: "Project not found for this domain" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -55,7 +69,8 @@ serve(async (req) => {
     }
 
     const project = projects[0];
-    console.log(`Syncing stats for project: ${project.name} (${project.id})`);
+    log.setUserId(project.user_id);
+    log.info("project_found", { project_id: project.id, project_name: project.name });
 
     // Extract stats from body
     const { stats, seo_health, internal_links_data, autocorrect_results, logs, timestamp } = body;
@@ -133,7 +148,8 @@ serve(async (req) => {
       body: JSON.stringify({ updated_at: new Date().toISOString() }),
     });
 
-    console.log("Stats synced:", { project_id: project.id, total_posts: stats?.total_posts });
+    log.info("sync_complete", { project_id: project.id, total_posts: stats?.total_posts });
+    log.requestEnd(200, Date.now() - startTime);
 
     return new Response(
       JSON.stringify({
@@ -146,7 +162,8 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error("sync-wordpress-stats error:", error);
+    log.error("sync_error", { error: error instanceof Error ? error.message : "unknown" });
+    log.requestEnd(500, Date.now() - startTime);
     return new Response(
       JSON.stringify({ 
         success: false, 
