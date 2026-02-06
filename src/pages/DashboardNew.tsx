@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import { format, subDays, isToday, isThisWeek, isThisMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import logoSeo from '@/assets/logo-grupo-seo.png';
+import { WordPressHealthCard } from '@/components/dashboard/WordPressHealthCard';
 
 // Quick action card component
 function QuickActionCard({ 
@@ -329,6 +330,11 @@ export default function DashboardNew() {
             </div>
           </CardContent>
         </Card>
+
+        {/* WordPress Health Status */}
+        {projects && projects.some(p => p.wordpress_url) && (
+          <WordPressHealthCard projects={projects} compact />
+        )}
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
