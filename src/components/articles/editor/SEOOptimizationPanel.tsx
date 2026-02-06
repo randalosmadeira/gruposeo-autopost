@@ -2,8 +2,11 @@ import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sparkles, FileText, AlignLeft, Heading, Search, X } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Sparkles, FileText, AlignLeft, Heading, Search, X, Shield, TrendingUp } from 'lucide-react';
 import { marked } from 'marked';
+import { ComplianceChecker } from './ComplianceChecker';
+import { SEOScorePanel } from './SEOScorePanel';
 
 interface SEOOptimizationPanelProps {
   content: string | null;
@@ -121,159 +124,190 @@ export function SEOOptimizationPanel({ content, keyword, title, excerpt }: SEOOp
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold">Otimização SEO</h3>
-        </div>
-        <Badge variant="secondary" className="text-xs font-normal">
-          {analysis.analyzedTerms} termo(s) analisado(s)
-        </Badge>
-      </div>
+      {/* MAA Analysis Tabs */}
+      <Tabs defaultValue="seo" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="seo" className="text-xs gap-1">
+            <TrendingUp className="h-3 w-3" />
+            SEO
+          </TabsTrigger>
+          <TabsTrigger value="compliance" className="text-xs gap-1">
+            <Shield className="h-3 w-3" />
+            Compliance
+          </TabsTrigger>
+          <TabsTrigger value="keywords" className="text-xs gap-1">
+            <Sparkles className="h-3 w-3" />
+            Keywords
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Score Circle - Matching reference design */}
-      <div className="flex flex-col items-center py-6">
-        <div className="relative w-32 h-32">
-          <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-            {/* Background circle */}
-            <circle
-              cx="50"
-              cy="50"
-              r="42"
-              fill="none"
-              stroke="hsl(var(--muted))"
-              strokeWidth="6"
-              opacity="0.3"
-            />
-            {/* Progress arc */}
-            <circle
-              cx="50"
-              cy="50"
-              r="42"
-              fill="none"
-              stroke={getScoreStrokeColor(analysis.score)}
-              strokeWidth="6"
-              strokeLinecap="round"
-              strokeDasharray={`${analysis.score * 2.64} 264`}
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className={`text-3xl font-bold ${getScoreColor(analysis.score)}`}>
-              {analysis.score}%
-            </span>
-            <span className={`text-sm font-semibold ${getScoreColor(analysis.score)}`}>
-              {getScoreLabel(analysis.score)}
-            </span>
-          </div>
-        </div>
-        <span className="text-sm text-muted-foreground mt-3">Nível de otimização</span>
-      </div>
-
-      {/* Stats - Horizontal layout matching reference */}
-      <div className="flex justify-between gap-2">
-        <div className="flex-1 flex flex-col items-center py-3 px-2 bg-muted/40 rounded-lg border">
-          <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-            <FileText className="w-3.5 h-3.5" />
-            <span className="text-xs">Palavras</span>
-          </div>
-          <span className="text-xl font-bold">{analysis.wordCount.toLocaleString()}</span>
-        </div>
-        <div className="flex-1 flex flex-col items-center py-3 px-2 bg-muted/40 rounded-lg border">
-          <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-            <AlignLeft className="w-3.5 h-3.5" />
-            <span className="text-xs">Parágrafos</span>
-          </div>
-          <span className="text-xl font-bold">{analysis.paragraphs}</span>
-        </div>
-        <div className="flex-1 flex flex-col items-center py-3 px-2 bg-muted/40 rounded-lg border">
-          <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-            <Heading className="w-3.5 h-3.5" />
-            <span className="text-xs">Subtítulos</span>
-          </div>
-          <span className="text-xl font-bold">{analysis.headings}</span>
-        </div>
-      </div>
-
-      {/* Keywords Section - Full height scroll */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold">Palavras-chave</span>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setFilterMode('all')}
-              className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                filterMode === 'all' 
-                  ? 'bg-muted text-foreground font-medium' 
-                  : 'text-muted-foreground hover:bg-muted/50'
-              }`}
-            >
-              Todas
-            </button>
-            <button
-              onClick={() => setFilterMode('improve')}
-              className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                filterMode === 'improve' 
-                  ? 'bg-primary text-primary-foreground font-medium' 
-                  : 'text-muted-foreground hover:bg-muted/50'
-              }`}
-            >
-              Melhorar
-            </button>
-          </div>
-        </div>
-
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar palavra-chave..."
-            className="pl-9 h-9 text-sm bg-muted/30"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+        {/* SEO Tab - New comprehensive panel */}
+        <TabsContent value="seo" className="mt-4">
+          <SEOScorePanel
+            title={title || undefined}
+            metaDescription={excerpt || undefined}
+            content={content || undefined}
+            keyword={keyword}
           />
-        </div>
+        </TabsContent>
 
-        {/* Keywords List - Scrollable */}
-        <ScrollArea className="h-[300px]">
-          <div className="space-y-2 pr-3">
-            {filteredKeywords.map((kw, index) => (
-              <div 
-                key={index} 
-                className="flex items-center gap-3 py-2.5 px-3 bg-card border rounded-lg"
-              >
-                <span className="flex-1 text-sm truncate font-medium">{kw.word}</span>
-                
-                {/* Progress bar */}
-                <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full transition-all ${
-                      kw.status === 'good' ? 'bg-green-500' : 
-                      kw.status === 'warning' ? 'bg-amber-500' : 'bg-red-400'
-                    }`}
-                    style={{ width: `${Math.min(100, kw.percentage)}%` }}
-                  />
-                </div>
-                
-                {/* Count indicator */}
-                <span className={`text-xs flex items-center gap-1 min-w-[40px] justify-end ${
-                  kw.status === 'good' ? 'text-green-600' : 
-                  kw.status === 'warning' ? 'text-amber-600' : 'text-red-500'
-                }`}>
-                  <X className="w-3 h-3" />
-                  {kw.count}/{kw.target}
+        {/* Compliance Tab - OAB validation */}
+        <TabsContent value="compliance" className="mt-4">
+          <ComplianceChecker content={content || ''} />
+        </TabsContent>
+
+        {/* Keywords Tab - Original functionality */}
+        <TabsContent value="keywords" className="mt-4 space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold">Análise de Keywords</h3>
+            </div>
+            <Badge variant="secondary" className="text-xs font-normal">
+              {analysis.analyzedTerms} termo(s)
+            </Badge>
+          </div>
+
+          {/* Score Circle */}
+          <div className="flex flex-col items-center py-4">
+            <div className="relative w-28 h-28">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="42"
+                  fill="none"
+                  stroke="hsl(var(--muted))"
+                  strokeWidth="6"
+                  opacity="0.3"
+                />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="42"
+                  fill="none"
+                  stroke={getScoreStrokeColor(analysis.score)}
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                  strokeDasharray={`${analysis.score * 2.64} 264`}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className={`text-2xl font-bold ${getScoreColor(analysis.score)}`}>
+                  {analysis.score}%
+                </span>
+                <span className={`text-xs font-semibold ${getScoreColor(analysis.score)}`}>
+                  {getScoreLabel(analysis.score)}
                 </span>
               </div>
-            ))}
-            
-            {filteredKeywords.length === 0 && (
-              <div className="text-center py-8 text-sm text-muted-foreground">
-                Nenhuma palavra-chave encontrada
-              </div>
-            )}
+            </div>
           </div>
-        </ScrollArea>
-      </div>
+
+          {/* Stats */}
+          <div className="flex justify-between gap-2">
+            <div className="flex-1 flex flex-col items-center py-2 px-2 bg-muted/40 rounded-lg border">
+              <div className="flex items-center gap-1 text-muted-foreground mb-1">
+                <FileText className="w-3 h-3" />
+                <span className="text-xs">Palavras</span>
+              </div>
+              <span className="text-lg font-bold">{analysis.wordCount.toLocaleString()}</span>
+            </div>
+            <div className="flex-1 flex flex-col items-center py-2 px-2 bg-muted/40 rounded-lg border">
+              <div className="flex items-center gap-1 text-muted-foreground mb-1">
+                <AlignLeft className="w-3 h-3" />
+                <span className="text-xs">Parágrafos</span>
+              </div>
+              <span className="text-lg font-bold">{analysis.paragraphs}</span>
+            </div>
+            <div className="flex-1 flex flex-col items-center py-2 px-2 bg-muted/40 rounded-lg border">
+              <div className="flex items-center gap-1 text-muted-foreground mb-1">
+                <Heading className="w-3 h-3" />
+                <span className="text-xs">Subtítulos</span>
+              </div>
+              <span className="text-lg font-bold">{analysis.headings}</span>
+            </div>
+          </div>
+
+          {/* Keywords Section */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold">Palavras-chave</span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setFilterMode('all')}
+                  className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                    filterMode === 'all' 
+                      ? 'bg-muted text-foreground font-medium' 
+                      : 'text-muted-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  Todas
+                </button>
+                <button
+                  onClick={() => setFilterMode('improve')}
+                  className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                    filterMode === 'improve' 
+                      ? 'bg-primary text-primary-foreground font-medium' 
+                      : 'text-muted-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  Melhorar
+                </button>
+              </div>
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar palavra-chave..."
+                className="pl-9 h-9 text-sm bg-muted/30"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            {/* Keywords List */}
+            <ScrollArea className="h-[250px]">
+              <div className="space-y-2 pr-3">
+                {filteredKeywords.map((kw, index) => (
+                  <div 
+                    key={index} 
+                    className="flex items-center gap-3 py-2.5 px-3 bg-card border rounded-lg"
+                  >
+                    <span className="flex-1 text-sm truncate font-medium">{kw.word}</span>
+                    
+                    <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full transition-all ${
+                          kw.status === 'good' ? 'bg-green-500' : 
+                          kw.status === 'warning' ? 'bg-amber-500' : 'bg-red-400'
+                        }`}
+                        style={{ width: `${Math.min(100, kw.percentage)}%` }}
+                      />
+                    </div>
+                    
+                    <span className={`text-xs flex items-center gap-1 min-w-[40px] justify-end ${
+                      kw.status === 'good' ? 'text-green-600' : 
+                      kw.status === 'warning' ? 'text-amber-600' : 'text-red-500'
+                    }`}>
+                      <X className="w-3 h-3" />
+                      {kw.count}/{kw.target}
+                    </span>
+                  </div>
+                ))}
+                
+                {filteredKeywords.length === 0 && (
+                  <div className="text-center py-8 text-sm text-muted-foreground">
+                    Nenhuma palavra-chave encontrada
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
