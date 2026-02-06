@@ -14,6 +14,7 @@ import { sanitizeHTML } from '@/lib/sanitize';
 import { ArticleEditorToolbar } from './editor/ArticleEditorToolbar';
 import { ArticleEditorContent } from './editor/ArticleEditorContent';
 import { ArticleEditorSidebar } from './editor/ArticleEditorSidebar';
+import { ReportProblemDialog } from './editor/ReportProblemDialog';
 
 interface Article {
   id: string;
@@ -53,6 +54,7 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
   const [activeTab, setActiveTab] = useState<'visual' | 'html'>('visual');
   const [isRegenerating, setIsRegenerating] = useState<'title' | 'excerpt' | 'image' | 'content' | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const { toast } = useToast();
   
   // Autosave refs
@@ -267,13 +269,26 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
             )}
             Publicar
           </Button>
-          {editedArticle.status === 'error' && (
-            <Button variant="destructive" size="icon" className="w-8 h-8">
-              <AlertTriangle className="w-4 h-4" />
-            </Button>
-          )}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setIsReportDialogOpen(true)}
+            className="gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+          >
+            <AlertTriangle className="w-4 h-4" />
+            Reportar
+          </Button>
         </div>
       </header>
+
+      {/* Report Problem Dialog */}
+      <ReportProblemDialog
+        open={isReportDialogOpen}
+        onOpenChange={setIsReportDialogOpen}
+        articleId={editedArticle.id}
+        articleTitle={editedArticle.title}
+        articleKeyword={editedArticle.keyword}
+      />
 
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
