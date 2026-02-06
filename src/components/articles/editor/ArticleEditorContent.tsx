@@ -71,9 +71,9 @@ export function ArticleEditorContent({
 
   if (activeTab === 'html') {
     return (
-      <div className="flex-1 flex flex-col bg-card border rounded-lg overflow-hidden">
+      <div className="h-full flex flex-col bg-card border rounded-lg overflow-hidden">
         {/* HTML Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-muted/50 border-b">
+        <div className="flex items-center justify-between px-4 py-3 bg-muted/50 border-b shrink-0">
           <div className="flex items-center gap-2 text-sm font-medium">
             <Code className="w-4 h-4" />
             Código HTML
@@ -85,7 +85,7 @@ export function ArticleEditorContent({
         </div>
         
         {/* HTML Content with syntax display */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 h-full">
           <pre className="p-4 text-sm font-mono leading-relaxed">
             {processedContent ? (
               formatHTMLForDisplay(processedContent).split('\n').map((line, index) => {
@@ -113,8 +113,8 @@ export function ArticleEditorContent({
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-card border rounded-lg overflow-hidden">
-      <ScrollArea className="flex-1">
+    <div className="h-full flex flex-col bg-card border rounded-lg overflow-hidden">
+      <ScrollArea className="flex-1 h-full">
         <div className="p-6 max-w-4xl mx-auto">
           {/* Featured Image */}
           {featuredImageUrl && (
