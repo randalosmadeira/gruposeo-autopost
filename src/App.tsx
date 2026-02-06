@@ -27,6 +27,7 @@ const LandingPageGenerator = lazy(() => import("./pages/LandingPageGenerator"));
 const Auth = lazy(() => import("./pages/Auth"));
 const HelpPage = lazy(() => import("./pages/HelpPage"));
 const NewsRewriter = lazy(() => import("./pages/NewsRewriter"));
+const BulkKeywordGenerator = lazy(() => import("./pages/BulkKeywordGenerator"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -73,6 +74,7 @@ const App = () => (
                 <Route path="/wordpress-plugin" element={<WordPressPlugin />} />
                 <Route path="/help" element={<HelpPage />} />
                 <Route path="/news-rewriter" element={<NewsRewriter />} />
+                <Route path="/bulk-generator" element={<BulkKeywordGenerator />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

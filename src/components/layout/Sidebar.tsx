@@ -14,6 +14,8 @@ import {
   Plug,
   Target,
   Zap,
+  FileEdit,
+  Layers,
 } from 'lucide-react';
 
 interface NavItem {
@@ -51,9 +53,23 @@ const navGroups: NavGroup[] = [
         label: 'Landing Page', 
         icon: Target, 
         href: '/landing-page/new', 
-        badge: 'Novo', 
-        badgeVariant: 'orange',
         iconColor: '#FF6B2B',
+      },
+      { 
+        label: 'Repostagem', 
+        icon: FileEdit, 
+        href: '/news-rewriter',
+        badge: 'Novo',
+        badgeVariant: 'orange',
+        iconColor: '#10B981',
+      },
+      { 
+        label: 'Em Massa', 
+        icon: Layers, 
+        href: '/bulk-generator',
+        badge: 'Novo',
+        badgeVariant: 'accent',
+        iconColor: '#8B5CF6',
       },
     ],
   },
