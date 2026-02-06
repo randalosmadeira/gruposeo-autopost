@@ -270,24 +270,38 @@ export function InternalLinkingCard({ projectId, onProjectSelect }: InternalLink
     try {
       // Test WordPress connection
       if (project.wordpress_url) {
+        // Check if using plugin auth or standard auth
+        const isPluginAuth = project.wordpress_username === '__CFRDM_PLUGIN__';
+        
+        const requestBody = isPluginAuth 
+          ? {
+              wordpress_url: project.wordpress_url,
+              use_plugin: true,
+              api_key: project.wordpress_app_password,
+            }
+          : {
+              wordpress_url: project.wordpress_url,
+              wordpress_username: project.wordpress_username,
+              wordpress_app_password: project.wordpress_app_password,
+            };
+
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-wordpress-connection`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              wordpress_url: project.wordpress_url,
-              username: project.wordpress_username || '',
-            }),
+            body: JSON.stringify(requestBody),
           }
         );
 
-        if (response.ok) {
+        const data = await response.json();
+        
+        if (data.success) {
           setConnectionStatus('success');
           setConnectionMessage('Conexão estabelecida com sucesso');
         } else {
           setConnectionStatus('error');
-          setConnectionMessage('Falha ao conectar com o site WordPress');
+          setConnectionMessage(data.error || 'Falha ao conectar com o site WordPress');
         }
       } else {
         setConnectionStatus('error');
