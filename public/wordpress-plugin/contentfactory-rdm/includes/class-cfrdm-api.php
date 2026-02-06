@@ -118,6 +118,27 @@ class CFRDM_API {
             'callback' => array(__CLASS__, 'get_seo_info'),
             'permission_callback' => array(__CLASS__, 'verify_api_key'),
         ));
+        
+        // AI SEO generation
+        register_rest_route('cfrdm/v1', '/generate-seo', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'generate_seo'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Structured logs
+        register_rest_route('cfrdm/v1', '/logs', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'get_structured_logs'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Log stats
+        register_rest_route('cfrdm/v1', '/logs/stats', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'get_log_stats'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
     }
     
     public static function verify_api_key($request) {
@@ -877,6 +898,130 @@ class CFRDM_API {
         return new WP_REST_Response(array(
             'success' => true,
             'data' => CFRDM_SEO::get_plugin_info(),
+        ), 200);
+    }
+    
+    /**
+     * Generate SEO metadata using AI
+     */
+    public static function generate_seo($request) {
+        $params = $request->get_json_params();
+        
+        $post_id = isset($params['post_id']) ? intval($params['post_id']) : 0;
+        
+        if (!$post_id) {
+            return new WP_Error(
+                'missing_post_id',
+                __('ID do post é obrigatório.', 'contentfactory-rdm'),
+                array('status' => 400)
+            );
+        }
+        
+        $post = get_post($post_id);
+        if (!$post) {
+            return new WP_Error(
+                'not_found',
+                __('Post não encontrado.', 'contentfactory-rdm'),
+                array('status' => 404)
+            );
+        }
+        
+        if (!class_exists('CFRDM_AI_SEO')) {
+            return new WP_Error(
+                'not_available',
+                __('Módulo de SEO via IA não disponível.', 'contentfactory-rdm'),
+                array('status' => 500)
+            );
+        }
+        
+        $options = array(
+            'language' => isset($params['language']) ? sanitize_text_field($params['language']) : 'pt-BR',
+            'country' => isset($params['country']) ? sanitize_text_field($params['country']) : 'Brasil',
+            'apply_to_post' => isset($params['apply']) ? (bool) $params['apply'] : false,
+        );
+        
+        if (!empty($params['title'])) {
+            $options['title'] = sanitize_text_field($params['title']);
+        }
+        if (!empty($params['content'])) {
+            $options['content'] = wp_kses_post($params['content']);
+        }
+        
+        $result = CFRDM_AI_SEO::generate($post_id, $options);
+        
+        if (is_wp_error($result)) {
+            return new WP_Error(
+                'generation_failed',
+                $result->get_error_message(),
+                array('status' => 500)
+            );
+        }
+        
+        CFRDM_Logger::success('api', 'SEO gerado via IA', array(
+            'post_id' => $post_id,
+        ), $post_id);
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'data' => $result,
+        ), 200);
+    }
+    
+    /**
+     * Get structured logs
+     */
+    public static function get_structured_logs($request) {
+        if (!class_exists('CFRDM_Structured_Logs')) {
+            return new WP_Error(
+                'not_available',
+                __('Módulo de logs estruturados não disponível.', 'contentfactory-rdm'),
+                array('status' => 500)
+            );
+        }
+        
+        $args = array(
+            'article_id' => $request->get_param('article_id'),
+            'post_id' => $request->get_param('post_id'),
+            'status' => $request->get_param('status'),
+            'step' => $request->get_param('step'),
+            'limit' => $request->get_param('limit') ?: 50,
+            'offset' => $request->get_param('offset') ?: 0,
+            'order_by' => $request->get_param('order_by') ?: 'created_at',
+            'order' => $request->get_param('order') ?: 'DESC',
+        );
+        
+        $result = CFRDM_Structured_Logs::get_logs($args);
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'data' => $result['logs'],
+            'pagination' => array(
+                'total' => $result['total'],
+                'limit' => $result['limit'],
+                'offset' => $result['offset'],
+                'pages' => $result['pages'],
+            ),
+        ), 200);
+    }
+    
+    /**
+     * Get log statistics
+     */
+    public static function get_log_stats($request) {
+        if (!class_exists('CFRDM_Structured_Logs')) {
+            return new WP_Error(
+                'not_available',
+                __('Módulo de logs estruturados não disponível.', 'contentfactory-rdm'),
+                array('status' => 500)
+            );
+        }
+        
+        $days = $request->get_param('days') ?: 7;
+        $stats = CFRDM_Structured_Logs::get_stats(intval($days));
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'data' => $stats,
         ), 200);
     }
 }

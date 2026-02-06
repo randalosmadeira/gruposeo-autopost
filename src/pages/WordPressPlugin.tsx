@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '2.3.0';
+const PLUGIN_VERSION = '2.4.0';
 const PLUGIN_LAST_UPDATE = '2025-02-06';
 
 const features = [
@@ -46,13 +46,13 @@ const features = [
   },
   {
     icon: Shield,
-    title: 'SEO Completo',
-    description: 'Suporte nativo para Yoast SEO, Rank Math e All in One SEO com Focus Keyword.',
+    title: 'SEO Completo + IA',
+    description: 'Geração de SEO via IA: slug, meta description, tags e títulos virais automáticos.',
   },
   {
     icon: Zap,
     title: 'Deduplicação de Imagens',
-    description: 'Sistema MD5 que evita downloads duplicados e economiza espaço em disco.',
+    description: 'Sistema MD5 com filtro anti-logo que evita baixar ícones como featured image.',
   },
 ];
 
@@ -99,6 +99,9 @@ export default function WordPressPluginPage() {
         { path: 'includes/class-cfrdm-schema-validator.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-schema-validator.php' },
         { path: 'includes/class-cfrdm-media.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-media.php' },
         { path: 'includes/class-cfrdm-seo.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-seo.php' },
+        { path: 'includes/class-cfrdm-structured-logs.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-structured-logs.php' },
+        { path: 'includes/class-cfrdm-ai-seo.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-seo.php' },
+        { path: 'includes/class-cfrdm-image-filter.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-image-filter.php' },
         { path: 'assets/css/admin.css', url: '/wordpress-plugin/contentfactory-rdm/assets/css/admin.css' },
         { path: 'assets/js/admin.js', url: '/wordpress-plugin/contentfactory-rdm/assets/js/admin.js' },
       ];
