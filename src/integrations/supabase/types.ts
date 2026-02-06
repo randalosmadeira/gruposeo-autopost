@@ -568,7 +568,72 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      user_settings_safe: {
+        Row: {
+          ai_provider: string | null
+          byok_enabled: boolean | null
+          content_model: string | null
+          created_at: string | null
+          default_ai_model: string | null
+          default_language: string | null
+          default_point_of_view: string | null
+          default_tone: string | null
+          email_notifications: boolean | null
+          has_anthropic_key: boolean | null
+          has_gemini_key: boolean | null
+          has_openai_key: boolean | null
+          has_serper_key: boolean | null
+          id: string | null
+          image_model: string | null
+          timezone: string | null
+          title_model: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          ai_provider?: string | null
+          byok_enabled?: boolean | null
+          content_model?: string | null
+          created_at?: string | null
+          default_ai_model?: string | null
+          default_language?: string | null
+          default_point_of_view?: string | null
+          default_tone?: string | null
+          email_notifications?: boolean | null
+          has_anthropic_key?: never
+          has_gemini_key?: never
+          has_openai_key?: never
+          has_serper_key?: never
+          id?: string | null
+          image_model?: string | null
+          timezone?: string | null
+          title_model?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          ai_provider?: string | null
+          byok_enabled?: boolean | null
+          content_model?: string | null
+          created_at?: string | null
+          default_ai_model?: string | null
+          default_language?: string | null
+          default_point_of_view?: string | null
+          default_tone?: string | null
+          email_notifications?: boolean | null
+          has_anthropic_key?: never
+          has_gemini_key?: never
+          has_openai_key?: never
+          has_serper_key?: never
+          id?: string | null
+          image_model?: string | null
+          timezone?: string | null
+          title_model?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
