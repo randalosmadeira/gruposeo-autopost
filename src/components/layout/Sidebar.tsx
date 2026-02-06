@@ -4,13 +4,8 @@ import { PrefetchLink } from '@/components/PrefetchLink';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
-  FileText,
   FolderKanban,
-  PenTool,
   Settings,
-  ChevronLeft,
-  ChevronRight,
-  Zap,
   Crown,
   Newspaper,
   GraduationCap,
@@ -18,27 +13,65 @@ import {
   User,
   Plug,
   Target,
+  Zap,
 } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface NavItem {
   label: string;
   icon: React.ElementType;
   href: string;
   badge?: string;
-  badgeVariant?: 'default' | 'accent' | 'premium';
+  badgeVariant?: 'default' | 'accent' | 'premium' | 'orange';
+  iconColor?: string;
 }
 
-const mainNavItems: NavItem[] = [
-  { label: 'Academia', icon: GraduationCap, href: '/academia' },
-  { label: 'Painel', icon: LayoutDashboard, href: '/' },
-  { label: 'Geração e...', icon: Zap, href: '/articles/bulk' },
-  { label: 'Landing Page', icon: Target, href: '/landing-page/new', badge: 'Novo', badgeVariant: 'accent' },
-  { label: 'Autoridade', icon: Crown, href: '/authority-planner' },
-  { label: 'Agente de...', icon: Newspaper, href: '/news-agents' },
-  { label: 'Projetos', icon: FolderKanban, href: '/projects' },
-  { label: 'Histórico', icon: History, href: '/articles' },
-  { label: 'Plugin WP', icon: Plug, href: '/wordpress-plugin' },
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
+  {
+    title: 'Início',
+    items: [
+      { label: 'Academia', icon: GraduationCap, href: '/academia' },
+      { label: 'Painel', icon: LayoutDashboard, href: '/' },
+    ],
+  },
+  {
+    title: 'Geradores',
+    items: [
+      { 
+        label: 'Artigos IA', 
+        icon: Zap, 
+        href: '/articles/bulk',
+        iconColor: '#4169E1',
+      },
+      { 
+        label: 'Landing Page', 
+        icon: Target, 
+        href: '/landing-page/new', 
+        badge: 'Novo', 
+        badgeVariant: 'orange',
+        iconColor: '#FF6B2B',
+      },
+    ],
+  },
+  {
+    title: 'Automação',
+    items: [
+      { label: 'Autoridade', icon: Crown, href: '/authority-planner' },
+      { label: 'Agentes', icon: Newspaper, href: '/news-agents' },
+    ],
+  },
+  {
+    title: 'Gestão',
+    items: [
+      { label: 'Projetos', icon: FolderKanban, href: '/projects' },
+      { label: 'Histórico', icon: History, href: '/articles' },
+      { label: 'Plugin WP', icon: Plug, href: '/wordpress-plugin' },
+    ],
+  },
 ];
 
 const bottomNavItems: NavItem[] = [
@@ -47,7 +80,7 @@ const bottomNavItems: NavItem[] = [
 ];
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed] = useState(true);
   const location = useLocation();
 
   const isActive = (href: string) => {
@@ -55,17 +88,18 @@ export function Sidebar() {
     return location.pathname.startsWith(href);
   };
 
+  const badgeColors = {
+    default: 'bg-muted text-muted-foreground',
+    accent: 'bg-primary text-primary-foreground',
+    premium: 'bg-amber-500 text-white',
+    orange: 'bg-orange-500 text-white',
+  };
+
   const NavLink = ({ item }: { item: NavItem }) => {
     const active = isActive(item.href);
     const Icon = item.icon;
 
-    const badgeColors = {
-      default: 'bg-muted text-muted-foreground',
-      accent: 'bg-primary text-primary-foreground',
-      premium: 'bg-amber-500 text-white',
-    };
-
-    const linkContent = (
+    return (
       <PrefetchLink
         to={item.href}
         prefetchOnHover
@@ -77,10 +111,13 @@ export function Sidebar() {
         )}
       >
         <div className="relative">
-          <Icon className={cn(
-            'w-5 h-5 flex-shrink-0 transition-colors',
-            active && 'text-sidebar-primary'
-          )} />
+          <Icon 
+            className={cn(
+              'w-5 h-5 flex-shrink-0 transition-colors',
+              active && !item.iconColor && 'text-sidebar-primary'
+            )} 
+            style={item.iconColor ? { color: item.iconColor } : undefined}
+          />
           {item.badge && (
             <span className={cn(
               'absolute -top-1.5 -right-2.5 px-1 py-0.5 text-[8px] font-bold rounded-full leading-none',
@@ -101,8 +138,6 @@ export function Sidebar() {
         )}
       </PrefetchLink>
     );
-
-    return linkContent;
   };
 
   return (
@@ -118,9 +153,13 @@ export function Sidebar() {
       </div>
 
       {/* Main Navigation */}
-      <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto scrollbar-thin">
-        {mainNavItems.map((item) => (
-          <NavLink key={item.href + item.label} item={item} />
+      <nav className="flex-1 px-2 py-2 overflow-y-auto scrollbar-thin">
+        {navGroups.map((group, groupIdx) => (
+          <div key={group.title} className={cn(groupIdx > 0 && 'mt-2 pt-2 border-t border-sidebar-border/50')}>
+            {group.items.map((item) => (
+              <NavLink key={item.href + item.label} item={item} />
+            ))}
+          </div>
         ))}
       </nav>
 
