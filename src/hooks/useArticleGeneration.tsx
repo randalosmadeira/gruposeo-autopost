@@ -40,8 +40,18 @@ export function useArticleGeneration() {
     setProgress(0);
 
     try {
-      // Get the user's session token
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      // Get the user's session token with auto-refresh
+      let { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      // If session exists but might be expired, try to refresh it
+      if (session?.expires_at && session.expires_at * 1000 < Date.now() + 60000) {
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+          console.warn('Token refresh failed:', refreshError);
+        } else if (refreshData.session) {
+          session = refreshData.session;
+        }
+      }
       
       if (sessionError || !session?.access_token) {
         toast({
