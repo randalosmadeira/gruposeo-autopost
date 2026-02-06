@@ -578,7 +578,7 @@ export default function HelpPage() {
                       Quais modelos de IA estão disponíveis?
                     </AccordionTrigger>
                     <AccordionContent>
-                      O sistema utiliza o Lovable AI Gateway com acesso a modelos Google Gemini
+                      O sistema utiliza um AI Gateway proprietário com acesso a modelos Google Gemini
                       e OpenAI GPT-5. O modelo padrão é google/gemini-3-flash-preview para
                       melhor custo-benefício.
                     </AccordionContent>

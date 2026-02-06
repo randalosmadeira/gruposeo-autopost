@@ -43,7 +43,18 @@ interface DayDetailsModalProps {
 export function DayDetailsModal({ open, onOpenChange, date, content }: DayDetailsModalProps) {
   const navigate = useNavigate();
 
-  if (!date) return null;
+  // Early return must come after hooks
+  if (!date) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Carregando...</DialogTitle>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   const handleArticleClick = (item: ContentItem) => {
     navigate(`/articles/${item.id}`);

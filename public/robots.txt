@@ -1,4 +1,4 @@
-# ContentFactory RDM - robots.txt
+# ContentFactory RDM - GRUPO SEO MARKETING - robots.txt
 
 User-agent: Googlebot
 Allow: /
@@ -16,4 +16,4 @@ User-agent: *
 Allow: /
 
 # Sitemap
-# Sitemap: https://seu-dominio.com/sitemap.xml
+# Sitemap: https://contentfactory.gruposeomarketing.com.br/sitemap.xml
