@@ -32,6 +32,7 @@ import {
   AlertCircle,
   Rocket,
   Target,
+  Link2,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useArticleGeneration } from '@/hooks/useArticleGeneration';
@@ -58,6 +59,8 @@ import {
   AdvancedSettings,
   PublishingOptions,
   SEOAdvancedConfig,
+  InternalLinksManager,
+  type InternalLink,
 } from '@/components/shared';
 
 // App states as per spec
@@ -193,6 +196,9 @@ export default function ArticleGeneratorV2() {
   const [appState, setAppState] = useState<AppState>('form');
   const [showPreview, setShowPreview] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  
+  // Internal links state
+  const [internalLinks, setInternalLinks] = useState<InternalLink[]>([]);
   
   // Outline state
   const [outlineSections, setOutlineSections] = useState<OutlineSection[]>([]);
@@ -339,6 +345,8 @@ export default function ArticleGeneratorV2() {
       seoOptimization: config.seoOptimization,
       humanizeContent: config.humanizeContent,
       realtimeData: config.realtimeData,
+      // Internal links
+      internalLinks: internalLinks.map(link => ({ anchor: link.anchor, url: link.url })),
     });
 
     if (result) {
@@ -712,6 +720,32 @@ export default function ArticleGeneratorV2() {
                     />
                   </AccordionContent>
                 </AccordionItem>
+
+                {/* Internal Links Section */}
+                {config.internalLinking && (
+                  <AccordionItem value="internal-links" className="border rounded-lg px-4 mt-4" style={{ borderColor: colors.border }}>
+                    <AccordionTrigger className="py-4">
+                      <div className="flex items-center gap-2">
+                        <Link2 className="w-5 h-5" style={{ color: colors.primary }} />
+                        <span className="font-semibold">Links Internos</span>
+                        {internalLinks.length > 0 && (
+                          <Badge variant="secondary" className="ml-2 text-xs">
+                            {internalLinks.length} links
+                          </Badge>
+                        )}
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="pb-4">
+                      <InternalLinksManager
+                        links={internalLinks}
+                        onLinksChange={setInternalLinks}
+                        projectId={config.projectId}
+                        keyword={config.keyword}
+                        accentColor={colors.primary}
+                      />
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
 
                 {/* Advanced Settings Section */}
                 <AccordionItem value="advanced" className="border rounded-lg px-4 mt-4" style={{ borderColor: colors.border }}>
