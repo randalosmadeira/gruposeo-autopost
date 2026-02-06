@@ -1182,4 +1182,56 @@ class CFRDM_Admin {
         
         wp_send_json_success($results);
     }
+    
+    public static function ajax_validate_schema() {
+        check_ajax_referer('cfrdm_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Permissão negada');
+        }
+        
+        $post_id = intval($_POST['post_id'] ?? 0);
+        
+        if (!$post_id) {
+            wp_send_json_error(array('message' => 'ID do artigo não fornecido'));
+        }
+        
+        $validation = CFRDM_Schema_Validator::validate_post_schemas($post_id);
+        
+        // Add Google Rich Results Test URL
+        $validation['test_url'] = 'https://search.google.com/test/rich-results?url=' . urlencode(get_permalink($post_id));
+        $validation['schema_validator_url'] = 'https://validator.schema.org/';
+        
+        wp_send_json_success($validation);
+    }
+    
+    public static function ajax_generate_links() {
+        check_ajax_referer('cfrdm_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Permissão negada');
+        }
+        
+        $post_id = intval($_POST['post_id'] ?? 0);
+        
+        if (!$post_id) {
+            wp_send_json_error(array('message' => 'ID do artigo não fornecido'));
+        }
+        
+        $links = CFRDM_Internal_Links::get_link_suggestions($post_id);
+        
+        wp_send_json_success($links);
+    }
+    
+    public static function ajax_analyze_links() {
+        check_ajax_referer('cfrdm_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Permissão negada');
+        }
+        
+        $results = CFRDM_Internal_Links::analyze_all_posts();
+        
+        wp_send_json_success($results);
+    }
 }

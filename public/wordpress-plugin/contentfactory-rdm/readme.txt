@@ -67,6 +67,10 @@ Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject s
 == Changelog ==
 
 = 2.2.0 =
+* **NOVO**: Validador de Schema JSON-LD antes da publicação
+* **NOVO**: Endpoints REST para validação e preview de schemas
+* **NOVO**: Integração com Google Rich Results Test
+* **NOVO**: Avisos no admin para problemas de schema
 * **NOVO**: Schema Product para artigos de review de produtos
 * **NOVO**: Schema Review com rating, prós e contras
 * **NOVO**: Schema ItemList para artigos de comparação
@@ -107,6 +111,9 @@ Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject s
 * Logs de atividade
 
 == Upgrade Notice ==
+
+= 2.2.0 =
+Nova versão com validador de schema JSON-LD, suporte a Product/Review schemas e integração com Google Rich Results Test.
 
 = 2.1.0 =
 Nova versão com indexação automática para Google/Bing e schema markup JSON-LD. Recomendado para todos os usuários.
