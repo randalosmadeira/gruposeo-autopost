@@ -745,13 +745,14 @@ export function PromptTemplatesCard() {
                 id="template-prompt"
                 value={editingTemplate?.prompt || ''}
                 onChange={(e) => setEditingTemplate({ ...editingTemplate!, prompt: e.target.value })}
-                rows={18}
-                className="font-mono text-sm resize-none"
+                rows={20}
+                maxLength={16000}
+                className="font-mono text-sm resize-y min-h-[300px]"
                 disabled={editingTemplate?.isDefault}
                 placeholder="Escreva seu prompt aqui..."
               />
-              <p className="text-xs text-muted-foreground">
-                {editingTemplate?.prompt?.length || 0} caracteres
+              <p className={`text-xs ${(editingTemplate?.prompt?.length || 0) > 15000 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                {editingTemplate?.prompt?.length || 0} / 16.000 caracteres
               </p>
             </div>
           </div>
