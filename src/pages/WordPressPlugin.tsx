@@ -20,7 +20,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '2.0.0';
+const PLUGIN_VERSION = '2.2.1';
+const PLUGIN_LAST_UPDATE = '2025-02-06';
 
 const features = [
   {
@@ -92,6 +93,10 @@ export default function WordPressPluginPage() {
         { path: 'includes/class-cfrdm-image-optimizer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-image-optimizer.php' },
         { path: 'includes/class-cfrdm-sync.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-sync.php' },
         { path: 'includes/class-cfrdm-internal-links.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-internal-links.php' },
+        { path: 'includes/class-cfrdm-diagnostics.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-diagnostics.php' },
+        { path: 'includes/class-cfrdm-diagnostics-page.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-diagnostics-page.php' },
+        { path: 'includes/class-cfrdm-indexing.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-indexing.php' },
+        { path: 'includes/class-cfrdm-schema-validator.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-schema-validator.php' },
         { path: 'assets/css/admin.css', url: '/wordpress-plugin/contentfactory-rdm/assets/css/admin.css' },
         { path: 'assets/js/admin.js', url: '/wordpress-plugin/contentfactory-rdm/assets/js/admin.js' },
       ];
@@ -158,9 +163,14 @@ export default function WordPressPluginPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Badge variant="secondary" className="text-sm px-3 py-1">
-            v{PLUGIN_VERSION}
-          </Badge>
+          <div className="flex flex-col items-end gap-1">
+            <Badge variant="secondary" className="text-sm px-3 py-1">
+              v{PLUGIN_VERSION}
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              Atualizado em {new Date(PLUGIN_LAST_UPDATE).toLocaleDateString('pt-BR')}
+            </span>
+          </div>
           <Button onClick={handleDownload} size="lg" disabled={isDownloading}>
             {isDownloading ? (
               <>
