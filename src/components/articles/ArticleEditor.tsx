@@ -66,6 +66,61 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
     setHasChanges(true);
   }, []);
 
+  // Keyboard shortcuts handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if we're in an input field that should prevent shortcuts
+      const target = e.target as HTMLElement;
+      const isInputField = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+      
+      // Ctrl+S or Cmd+S - Save
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (hasChanges && !isSaving) {
+          handleSave();
+        }
+        return;
+      }
+      
+      // Only apply formatting shortcuts when in editor area (not in input fields)
+      if (!isInputField && editorRef.current) {
+        // Ctrl+B - Bold
+        if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+          e.preventDefault();
+          document.execCommand('bold', false);
+          return;
+        }
+        
+        // Ctrl+I - Italic
+        if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+          e.preventDefault();
+          document.execCommand('italic', false);
+          return;
+        }
+        
+        // Ctrl+U - Underline
+        if ((e.ctrlKey || e.metaKey) && e.key === 'u') {
+          e.preventDefault();
+          document.execCommand('underline', false);
+          return;
+        }
+        
+        // Ctrl+K - Insert Link
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+          e.preventDefault();
+          const url = prompt('Digite a URL do link:');
+          if (url) {
+            document.execCommand('createLink', false, url);
+          }
+          return;
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [hasChanges, isSaving]);
+
   // Autosave effect
   useEffect(() => {
     if (!hasChanges) return;
