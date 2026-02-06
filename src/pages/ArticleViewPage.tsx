@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Pencil, ExternalLink, Calendar, Tag, FileText } from 'lucide-react';
+import { ArrowLeft, Loader2, Pencil, ExternalLink, Calendar, Tag, FileText, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { sanitizeHTML } from '@/lib/sanitize';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { ArticleBreadcrumbs } from '@/components/articles/ArticleBreadcrumbs';
 
 interface Article {
   id: string;
@@ -102,18 +103,20 @@ export default function ArticleViewPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* Header with Breadcrumbs */}
       <header className="sticky top-0 z-40 bg-card border-b">
         <div className="flex items-center justify-between px-6 py-3">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/articles')}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Voltar
+            <Button variant="ghost" size="icon" onClick={() => navigate('/articles')}>
+              <ArrowLeft className="w-4 h-4" />
             </Button>
-            <div className="h-6 w-px bg-border" />
-            <Badge className={status.className}>{status.label}</Badge>
+            <ArticleBreadcrumbs 
+              articleTitle={article.title || article.keyword} 
+              mode="view" 
+            />
           </div>
           <div className="flex items-center gap-2">
+            <Badge className={status.className}>{status.label}</Badge>
             {article.published_url && (
               <Button variant="outline" size="sm" asChild>
                 <a href={article.published_url} target="_blank" rel="noopener noreferrer">
@@ -130,11 +133,78 @@ export default function ArticleViewPage() {
         </div>
       </header>
 
+      {/* Dashboard Stats */}
+      <div className="border-b bg-muted/30">
+        <div className="max-w-6xl mx-auto px-6 py-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="bg-card">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <FileText className="w-4 h-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Palavras</p>
+                    <p className="text-lg font-semibold">{article.word_count || 0}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-card">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-blue-500/10">
+                    <Tag className="w-4 h-4 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Palavra-chave</p>
+                    <p className="text-sm font-medium truncate max-w-[120px]">{article.keyword}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-card">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-green-500/10">
+                    <Calendar className="w-4 h-4 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Criado em</p>
+                    <p className="text-sm font-medium">
+                      {format(new Date(article.created_at), "dd/MM/yy", { locale: ptBR })}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-card">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-amber-500/10">
+                    <BarChart3 className="w-4 h-4 text-amber-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Tempo de leitura</p>
+                    <p className="text-lg font-semibold">
+                      {Math.max(1, Math.ceil((article.word_count || 0) / 200))} min
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+
       {/* Content */}
       <div className="max-w-4xl mx-auto p-6 space-y-6">
         {/* Featured Image */}
         {article.featured_image_url && (
-          <div className="aspect-video rounded-xl overflow-hidden bg-muted">
+          <div className="aspect-video rounded-xl overflow-hidden bg-muted shadow-lg">
             <img
               src={article.featured_image_url}
               alt={article.title || ''}
@@ -148,28 +218,9 @@ export default function ArticleViewPage() {
           <h1 className="text-3xl font-bold text-foreground">
             {article.title || article.keyword}
           </h1>
-          
-          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-1.5">
-              <Calendar className="w-4 h-4" />
-              <span>
-                {format(new Date(article.created_at), "d 'de' MMMM, yyyy", { locale: ptBR })}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Tag className="w-4 h-4" />
-              <span>{article.keyword}</span>
-            </div>
-            {article.word_count && (
-              <div className="flex items-center gap-1.5">
-                <FileText className="w-4 h-4" />
-                <span>{article.word_count} palavras</span>
-              </div>
-            )}
-          </div>
 
           {article.excerpt && (
-            <p className="text-lg text-muted-foreground italic">
+            <p className="text-lg text-muted-foreground italic border-l-4 border-primary pl-4">
               {article.excerpt}
             </p>
           )}
