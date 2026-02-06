@@ -43,6 +43,9 @@ import {
   X,
   FileUp,
   ClipboardPaste,
+  Pencil,
+  Check,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -97,6 +100,9 @@ export function InternalLinksManager({
   const [importText, setImportText] = useState('');
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
   const [keywordFilter, setKeywordFilter] = useState('');
+  const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
+  const [editingAnchor, setEditingAnchor] = useState('');
+  const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
 
   // Fetch existing articles for suggestions
   useEffect(() => {
@@ -190,6 +196,38 @@ export function InternalLinksManager({
 
   const removeLink = (id: string) => {
     onLinksChange(links.filter(l => l.id !== id));
+  };
+
+  const startEditing = (link: InternalLink) => {
+    setEditingLinkId(link.id);
+    setEditingAnchor(link.anchor);
+  };
+
+  const saveEditing = () => {
+    if (!editingLinkId || !editingAnchor.trim()) return;
+    
+    const updatedLinks = links.map(link => 
+      link.id === editingLinkId 
+        ? { ...link, anchor: editingAnchor.trim() }
+        : link
+    );
+    
+    onLinksChange(updatedLinks);
+    setEditingLinkId(null);
+    setEditingAnchor('');
+    
+    toast({ title: 'Texto âncora atualizado!' });
+  };
+
+  const cancelEditing = () => {
+    setEditingLinkId(null);
+    setEditingAnchor('');
+  };
+
+  // Check for duplicate URLs
+  const isDuplicateUrl = (url: string): boolean => {
+    const normalizedUrl = url.toLowerCase().trim();
+    return links.some(link => link.url.toLowerCase().trim() === normalizedUrl);
   };
 
   const handleAddManual = () => {
@@ -287,7 +325,22 @@ export function InternalLinksManager({
       return;
     }
     
-    const linksToAdd = parsedLinks.slice(0, maxLinks - links.length);
+    // Filter out duplicates
+    const existingUrls = new Set(links.map(l => l.url.toLowerCase().trim()));
+    const uniqueLinks: Array<{ anchor: string; url: string }> = [];
+    const duplicates: string[] = [];
+    
+    for (const link of parsedLinks) {
+      const normalizedUrl = link.url.toLowerCase().trim();
+      if (existingUrls.has(normalizedUrl)) {
+        duplicates.push(link.url);
+      } else {
+        existingUrls.add(normalizedUrl);
+        uniqueLinks.push(link);
+      }
+    }
+    
+    const linksToAdd = uniqueLinks.slice(0, maxLinks - links.length);
     const newLinks: InternalLink[] = linksToAdd.map(link => ({
       id: crypto.randomUUID(),
       anchor: link.anchor,
@@ -297,12 +350,24 @@ export function InternalLinksManager({
     
     onLinksChange([...links, ...newLinks]);
     setImportText('');
-    setShowImportDialog(false);
+    setDuplicateWarnings(duplicates);
     
-    toast({
-      title: 'Links importados!',
-      description: `${newLinks.length} link(s) adicionado(s) com sucesso.`,
-    });
+    if (duplicates.length > 0) {
+      toast({
+        title: `${newLinks.length} link(s) importado(s)`,
+        description: `${duplicates.length} URL(s) duplicada(s) foram ignoradas.`,
+        variant: 'default',
+      });
+    } else {
+      toast({
+        title: 'Links importados!',
+        description: `${newLinks.length} link(s) adicionado(s) com sucesso.`,
+      });
+    }
+    
+    if (duplicates.length === 0) {
+      setShowImportDialog(false);
+    }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -535,14 +600,41 @@ export function InternalLinksManager({
                 </TabsContent>
               </Tabs>
               
+              {/* Duplicate Warnings */}
+              {duplicateWarnings.length > 0 && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 mt-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    <p className="text-sm font-medium text-amber-800">
+                      URLs duplicadas ignoradas ({duplicateWarnings.length})
+                    </p>
+                  </div>
+                  <div className="max-h-20 overflow-y-auto">
+                    {duplicateWarnings.slice(0, 5).map((url, i) => (
+                      <p key={i} className="text-xs text-amber-700 truncate">{url}</p>
+                    ))}
+                    {duplicateWarnings.length > 5 && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        +{duplicateWarnings.length - 5} mais...
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+              
               <div className="flex justify-end gap-2 mt-4">
-                <Button variant="outline" onClick={() => setShowImportDialog(false)}>
-                  Cancelar
+                <Button variant="outline" onClick={() => { 
+                  setShowImportDialog(false); 
+                  setDuplicateWarnings([]);
+                }}>
+                  {duplicateWarnings.length > 0 ? 'Fechar' : 'Cancelar'}
                 </Button>
-                <Button onClick={handleImport} disabled={!importText.trim()}>
-                  <Plus className="w-4 h-4 mr-1" />
-                  Importar Links
-                </Button>
+                {duplicateWarnings.length === 0 && (
+                  <Button onClick={handleImport} disabled={!importText.trim()}>
+                    <Plus className="w-4 h-4 mr-1" />
+                    Importar Links
+                  </Button>
+                )}
               </div>
             </DialogContent>
           </Dialog>
@@ -719,7 +811,44 @@ export function InternalLinksManager({
                   {index + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{link.anchor}</p>
+                  {editingLinkId === link.id ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={editingAnchor}
+                        onChange={(e) => setEditingAnchor(e.target.value)}
+                        className="h-7 text-sm"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveEditing();
+                          if (e.key === 'Escape') cancelEditing();
+                        }}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                        onClick={saveEditing}
+                      >
+                        <Check className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={cancelEditing}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <p 
+                      className="text-sm font-medium truncate cursor-pointer hover:text-primary transition-colors"
+                      onClick={() => startEditing(link)}
+                      title="Clique para editar"
+                    >
+                      {link.anchor}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
                     <ExternalLink className="w-3 h-3" />
                     {link.url}
@@ -738,6 +867,17 @@ export function InternalLinksManager({
                 >
                   {link.source === 'suggested' ? 'Auto' : link.source === 'imported' ? 'CSV' : 'Manual'}
                 </Badge>
+                {editingLinkId !== link.id && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-muted-foreground hover:text-primary"
+                    onClick={() => startEditing(link)}
+                    title="Editar texto âncora"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
