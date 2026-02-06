@@ -31,6 +31,7 @@ import {
   X,
   AlertCircle,
   Rocket,
+  Target,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useArticleGeneration } from '@/hooks/useArticleGeneration';
@@ -56,6 +57,7 @@ import {
   ContentStructureConfig,
   AdvancedSettings,
   PublishingOptions,
+  SEOAdvancedConfig,
 } from '@/components/shared';
 
 // App states as per spec
@@ -112,6 +114,11 @@ interface ArticleConfig {
   size: string;
   language: string;
   aiModel: string;
+  // SEO Advanced fields
+  segment: string;
+  contentType: string;
+  goal: string;
+  intentType: string;
   // Content elements
   metaDescription: boolean;
   lists: boolean;
@@ -141,6 +148,12 @@ const defaultConfig: ArticleConfig = {
   size: 'medium',
   language: 'pt-BR',
   aiModel: 'standard',
+  // SEO defaults
+  segment: 'general',
+  contentType: 'how-to',
+  goal: 'inform',
+  intentType: 'informational',
+  // Content elements
   metaDescription: true,
   lists: true,
   tables: false,
@@ -303,18 +316,29 @@ export default function ArticleGeneratorV2() {
 
     const result = await generateArticle({
       keyword: config.keyword,
+      title: config.title,
       secondaryKeywords: '',
       wordCount: config.size as 'short' | 'medium' | 'long' | 'very-long',
       tone: config.tone,
       pointOfView: config.pointOfView,
       language: config.language,
       type: 'blog',
+      // Advanced SEO fields
+      contentType: config.contentType as 'how-to' | 'listicle' | 'pillar' | 'comparative' | 'opinion' | 'news',
+      segment: config.segment as 'legal' | 'health' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'education' | 'general',
+      goal: config.goal as 'inform' | 'convert' | 'educate' | 'engage',
+      intentType: config.intentType as 'informational' | 'navigational' | 'transactional' | 'commercial',
+      // Content elements
       includeFaq: config.faq,
       faqCount: 5,
       includeTable: config.tables,
       includeList: config.lists,
       includeConclusion: config.conclusion,
+      includeMetaDescription: config.metaDescription,
+      // SEO options
       seoOptimization: config.seoOptimization,
+      humanizeContent: config.humanizeContent,
+      realtimeData: config.realtimeData,
     });
 
     if (result) {
@@ -630,6 +654,32 @@ export default function ArticleGeneratorV2() {
                       <strong style={{ color: colors.textPrimary }}>Detalhes técnicos:</strong>{' '}
                       {selectedModel.technical}
                     </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* SEO Advanced Config Section */}
+                <AccordionItem value="seo-config" className="border rounded-lg px-4 mt-4" style={{ borderColor: colors.border }}>
+                  <AccordionTrigger className="py-4">
+                    <div className="flex items-center gap-2">
+                      <Target className="w-5 h-5" style={{ color: colors.primary }} />
+                      <span className="font-semibold">Configuração SEO Avançada</span>
+                      <Badge variant="outline" className="ml-2 text-xs" style={{ borderColor: colors.success, color: colors.success }}>
+                        E-E-A-T
+                      </Badge>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-4">
+                    <SEOAdvancedConfig
+                      segment={config.segment}
+                      contentType={config.contentType}
+                      goal={config.goal}
+                      intentType={config.intentType}
+                      onSegmentChange={(v) => updateConfig('segment', v)}
+                      onContentTypeChange={(v) => updateConfig('contentType', v)}
+                      onGoalChange={(v) => updateConfig('goal', v)}
+                      onIntentTypeChange={(v) => updateConfig('intentType', v)}
+                      accentColor={colors.primary}
+                    />
                   </AccordionContent>
                 </AccordionItem>
 

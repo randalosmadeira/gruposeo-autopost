@@ -7,27 +7,46 @@ const GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate
 
 interface ArticleConfig {
   keyword: string;
+  title?: string;
   secondaryKeywords: string;
   wordCount: 'short' | 'medium' | 'long' | 'very-long';
   tone: string;
   pointOfView: string;
   language: string;
   type: 'blog' | 'sales';
+  // Advanced SEO fields
+  contentType?: 'how-to' | 'listicle' | 'pillar' | 'comparative' | 'opinion' | 'news';
+  segment?: 'legal' | 'health' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'education' | 'general';
+  goal?: 'inform' | 'convert' | 'educate' | 'engage';
+  intentType?: 'informational' | 'navigational' | 'transactional' | 'commercial';
+  // Company data
   companyName?: string;
   companyPhone?: string;
   companyAddress?: string;
+  // Sales-specific
   targetAudience?: string;
   painPoints?: string;
   differentials?: string;
   ctaObjective?: string;
+  additionalInfo?: string;
+  // Content elements
   includeFaq: boolean;
   faqCount: number;
   includeTable: boolean;
   includeList: boolean;
   includeConclusion: boolean;
+  includeMetaDescription?: boolean;
+  // SEO options
   seoOptimization: boolean;
+  humanizeContent?: boolean;
+  realtimeData?: boolean;
   customInstructions?: string;
+  // Internal links
+  internalLinks?: Array<{ anchor: string; url: string }>;
+  sourcesContext?: string;
 }
+
+export type { ArticleConfig };
 
 export function useArticleGeneration() {
   const [content, setContent] = useState('');
