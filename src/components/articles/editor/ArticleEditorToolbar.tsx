@@ -264,23 +264,30 @@ export function ArticleEditorToolbar({
       {/* Spacer */}
       <div className="flex-1" />
 
+      {/* Keyboard shortcuts hint */}
+      <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground mr-2">
+        <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">Ctrl+S</kbd>
+        <span>salvar</span>
+      </div>
+
       {/* Status indicator */}
       {isSaving ? (
-        <Badge variant="secondary" className="gap-1 font-normal">
+        <Badge variant="secondary" className="gap-2 font-normal animate-pulse">
           <Loader2 className="w-3 h-3 animate-spin" />
           Salvando...
         </Badge>
       ) : hasChanges ? (
-        <Badge variant="outline" className="gap-1 font-normal text-chart-4 border-chart-4/30">
+        <Badge variant="outline" className="gap-2 font-normal text-amber-600 border-amber-300 bg-amber-50">
+          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
           Alterações pendentes
         </Badge>
       ) : lastSaved ? (
-        <Badge variant="outline" className="gap-1 font-normal text-chart-2 border-chart-2/30">
+        <Badge variant="outline" className="gap-2 font-normal text-emerald-600 border-emerald-300 bg-emerald-50">
           <CheckCircle2 className="w-3 h-3" />
           {lastSaved}
         </Badge>
       ) : (
-        <Badge variant="outline" className="gap-1 font-normal text-chart-2 border-chart-2/30">
+        <Badge variant="outline" className="gap-2 font-normal text-emerald-600 border-emerald-300 bg-emerald-50">
           <CheckCircle2 className="w-3 h-3" />
           Pronto
         </Badge>
