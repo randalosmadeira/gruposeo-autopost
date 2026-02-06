@@ -32,6 +32,15 @@ import {
   Link2,
   Globe,
   Loader2,
+  Settings,
+  CreditCard,
+  Search,
+  User,
+  Image,
+  Rocket,
+  Clock,
+  RefreshCw,
+  Eye,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useArticleGeneration } from '@/hooks/useArticleGeneration';
@@ -124,6 +133,16 @@ interface ArticleConfig {
   // Internal linking
   internalLinking: boolean;
   projectId: string;
+  // Advanced settings
+  usePlatformCredits: boolean;
+  seoOptimization: boolean;
+  realtimeData: boolean;
+  humanizeContent: boolean;
+  generateImages: boolean;
+  imageCount: number;
+  imageStyle: string;
+  // Publishing
+  autoPublish: boolean;
 }
 
 const defaultConfig: ArticleConfig = {
@@ -141,7 +160,28 @@ const defaultConfig: ArticleConfig = {
   faq: false,
   internalLinking: true,
   projectId: '',
+  // Advanced settings
+  usePlatformCredits: true,
+  seoOptimization: false,
+  realtimeData: false,
+  humanizeContent: false,
+  generateImages: false,
+  imageCount: 1,
+  imageStyle: 'fotorrealístico',
+  // Publishing
+  autoPublish: false,
 };
+
+const imageStyles = [
+  'Fotorrealístico',
+  'Ilustração Digital',
+  'Estilo Cartoon',
+  'Minimalista',
+  'Arte Abstrata',
+  'Aquarela',
+  'Estilo Vintage',
+  'Design Moderno',
+];
 
 export default function ArticleGeneratorV2() {
   const navigate = useNavigate();
@@ -152,13 +192,18 @@ export default function ArticleGeneratorV2() {
   const [config, setConfig] = useState<ArticleConfig>(defaultConfig);
   const [showTutorial, setShowTutorial] = useState(true);
   const [generatingTitle, setGeneratingTitle] = useState(false);
+  const [generationPhase, setGenerationPhase] = useState<'idle' | 'outline' | 'article'>('idle');
 
   const updateConfig = <K extends keyof ArticleConfig>(key: K, value: ArticleConfig[K]) => {
     setConfig(prev => ({ ...prev, [key]: value }));
   };
 
+  // Calculate total credits based on selected options
   const selectedModel = aiModels.find(m => m.value === config.aiModel) || aiModels[0];
-  const totalCredits = selectedModel.credits;
+  let totalCredits = selectedModel.credits;
+  if (config.realtimeData) totalCredits += 1;
+  if (config.humanizeContent) totalCredits += 1;
+  if (config.generateImages) totalCredits += config.imageCount;
 
   const handleGenerateTitle = async () => {
     if (!config.keyword.trim()) {
@@ -205,12 +250,43 @@ export default function ArticleGeneratorV2() {
       includeTable: config.tables,
       includeList: config.lists,
       includeConclusion: config.conclusion,
-      seoOptimization: true,
+      seoOptimization: config.seoOptimization,
     });
 
     if (result) {
+      setGenerationPhase('idle');
       navigate('/articles');
+    } else {
+      setGenerationPhase('idle');
     }
+  };
+
+  const handleGenerateOutline = async () => {
+    if (!config.keyword.trim()) {
+      toast({
+        title: 'Palavra-chave necessária',
+        description: 'Digite uma palavra-chave para gerar o esboço.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setGenerationPhase('outline');
+    // Simulate outline generation - in real implementation this would call an API
+    setTimeout(() => {
+      toast({
+        title: 'Esboço gerado!',
+        description: 'Revise a estrutura e clique em "Gerar Artigo Completo".',
+      });
+    }, 2000);
+  };
+
+  const handleReset = () => {
+    setConfig(defaultConfig);
+    setGenerationPhase('idle');
+    toast({
+      title: 'Configurações reiniciadas',
+      description: 'Todos os campos foram limpos.',
+    });
   };
 
   return (
@@ -573,128 +649,381 @@ export default function ArticleGeneratorV2() {
                     </div>
                   </AccordionContent>
                 </AccordionItem>
-              </Accordion>
 
-              {/* Generate Button */}
+                {/* Advanced Settings Section */}
+                <AccordionItem value="advanced" className="border rounded-lg px-4 mt-4" style={{ borderColor: colors.border }}>
+                  <AccordionTrigger className="py-4">
+                    <div className="flex items-center gap-2">
+                      <Settings className="w-5 h-5" style={{ color: colors.primary }} />
+                      <span className="font-semibold">Configurações Avançadas</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-4 space-y-3">
+                    {/* Platform Credits */}
+                    <AdvancedToggleCard
+                      icon={<CreditCard className="w-4 h-4" />}
+                      title="Usar Créditos da Plataforma"
+                      description="Use créditos da plataforma em vez da sua chave de API"
+                      badge="Custo: 1 Crédito"
+                      enabled={config.usePlatformCredits}
+                      onChange={(v) => updateConfig('usePlatformCredits', v)}
+                      highlight
+                    />
+
+                    {/* SEO Optimization */}
+                    <AdvancedToggleCard
+                      icon={<Search className="w-4 h-4" />}
+                      title="Otimização SEO"
+                      description="Analisar concorrentes e otimizar conteúdo para mecanismos de busca"
+                      enabled={config.seoOptimization}
+                      onChange={(v) => updateConfig('seoOptimization', v)}
+                      bgColor={colors.lightBlue}
+                    />
+
+                    {/* Realtime Data */}
+                    <AdvancedToggleCard
+                      icon={<Globe className="w-4 h-4" />}
+                      title="Dados da Internet em Tempo Real"
+                      description="Usar informações atuais da web"
+                      badge="Custo: +1 Crédito"
+                      enabled={config.realtimeData}
+                      onChange={(v) => updateConfig('realtimeData', v)}
+                      bgColor={colors.secondary}
+                    />
+
+                    {/* Humanize Content */}
+                    <AdvancedToggleCard
+                      icon={<User className="w-4 h-4" />}
+                      title="Humanizar Conteúdo"
+                      description="Tornar o texto mais natural e envolvente"
+                      badge="Custo: +1 Crédito"
+                      enabled={config.humanizeContent}
+                      onChange={(v) => updateConfig('humanizeContent', v)}
+                      bgColor={colors.tertiary}
+                    />
+
+                    {/* Generate Images */}
+                    <div>
+                      <AdvancedToggleCard
+                        icon={<Image className="w-4 h-4" />}
+                        title="Gerar Imagens IA"
+                        description="Criar conteúdo visual relevante"
+                        enabled={config.generateImages}
+                        onChange={(v) => updateConfig('generateImages', v)}
+                        bgColor={colors.pink}
+                      />
+                      
+                      {config.generateImages && (
+                        <div className="mt-3 ml-11 space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Número de Imagens</Label>
+                              <Select 
+                                value={String(config.imageCount)} 
+                                onValueChange={(v) => updateConfig('imageCount', parseInt(v))}
+                              >
+                                <SelectTrigger className="h-9">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {[1, 2, 3, 4, 5].map((num) => (
+                                    <SelectItem key={num} value={String(num)}>
+                                      {num} {num === 1 ? 'imagem' : 'imagens'}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Estilo da Imagem</Label>
+                              <Select 
+                                value={config.imageStyle} 
+                                onValueChange={(v) => updateConfig('imageStyle', v)}
+                              >
+                                <SelectTrigger className="h-9">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {imageStyles.map((style) => (
+                                    <SelectItem key={style} value={style.toLowerCase()}>
+                                      {style}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <button 
+                            className="text-xs flex items-center gap-1 hover:underline"
+                            style={{ color: colors.primary }}
+                          >
+                            <Image className="w-3 h-3" />
+                            Ver exemplos de estilos
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Publication Options Section */}
+                <AccordionItem value="publishing" className="border rounded-lg px-4 mt-4" style={{ borderColor: colors.border }}>
+                  <AccordionTrigger className="py-4">
+                    <div className="flex items-center gap-2">
+                      <Rocket className="w-5 h-5" style={{ color: colors.primary }} />
+                      <span className="font-semibold">Opções de Publicação</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-4">
+                    <div className="flex items-center justify-between p-3 rounded-lg border" style={{ borderColor: colors.border }}>
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="w-8 h-8 rounded-lg flex items-center justify-center"
+                          style={{ backgroundColor: colors.lightBlue }}
+                        >
+                          <Clock className="w-4 h-4" style={{ color: colors.primary }} />
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm" style={{ color: colors.textPrimary }}>
+                            Configurar publicação automática
+                          </p>
+                          <p className="text-xs" style={{ color: colors.textSecondary }}>
+                            Publique artigos diretamente no WordPress ou no Wix
+                          </p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={config.autoPublish}
+                        onCheckedChange={(v) => updateConfig('autoPublish', v)}
+                      />
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
+          </ScrollArea>
+          
+          {/* Sticky Action Bar */}
+          <div 
+            className="sticky bottom-0 border-t p-4 space-y-2"
+            style={{ backgroundColor: colors.background, borderColor: colors.border }}
+          >
+            {generationPhase === 'idle' && (
               <Button
-                onClick={handleGenerate}
+                onClick={handleGenerateOutline}
                 disabled={isGenerating || !config.keyword.trim()}
                 className="w-full h-12 text-base"
                 style={{ backgroundColor: colors.primary }}
               >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                    Gerando Artigo...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-5 h-5 mr-2" />
-                    Gerar Artigo ({totalCredits} {totalCredits === 1 ? 'crédito' : 'créditos'})
-                  </>
-                )}
+                <Play className="w-5 h-5 mr-2" />
+                Gerar Esboço do Artigo
               </Button>
-            </div>
-          </ScrollArea>
+            )}
+            
+            {generationPhase === 'outline' && (
+              <>
+                <Button
+                  onClick={handleGenerate}
+                  disabled={isGenerating}
+                  className="w-full h-12 text-base"
+                  style={{ backgroundColor: colors.primary }}
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                      Gerando Artigo...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5 mr-2" />
+                      Gerar Artigo Completo ({totalCredits} {totalCredits === 1 ? 'crédito' : 'créditos'})
+                    </>
+                  )}
+                </Button>
+                <Button
+                  onClick={handleReset}
+                  variant="outline"
+                  className="w-full h-10"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Reiniciar & Começar de Novo
+                </Button>
+              </>
+            )}
+
+            {generationPhase === 'idle' && (
+              <p className="text-xs text-center" style={{ color: colors.textSecondary }}>
+                Custo total: {totalCredits} {totalCredits === 1 ? 'crédito' : 'créditos'}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Right Panel - Preview */}
         <div className="w-1/2 overflow-hidden" style={{ backgroundColor: colors.background }}>
           <ScrollArea className="h-full">
             <div className="p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <FileText className="w-5 h-5" style={{ color: colors.primary }} />
+              {/* Preview Header */}
+              <div className="flex items-center gap-2 mb-2">
+                <Eye className="w-5 h-5" style={{ color: colors.primary }} />
                 <h2 className="text-lg font-semibold" style={{ color: colors.textPrimary }}>
-                  Prévia do Artigo
+                  Prévia em Tempo Real
                 </h2>
               </div>
+              <p className="text-sm mb-6" style={{ color: colors.textSecondary }}>
+                Prévia do artigo em tempo real
+              </p>
 
               <div 
                 className="rounded-lg border p-6 min-h-[500px]"
                 style={{ borderColor: colors.border }}
               >
                 {config.title || config.keyword ? (
-                  <article className="prose prose-sm max-w-none">
-                    <h1 className="text-2xl font-bold mb-4" style={{ color: colors.textPrimary }}>
+                  <article className="space-y-6">
+                    {/* Article Title */}
+                    <h1 className="text-2xl font-bold" style={{ color: colors.textPrimary }}>
                       {config.title || `[Título sobre: ${config.keyword}]`}
                     </h1>
                     
-                    {config.metaDescription && (
-                      <div 
-                        className="p-3 rounded-lg mb-4 text-sm"
+                    {/* Metadata Tags */}
+                    <div className="flex flex-wrap gap-2">
+                      <Badge 
+                        variant="secondary" 
+                        className="text-xs"
                         style={{ backgroundColor: colors.lightBlue }}
                       >
-                        <strong>Meta Descrição:</strong> Descubra tudo sobre {config.keyword}. 
-                        Guia completo com dicas práticas e informações atualizadas.
+                        Tamanho: {articleSizes.find(s => s.value === config.size)?.words}
+                      </Badge>
+                      <Badge 
+                        variant="secondary" 
+                        className="text-xs"
+                        style={{ backgroundColor: colors.lightBlue }}
+                      >
+                        Idioma: {config.language === 'pt-BR' ? '🇧🇷 Português' : config.language === 'en-US' ? '🇺🇸 English' : '🇪🇸 Español'}
+                      </Badge>
+                      <Badge 
+                        variant="secondary" 
+                        className="text-xs"
+                        style={{ backgroundColor: colors.lightBlue }}
+                      >
+                        Tom: {config.tone.charAt(0).toUpperCase() + config.tone.slice(1)}
+                      </Badge>
+                      <Badge 
+                        variant="secondary" 
+                        className="text-xs"
+                        style={{ backgroundColor: colors.lightBlue }}
+                      >
+                        Ponto de Vista: {pointsOfView.find(p => p.value === config.pointOfView)?.label || config.pointOfView}
+                      </Badge>
+                    </div>
+
+                    {/* Meta Description Preview */}
+                    {config.metaDescription && (
+                      <div 
+                        className="p-4 rounded-lg text-sm"
+                        style={{ backgroundColor: colors.lightBlue }}
+                      >
+                        <strong className="block mb-1" style={{ color: colors.textPrimary }}>Meta Descrição:</strong>
+                        <p style={{ color: colors.textSecondary }}>
+                          Descubra tudo sobre {config.keyword || '[palavra-chave]'}. 
+                          Guia completo com dicas práticas e informações atualizadas para {new Date().getFullYear()}.
+                        </p>
                       </div>
                     )}
 
-                    <div className="space-y-4" style={{ color: colors.textSecondary }}>
-                      <p>
-                        <strong style={{ color: colors.textPrimary }}>Palavra-chave:</strong>{' '}
-                        {config.keyword || '[Não definida]'}
-                      </p>
-                      <p>
-                        <strong style={{ color: colors.textPrimary }}>Tom:</strong>{' '}
-                        {config.tone.charAt(0).toUpperCase() + config.tone.slice(1)}
-                      </p>
-                      <p>
-                        <strong style={{ color: colors.textPrimary }}>Tamanho:</strong>{' '}
-                        {articleSizes.find(s => s.value === config.size)?.label} (
-                        {articleSizes.find(s => s.value === config.size)?.words})
-                      </p>
-                      <p>
-                        <strong style={{ color: colors.textPrimary }}>Modelo:</strong>{' '}
-                        {selectedModel.label}
+                    {/* Content Placeholder */}
+                    <div 
+                      className="p-6 rounded-lg border-2 border-dashed text-center"
+                      style={{ borderColor: colors.border }}
+                    >
+                      <FileText className="w-8 h-8 mx-auto mb-2" style={{ color: colors.border }} />
+                      <p className="text-sm" style={{ color: colors.textSecondary }}>
+                        O conteúdo do artigo aparecerá aqui quando gerado
                       </p>
                     </div>
 
-                    <div className="mt-6 pt-4 border-t" style={{ borderColor: colors.border }}>
-                      <p className="text-sm font-medium mb-2" style={{ color: colors.textPrimary }}>
+                    {/* Included Elements */}
+                    <div className="pt-4 border-t" style={{ borderColor: colors.border }}>
+                      <p className="text-sm font-medium mb-3" style={{ color: colors.textPrimary }}>
                         Elementos incluídos:
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {config.metaDescription && (
                           <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
-                            Meta Descrição
+                            📝 Meta Descrição
                           </Badge>
                         )}
                         {config.lists && (
                           <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
-                            Listas
+                            📋 Listas
                           </Badge>
                         )}
                         {config.tables && (
                           <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
-                            Tabelas
+                            📊 Tabelas
                           </Badge>
                         )}
                         {config.conclusion && (
                           <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
-                            Conclusão
+                            ✅ Conclusão
                           </Badge>
                         )}
                         {config.faq && (
                           <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
-                            FAQ
+                            ❓ FAQ
                           </Badge>
                         )}
                         {config.internalLinking && (
                           <Badge variant="secondary" style={{ backgroundColor: colors.secondary }}>
-                            Linkagem Interna
+                            🔗 Linkagem Interna
+                          </Badge>
+                        )}
+                        {config.seoOptimization && (
+                          <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
+                            🔍 SEO Otimizado
+                          </Badge>
+                        )}
+                        {config.realtimeData && (
+                          <Badge variant="secondary" style={{ backgroundColor: colors.secondary }}>
+                            🌐 Dados em Tempo Real
+                          </Badge>
+                        )}
+                        {config.humanizeContent && (
+                          <Badge variant="secondary" style={{ backgroundColor: colors.tertiary }}>
+                            👤 Conteúdo Humanizado
+                          </Badge>
+                        )}
+                        {config.generateImages && (
+                          <Badge variant="secondary" style={{ backgroundColor: colors.pink }}>
+                            🖼️ {config.imageCount} {config.imageCount === 1 ? 'Imagem' : 'Imagens'} IA
                           </Badge>
                         )}
                       </div>
                     </div>
+
+                    {/* Model Info */}
+                    <div 
+                      className="p-3 rounded-lg text-xs"
+                      style={{ backgroundColor: colors.backgroundSecondary }}
+                    >
+                      <strong style={{ color: colors.textPrimary }}>Modelo:</strong>{' '}
+                      <span style={{ color: colors.textSecondary }}>{selectedModel.label} - {selectedModel.technical}</span>
+                    </div>
                   </article>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-[400px] text-center">
-                    <FileText className="w-12 h-12 mb-4" style={{ color: colors.border }} />
+                    <div 
+                      className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
+                      style={{ backgroundColor: colors.backgroundSecondary }}
+                    >
+                      <FileText className="w-8 h-8" style={{ color: colors.border }} />
+                    </div>
                     <p className="text-lg font-medium mb-2" style={{ color: colors.textPrimary }}>
-                      Configure seu artigo
+                      Gerador de Artigos IA
                     </p>
                     <p className="text-sm max-w-xs" style={{ color: colors.textSecondary }}>
-                      Preencha os campos à esquerda para ver uma prévia do seu artigo aqui.
+                      Preencha os detalhes à esquerda para ver uma prévia da 
+                      estrutura e conteúdo do seu artigo.
                     </p>
                   </div>
                 )}
@@ -707,7 +1036,7 @@ export default function ArticleGeneratorV2() {
   );
 }
 
-// Toggle Card Component
+// Toggle Card Component for Content Structure
 function ToggleCard({
   icon,
   title,
@@ -752,6 +1081,71 @@ function ToggleCard({
         </div>
       </div>
       <Switch checked={enabled} onCheckedChange={onChange} />
+    </div>
+  );
+}
+
+// Advanced Toggle Card Component
+function AdvancedToggleCard({
+  icon,
+  title,
+  description,
+  badge,
+  enabled,
+  onChange,
+  bgColor,
+  highlight,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  badge?: string;
+  enabled: boolean;
+  onChange: (value: boolean) => void;
+  bgColor?: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        'p-3 rounded-lg border flex items-center justify-between cursor-pointer transition-all',
+        highlight && enabled ? 'ring-2 ring-blue-200' : '',
+        enabled ? 'border-blue-200' : 'border-gray-200 hover:border-gray-300'
+      )}
+      style={{ backgroundColor: enabled ? bgColor || '#F8FAFC' : 'transparent' }}
+      onClick={() => onChange(!enabled)}
+    >
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div 
+          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ 
+            backgroundColor: enabled ? (bgColor ? `${bgColor}` : '#E3F2FD') : '#F5F5F5',
+            color: enabled ? '#4169E1' : '#666666'
+          }}
+        >
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-medium text-sm" style={{ color: '#1A1A1A' }}>
+              {title}
+            </p>
+            {badge && (
+              <Badge 
+                variant="secondary" 
+                className="text-[10px] px-1.5 py-0"
+                style={{ backgroundColor: '#E3F2FD', color: '#4169E1' }}
+              >
+                {badge}
+              </Badge>
+            )}
+          </div>
+          <p className="text-xs truncate" style={{ color: '#666666' }}>
+            {description}
+          </p>
+        </div>
+      </div>
+      <Switch checked={enabled} onCheckedChange={onChange} className="flex-shrink-0 ml-2" />
     </div>
   );
 }
