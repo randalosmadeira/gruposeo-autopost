@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import { buildAdvancedSEOPrompt, type PromptConfig } from "../_shared/seo-prompt-builder.ts";
 
 const FUNCTION_NAME = "generate-article";
 
@@ -11,26 +12,45 @@ const corsHeaders = {
 
 interface ArticleConfig {
   keyword: string;
+  title?: string;
   secondaryKeywords: string;
   wordCount: 'short' | 'medium' | 'long' | 'very-long';
   tone: string;
   pointOfView: string;
   language: string;
   type: 'blog' | 'sales';
+  // Content type and segment (new advanced fields)
+  contentType?: 'how-to' | 'listicle' | 'pillar' | 'comparative' | 'opinion' | 'news';
+  segment?: 'legal' | 'health' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'education' | 'general';
+  goal?: 'inform' | 'convert' | 'educate' | 'engage';
+  intentType?: 'informational' | 'navigational' | 'transactional' | 'commercial';
+  // Company data for sales pages
   companyName?: string;
   companyPhone?: string;
   companyAddress?: string;
+  // Sales-specific
   targetAudience?: string;
   painPoints?: string;
   differentials?: string;
   ctaObjective?: string;
+  additionalInfo?: string;
+  // Content elements
   includeFaq: boolean;
   faqCount: number;
   includeTable: boolean;
   includeList: boolean;
   includeConclusion: boolean;
+  includeMetaDescription?: boolean;
+  // SEO options
   seoOptimization: boolean;
+  humanizeContent?: boolean;
+  realtimeData?: boolean;
+  // Custom instructions (legacy support)
   customInstructions?: string;
+  // Internal links
+  internalLinks?: Array<{ anchor: string; url: string }>;
+  // Sources context
+  sourcesContext?: string;
 }
 
 const wordCountRanges = {
@@ -44,9 +64,13 @@ const pointOfViewMap: Record<string, string> = {
   nos: "primeira pessoa do plural (nós)",
   voce: "segunda pessoa (você)",
   ele: "terceira pessoa",
+  primeira: "primeira pessoa do singular (eu)",
+  segunda: "segunda pessoa (você)",
+  terceira: "terceira pessoa",
 };
 
-function buildSystemPrompt(config: ArticleConfig): string {
+// Legacy prompt builder for backward compatibility
+function buildLegacySystemPrompt(config: ArticleConfig): string {
   const wordRange = wordCountRanges[config.wordCount];
   const pov = pointOfViewMap[config.pointOfView] || "segunda pessoa (você)";
   
@@ -98,6 +122,48 @@ REGRAS IMPORTANTES:
   }
 
   return systemPrompt;
+}
+
+// Check if config has advanced fields
+function hasAdvancedConfig(config: ArticleConfig): boolean {
+  return !!(config.segment || config.contentType || config.intentType || config.goal);
+}
+
+// Build prompt config for advanced system
+function buildPromptConfig(config: ArticleConfig): PromptConfig {
+  return {
+    title: config.title || '',
+    keyword: config.keyword,
+    secondaryKeywords: config.secondaryKeywords ? config.secondaryKeywords.split(',').map(k => k.trim()) : [],
+    language: config.language || 'Português Brasileiro',
+    currentYear: new Date().getFullYear(),
+    articleLength: config.wordCount,
+    tone: config.tone,
+    pointOfView: config.pointOfView,
+    contentType: config.contentType || 'how-to',
+    segment: config.segment || 'general',
+    goal: config.goal || 'inform',
+    intentType: config.intentType || 'informational',
+    includeFaq: config.includeFaq,
+    faqCount: config.faqCount || 5,
+    includeTable: config.includeTable,
+    includeList: config.includeList,
+    includeConclusion: config.includeConclusion,
+    includeMetaDescription: config.includeMetaDescription ?? true,
+    internalLinks: config.internalLinks,
+    sourcesContext: config.sourcesContext,
+    companyName: config.companyName,
+    companyPhone: config.companyPhone,
+    companyAddress: config.companyAddress,
+    targetAudience: config.targetAudience,
+    painPoints: config.painPoints,
+    differentials: config.differentials,
+    ctaObjective: config.ctaObjective,
+    additionalInfo: config.additionalInfo,
+    seoOptimization: config.seoOptimization,
+    humanizeContent: config.humanizeContent ?? false,
+    realtimeData: config.realtimeData ?? false,
+  };
 }
 
 serve(async (req) => {
@@ -154,8 +220,21 @@ serve(async (req) => {
       throw new Error("AI API key is not configured");
     }
 
-    const systemPrompt = buildSystemPrompt(config);
-    const userPrompt = `Escreva um artigo completo e otimizado para SEO sobre: "${config.keyword}"
+    // Determine which prompt system to use
+    let systemPrompt: string;
+    let userPrompt: string;
+
+    if (hasAdvancedConfig(config)) {
+      // Use new advanced SEO prompt system
+      const promptConfig = buildPromptConfig(config);
+      const prompts = buildAdvancedSEOPrompt(promptConfig);
+      systemPrompt = prompts.system;
+      userPrompt = prompts.user;
+      log.info("using_advanced_prompt", { segment: config.segment, contentType: config.contentType });
+    } else {
+      // Fallback to legacy prompt for backward compatibility
+      systemPrompt = buildLegacySystemPrompt(config);
+      userPrompt = `Escreva um artigo completo e otimizado para SEO sobre: "${config.keyword}"
 
 Estrutura esperada:
 1. Título principal atraente (H1)
@@ -166,6 +245,8 @@ ${config.includeFaq ? `5. FAQ com ${config.faqCount} perguntas e respostas` : ''
 ${config.includeConclusion ? '6. Conclusão com resumo e CTA' : ''}
 
 Comece agora:`;
+      log.info("using_legacy_prompt", { keyword: config.keyword });
+    }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -185,26 +266,31 @@ Comece agora:`;
 
     if (!response.ok) {
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }), {
+        return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos.", request_id: requestId }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Créditos de IA insuficientes." }), {
+        return new Response(JSON.stringify({ error: "Créditos de IA insuficientes.", request_id: requestId }), {
           status: 402,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const text = await response.text();
       console.error("AI gateway error:", response.status, text);
-      return new Response(JSON.stringify({ error: "Erro no gateway de IA" }), {
+      return new Response(JSON.stringify({ error: "Erro no gateway de IA", request_id: requestId }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    log.info("stream_started", { model: "google/gemini-3-flash-preview", keyword: config.keyword });
+    log.info("stream_started", { 
+      model: "google/gemini-3-flash-preview", 
+      keyword: config.keyword,
+      segment: config.segment || 'general',
+      useAdvanced: hasAdvancedConfig(config)
+    });
 
     return new Response(response.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
@@ -212,7 +298,7 @@ Comece agora:`;
   } catch (error) {
     log.error("generation_error", { error: error instanceof Error ? error.message : "unknown" });
     log.requestEnd(500, Date.now() - startTime);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Erro desconhecido" }), {
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Erro desconhecido", request_id: requestId }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
