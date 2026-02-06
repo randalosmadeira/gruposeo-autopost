@@ -1,9 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Command,
   CommandEmpty,
@@ -18,6 +20,14 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
   Link2,
   Plus,
   Trash2,
@@ -26,18 +36,24 @@ import {
   ExternalLink,
   Sparkles,
   AlertCircle,
-  CheckCircle2,
-  Globe,
+  Upload,
+  Eye,
+  Copy,
+  Filter,
+  X,
+  FileUp,
+  ClipboardPaste,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 
 export interface InternalLink {
   id: string;
   anchor: string;
   url: string;
-  source: 'manual' | 'suggested';
+  source: 'manual' | 'suggested' | 'imported';
 }
 
 interface Article {
@@ -67,6 +83,9 @@ export function InternalLinksManager({
   maxLinks = 15,
 }: InternalLinksManagerProps) {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(false);
   const [newAnchor, setNewAnchor] = useState('');
@@ -74,6 +93,10 @@ export function InternalLinksManager({
   const [showAddForm, setShowAddForm] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+  const [keywordFilter, setKeywordFilter] = useState('');
 
   // Fetch existing articles for suggestions
   useEffect(() => {
@@ -131,12 +154,14 @@ export function InternalLinksManager({
     });
   }, [articles, links, searchQuery]);
 
-  // Suggested articles based on keyword similarity
+  // Suggested articles based on keyword similarity with additional keyword filter
   const suggestedArticles = useMemo(() => {
-    if (!keyword) return [];
+    if (!keyword && !keywordFilter) return [];
     
-    const keywordLower = keyword.toLowerCase();
-    const words = keywordLower.split(/\s+/).filter(w => w.length > 3);
+    const searchTerms = (keywordFilter || keyword || '').toLowerCase();
+    const words = searchTerms.split(/\s+/).filter(w => w.length > 2);
+    
+    if (words.length === 0) return [];
     
     return articles
       .filter(article => {
@@ -149,8 +174,8 @@ export function InternalLinksManager({
         
         return words.some(word => title.includes(word) || kw.includes(word));
       })
-      .slice(0, 5);
-  }, [articles, keyword, links]);
+      .slice(0, 8);
+  }, [articles, keyword, keywordFilter, links]);
 
   const addLink = (link: Omit<InternalLink, 'id'>) => {
     if (links.length >= maxLinks) return;
@@ -206,10 +231,110 @@ export function InternalLinksManager({
     });
   };
 
+  // Parse imported text (URLs or CSV)
+  const parseImportedLinks = (text: string): Array<{ anchor: string; url: string }> => {
+    const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+    const parsedLinks: Array<{ anchor: string; url: string }> = [];
+    
+    for (const line of lines) {
+      // Check if it's CSV format (anchor,url or anchor;url)
+      if (line.includes(',') || line.includes(';')) {
+        const separator = line.includes(';') ? ';' : ',';
+        const parts = line.split(separator).map(p => p.trim());
+        if (parts.length >= 2) {
+          parsedLinks.push({ anchor: parts[0], url: parts[1] });
+        } else if (parts.length === 1 && parts[0].startsWith('http')) {
+          // Just URL
+          const url = parts[0];
+          const anchor = extractAnchorFromUrl(url);
+          parsedLinks.push({ anchor, url });
+        }
+      } else if (line.startsWith('http') || line.startsWith('/')) {
+        // Just a URL
+        const anchor = extractAnchorFromUrl(line);
+        parsedLinks.push({ anchor, url: line });
+      }
+    }
+    
+    return parsedLinks;
+  };
+
+  const extractAnchorFromUrl = (url: string): string => {
+    try {
+      // Extract last path segment and convert to readable text
+      const path = new URL(url, 'https://example.com').pathname;
+      const lastSegment = path.split('/').filter(Boolean).pop() || '';
+      return lastSegment
+        .replace(/[-_]/g, ' ')
+        .replace(/\.(html|php|aspx?)$/i, '')
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ') || url;
+    } catch {
+      return url;
+    }
+  };
+
+  const handleImport = () => {
+    const parsedLinks = parseImportedLinks(importText);
+    
+    if (parsedLinks.length === 0) {
+      toast({
+        title: 'Nenhum link encontrado',
+        description: 'Verifique o formato dos dados importados.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    const linksToAdd = parsedLinks.slice(0, maxLinks - links.length);
+    const newLinks: InternalLink[] = linksToAdd.map(link => ({
+      id: crypto.randomUUID(),
+      anchor: link.anchor,
+      url: link.url,
+      source: 'imported' as const,
+    }));
+    
+    onLinksChange([...links, ...newLinks]);
+    setImportText('');
+    setShowImportDialog(false);
+    
+    toast({
+      title: 'Links importados!',
+      description: `${newLinks.length} link(s) adicionado(s) com sucesso.`,
+    });
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      setImportText(content);
+    };
+    reader.readAsText(file);
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Generate preview HTML
+  const generatePreviewHtml = () => {
+    if (links.length === 0) return '<p>Nenhum link adicionado ainda.</p>';
+    
+    return links.map((link, index) => 
+      `<p>...texto do artigo mencionando <a href="${link.url}" target="_blank" rel="noopener noreferrer">${link.anchor}</a> de forma natural...</p>`
+    ).join('\n\n');
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <div
             className="w-8 h-8 rounded-lg flex items-center justify-center"
@@ -225,7 +350,203 @@ export function InternalLinksManager({
           </div>
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {/* Preview Dialog */}
+          <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={links.length === 0}
+                className="gap-1"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                Preview
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Eye className="w-5 h-5" />
+                  Preview dos Links no Artigo
+                </DialogTitle>
+                <DialogDescription>
+                  Visualização de como os links serão inseridos no conteúdo final
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-4">
+                {/* Preview Content */}
+                <div className="p-4 rounded-lg bg-muted/50 border">
+                  <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    Os links serão inseridos naturalmente no contexto do artigo
+                  </p>
+                  
+                  <div className="prose prose-sm max-w-none">
+                    {links.length === 0 ? (
+                      <p className="text-muted-foreground italic">Nenhum link adicionado ainda.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        <p className="text-foreground">
+                          <span className="bg-muted px-1 rounded">[Introdução do artigo...]</span>
+                        </p>
+                        
+                        {links.slice(0, 3).map((link, index) => (
+                          <div key={link.id} className="p-3 bg-background rounded border-l-2 border-primary">
+                            <p className="text-foreground">
+                              ...conforme mencionado anteriormente, é importante entender{' '}
+                              <a 
+                                href={link.url} 
+                                className="text-primary underline hover:no-underline font-medium"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {link.anchor}
+                              </a>
+                              {' '}para obter melhores resultados...
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Link {index + 1} • {link.source === 'manual' ? 'Manual' : link.source === 'imported' ? 'Importado' : 'Sugerido'}
+                            </p>
+                          </div>
+                        ))}
+                        
+                        {links.length > 3 && (
+                          <p className="text-muted-foreground text-sm italic">
+                            + {links.length - 3} link(s) adicional(is) serão distribuídos ao longo do artigo
+                          </p>
+                        )}
+                        
+                        <p className="text-foreground">
+                          <span className="bg-muted px-1 rounded">[Conclusão do artigo...]</span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* HTML Code Preview */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-xs font-medium">Código HTML Gerado</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1"
+                      onClick={() => {
+                        navigator.clipboard.writeText(generatePreviewHtml());
+                        toast({ title: 'Código copiado!' });
+                      }}
+                    >
+                      <Copy className="w-3 h-3" />
+                      Copiar
+                    </Button>
+                  </div>
+                  <pre className="p-3 rounded-lg bg-slate-950 text-slate-50 text-xs overflow-x-auto max-h-32">
+                    <code>{generatePreviewHtml()}</code>
+                  </pre>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Import Dialog */}
+          <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={links.length >= maxLinks}
+                className="gap-1"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Importar
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Upload className="w-5 h-5" />
+                  Importar Links
+                </DialogTitle>
+                <DialogDescription>
+                  Importe múltiplos links de uma vez via CSV ou cole URLs diretamente
+                </DialogDescription>
+              </DialogHeader>
+              
+              <Tabs defaultValue="paste" className="mt-4">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="paste" className="gap-1">
+                    <ClipboardPaste className="w-3.5 h-3.5" />
+                    Colar URLs
+                  </TabsTrigger>
+                  <TabsTrigger value="file" className="gap-1">
+                    <FileUp className="w-3.5 h-3.5" />
+                    Arquivo CSV
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="paste" className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Cole as URLs (uma por linha)</Label>
+                    <Textarea
+                      placeholder={`https://seusite.com/artigo-1\nhttps://seusite.com/artigo-2\n\nOu no formato CSV:\nTexto Âncora, https://url.com\nOutro Texto, https://outra-url.com`}
+                      value={importText}
+                      onChange={(e) => setImportText(e.target.value)}
+                      className="h-40 font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Formatos aceitos: URL por linha ou CSV (âncora, url)
+                    </p>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="file" className="space-y-4 mt-4">
+                  <div className="border-2 border-dashed rounded-lg p-8 text-center">
+                    <FileUp className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Arraste um arquivo CSV ou clique para selecionar
+                    </p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".csv,.txt"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      id="csv-upload"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Selecionar Arquivo
+                    </Button>
+                  </div>
+                  
+                  {importText && (
+                    <div className="p-3 rounded-lg bg-muted">
+                      <p className="text-xs font-medium mb-1">Conteúdo carregado:</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {importText.slice(0, 100)}...
+                      </p>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+              
+              <div className="flex justify-end gap-2 mt-4">
+                <Button variant="outline" onClick={() => setShowImportDialog(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleImport} disabled={!importText.trim()}>
+                  <Plus className="w-4 h-4 mr-1" />
+                  Importar Links
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          
           {/* Search existing articles */}
           <Popover open={searchOpen} onOpenChange={setSearchOpen}>
             <PopoverTrigger asChild>
@@ -299,27 +620,53 @@ export function InternalLinksManager({
         </div>
       </div>
 
+      {/* Keyword Filter for Suggestions */}
+      <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border">
+        <Filter className="w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Filtrar sugestões por palavra-chave..."
+          value={keywordFilter}
+          onChange={(e) => setKeywordFilter(e.target.value)}
+          className="h-8 text-sm flex-1"
+        />
+        {keywordFilter && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setKeywordFilter('')}
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
+
       {/* Suggested Articles */}
       {suggestedArticles.length > 0 && (
         <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="w-4 h-4 text-amber-600" />
             <p className="text-sm font-medium text-amber-800">Sugestões Automáticas</p>
+            <Badge variant="outline" className="ml-auto text-xs border-amber-300 text-amber-700">
+              {suggestedArticles.length} encontrados
+            </Badge>
           </div>
           <p className="text-xs text-amber-700 mb-3">
-            Artigos relacionados à sua palavra-chave "{keyword}"
+            Artigos relacionados a "{keywordFilter || keyword}"
           </p>
           <div className="flex flex-wrap gap-2">
             {suggestedArticles.map((article) => (
               <Badge
                 key={article.id}
                 variant="outline"
-                className="cursor-pointer hover:bg-amber-100 border-amber-300 text-amber-800 gap-1"
+                className="cursor-pointer hover:bg-amber-100 border-amber-300 text-amber-800 gap-1 max-w-[200px]"
                 onClick={() => handleAddSuggested(article)}
               >
-                <Plus className="w-3 h-3" />
-                {(article.title || article.keyword).slice(0, 30)}
-                {(article.title || article.keyword).length > 30 && '...'}
+                <Plus className="w-3 h-3 flex-shrink-0" />
+                <span className="truncate">
+                  {(article.title || article.keyword).slice(0, 35)}
+                  {(article.title || article.keyword).length > 35 && '...'}
+                </span>
               </Badge>
             ))}
           </div>
@@ -384,10 +731,12 @@ export function InternalLinksManager({
                     'text-xs',
                     link.source === 'suggested'
                       ? 'border-amber-300 text-amber-700'
+                      : link.source === 'imported'
+                      ? 'border-purple-300 text-purple-700'
                       : 'border-gray-300 text-gray-700'
                   )}
                 >
-                  {link.source === 'suggested' ? 'Auto' : 'Manual'}
+                  {link.source === 'suggested' ? 'Auto' : link.source === 'imported' ? 'CSV' : 'Manual'}
                 </Badge>
                 <Button
                   variant="ghost"
