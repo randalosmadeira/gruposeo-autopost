@@ -15,7 +15,10 @@ import {
   Heading2,
   Heading3,
   Type,
-  Loader2
+  Loader2,
+  Globe,
+  Save,
+  ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +40,13 @@ interface ArticleSection {
   image?: string;
 }
 
+interface Project {
+  id: string;
+  name: string;
+  domain: string;
+  is_connected: boolean;
+}
+
 interface ArticleEditorProps {
   title: string;
   intro: string;
@@ -45,8 +55,14 @@ interface ArticleEditorProps {
   onTitleChange: (title: string) => void;
   onIntroChange: (intro: string) => void;
   onSectionChange: (id: string, field: 'title' | 'content', value: string) => void;
-  onPublish: () => void;
+  onPublish: (projectId: string) => void;
+  onSave?: () => void;
   isPublishing?: boolean;
+  isSaving?: boolean;
+  lastSaved?: Date | null;
+  projects?: Project[];
+  selectedProjectId?: string;
+  publishedUrl?: string;
 }
 
 export function ArticleEditor({
@@ -58,9 +74,16 @@ export function ArticleEditor({
   onIntroChange,
   onSectionChange,
   onPublish,
+  onSave,
   isPublishing,
+  isSaving,
+  lastSaved,
+  projects = [],
+  selectedProjectId,
+  publishedUrl,
 }: ArticleEditorProps) {
   const [activeFormat, setActiveFormat] = useState('normal');
+  const [publishProjectId, setPublishProjectId] = useState(selectedProjectId || '');
   const editorRef = useRef<HTMLDivElement>(null);
 
   const execCommand = (command: string, value?: string) => {
@@ -95,22 +118,76 @@ export function ArticleEditor({
               Artigo Gerado com Sucesso!
             </p>
             <p className="text-sm text-muted-foreground">
-              Seu artigo está pronto para edição e publicação.
+              {lastSaved ? (
+                <>Salvo às {lastSaved.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
+              ) : (
+                <>Seu artigo está pronto para edição e publicação.</>
+              )}
             </p>
           </div>
         </div>
-        <Button 
-          onClick={onPublish}
-          disabled={isPublishing}
-          className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
-        >
-          {isPublishing ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <Upload className="w-4 h-4 mr-2" />
+        
+        <div className="flex items-center gap-2">
+          {/* Save Button */}
+          {onSave && (
+            <Button 
+              variant="outline"
+              onClick={onSave}
+              disabled={isSaving}
+              className="transition-all duration-200"
+            >
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              Salvar
+            </Button>
           )}
-          Publicar
-        </Button>
+
+          {/* WordPress Project Selector */}
+          {projects.length > 0 && (
+            <Select value={publishProjectId} onValueChange={setPublishProjectId}>
+              <SelectTrigger className="w-48">
+                <Globe className="w-4 h-4 mr-2" />
+                <SelectValue placeholder="Selecionar site" />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.filter(p => p.is_connected).map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {/* Published URL Link */}
+          {publishedUrl && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(publishedUrl, '_blank')}
+            >
+              <ExternalLink className="w-4 h-4 mr-2" />
+              Ver no Site
+            </Button>
+          )}
+
+          {/* Publish Button */}
+          <Button 
+            onClick={() => onPublish(publishProjectId)}
+            disabled={isPublishing || !publishProjectId}
+            className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+          >
+            {isPublishing ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4 mr-2" />
+            )}
+            Publicar no WordPress
+          </Button>
+        </div>
       </div>
 
       {/* Editor Toolbar */}

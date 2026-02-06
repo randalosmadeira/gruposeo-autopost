@@ -48,6 +48,8 @@ import {
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useArticleGeneration } from '@/hooks/useArticleGeneration';
+import { useArticleAutoSave } from '@/hooks/useArticleAutoSave';
+import { useWordPressPublish } from '@/hooks/useWordPressPublish';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
@@ -211,7 +213,16 @@ export default function ArticleGeneratorV2() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { projects } = useProjects();
-  const { isGenerating, generateArticle } = useArticleGeneration();
+  const { isGenerating, generateArticle, content: generatedContent } = useArticleGeneration();
+  const { publishArticle, isPublishing } = useWordPressPublish();
+  const { 
+    articleId, 
+    isSaving, 
+    lastSaved, 
+    debouncedSave, 
+    saveGeneratedArticle,
+    setArticleId 
+  } = useArticleAutoSave();
   const isMobile = useIsMobile();
   
   const [config, setConfig] = useState<ArticleConfig>(defaultConfig);
@@ -231,6 +242,7 @@ export default function ArticleGeneratorV2() {
   
   // Article editor state
   const [articleData, setArticleData] = useState<ArticleData>(defaultArticleData);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   
   // User credits (mock - in real implementation this would come from API)
   const [userCredits] = useState(10);
@@ -410,6 +422,18 @@ export default function ArticleGeneratorV2() {
     setOutlineSections(sections);
     setAppState('editing-outline');
     
+    // Auto-save the outline
+    debouncedSave(sections, {
+      keyword: config.keyword,
+      title: config.title,
+      aiModel: config.aiModel,
+      size: config.size,
+      tone: config.tone,
+      pointOfView: config.pointOfView,
+      language: config.language,
+      projectId: config.projectId,
+    });
+    
     toast({
       title: 'Esboço gerado!',
       description: 'Revise a estrutura e clique em "Gerar Artigo Completo".',
@@ -423,6 +447,7 @@ export default function ArticleGeneratorV2() {
     setGenerationProgress(0);
     setGenerationSteps(defaultGenerationSteps);
     setArticleData(defaultArticleData);
+    setArticleId(null);
     toast({
       title: 'Configurações reiniciadas',
       description: 'Todos os campos foram limpos.',
@@ -1062,7 +1087,20 @@ export default function ArticleGeneratorV2() {
           {appState === 'editing-outline' && (
             <OutlineEditor
               sections={outlineSections}
-              onSectionsChange={setOutlineSections}
+              onSectionsChange={(newSections) => {
+                setOutlineSections(newSections);
+                // Auto-save on outline changes
+                debouncedSave(newSections, {
+                  keyword: config.keyword,
+                  title: config.title,
+                  aiModel: config.aiModel,
+                  size: config.size,
+                  tone: config.tone,
+                  pointOfView: config.pointOfView,
+                  language: config.language,
+                  projectId: config.projectId,
+                });
+              }}
               onGenerate={handleGenerate}
               onReset={handleReset}
               isGenerating={isGenerating}
@@ -1087,13 +1125,38 @@ export default function ArticleGeneratorV2() {
                   ),
                 }));
               }}
-              onPublish={() => {
-                setAppState('publishing');
-                toast({
-                  title: 'Publicação',
-                  description: 'Funcionalidade de publicação em desenvolvimento.',
+              onPublish={async (projectId) => {
+                if (!articleId || !projectId) {
+                  toast({
+                    title: 'Erro',
+                    description: 'Selecione um projeto WordPress para publicar.',
+                    variant: 'destructive',
+                  });
+                  return;
+                }
+                
+                // First save the article
+                await saveGeneratedArticle(generatedContent || '', articleData.title);
+                
+                // Then publish to WordPress
+                const result = await publishArticle({
+                  id: articleId,
+                  title: articleData.title,
+                  project_id: projectId,
                 });
+                
+                if (result.success && result.postUrl) {
+                  setPublishedUrl(result.postUrl);
+                  setAppState('publishing');
+                }
               }}
+              onSave={() => saveGeneratedArticle(generatedContent || '', articleData.title)}
+              isPublishing={isPublishing}
+              isSaving={isSaving}
+              lastSaved={lastSaved}
+              projects={projects}
+              selectedProjectId={config.projectId}
+              publishedUrl={publishedUrl || undefined}
             />
           )}
 
