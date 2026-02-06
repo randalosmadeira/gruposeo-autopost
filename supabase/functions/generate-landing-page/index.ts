@@ -207,7 +207,7 @@ serve(async (req) => {
   try {
     // ========== AUTHENTICATION ==========
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
         JSON.stringify({ error: "Autorização necessária" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -221,13 +221,18 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: authError } = await supabase.auth.getClaims(token);
+    if (authError || !claimsData?.claims) {
+      console.error("Auth error:", authError);
       return new Response(
         JSON.stringify({ error: "Usuário não autenticado" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    
+    const userId = claimsData.claims.sub;
+    console.log("Authenticated user:", userId);
     // ========== END AUTHENTICATION ==========
 
     const { config } = await req.json() as { config: LandingPageConfig };
