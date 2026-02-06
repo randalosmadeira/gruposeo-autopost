@@ -4,15 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
   RefreshCw, 
   Clock, 
   CheckCircle, 
   XCircle, 
-  AlertCircle,
-  Play,
   Pause,
   RotateCcw,
   Share2,
@@ -22,8 +19,13 @@ import {
   TrendingUp
 } from "lucide-react";
 import { useProjects } from "@/hooks/useProjects";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { 
+  QueueHistoryChart, 
+  useQueueNotifications, 
+  NotificationToggle,
+  QueueNotificationBanner 
+} from "@/components/queue-monitor";
 
 interface QueueItem {
   id: number;
@@ -51,6 +53,14 @@ interface QueueStats {
   total: number;
   completed_last_hour: number;
   avg_attempts: number;
+  history?: QueueHistoryItem[];
+}
+
+interface QueueHistoryItem {
+  timestamp: string;
+  completed: number;
+  failed: number;
+  pending: number;
 }
 
 interface SocialQueueItem {
@@ -96,6 +106,7 @@ export default function QueueMonitor() {
   const { projects } = useProjects();
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
   // Get connected WordPress projects
   const connectedProjects = projects?.filter(p => p.is_connected && p.wordpress_url) || [];
@@ -267,6 +278,12 @@ export default function QueueMonitor() {
     });
   };
 
+  // Queue notifications hook - monitors for new failures
+  useQueueNotifications(contentQueueItems, notificationsEnabled);
+
+  // Calculate failed count for banner
+  const failedCount = (contentQueueStats?.failed || 0) + (socialQueueStats?.failed || 0);
+
   if (connectedProjects.length === 0) {
     return (
       <div className="p-6">
@@ -332,12 +349,26 @@ export default function QueueMonitor() {
             )}
           </Button>
 
+          <NotificationToggle 
+            enabled={notificationsEnabled} 
+            onToggle={() => setNotificationsEnabled(!notificationsEnabled)} 
+          />
+
           <Button variant="outline" size="sm" onClick={handleRefreshAll}>
             <RefreshCw className="w-4 h-4 mr-2" />
             Atualizar
           </Button>
         </div>
       </div>
+
+      {/* Failure Alert Banner */}
+      <QueueNotificationBanner failedCount={failedCount} />
+
+      {/* History Chart */}
+      <QueueHistoryChart 
+        data={contentQueueStats?.history} 
+        isLoading={loadingContent} 
+      />
 
       {/* Stats Overview */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
