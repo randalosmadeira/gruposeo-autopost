@@ -30,6 +30,12 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import {
   FileText,
   Plus,
   Trash2,
@@ -42,11 +48,13 @@ import {
   Info,
   Wand2,
   Play,
+  Settings,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { ToneVoiceConfig, AIModelSelector } from '@/components/shared';
 
 // Types
 interface ArticleRow {
@@ -85,6 +93,15 @@ export default function BulkArticleGenerator() {
   const [defaultSize, setDefaultSize] = useState('medium');
   const [showTitlesDialog, setShowTitlesDialog] = useState(false);
   const [generatingTitles, setGeneratingTitles] = useState(false);
+
+  // Global configuration for all articles
+  const [globalConfig, setGlobalConfig] = useState({
+    tone: 'profissional',
+    customTone: '',
+    pointOfView: 'terceira-singular',
+    language: 'pt-BR',
+    aiModel: 'standard',
+  });
 
   // Stats
   const filledArticles = articles.filter(a => a.keyword.trim());
@@ -354,9 +371,45 @@ export default function BulkArticleGenerator() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+        {/* Global Configuration Section */}
+        <Accordion type="single" collapsible className="space-y-4">
+          <AccordionItem value="global-config" className="border rounded-lg bg-background">
+            <AccordionTrigger className="px-6 py-4 hover:no-underline">
+              <div className="flex items-center gap-3">
+                <Settings className="w-5 h-5 text-primary" />
+                <div className="text-left">
+                  <h3 className="font-semibold">Configurações Globais</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Defina tom de voz, ponto de vista e modelo de IA para todos os artigos
+                  </p>
+                </div>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="px-6 pb-6 space-y-6">
+              {/* Tom de Voz e Estilo */}
+              <ToneVoiceConfig
+                tone={globalConfig.tone}
+                onToneChange={(v) => setGlobalConfig(prev => ({ ...prev, tone: v }))}
+                customTone={globalConfig.customTone}
+                onCustomToneChange={(v) => setGlobalConfig(prev => ({ ...prev, customTone: v }))}
+                pointOfView={globalConfig.pointOfView}
+                onPointOfViewChange={(v) => setGlobalConfig(prev => ({ ...prev, pointOfView: v }))}
+                language={globalConfig.language}
+                onLanguageChange={(v) => setGlobalConfig(prev => ({ ...prev, language: v }))}
+              />
+
+              {/* AI Model */}
+              <AIModelSelector
+                value={globalConfig.aiModel}
+                onChange={(v) => setGlobalConfig(prev => ({ ...prev, aiModel: v }))}
+              />
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+
         {/* Action Bar */}
-        <Card className="mb-6">
+        <Card>
           <CardContent className="p-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>

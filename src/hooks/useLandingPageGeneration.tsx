@@ -29,6 +29,10 @@ export interface LandingPageConfig {
   template?: string;
   // AI Model
   aiModel: string;
+  // Tone & Voice
+  tone: string;
+  customTone?: string;
+  pointOfView: string;
   // Advanced settings
   usePlatformCredits: boolean;
   seoOptimization: boolean;

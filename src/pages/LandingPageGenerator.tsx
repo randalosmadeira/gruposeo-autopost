@@ -60,6 +60,7 @@ import {
   PhoneInput,
   validatePhoneBR,
   getModelByValue,
+  ToneVoiceConfig,
 } from '@/components/shared';
 import {
   LandingPageOutlineEditor,
@@ -194,6 +195,11 @@ const defaultConfig: LandingPageConfig = {
   projectId: '',
   template: '',
   aiModel: 'standard',
+  // Tone & Voice
+  tone: 'profissional',
+  customTone: '',
+  pointOfView: 'terceira-singular',
+  // Advanced
   usePlatformCredits: true,
   seoOptimization: false,
   realtimeData: false,
@@ -765,6 +771,31 @@ export default function LandingPageGenerator() {
                         Orientações extras para a IA personalizar o conteúdo.
                       </p>
                     </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Tom de Voz e Estilo */}
+                <AccordionItem value="tone-voice" className="border rounded-lg overflow-hidden">
+                  <AccordionTrigger className="px-4 py-3 hover:no-underline bg-purple-50/50">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-purple-500" />
+                      <span className="font-semibold">
+                        Tom de Voz e Estilo
+                      </span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="p-4 bg-white">
+                    <ToneVoiceConfig
+                      tone={config.tone}
+                      onToneChange={(v) => updateConfig('tone', v)}
+                      customTone={config.customTone}
+                      onCustomToneChange={(v) => updateConfig('customTone', v)}
+                      pointOfView={config.pointOfView}
+                      onPointOfViewChange={(v) => updateConfig('pointOfView', v)}
+                      language={config.language}
+                      onLanguageChange={(v) => updateConfig('language', v)}
+                      accentColor="#FF6B2B"
+                    />
                   </AccordionContent>
                 </AccordionItem>
 
