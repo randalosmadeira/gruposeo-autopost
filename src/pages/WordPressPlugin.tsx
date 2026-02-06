@@ -103,6 +103,7 @@ export default function WordPressPluginPage() {
         { path: 'includes/class-cfrdm-ai-seo.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-seo.php' },
         { path: 'includes/class-cfrdm-image-filter.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-image-filter.php' },
         { path: 'includes/class-cfrdm-social-poster.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-social-poster.php' },
+        { path: 'includes/class-cfrdm-social-admin.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-social-admin.php' },
         { path: 'includes/class-cfrdm-cron-scheduler.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-cron-scheduler.php' },
         { path: 'includes/class-cfrdm-content-queue.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-content-queue.php' },
         { path: 'assets/css/admin.css', url: '/wordpress-plugin/contentfactory-rdm/assets/css/admin.css' },

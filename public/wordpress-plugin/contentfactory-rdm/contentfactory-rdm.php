@@ -60,6 +60,7 @@ function cfrdm_load_dependencies() {
     
     // Advanced modules
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-social-poster.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-social-admin.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-cron-scheduler.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-content-queue.php';
 }
@@ -624,6 +625,15 @@ private function init_admin_hooks() {
             'manage_options',
             'cfrdm-settings',
             array('CFRDM_Admin', 'render_settings')
+        );
+        
+        add_submenu_page(
+            'cfrdm-dashboard',
+            __('Redes Sociais', 'contentfactory-rdm'),
+            __('Redes Sociais', 'contentfactory-rdm'),
+            'manage_options',
+            'cfrdm-social',
+            array('CFRDM_Social_Admin', 'render')
         );
     }
     
