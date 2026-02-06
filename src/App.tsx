@@ -32,6 +32,7 @@ const HelpPage = lazy(() => import("./pages/HelpPage"));
 const NewsRewriter = lazy(() => import("./pages/NewsRewriter"));
 const BulkKeywordGenerator = lazy(() => import("./pages/BulkKeywordGenerator"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const QueueMonitor = lazy(() => import("./pages/QueueMonitor"));
 const Academy = lazy(() => import("./pages/Academy"));
 
 const queryClient = new QueryClient();
@@ -80,6 +81,7 @@ const App = () => (
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/wordpress-plugin" element={<WordPressPlugin />} />
                 <Route path="/wordpress-monitor" element={<WordPressMonitor />} />
+                <Route path="/queue-monitor" element={<QueueMonitor />} />
                 <Route path="/help" element={<HelpPage />} />
                 <Route path="/news-rewriter" element={<NewsRewriter />} />
                 <Route path="/bulk-generator" element={<BulkKeywordGenerator />} />

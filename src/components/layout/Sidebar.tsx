@@ -88,6 +88,7 @@ const navGroups: NavGroup[] = [
       { label: 'Projetos', icon: FolderKanban, href: '/projects' },
       { label: 'Histórico', icon: History, href: '/articles' },
       { label: 'Monitor WP', icon: Activity, href: '/wordpress-monitor', iconColor: '#10B981' },
+      { label: 'Filas', icon: Layers, href: '/queue-monitor', badge: 'Novo', badgeVariant: 'orange', iconColor: '#8B5CF6' },
       { label: 'Plugin WP', icon: Plug, href: '/wordpress-plugin' },
     ],
   },
