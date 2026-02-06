@@ -17,6 +17,7 @@ import {
   History,
   User,
   Plug,
+  Target,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -31,12 +32,13 @@ interface NavItem {
 const mainNavItems: NavItem[] = [
   { label: 'Academia', icon: GraduationCap, href: '/academia' },
   { label: 'Painel', icon: LayoutDashboard, href: '/' },
-  { label: 'Geração em Massa', icon: Zap, href: '/articles/bulk' },
+  { label: 'Geração e...', icon: Zap, href: '/articles/bulk' },
+  { label: 'Landing Page', icon: Target, href: '/landing-page/new', badge: 'Novo', badgeVariant: 'accent' },
   { label: 'Autoridade', icon: Crown, href: '/authority-planner' },
-  { label: 'Agente de notícias', icon: Newspaper, href: '/news-agents' },
+  { label: 'Agente de...', icon: Newspaper, href: '/news-agents' },
   { label: 'Projetos', icon: FolderKanban, href: '/projects' },
   { label: 'Histórico', icon: History, href: '/articles' },
-  { label: 'Plugin WP', icon: Plug, href: '/wordpress-plugin', badge: 'Novo', badgeVariant: 'accent' },
+  { label: 'Plugin WP', icon: Plug, href: '/wordpress-plugin' },
 ];
 
 const bottomNavItems: NavItem[] = [

@@ -20,6 +20,7 @@ const AuthorityPlanner = lazy(() => import("./pages/AuthorityPlanner"));
 const NewsAgents = lazy(() => import("./pages/NewsAgents"));
 const CreateNewsAgent = lazy(() => import("./pages/CreateNewsAgent"));
 const WordPressPlugin = lazy(() => import("./pages/WordPressPlugin"));
+const LandingPageGenerator = lazy(() => import("./pages/LandingPageGenerator"));
 const Auth = lazy(() => import("./pages/Auth"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -54,6 +55,7 @@ const App = () => (
                 <Route path="/articles/new" element={<ArticleGeneratorV2 />} />
                 <Route path="/articles/new/:type" element={<ArticleGenerator />} />
                 <Route path="/articles/bulk" element={<ArticleTypeSelection />} />
+                <Route path="/landing-page/new" element={<LandingPageGenerator />} />
                 <Route path="/authority-planner" element={<AuthorityPlanner />} />
                 <Route path="/news-agents" element={<NewsAgents />} />
                 <Route path="/news-agents/new" element={<CreateNewsAgent />} />
