@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createLogger, createRequestId } from "../_shared/logger.ts";
+
+const FUNCTION_NAME = "ai-api";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -78,6 +81,10 @@ async function callGeminiImage(prompt: string) {
 }
 
 serve(async (req) => {
+  const requestId = createRequestId();
+  const log = createLogger(FUNCTION_NAME, requestId);
+  const startTime = Date.now();
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -87,19 +94,23 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     let userId: string | null = null;
 
-    if (authHeader) {
+    if (authHeader?.startsWith("Bearer ")) {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
       const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } },
       });
       
-      const { data: { user } } = await supabase.auth.getUser();
+      const token = authHeader.replace("Bearer ", "");
+      const { data: { user } } = await supabase.auth.getUser(token);
       userId = user?.id || null;
+      if (userId) log.authSuccess(userId);
     }
 
     const body: AIRequest = await req.json();
     const { action, model, prompt, systemPrompt, messages, maxTokens, temperature, imagePrompt } = body;
+
+    log.requestStart(req.method, action);
 
     let result;
 
@@ -285,13 +296,15 @@ Formato JSON:
         );
     }
 
+    log.requestEnd(200, Date.now() - startTime);
     return new Response(
       JSON.stringify({ success: true, ...result }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
-    console.error("AI API error:", error);
+    log.error("ai_api_error", { error: error instanceof Error ? error.message : "unknown" });
+    log.requestEnd(500, Date.now() - startTime);
     return new Response(
       JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Erro interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
