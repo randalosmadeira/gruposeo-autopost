@@ -2,8 +2,8 @@
 /**
  * Plugin Name: ContentFactory RDM
  * Plugin URI: https://gruposeo.marketing/contentfactory
- * Description: Integração avançada com ContentFactory para publicação automática de artigos, sincronização, otimização de imagens, links internos, geração de SEO via IA e indexação automática.
- * Version: 2.4.0
+ * Description: Integração avançada com ContentFactory para publicação automática de artigos, sincronização, otimização de imagens, links internos, geração de SEO via IA, indexação automática, social posting e queue system.
+ * Version: 2.5.0
  * Author: GRUPO SEO MARKETING
  * Author URI: https://gruposeo.marketing
  * License: GPL v2 or later
@@ -20,13 +20,18 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '2.4.0');
+define('CFRDM_VERSION', '2.5.0');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
 define('CFRDM_LOG_TABLE', 'cfrdm_logs');
 define('CFRDM_NEWS_TABLE', 'cfrdm_news');
 define('CFRDM_STRUCTURED_LOGS_TABLE', 'cfrdm_structured_logs');
+define('CFRDM_SOCIAL_QUEUE_TABLE', 'cfrdm_social_queue');
+define('CFRDM_SOCIAL_ACCOUNTS_TABLE', 'cfrdm_social_accounts');
+define('CFRDM_CRON_JOBS_TABLE', 'cfrdm_cron_jobs');
+define('CFRDM_CRON_HISTORY_TABLE', 'cfrdm_cron_history');
+define('CFRDM_CONTENT_QUEUE_TABLE', 'cfrdm_content_queue');
 
 /**
  * CRITICAL: Lazy load includes to prevent conflicts with page builders
@@ -52,6 +57,11 @@ function cfrdm_load_dependencies() {
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-structured-logs.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-seo.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-image-filter.php';
+    
+    // Advanced modules
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-social-poster.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-cron-scheduler.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-content-queue.php';
 }
 
 /**
@@ -130,6 +140,9 @@ class ContentFactory_RDM {
         // Plugin action links
         add_filter('plugin_action_links_' . CFRDM_PLUGIN_BASENAME, array($this, 'add_action_links'));
         
+        // Register custom cron intervals
+        add_filter('cron_schedules', array('CFRDM_Cron_Scheduler', 'register_intervals'));
+        
         // Cron jobs - only schedule if not already scheduled
         add_action('init', array($this, 'schedule_cron_jobs'));
         
@@ -137,6 +150,15 @@ class ContentFactory_RDM {
         add_action('cfrdm_daily_cleanup', array($this, 'daily_cleanup'));
         add_action('cfrdm_sync_stats', array($this, 'sync_stats_callback'));
         add_action('cfrdm_fetch_news', array($this, 'fetch_news_callback'));
+        
+        // Advanced module callbacks
+        add_action('cfrdm_process_social_queue', array($this, 'process_social_queue_callback'));
+        add_action('cfrdm_process_content_queue', array($this, 'process_content_queue_callback'));
+        add_action('cfrdm_cleanup_structured_logs', array($this, 'cleanup_structured_logs_callback'));
+        add_action('cfrdm_reset_stuck_cron_jobs', array($this, 'reset_stuck_jobs_callback'));
+        
+        // Auto-post to social on publish
+        add_action('publish_post', array($this, 'auto_queue_social_post'), 100, 2);
     }
     
 private function init_admin_hooks() {
@@ -390,6 +412,16 @@ private function init_admin_hooks() {
         // Create database tables FIRST
         $this->create_tables();
         
+        // Create advanced module tables
+        cfrdm_load_dependencies();
+        CFRDM_Structured_Logs::create_table();
+        CFRDM_Social_Poster::create_tables();
+        CFRDM_Cron_Scheduler::create_tables();
+        CFRDM_Content_Queue::create_table();
+        
+        // Register default cron jobs
+        CFRDM_Cron_Scheduler::register_default_jobs();
+        
         // Generate API key if not exists
         if (!get_option('cfrdm_api_key')) {
             update_option('cfrdm_api_key', wp_generate_uuid4());
@@ -408,6 +440,7 @@ private function init_admin_hooks() {
             'cfrdm_image_quality' => 85,
             'cfrdm_auto_correct' => true,
             'cfrdm_log_retention_days' => 30,
+            'cfrdm_auto_social_post' => false,
         );
         
         foreach ($defaults as $key => $value) {
@@ -421,7 +454,6 @@ private function init_admin_hooks() {
         
         // Log activation AFTER tables are created
         if (cfrdm_tables_exist()) {
-            cfrdm_load_dependencies();
             CFRDM_Logger::log('system', 'Plugin ativado', array('version' => CFRDM_VERSION));
         }
     }
@@ -725,6 +757,48 @@ private function init_admin_hooks() {
         
         cfrdm_load_admin_dependencies();
         CFRDM_Sync::fetch_platform_news();
+    }
+    
+    /**
+     * Process social media queue
+     */
+    public function process_social_queue_callback() {
+        cfrdm_load_dependencies();
+        CFRDM_Social_Poster::process_queue(10);
+        CFRDM_Social_Poster::cleanup(30);
+    }
+    
+    /**
+     * Process content queue
+     */
+    public function process_content_queue_callback() {
+        cfrdm_load_dependencies();
+        CFRDM_Content_Queue::process(null, 5);
+        CFRDM_Content_Queue::reset_stuck(30);
+    }
+    
+    /**
+     * Cleanup structured logs
+     */
+    public function cleanup_structured_logs_callback() {
+        cfrdm_load_dependencies();
+        CFRDM_Structured_Logs::cleanup(30);
+    }
+    
+    /**
+     * Reset stuck cron jobs
+     */
+    public function reset_stuck_jobs_callback() {
+        cfrdm_load_dependencies();
+        CFRDM_Cron_Scheduler::reset_stuck_jobs(30);
+    }
+    
+    /**
+     * Auto-queue social post on publish
+     */
+    public function auto_queue_social_post($post_id, $post) {
+        cfrdm_load_dependencies();
+        CFRDM_Social_Poster::on_post_publish($post_id, $post);
     }
 }
 
