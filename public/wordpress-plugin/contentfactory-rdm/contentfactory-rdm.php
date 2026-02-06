@@ -2,8 +2,8 @@
 /**
  * Plugin Name: ContentFactory RDM
  * Plugin URI: https://gruposeo.marketing/contentfactory
- * Description: Integração avançada com ContentFactory para publicação automática de artigos, sincronização, otimização de imagens, links internos e indexação SEO automática.
- * Version: 2.2.1
+ * Description: Integração avançada com ContentFactory para publicação automática de artigos, sincronização, otimização de imagens, links internos, geração de SEO via IA e indexação automática.
+ * Version: 2.4.0
  * Author: GRUPO SEO MARKETING
  * Author URI: https://gruposeo.marketing
  * License: GPL v2 or later
@@ -20,12 +20,13 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '2.3.0');
+define('CFRDM_VERSION', '2.4.0');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
 define('CFRDM_LOG_TABLE', 'cfrdm_logs');
 define('CFRDM_NEWS_TABLE', 'cfrdm_news');
+define('CFRDM_STRUCTURED_LOGS_TABLE', 'cfrdm_structured_logs');
 
 /**
  * CRITICAL: Lazy load includes to prevent conflicts with page builders
@@ -48,6 +49,9 @@ function cfrdm_load_dependencies() {
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-articles.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-media.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-seo.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-structured-logs.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-seo.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-image-filter.php';
 }
 
 /**
