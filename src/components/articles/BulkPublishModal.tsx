@@ -107,6 +107,8 @@ export function BulkPublishModal({
   const [articlesWithCategories, setArticlesWithCategories] = useState<ArticleWithCategories[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'connected' | 'error'>('idle');
   const [isPublishing, setIsPublishing] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -127,16 +129,37 @@ export function BulkPublishModal({
   }, []);
 
   // Fetch categories from WordPress
-  const fetchCategories = useCallback(async (projectId: string) => {
+  const fetchCategories = useCallback(async (projectId: string): Promise<{ categories: Category[], error?: string }> => {
     try {
       const { data, error } = await supabase.functions.invoke('wordpress-api', {
         body: { action: 'get-categories', projectId, perPage: 100 },
       });
-      if (error) throw error;
-      return data?.data?.categories || data?.categories || [];
+      
+      if (error) {
+        return { categories: [], error: error.message };
+      }
+      
+      if (!data?.success) {
+        const errorMsg = data?.error || 'Erro ao buscar categorias';
+        // Check for critical WordPress error (HTML error page)
+        if (errorMsg.includes('erro crítico') || 
+            errorMsg.includes('critical error') ||
+            errorMsg.includes('<p>') ||
+            errorMsg.includes('</p>')) {
+          return { 
+            categories: [], 
+            error: 'O site WordPress está com erro crítico (HTTP 500). Possíveis soluções:\n\n1. Desative o plugin ContentFactory RDM via FTP ou WP Admin\n2. Instale a versão 2.2.1 do plugin (com correções de compatibilidade)\n3. Verifique conflitos com Elementor, Divi ou outros page builders' 
+          };
+        }
+        return { categories: [], error: errorMsg };
+      }
+      
+      // The API returns { success: true, data: [...categories] }
+      const cats = Array.isArray(data?.data) ? data.data : [];
+      return { categories: cats };
     } catch (error) {
       console.error('Error fetching categories:', error);
-      return [];
+      return { categories: [], error: 'Falha na conexão com o WordPress' };
     }
   }, []);
 
@@ -156,6 +179,8 @@ export function BulkPublishModal({
       setSelectedProject('');
       setGlobalCategories([]);
       setCategories([]);
+      setCategoryError(null);
+      setConnectionStatus('idle');
       setIsPublishing(false);
       setRetryMode(false);
     }
@@ -180,13 +205,24 @@ export function BulkPublishModal({
     if (!selectedProject) return;
     
     setIsLoadingCategories(true);
+    setCategoryError(null);
+    setConnectionStatus('testing');
+    
     try {
       const result = await fetchCategories(selectedProject);
-      if (Array.isArray(result)) {
-        setCategories(result);
+      
+      if (result.error) {
+        setCategoryError(result.error);
+        setConnectionStatus('error');
+        setCategories([]);
+      } else {
+        setCategories(result.categories);
+        setConnectionStatus('connected');
       }
     } catch (error) {
       console.error('Error loading categories:', error);
+      setCategoryError('Erro inesperado ao carregar categorias');
+      setConnectionStatus('error');
     } finally {
       setIsLoadingCategories(false);
     }
@@ -695,11 +731,32 @@ export function BulkPublishModal({
                       </SelectContent>
                     </Select>
 
-                    {/* Selected Site Preview */}
+                    {/* Selected Site Preview with Connection Status */}
                     {selectedProjectDetails && (
-                      <div className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-lg animate-fade-in">
-                        <div className="p-2 bg-primary/10 rounded-lg">
-                          <Globe className="w-4 h-4 text-primary" />
+                      <div className={cn(
+                        "flex items-center gap-3 p-3 border rounded-lg animate-fade-in",
+                        connectionStatus === 'error' 
+                          ? "bg-destructive/5 border-destructive/30" 
+                          : connectionStatus === 'connected'
+                            ? "bg-primary/5 border-primary/20"
+                            : "bg-muted/50 border-border"
+                      )}>
+                        <div className={cn(
+                          "p-2 rounded-lg",
+                          connectionStatus === 'error' 
+                            ? "bg-destructive/10" 
+                            : connectionStatus === 'connected'
+                              ? "bg-primary/10"
+                              : "bg-muted"
+                        )}>
+                          <Globe className={cn(
+                            "w-4 h-4",
+                            connectionStatus === 'error' 
+                              ? "text-destructive" 
+                              : connectionStatus === 'connected'
+                                ? "text-primary"
+                                : "text-muted-foreground"
+                          )} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">
@@ -709,7 +766,29 @@ export function BulkPublishModal({
                             {selectedProjectDetails.wordpress_url || selectedProjectDetails.domain}
                           </p>
                         </div>
-                        <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                        <div className="flex items-center gap-2">
+                          {connectionStatus === 'testing' && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Verificando...
+                            </div>
+                          )}
+                          {connectionStatus === 'connected' && (
+                            <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800">
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Conectado
+                            </Badge>
+                          )}
+                          {connectionStatus === 'error' && (
+                            <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">
+                              <AlertCircle className="w-3 h-3 mr-1" />
+                              Erro
+                            </Badge>
+                          )}
+                          {connectionStatus === 'idle' && (
+                            <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -778,8 +857,32 @@ export function BulkPublishModal({
                       </label>
                     </div>
 
-                    {/* No Categories Message */}
-                    {!isLoadingCategories && categories.length === 0 && (
+                    {/* Connection Error Message */}
+                    {!isLoadingCategories && categoryError && (
+                      <div className="flex items-start gap-3 p-4 bg-destructive/5 border border-destructive/30 rounded-lg">
+                        <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-destructive">
+                            Erro ao conectar com o WordPress
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {categoryError}
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-3"
+                            onClick={handleLoadCategories}
+                          >
+                            <RotateCcw className="w-3 h-3 mr-2" />
+                            Tentar novamente
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* No Categories Message - Only show when connected but no categories */}
+                    {!isLoadingCategories && !categoryError && categories.length === 0 && connectionStatus === 'connected' && (
                       <div className="flex items-center gap-3 p-4 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-900 rounded-lg">
                         <Info className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
                         <div>
