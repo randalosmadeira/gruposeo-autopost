@@ -385,7 +385,7 @@ export default function ArticlesList() {
           </div>
           
           <Button asChild className="bg-primary hover:bg-primary/90">
-            <Link to="/gerador-artigos">
+            <Link to="/articles/new">
               <Plus className="w-4 h-4 mr-2" />
               Novo Artigo
             </Link>
@@ -525,7 +525,7 @@ export default function ArticlesList() {
               </p>
               {articles.length === 0 && (
                 <Button asChild>
-                  <Link to="/gerador-artigos">
+                  <Link to="/articles/new">
                     <Plus className="w-4 h-4 mr-2" />
                     Criar Primeiro Artigo
                   </Link>
