@@ -1,18 +1,18 @@
 === ContentFactory RDM ===
-Contributors: contentfactoryrdm
-Tags: content, seo, articles, automation, ai
+Contributors: gruposeomarketing
+Tags: content, seo, articles, automation, ai, image-optimization
 Requires at least: 5.8
-Tested up to: 6.4
+Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 2.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Integração completa com a plataforma ContentFactory RDM para gestão de artigos SEO, publicação automática e sincronização bidirecional.
+Integração completa com a plataforma ContentFactory RDM para gestão de artigos SEO, publicação automática, sincronização bidirecional, otimização de imagens e logging avançado.
 
 == Description ==
 
-O **ContentFactory RDM** é um plugin WordPress que conecta seu site à plataforma ContentFactory RDM, permitindo:
+O **ContentFactory RDM** é um plugin WordPress desenvolvido pelo GRUPO SEO MARKETING que conecta seu site à plataforma ContentFactory RDM, permitindo:
 
 * **Publicação Automática**: Artigos criados na plataforma são publicados automaticamente no seu WordPress
 * **Sincronização Bidirecional**: Alterações no WordPress são refletidas na plataforma e vice-versa
@@ -20,6 +20,10 @@ O **ContentFactory RDM** é um plugin WordPress que conecta seu site à platafor
 * **Suporte a SEO**: Integração com Yoast SEO e Rank Math
 * **Webhooks**: Notificações em tempo real sobre alterações
 * **API Completa**: REST API para integrações personalizadas
+* **Otimização de Imagens**: Compressão automática, redimensionamento e geração de WebP
+* **Links Internos Inteligentes**: Análise e sugestão de links internos semanticamente relacionados
+* **Logging Avançado**: Registro detalhado de todas as operações com exportação CSV
+* **Auto-correções SEO**: Detecção e correção automática de problemas de SEO
 
 == Installation ==
 
@@ -42,7 +46,27 @@ Sim! O plugin detecta automaticamente se você tem Yoast SEO ou Rank Math instal
 
 Quando um post é criado, editado ou excluído no WordPress, o plugin envia uma notificação para a plataforma ContentFactory, mantendo tudo sincronizado.
 
+= O plugin otimiza imagens automaticamente? =
+
+Sim! Na versão 2.0, o plugin comprime, redimensiona e gera versões WebP das imagens automaticamente para melhorar a performance do site.
+
+= Como funciona o sistema de links internos? =
+
+O plugin analisa o conteúdo do seu site e sugere links internos semanticamente relacionados para melhorar a arquitetura de SEO.
+
 == Changelog ==
+
+= 2.0.0 =
+* **NOVO**: Sistema de logging detalhado com exportação CSV
+* **NOVO**: Otimização automática de imagens (compressão, redimensionamento, WebP)
+* **NOVO**: Geração automática de imagens OpenGraph
+* **NOVO**: Análise e sugestão de links internos
+* **NOVO**: Auto-correções de SEO (títulos, excerpts, meta descriptions)
+* **NOVO**: Portal de notícias e atualizações da plataforma
+* **NOVO**: Dashboard administrativo aprimorado com métricas
+* **MELHORADO**: Performance geral do plugin
+* **MELHORADO**: Compatibilidade com WordPress 6.5
+* **CORRIGIDO**: Diversos bugs menores
 
 = 1.0.0 =
 * Lançamento inicial
@@ -56,5 +80,16 @@ Quando um post é criado, editado ou excluído no WordPress, o plugin envia uma 
 
 == Upgrade Notice ==
 
+= 2.0.0 =
+Atualização importante com novas funcionalidades de otimização de imagens, links internos e logging avançado. Faça backup antes de atualizar.
+
 = 1.0.0 =
 Primeira versão do plugin.
+
+== Screenshots ==
+
+1. Dashboard principal com estatísticas
+2. Configurações do plugin
+3. Lista de artigos sincronizados
+4. Sistema de logs detalhado
+5. Análise de links internos
