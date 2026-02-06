@@ -101,13 +101,21 @@ class CFRDM_Indexing {
             );
         }
         
-        // Add FAQ schema if article has FAQ section
-        $faq_schema = self::extract_faq_schema($post->post_content);
-        if (!empty($faq_schema)) {
-            $schema['hasPart'] = $faq_schema;
+        echo '<script type="application/ld+json">' . wp_json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . '</script>' . "\n";
+        
+        // Add separate FAQ schema if article has FAQ section (Google requires FAQPage type)
+        $faq_items = self::extract_faq_schema($post->post_content);
+        if (!empty($faq_items)) {
+            $faq_schema = array(
+                '@context' => 'https://schema.org',
+                '@type' => 'FAQPage',
+                'mainEntity' => $faq_items,
+            );
+            echo '<script type="application/ld+json">' . wp_json_encode($faq_schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . '</script>' . "\n";
         }
         
-        echo '<script type="application/ld+json">' . wp_json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . '</script>' . "\n";
+        // Add BreadcrumbList schema
+        self::add_breadcrumb_schema($post);
     }
     
     /**
@@ -333,6 +341,62 @@ class CFRDM_Indexing {
             return wp_get_attachment_url($custom_logo_id);
         }
         return get_site_icon_url() ?: '';
+    }
+    
+    /**
+     * Add BreadcrumbList schema for navigation
+     */
+    private static function add_breadcrumb_schema($post) {
+        $categories = get_the_category($post->ID);
+        
+        $breadcrumb_items = array(
+            array(
+                '@type' => 'ListItem',
+                'position' => 1,
+                'name' => __('Início', 'contentfactory-rdm'),
+                'item' => home_url('/'),
+            ),
+        );
+        
+        $position = 2;
+        
+        // Add category if exists
+        if (!empty($categories)) {
+            $category = $categories[0];
+            $breadcrumb_items[] = array(
+                '@type' => 'ListItem',
+                'position' => $position,
+                'name' => $category->name,
+                'item' => get_category_link($category->term_id),
+            );
+            $position++;
+        }
+        
+        // Add current article
+        $breadcrumb_items[] = array(
+            '@type' => 'ListItem',
+            'position' => $position,
+            'name' => get_the_title($post->ID),
+            'item' => get_permalink($post->ID),
+        );
+        
+        $breadcrumb_schema = array(
+            '@context' => 'https://schema.org',
+            '@type' => 'BreadcrumbList',
+            'itemListElement' => $breadcrumb_items,
+        );
+        
+        echo '<script type="application/ld+json">' . wp_json_encode($breadcrumb_schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . '</script>' . "\n";
+    }
+    
+    /**
+     * Validate schema data before output
+     */
+    private static function validate_schema_field($value, $default = '') {
+        if (empty($value) || !is_string($value)) {
+            return $default;
+        }
+        return wp_strip_all_tags($value);
     }
 }
 
