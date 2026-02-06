@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -188,6 +189,7 @@ export default function ArticleGeneratorV2() {
     lastSaved, 
     debouncedSave, 
     saveGeneratedArticle,
+    setGeneratingStatus,
     setArticleId 
   } = useArticleAutoSave();
   const isMobile = useIsMobile();
@@ -324,6 +326,11 @@ export default function ArticleGeneratorV2() {
 
     setAppState('generating-article');
     
+    // Set status to generating if we have an articleId
+    if (articleId) {
+      await setGeneratingStatus();
+    }
+    
     // Start generating the article and image in parallel if enabled
     const articlePromise = (async () => {
       await simulateGeneration();
@@ -381,20 +388,46 @@ export default function ArticleGeneratorV2() {
     }
 
     const result = await articlePromise;
+    const finalImageUrl = imageResult?.image || featuredImageUrl || null;
 
     if (result) {
-      const articleSections = outlineSections.map((section) => ({
-        id: section.id,
-        title: section.title,
-        content: `<p>Conteúdo da seção "${section.title}" será gerado aqui.</p>`,
-        level: section.level,
-      }));
+      // Parse the generated content sections from the result
+      const generatedTitle = config.title || `${config.keyword}: Guia Completo`;
+      
+      // Save the generated article to the database
+      if (articleId) {
+        await saveGeneratedArticle(result, generatedTitle, finalImageUrl);
+      } else {
+        // Create the article if it doesn't exist yet
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const wordCount = result.split(/\s+/).filter(Boolean).length;
+          const { data: newArticle, error } = await supabase
+            .from('articles')
+            .insert({
+              keyword: config.keyword,
+              title: generatedTitle,
+              content: result,
+              word_count: wordCount,
+              status: 'ready' as const,
+              user_id: session.user.id,
+              project_id: config.projectId || null,
+              featured_image_url: finalImageUrl,
+            })
+            .select('id')
+            .single();
+          
+          if (!error && newArticle) {
+            setArticleId(newArticle.id);
+          }
+        }
+      }
       
       setArticleData({
-        title: config.title || `${config.keyword}: Guia Completo`,
-        intro: result.substring(0, 500) || '<p>Introdução do artigo...</p>',
-        sections: articleSections,
-        featuredImage: imageResult?.image || featuredImageUrl || undefined,
+        title: generatedTitle,
+        intro: result,
+        sections: [],
+        featuredImage: finalImageUrl || undefined,
       });
       
       setAppState('editing-article');
@@ -405,6 +438,14 @@ export default function ArticleGeneratorV2() {
           : 'Seu artigo está pronto para edição e publicação.',
       });
     } else {
+      // Update article status to error if generation failed
+      if (articleId) {
+        await supabase
+          .from('articles')
+          .update({ status: 'error', error_message: 'Falha na geração do conteúdo' })
+          .eq('id', articleId);
+      }
+      
       setAppState('editing-outline');
       toast({
         title: 'Erro na geração',
