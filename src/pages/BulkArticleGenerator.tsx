@@ -2,13 +2,9 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
+import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import {
   Select,
   SelectContent,
@@ -31,26 +27,21 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import {
-  Layers,
+  FileText,
   Plus,
   Trash2,
-  Play,
-  Pause,
+  Loader2,
   CheckCircle2,
   XCircle,
-  Loader2,
-  FileText,
-  Settings,
-  Upload,
-  Eye,
-  Copy,
-  RefreshCw,
+  Clock,
   Sparkles,
-  AlertCircle,
-  ArrowLeft,
+  ArrowRight,
+  Info,
+  Wand2,
+  Play,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
@@ -58,658 +49,520 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 
 // Types
-interface ArticleVariation {
+interface ArticleRow {
   id: string;
   keyword: string;
   title: string;
-  customData: Record<string, string>;
+  size: string;
   status: 'pending' | 'generating' | 'completed' | 'error';
   articleId?: string;
   error?: string;
-  progress?: number;
 }
-
-interface TemplateConfig {
-  tone: string;
-  pointOfView: string;
-  size: string;
-  language: string;
-  projectId: string;
-  category: string;
-  includeFaq: boolean;
-  includeTables: boolean;
-  includeLists: boolean;
-  includeConclusion: boolean;
-  autoPublish: boolean;
-  publishStatus: 'draft' | 'publish';
-}
-
-type GenerationStatus = 'idle' | 'running' | 'paused' | 'completed';
-
-const tones = [
-  { value: 'profissional', label: 'Profissional' },
-  { value: 'casual', label: 'Casual' },
-  { value: 'academico', label: 'Acadêmico' },
-  { value: 'persuasivo', label: 'Persuasivo' },
-  { value: 'educativo', label: 'Educativo' },
-];
-
-const pointsOfView = [
-  { value: 'terceira', label: 'Terceira Pessoa' },
-  { value: 'primeira', label: 'Primeira Pessoa' },
-  { value: 'segunda', label: 'Segunda Pessoa' },
-];
 
 const articleSizes = [
-  { value: 'short', label: 'Curto (~750 palavras)' },
-  { value: 'medium', label: 'Médio (~1.500 palavras)' },
-  { value: 'long', label: 'Longo (~2.500 palavras)' },
-  { value: 'very-long', label: 'Muito Longo (~4.000 palavras)' },
+  { value: 'short', label: 'Curto (~750)' },
+  { value: 'medium', label: 'Médio (~1.500)' },
+  { value: 'long', label: 'Longo (~2.500)' },
+  { value: 'very-long', label: 'Muito Longo (~4.000)' },
 ];
-
-const defaultTemplate: TemplateConfig = {
-  tone: 'profissional',
-  pointOfView: 'segunda',
-  size: 'medium',
-  language: 'pt-BR',
-  projectId: '',
-  category: '',
-  includeFaq: true,
-  includeTables: false,
-  includeLists: true,
-  includeConclusion: true,
-  autoPublish: false,
-  publishStatus: 'draft',
-};
 
 export default function BulkArticleGenerator() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { projects } = useProjects();
   
-  const [template, setTemplate] = useState<TemplateConfig>(defaultTemplate);
-  const [variations, setVariations] = useState<ArticleVariation[]>([]);
-  const [newKeyword, setNewKeyword] = useState('');
-  const [newTitle, setNewTitle] = useState('');
-  const [bulkKeywords, setBulkKeywords] = useState('');
-  const [showBulkDialog, setShowBulkDialog] = useState(false);
+  const [articles, setArticles] = useState<ArticleRow[]>(() => {
+    // Initialize with 30 empty rows
+    return Array.from({ length: 30 }, (_, i) => ({
+      id: crypto.randomUUID(),
+      keyword: '',
+      title: '',
+      size: 'medium',
+      status: 'pending' as const,
+    }));
+  });
   
-  const [generationStatus, setGenerationStatus] = useState<GenerationStatus>('idle');
-  const [currentIndex, setCurrentIndex] = useState(0);
-  
-  const connectedProjects = projects.filter(p => p.is_connected);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [defaultSize, setDefaultSize] = useState('medium');
+  const [showTitlesDialog, setShowTitlesDialog] = useState(false);
+  const [generatingTitles, setGeneratingTitles] = useState(false);
 
   // Stats
-  const totalCount = variations.length;
-  const completedCount = variations.filter(v => v.status === 'completed').length;
-  const errorCount = variations.filter(v => v.status === 'error').length;
-  const pendingCount = variations.filter(v => v.status === 'pending').length;
-  const overallProgress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+  const filledArticles = articles.filter(a => a.keyword.trim());
+  const totalCount = filledArticles.length;
+  const completedCount = articles.filter(a => a.status === 'completed').length;
+  const errorCount = articles.filter(a => a.status === 'error').length;
+  
+  // Calculate estimated time and credits (1 credit per article, ~2min per article)
+  const estimatedCredits = totalCount;
+  const estimatedTime = totalCount > 0 ? `${Math.ceil(totalCount * 2 / 60)}h` : '0';
 
-  // Add single variation
-  const addVariation = useCallback(() => {
-    if (!newKeyword.trim()) {
+  // Update a single article row
+  const updateArticle = useCallback((id: string, field: keyof ArticleRow, value: string) => {
+    setArticles(prev => prev.map(a => 
+      a.id === id ? { ...a, [field]: value } : a
+    ));
+  }, []);
+
+  // Add more rows
+  const addRows = useCallback((count: number = 10) => {
+    setArticles(prev => [
+      ...prev,
+      ...Array.from({ length: count }, () => ({
+        id: crypto.randomUUID(),
+        keyword: '',
+        title: '',
+        size: defaultSize,
+        status: 'pending' as const,
+      })),
+    ]);
+  }, [defaultSize]);
+
+  // Remove empty rows at the end
+  const removeRow = useCallback((id: string) => {
+    setArticles(prev => prev.filter(a => a.id !== id));
+  }, []);
+
+  // Apply size to all
+  const applyDefaultSize = useCallback((size: string) => {
+    setDefaultSize(size);
+    setArticles(prev => prev.map(a => ({ ...a, size })));
+  }, []);
+
+  // Generate titles for all keywords
+  const handleGenerateTitles = useCallback(async () => {
+    const articlesWithKeywords = articles.filter(a => a.keyword.trim() && !a.title.trim());
+    
+    if (articlesWithKeywords.length === 0) {
       toast({
-        title: 'Palavra-chave obrigatória',
-        description: 'Digite uma palavra-chave para adicionar.',
-        variant: 'destructive',
+        title: 'Nenhum título para gerar',
+        description: 'Adicione palavras-chave primeiro ou todos já possuem título.',
       });
       return;
     }
 
-    const newVariation: ArticleVariation = {
-      id: crypto.randomUUID(),
-      keyword: newKeyword.trim(),
-      title: newTitle.trim() || `${newKeyword.trim()}: Guia Completo`,
-      customData: {},
-      status: 'pending',
-    };
-
-    setVariations(prev => [...prev, newVariation]);
-    setNewKeyword('');
-    setNewTitle('');
+    setGeneratingTitles(true);
     
-    toast({
-      title: 'Variação adicionada',
-      description: `"${newVariation.keyword}" foi adicionada à lista.`,
-    });
-  }, [newKeyword, newTitle, toast]);
-
-  // Add multiple variations from bulk input
-  const addBulkVariations = useCallback(() => {
-    const keywords = bulkKeywords
-      .split('\n')
-      .map(k => k.trim())
-      .filter(k => k.length > 0);
-
-    if (keywords.length === 0) {
-      toast({
-        title: 'Nenhuma palavra-chave',
-        description: 'Digite pelo menos uma palavra-chave.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const newVariations: ArticleVariation[] = keywords.map(keyword => ({
-      id: crypto.randomUUID(),
-      keyword,
-      title: `${keyword}: Guia Completo`,
-      customData: {},
-      status: 'pending',
-    }));
-
-    setVariations(prev => [...prev, ...newVariations]);
-    setBulkKeywords('');
-    setShowBulkDialog(false);
+    // Simulate title generation
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
-    toast({
-      title: `${newVariations.length} variações adicionadas`,
-      description: 'As palavras-chave foram adicionadas à lista.',
-    });
-  }, [bulkKeywords, toast]);
-
-  // Remove variation
-  const removeVariation = useCallback((id: string) => {
-    setVariations(prev => prev.filter(v => v.id !== id));
-  }, []);
-
-  // Duplicate variation
-  const duplicateVariation = useCallback((variation: ArticleVariation) => {
-    const newVariation: ArticleVariation = {
-      ...variation,
-      id: crypto.randomUUID(),
-      status: 'pending',
-      articleId: undefined,
-      error: undefined,
-    };
-    setVariations(prev => [...prev, newVariation]);
-  }, []);
-
-  // Clear all
-  const clearAll = useCallback(() => {
-    setVariations([]);
-    setGenerationStatus('idle');
-    setCurrentIndex(0);
-  }, []);
-
-  // Generate single article
-  const generateArticle = async (variation: ArticleVariation): Promise<boolean> => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        throw new Error('Usuário não autenticado');
+    setArticles(prev => prev.map(a => {
+      if (a.keyword.trim() && !a.title.trim()) {
+        return { ...a, title: `${a.keyword}: Guia Completo ${new Date().getFullYear()}` };
       }
+      return a;
+    }));
+    
+    setGeneratingTitles(false);
+    setShowTitlesDialog(false);
+    
+    toast({
+      title: 'Títulos gerados!',
+      description: `${articlesWithKeywords.length} títulos foram gerados com sucesso.`,
+    });
+  }, [articles, toast]);
 
-      // Create article record
-      const { data: article, error: createError } = await supabase
-        .from('articles')
-        .insert({
-          user_id: session.user.id,
-          keyword: variation.keyword,
-          title: variation.title,
-          status: 'generating',
-          type: 'blog',
-          project_id: template.projectId || null,
-          config: {
-            tone: template.tone,
-            pointOfView: template.pointOfView,
-            size: template.size,
-            language: template.language,
-            includeFaq: template.includeFaq,
-            includeTables: template.includeTables,
-            includeLists: template.includeLists,
-            includeConclusion: template.includeConclusion,
-            bulkGenerated: true,
-          },
-        })
-        .select('id')
-        .single();
-
-      if (createError) throw createError;
-
-      // Call generation function
-      const { data, error } = await supabase.functions.invoke('generate-article', {
-        body: {
-          articleId: article.id,
-          keyword: variation.keyword,
-          title: variation.title,
-          wordCount: template.size,
-          tone: template.tone,
-          pointOfView: template.pointOfView,
-          language: template.language,
-          type: 'blog',
-          includeFaq: template.includeFaq,
-          includeTable: template.includeTables,
-          includeList: template.includeLists,
-          includeConclusion: template.includeConclusion,
-        },
+  // Handle paste for bulk input
+  const handlePaste = useCallback((e: React.ClipboardEvent, startIndex: number) => {
+    const text = e.clipboardData.getData('text');
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    
+    if (lines.length > 1) {
+      e.preventDefault();
+      
+      setArticles(prev => {
+        const newArticles = [...prev];
+        lines.forEach((line, i) => {
+          const targetIndex = startIndex + i;
+          if (targetIndex < newArticles.length) {
+            // Check if line contains separator (tab or comma)
+            const parts = line.split(/[\t,]/).map(p => p.trim());
+            newArticles[targetIndex] = {
+              ...newArticles[targetIndex],
+              keyword: parts[0] || '',
+              title: parts[1] || '',
+            };
+          } else {
+            newArticles.push({
+              id: crypto.randomUUID(),
+              keyword: line,
+              title: '',
+              size: defaultSize,
+              status: 'pending',
+            });
+          }
+        });
+        return newArticles;
       });
-
-      if (error) throw error;
-
-      // Update variation with article ID
-      setVariations(prev => prev.map(v => 
-        v.id === variation.id 
-          ? { ...v, status: 'completed', articleId: article.id }
-          : v
-      ));
-
-      return true;
-    } catch (error) {
-      console.error('Generation error:', error);
-      setVariations(prev => prev.map(v => 
-        v.id === variation.id 
-          ? { ...v, status: 'error', error: error instanceof Error ? error.message : 'Erro desconhecido' }
-          : v
-      ));
-      return false;
+      
+      toast({
+        title: `${lines.length} linhas coladas`,
+        description: 'As palavras-chave foram distribuídas nas linhas.',
+      });
     }
-  };
+  }, [defaultSize, toast]);
 
   // Start generation
-  const startGeneration = useCallback(async () => {
-    const pendingVariations = variations.filter(v => v.status === 'pending');
+  const handleStartGeneration = useCallback(async () => {
+    const toGenerate = filledArticles.filter(a => a.status === 'pending');
     
-    if (pendingVariations.length === 0) {
+    if (toGenerate.length === 0) {
       toast({
-        title: 'Nenhum artigo pendente',
-        description: 'Adicione variações para gerar.',
+        title: 'Nenhum artigo para gerar',
+        description: 'Adicione palavras-chave primeiro.',
         variant: 'destructive',
       });
       return;
     }
 
-    setGenerationStatus('running');
+    setIsGenerating(true);
     
-    for (let i = 0; i < pendingVariations.length; i++) {
-      const variation = pendingVariations[i];
-      setCurrentIndex(i);
-      
+    for (const article of toGenerate) {
       // Update status to generating
-      setVariations(prev => prev.map(v => 
-        v.id === variation.id ? { ...v, status: 'generating' } : v
+      setArticles(prev => prev.map(a => 
+        a.id === article.id ? { ...a, status: 'generating' } : a
       ));
 
-      await generateArticle(variation);
-      
-      // Small delay between generations to avoid rate limiting
-      if (i < pendingVariations.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) throw new Error('Não autenticado');
+
+        // Create article
+        const { data: createdArticle, error: createError } = await supabase
+          .from('articles')
+          .insert({
+            user_id: session.user.id,
+            keyword: article.keyword,
+            title: article.title || `${article.keyword}: Guia Completo`,
+            status: 'generating',
+            type: 'blog',
+            config: { size: article.size, bulkGenerated: true },
+          })
+          .select('id')
+          .single();
+
+        if (createError) throw createError;
+
+        // Call generation function
+        const { error } = await supabase.functions.invoke('generate-article', {
+          body: {
+            articleId: createdArticle.id,
+            keyword: article.keyword,
+            title: article.title || `${article.keyword}: Guia Completo`,
+            wordCount: article.size,
+            type: 'blog',
+          },
+        });
+
+        if (error) throw error;
+
+        setArticles(prev => prev.map(a => 
+          a.id === article.id 
+            ? { ...a, status: 'completed', articleId: createdArticle.id }
+            : a
+        ));
+      } catch (error) {
+        setArticles(prev => prev.map(a => 
+          a.id === article.id 
+            ? { ...a, status: 'error', error: error instanceof Error ? error.message : 'Erro' }
+            : a
+        ));
       }
+
+      // Small delay between generations
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    setGenerationStatus('completed');
+    setIsGenerating(false);
     toast({
       title: 'Geração concluída!',
-      description: `${completedCount + pendingVariations.length} artigos foram gerados.`,
+      description: `${toGenerate.length} artigos foram processados.`,
     });
-  }, [variations, toast, completedCount]);
+  }, [filledArticles, toast]);
 
-  // Retry failed
-  const retryFailed = useCallback(() => {
-    setVariations(prev => prev.map(v => 
-      v.status === 'error' ? { ...v, status: 'pending', error: undefined } : v
-    ));
-    toast({
-      title: 'Artigos com erro marcados para reprocessar',
-      description: 'Clique em "Iniciar Geração" para tentar novamente.',
-    });
-  }, [toast]);
-
-  const updateTemplate = <K extends keyof TemplateConfig>(key: K, value: TemplateConfig[K]) => {
-    setTemplate(prev => ({ ...prev, [key]: value }));
+  const getStatusBadge = (status: ArticleRow['status']) => {
+    switch (status) {
+      case 'generating':
+        return (
+          <Badge variant="secondary" className="gap-1">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Gerando...
+          </Badge>
+        );
+      case 'completed':
+        return (
+          <Badge className="gap-1 bg-green-100 text-green-700 hover:bg-green-100">
+            <CheckCircle2 className="w-3 h-3" />
+            Pronto
+          </Badge>
+        );
+      case 'error':
+        return (
+          <Badge variant="destructive" className="gap-1">
+            <XCircle className="w-3 h-3" />
+            Erro
+          </Badge>
+        );
+      default:
+        return null;
+    }
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => navigate('/articles/new')}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Layers className="w-5 h-5 text-primary" />
+    <div className="min-h-screen bg-muted/30">
+      {/* Header Card */}
+      <div className="bg-background border-b">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            {/* Title Section */}
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                <FileText className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold">Campanha de Artigos em Massa</h1>
+                <h1 className="text-2xl font-bold text-foreground">
+                  Criar Artigos Informativos
+                </h1>
                 <p className="text-sm text-muted-foreground">
-                  Gere múltiplos artigos com variações de um template base
+                  Configure múltiplos artigos com estrutura completa, voz consistente e publicação automatizada.
                 </p>
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {generationStatus === 'idle' && variations.length > 0 && (
-              <Button onClick={startGeneration} className="gap-2">
-                <Play className="w-4 h-4" />
-                Iniciar Geração ({pendingCount})
-              </Button>
-            )}
-            {generationStatus === 'running' && (
-              <Button variant="secondary" disabled className="gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Gerando... ({currentIndex + 1}/{pendingCount})
-              </Button>
-            )}
-            {generationStatus === 'completed' && errorCount > 0 && (
-              <Button variant="outline" onClick={retryFailed} className="gap-2">
-                <RefreshCw className="w-4 h-4" />
-                Reprocessar Erros ({errorCount})
-              </Button>
-            )}
-          </div>
-        </div>
-      </header>
 
-      <div className="flex h-[calc(100vh-73px)]">
-        {/* Left Panel - Template Config */}
-        <div className="w-80 border-r bg-card overflow-hidden flex flex-col">
-          <div className="p-4 border-b">
-            <h2 className="font-semibold flex items-center gap-2">
-              <Settings className="w-4 h-4" />
-              Template Base
-            </h2>
-            <p className="text-xs text-muted-foreground mt-1">
-              Configurações aplicadas a todos os artigos
-            </p>
-          </div>
-          <ScrollArea className="flex-1">
-            <div className="p-4 space-y-4">
-              {/* Tom */}
-              <div className="space-y-2">
-                <Label>Tom de Voz</Label>
-                <Select value={template.tone} onValueChange={(v) => updateTemplate('tone', v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tones.map(t => (
-                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Ponto de Vista */}
-              <div className="space-y-2">
-                <Label>Ponto de Vista</Label>
-                <Select value={template.pointOfView} onValueChange={(v) => updateTemplate('pointOfView', v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pointsOfView.map(p => (
-                      <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Tamanho */}
-              <div className="space-y-2">
-                <Label>Tamanho do Artigo</Label>
-                <Select value={template.size} onValueChange={(v) => updateTemplate('size', v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {articleSizes.map(s => (
-                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Separator />
-
-              {/* Projeto WordPress */}
-              <div className="space-y-2">
-                <Label>Projeto WordPress</Label>
-                <Select 
-                  value={template.projectId || 'none'} 
-                  onValueChange={(v) => updateTemplate('projectId', v === 'none' ? '' : v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecionar projeto..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum (não publicar)</SelectItem>
-                    {connectedProjects.map(p => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Separator />
-
-              {/* Content Options */}
-              <div className="space-y-3">
-                <Label>Elementos do Conteúdo</Label>
-                <div className="space-y-2">
-                  {[
-                    { key: 'includeFaq' as const, label: 'Incluir FAQ' },
-                    { key: 'includeTables' as const, label: 'Incluir Tabelas' },
-                    { key: 'includeLists' as const, label: 'Incluir Listas' },
-                    { key: 'includeConclusion' as const, label: 'Incluir Conclusão' },
-                  ].map(opt => (
-                    <label key={opt.key} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={template[opt.key]}
-                        onChange={(e) => updateTemplate(opt.key, e.target.checked)}
-                        className="rounded border-input"
-                      />
-                      <span className="text-sm">{opt.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </ScrollArea>
-        </div>
-
-        {/* Right Panel - Variations */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Stats Bar */}
-          {variations.length > 0 && (
-            <div className="p-4 border-b bg-muted/30">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-4 text-sm">
-                  <span className="flex items-center gap-1">
-                    <FileText className="w-4 h-4 text-muted-foreground" />
-                    Total: <strong>{totalCount}</strong>
-                  </span>
-                  <span className="flex items-center gap-1 text-emerald-600">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Concluídos: <strong>{completedCount}</strong>
-                  </span>
-                  {errorCount > 0 && (
-                    <span className="flex items-center gap-1 text-destructive">
-                      <XCircle className="w-4 h-4" />
-                      Erros: <strong>{errorCount}</strong>
-                    </span>
-                  )}
-                  <span className="flex items-center gap-1 text-muted-foreground">
-                    Pendentes: <strong>{pendingCount}</strong>
-                  </span>
-                </div>
-                <Button variant="ghost" size="sm" onClick={clearAll} className="text-muted-foreground">
-                  <Trash2 className="w-4 h-4 mr-1" />
-                  Limpar Tudo
-                </Button>
-              </div>
-              <Progress value={overallProgress} className="h-2" />
-            </div>
-          )}
-
-          {/* Add Variation Form */}
-          <div className="p-4 border-b bg-card">
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <Input
-                  placeholder="Palavra-chave principal *"
-                  value={newKeyword}
-                  onChange={(e) => setNewKeyword(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addVariation()}
-                />
-              </div>
-              <div className="flex-1">
-                <Input
-                  placeholder="Título (opcional - será gerado automaticamente)"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addVariation()}
-                />
-              </div>
-              <Button onClick={addVariation} className="gap-2">
-                <Plus className="w-4 h-4" />
-                Adicionar
-              </Button>
-              <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="gap-2">
-                    <Upload className="w-4 h-4" />
-                    Em Massa
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Adicionar Palavras-chave em Massa</DialogTitle>
-                    <DialogDescription>
-                      Cole uma lista de palavras-chave (uma por linha)
-                    </DialogDescription>
-                  </DialogHeader>
-                  <Textarea
-                    placeholder="advogado criminal são paulo&#10;advogado trabalhista sp&#10;advogado de família&#10;..."
-                    value={bulkKeywords}
-                    onChange={(e) => setBulkKeywords(e.target.value)}
-                    rows={10}
-                  />
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowBulkDialog(false)}>
-                      Cancelar
-                    </Button>
-                    <Button onClick={addBulkVariations}>
-                      Adicionar {bulkKeywords.split('\n').filter(k => k.trim()).length} Palavras-chave
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+            {/* Stats Cards */}
+            <div className="flex items-center gap-3">
+              <Card className="border shadow-sm">
+                <CardContent className="px-4 py-3 text-center">
+                  <p className="text-xs text-muted-foreground mb-0.5">Total de artigos</p>
+                  <p className="text-2xl font-bold text-foreground">{totalCount}</p>
+                </CardContent>
+              </Card>
+              <Card className="border shadow-sm">
+                <CardContent className="px-4 py-3 text-center">
+                  <p className="text-xs text-muted-foreground mb-0.5">Créditos estimados</p>
+                  <p className="text-2xl font-bold text-foreground">{estimatedCredits}</p>
+                </CardContent>
+              </Card>
+              <Card className="border shadow-sm">
+                <CardContent className="px-4 py-3 text-center">
+                  <p className="text-xs text-muted-foreground mb-0.5">Tempo estimado</p>
+                  <p className="text-2xl font-bold text-foreground">{estimatedTime}</p>
+                </CardContent>
+              </Card>
             </div>
           </div>
-
-          {/* Variations Table */}
-          <ScrollArea className="flex-1">
-            {variations.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                  <Layers className="w-8 h-8 text-muted-foreground" />
-                </div>
-                <h3 className="text-lg font-semibold mb-2">Nenhuma variação adicionada</h3>
-                <p className="text-sm text-muted-foreground max-w-md mb-4">
-                  Adicione palavras-chave para criar artigos em massa. Cada palavra-chave
-                  gerará um artigo único usando o template configurado.
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setShowBulkDialog(true)} className="gap-2">
-                    <Upload className="w-4 h-4" />
-                    Adicionar em Massa
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">#</TableHead>
-                    <TableHead>Palavra-chave</TableHead>
-                    <TableHead>Título</TableHead>
-                    <TableHead className="w-32">Status</TableHead>
-                    <TableHead className="w-28 text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {variations.map((variation, index) => (
-                    <TableRow key={variation.id}>
-                      <TableCell className="text-muted-foreground">{index + 1}</TableCell>
-                      <TableCell className="font-medium">{variation.keyword}</TableCell>
-                      <TableCell className="text-muted-foreground max-w-xs truncate">
-                        {variation.title}
-                      </TableCell>
-                      <TableCell>
-                        {variation.status === 'pending' && (
-                          <Badge variant="outline" className="gap-1">
-                            <div className="w-2 h-2 rounded-full bg-muted-foreground" />
-                            Pendente
-                          </Badge>
-                        )}
-                        {variation.status === 'generating' && (
-                          <Badge variant="secondary" className="gap-1">
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            Gerando...
-                          </Badge>
-                        )}
-                        {variation.status === 'completed' && (
-                          <Badge className="gap-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-                            <CheckCircle2 className="w-3 h-3" />
-                            Concluído
-                          </Badge>
-                        )}
-                        {variation.status === 'error' && (
-                          <Badge variant="destructive" className="gap-1">
-                            <XCircle className="w-3 h-3" />
-                            Erro
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {variation.articleId && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => navigate(`/articles/${variation.articleId}/edit`)}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => duplicateVariation(variation)}
-                          >
-                            <Copy className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={() => removeVariation(variation.id)}
-                            disabled={variation.status === 'generating'}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </ScrollArea>
         </div>
       </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* Action Bar */}
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Lista de Artigos</h2>
+                <p className="text-sm text-muted-foreground">
+                  Configure palavra-chave, título e tamanho para cada artigo
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button 
+                  onClick={() => addRows(10)} 
+                  variant="outline" 
+                  className="gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Adicionar
+                </Button>
+                <Button 
+                  onClick={() => setShowTitlesDialog(true)}
+                  variant="outline" 
+                  className="gap-2"
+                >
+                  <Wand2 className="w-4 h-4" />
+                  Gerar Títulos
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Table */}
+        <Card className="mb-6">
+          <ScrollArea className="h-[500px]">
+            <Table>
+              <TableHeader className="sticky top-0 bg-background z-10">
+                <TableRow>
+                  <TableHead className="w-14 text-center">#</TableHead>
+                  <TableHead className="w-[30%]">Palavra-chave</TableHead>
+                  <TableHead className="w-[35%]">Título</TableHead>
+                  <TableHead className="w-[15%]">Tamanho</TableHead>
+                  <TableHead className="w-[10%] text-center">Status</TableHead>
+                  <TableHead className="w-14"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {articles.map((article, index) => (
+                  <TableRow key={article.id}>
+                    <TableCell className="text-center font-medium text-muted-foreground">
+                      {index + 1}
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        placeholder="Ex: marketing digital"
+                        value={article.keyword}
+                        onChange={(e) => updateArticle(article.id, 'keyword', e.target.value)}
+                        onPaste={(e) => handlePaste(e, index)}
+                        disabled={article.status === 'generating' || article.status === 'completed'}
+                        className="h-9"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          placeholder="Ex: Guia Completo de Marketing Digital"
+                          value={article.title}
+                          onChange={(e) => updateArticle(article.id, 'title', e.target.value)}
+                          disabled={article.status === 'generating' || article.status === 'completed'}
+                          className="h-9"
+                        />
+                        {!article.title && article.keyword && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 shrink-0"
+                            onClick={() => updateArticle(article.id, 'title', `${article.keyword}: Guia Completo`)}
+                          >
+                            <Wand2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Select
+                        value={article.size}
+                        onValueChange={(v) => updateArticle(article.id, 'size', v)}
+                        disabled={article.status === 'generating' || article.status === 'completed'}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Selecionar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {articleSizes.map(s => (
+                            <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {getStatusBadge(article.status)}
+                    </TableCell>
+                    <TableCell>
+                      {article.status === 'pending' && !article.keyword && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeRow(article.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+        </Card>
+
+        {/* Apply size to all */}
+        <Card className="mb-6">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">Aplicar tamanho a todos:</span>
+              <Select value={defaultSize} onValueChange={applyDefaultSize}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Selecionar tamanho padrão" />
+                </SelectTrigger>
+                <SelectContent>
+                  {articleSizes.map(s => (
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Tip */}
+        <Card className="mb-6 bg-primary/5 border-primary/20">
+          <CardContent className="p-4 flex items-center gap-3">
+            <Info className="w-5 h-5 text-primary shrink-0" />
+            <p className="text-sm text-muted-foreground">
+              <strong>Dica:</strong> Cole múltiplas linhas usando Ctrl+V para adicionar vários artigos de uma vez.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Footer Action */}
+        <div className="flex justify-center">
+          <Button 
+            size="lg"
+            className="gap-2 px-8"
+            onClick={handleStartGeneration}
+            disabled={totalCount === 0 || isGenerating}
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Gerando...
+              </>
+            ) : (
+              <>
+                Próxima etapa
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {/* Generate Titles Dialog */}
+      <Dialog open={showTitlesDialog} onOpenChange={setShowTitlesDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Gerar Títulos com IA</DialogTitle>
+            <DialogDescription>
+              Gerar títulos automaticamente para todas as palavras-chave que ainda não possuem título.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm">
+              <strong>{articles.filter(a => a.keyword.trim() && !a.title.trim()).length}</strong> artigos 
+              receberão títulos gerados automaticamente.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTitlesDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleGenerateTitles} disabled={generatingTitles} className="gap-2">
+              {generatingTitles ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Gerando...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Gerar Títulos
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
