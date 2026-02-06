@@ -10,6 +10,7 @@ export interface NewsAgent {
   name: string;
   topics: string[];
   keywords: string[];
+  rss_feeds: string[] | null;
   is_active: boolean;
   search_internal_links: boolean;
   cite_sources_inline: boolean;
@@ -29,6 +30,7 @@ export interface CreateNewsAgentInput {
   project_id?: string;
   topics: string[];
   keywords?: string[];
+  rss_feeds?: string[];
   search_internal_links?: boolean;
   cite_sources_inline?: boolean;
   cite_sources_footer?: boolean;

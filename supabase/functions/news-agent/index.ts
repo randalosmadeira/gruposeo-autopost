@@ -19,6 +19,61 @@ interface NewsSearchResult {
   date?: string;
 }
 
+interface RSSItem {
+  title: string;
+  link: string;
+  description: string;
+  pubDate: string;
+  source: string;
+}
+
+async function fetchRSSFeeds(feedUrls: string[], limit: number = 10): Promise<NewsSearchResult[]> {
+  if (!feedUrls || feedUrls.length === 0) return [];
+  
+  const items: NewsSearchResult[] = [];
+  
+  for (const feedUrl of feedUrls) {
+    try {
+      const response = await fetch(feedUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; ContentFactoryBot/1.0)',
+          'Accept': 'application/rss+xml, application/xml, text/xml',
+        },
+      });
+      
+      if (!response.ok) continue;
+      
+      const xmlText = await response.text();
+      const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+      let match;
+      
+      while ((match = itemRegex.exec(xmlText)) !== null && items.length < limit) {
+        const itemContent = match[1];
+        
+        const titleMatch = itemContent.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>|<title>([^<]+)<\/title>/);
+        const linkMatch = itemContent.match(/<link>([^<]+)<\/link>/);
+        const descMatch = itemContent.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>|<description>([^<]+)<\/description>/);
+        const sourceMatch = itemContent.match(/<source[^>]*>([^<]+)<\/source>/);
+        const pubDateMatch = itemContent.match(/<pubDate>([^<]+)<\/pubDate>/);
+        
+        if (titleMatch && linkMatch) {
+          items.push({
+            title: (titleMatch[1] || titleMatch[2] || '').trim(),
+            link: linkMatch[1].trim(),
+            snippet: descMatch ? (descMatch[1] || descMatch[2] || '').replace(/<[^>]+>/g, '').trim() : '',
+            source: sourceMatch ? sourceMatch[1] : new URL(feedUrl).hostname,
+            date: pubDateMatch ? pubDateMatch[1] : undefined,
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`Error fetching RSS feed ${feedUrl}:`, error);
+    }
+  }
+  
+  return items.slice(0, limit);
+}
+
 async function searchNews(topic: string, language: string, country: string): Promise<NewsSearchResult[]> {
   const query = encodeURIComponent(topic);
   const googleNewsUrl = `https://news.google.com/rss/search?q=${query}&hl=${language}&gl=${country}&ceid=${country}:${language.split('-')[0]}`;
@@ -163,12 +218,37 @@ serve(async (req) => {
       throw new Error("AI API key is not configured");
     }
 
-    const { action, agentId, topics, language, country, promptTemplate, limit } = await req.json();
+    const { action, agentId, topics, rssFeeds, language, country, promptTemplate, limit } = await req.json();
+
+    // Action: fetch RSS feeds
+    if (action === "fetch_rss") {
+      if (!rssFeeds || rssFeeds.length === 0) {
+        return new Response(JSON.stringify({ error: "rssFeeds array is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const items = await fetchRSSFeeds(rssFeeds, limit || 10);
+      
+      log.info("rss_fetch_complete", { feeds: rssFeeds.length, items: items.length });
+      log.requestEnd(200, Date.now() - startTime);
+      return new Response(JSON.stringify({ news: items }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (action === "search") {
       const allNews: NewsSearchResult[] = [];
       
-      for (const topic of topics) {
+      // If RSS feeds provided, fetch from them first
+      if (rssFeeds && rssFeeds.length > 0) {
+        const rssItems = await fetchRSSFeeds(rssFeeds, limit || 10);
+        allNews.push(...rssItems);
+      }
+      
+      // Then search by topics
+      for (const topic of (topics || [])) {
         const news = await searchNews(topic, language || "pt-BR", country || "BR");
         allNews.push(...news);
       }
@@ -177,7 +257,7 @@ serve(async (req) => {
         index === self.findIndex(t => t.title === item.title)
       ).slice(0, limit || 10);
 
-      log.info("search_complete", { topics_count: topics.length, results: uniqueNews.length });
+      log.info("search_complete", { topics_count: topics?.length || 0, rss_feeds: rssFeeds?.length || 0, results: uniqueNews.length });
       log.requestEnd(200, Date.now() - startTime);
       return new Response(JSON.stringify({ news: uniqueNews }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
