@@ -29,6 +29,7 @@ const HelpPage = lazy(() => import("./pages/HelpPage"));
 const NewsRewriter = lazy(() => import("./pages/NewsRewriter"));
 const BulkKeywordGenerator = lazy(() => import("./pages/BulkKeywordGenerator"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Academy = lazy(() => import("./pages/Academy"));
 
 const queryClient = new QueryClient();
 
@@ -56,7 +57,8 @@ const App = () => (
                   </ProtectedRoute>
                 }
               >
-                <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={<Dashboard />} />
+                <Route path="/academia" element={<Academy />} />
                 <Route path="/articles" element={<ArticlesList />} />
                 <Route path="/articles/new" element={<ArticleGeneratorV2 />} />
                 <Route path="/articles/new/:type" element={<ArticleGenerator />} />
