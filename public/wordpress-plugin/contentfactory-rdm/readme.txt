@@ -4,7 +4,7 @@ Tags: content, seo, articles, automation, ai, image-optimization, indexing
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.1.0
+Stable tag: 2.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,6 +65,14 @@ Sim! Na versão 2.1, o plugin notifica automaticamente o Google e o Bing quando 
 Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject schema) e FAQs automaticamente.
 
 == Changelog ==
+
+= 2.2.0 =
+* **NOVO**: Schema Product para artigos de review de produtos
+* **NOVO**: Schema Review com rating, prós e contras
+* **NOVO**: Schema ItemList para artigos de comparação
+* **NOVO**: Extração automática de produtos do conteúdo
+* **NOVO**: Suporte a prós/contras estruturados (positiveNotes/negativeNotes)
+* **MELHORADO**: Detecção automática de tipo de artigo (review/comparison)
 
 = 2.1.0 =
 * **NOVO**: Indexação automática - notificação para Google e Bing ao publicar
