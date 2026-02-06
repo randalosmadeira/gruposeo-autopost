@@ -1,6 +1,6 @@
 <?php
 /**
- * Logger Class - Complete logging system
+ * Logger Class - Complete logging system with safety checks
  */
 
 if (!defined('ABSPATH')) {
@@ -25,26 +25,61 @@ class CFRDM_Logger {
     const CATEGORY_SYSTEM = 'system';
     
     /**
+     * Check if log table exists
+     */
+    private static function table_exists() {
+        global $wpdb;
+        
+        static $exists = null;
+        
+        // Cache the result to avoid repeated queries
+        if ($exists !== null) {
+            return $exists;
+        }
+        
+        $table = $wpdb->prefix . CFRDM_LOG_TABLE;
+        $result = $wpdb->get_var($wpdb->prepare(
+            "SHOW TABLES LIKE %s",
+            $table
+        ));
+        
+        $exists = !empty($result);
+        return $exists;
+    }
+    
+    /**
      * Log a message
      */
     public static function log($category, $message, $context = array(), $type = self::TYPE_INFO, $post_id = null) {
+        // Safety check - don't try to log if table doesn't exist
+        if (!self::table_exists()) {
+            // Fallback to error_log if table doesn't exist
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log(sprintf('[CFRDM %s] %s: %s', strtoupper($type), $category, $message));
+            }
+            return false;
+        }
+        
         global $wpdb;
         
         $table = $wpdb->prefix . CFRDM_LOG_TABLE;
         
-        // Get current user
-        $user_id = get_current_user_id();
+        // Get current user safely
+        $user_id = function_exists('get_current_user_id') ? get_current_user_id() : null;
         
         // Get IP address
         $ip_address = self::get_client_ip();
         
-        $wpdb->insert(
+        // Suppress errors during insert to prevent white screen
+        $wpdb->suppress_errors(true);
+        
+        $result = $wpdb->insert(
             $table,
             array(
                 'log_type' => $type,
                 'category' => $category,
                 'message' => $message,
-                'context' => !empty($context) ? json_encode($context, JSON_UNESCAPED_UNICODE) : null,
+                'context' => !empty($context) ? wp_json_encode($context, JSON_UNESCAPED_UNICODE) : null,
                 'post_id' => $post_id,
                 'user_id' => $user_id ?: null,
                 'ip_address' => $ip_address,
@@ -52,6 +87,16 @@ class CFRDM_Logger {
             ),
             array('%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s')
         );
+        
+        $wpdb->suppress_errors(false);
+        
+        if ($result === false) {
+            // Log to PHP error log as fallback
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log(sprintf('[CFRDM %s] %s: %s (DB insert failed)', strtoupper($type), $category, $message));
+            }
+            return false;
+        }
         
         return $wpdb->insert_id;
     }
@@ -98,6 +143,15 @@ class CFRDM_Logger {
      * Get logs with pagination and filtering
      */
     public static function get_logs($args = array()) {
+        if (!self::table_exists()) {
+            return array(
+                'logs' => array(),
+                'total' => 0,
+                'pages' => 0,
+                'page' => 1,
+            );
+        }
+        
         global $wpdb;
         
         $defaults = array(
@@ -150,7 +204,12 @@ class CFRDM_Logger {
         }
         
         $where_sql = implode(' AND ', $where);
-        $orderby = sanitize_sql_orderby($args['orderby'] . ' ' . $args['order']);
+        
+        // Sanitize orderby
+        $allowed_orderby = array('id', 'log_type', 'category', 'created_at');
+        $orderby = in_array($args['orderby'], $allowed_orderby) ? $args['orderby'] : 'created_at';
+        $order = strtoupper($args['order']) === 'ASC' ? 'ASC' : 'DESC';
+        
         $offset = ($args['page'] - 1) * $args['per_page'];
         
         // Count total
@@ -161,14 +220,13 @@ class CFRDM_Logger {
         $total = $wpdb->get_var($count_sql);
         
         // Get logs
-        $sql = "SELECT * FROM $table WHERE $where_sql ORDER BY $orderby LIMIT %d OFFSET %d";
-        $values[] = $args['per_page'];
-        $values[] = $offset;
+        $query_values = array_merge($values, array($args['per_page'], $offset));
+        $sql = "SELECT * FROM $table WHERE $where_sql ORDER BY $orderby $order LIMIT %d OFFSET %d";
         
-        $logs = $wpdb->get_results($wpdb->prepare($sql, $values));
+        $logs = $wpdb->get_results($wpdb->prepare($sql, $query_values));
         
         return array(
-            'logs' => $logs,
+            'logs' => $logs ?: array(),
             'total' => intval($total),
             'pages' => ceil($total / $args['per_page']),
             'page' => $args['page'],
@@ -179,6 +237,15 @@ class CFRDM_Logger {
      * Get log stats
      */
     public static function get_stats($days = 7) {
+        if (!self::table_exists()) {
+            return array(
+                'total' => 0,
+                'by_type' => array(),
+                'by_category' => array(),
+                'by_day' => array(),
+            );
+        }
+        
         global $wpdb;
         
         $table = $wpdb->prefix . CFRDM_LOG_TABLE;
@@ -220,9 +287,9 @@ class CFRDM_Logger {
         
         return array(
             'total' => intval($total),
-            'by_type' => $by_type,
-            'by_category' => $by_category,
-            'by_day' => $by_day,
+            'by_type' => $by_type ?: array(),
+            'by_category' => $by_category ?: array(),
+            'by_day' => $by_day ?: array(),
         );
     }
     
@@ -230,6 +297,10 @@ class CFRDM_Logger {
      * Cleanup old logs
      */
     public static function cleanup_old_logs($days = 30) {
+        if (!self::table_exists()) {
+            return 0;
+        }
+        
         global $wpdb;
         
         $table = $wpdb->prefix . CFRDM_LOG_TABLE;
@@ -247,6 +318,10 @@ class CFRDM_Logger {
      * Clear all logs
      */
     public static function clear_all_logs() {
+        if (!self::table_exists()) {
+            return false;
+        }
+        
         global $wpdb;
         
         $table = $wpdb->prefix . CFRDM_LOG_TABLE;
