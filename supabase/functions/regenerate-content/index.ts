@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createLogger, createRequestId } from "../_shared/logger.ts";
+
+const FUNCTION_NAME = "regenerate-content";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,14 +18,21 @@ interface RegenerateRequest {
 }
 
 serve(async (req) => {
+  const requestId = createRequestId();
+  const log = createLogger(FUNCTION_NAME, requestId);
+  const startTime = Date.now();
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    log.requestStart(req.method);
+
     // ========== AUTHENTICATION ==========
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
+      log.authFailure("missing_or_invalid_header");
       return new Response(
         JSON.stringify({ error: "Autorização necessária" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -36,16 +46,20 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) {
+      log.authFailure(authError?.message || "user_not_found");
       return new Response(
         JSON.stringify({ error: "Usuário não autenticado" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    log.authSuccess(user.id);
     // ========== END AUTHENTICATION ==========
 
     const { type, keyword, currentTitle, currentContent, language = "pt-BR" }: RegenerateRequest = await req.json();
+    log.info("regenerate_start", { type, keyword });
     
     const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!AI_API_KEY) {
@@ -124,12 +138,16 @@ No text or watermarks.`;
 
       if (!response.ok) {
         if (response.status === 429) {
+          log.warn("rate_limit", { type });
+          log.requestEnd(429, Date.now() - startTime);
           return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again later." }), {
             status: 429,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
         if (response.status === 402) {
+          log.warn("insufficient_credits", { type });
+          log.requestEnd(402, Date.now() - startTime);
           return new Response(JSON.stringify({ error: "Insufficient credits." }), {
             status: 402,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -141,6 +159,8 @@ No text or watermarks.`;
       const data = await response.json();
       const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
 
+      log.info("regenerate_complete", { type, success: !!imageUrl });
+      log.requestEnd(200, Date.now() - startTime);
       return new Response(JSON.stringify({ result: imageUrl, type: "image" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -163,12 +183,16 @@ No text or watermarks.`;
 
       if (!response.ok) {
         if (response.status === 429) {
+          log.warn("rate_limit", { type });
+          log.requestEnd(429, Date.now() - startTime);
           return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again later." }), {
             status: 429,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
         if (response.status === 402) {
+          log.warn("insufficient_credits", { type });
+          log.requestEnd(402, Date.now() - startTime);
           return new Response(JSON.stringify({ error: "Insufficient credits." }), {
             status: 402,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -180,12 +204,15 @@ No text or watermarks.`;
       const data = await response.json();
       const result = data.choices?.[0]?.message?.content?.trim();
 
+      log.info("regenerate_complete", { type, success: !!result });
+      log.requestEnd(200, Date.now() - startTime);
       return new Response(JSON.stringify({ result, type }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
   } catch (error) {
-    console.error("regenerate-content error:", error);
+    log.error("regenerate_error", { error: error instanceof Error ? error.message : "unknown" });
+    log.requestEnd(500, Date.now() - startTime);
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

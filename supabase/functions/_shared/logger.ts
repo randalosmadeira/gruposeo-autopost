@@ -1,6 +1,7 @@
 /**
  * Structured logging helper for edge functions.
  * Generates request_id, logs function_name + user_id without exposing tokens.
+ * Includes duration thresholds for performance monitoring.
  */
 
 export interface LogContext {
@@ -8,6 +9,16 @@ export interface LogContext {
   request_id: string;
   user_id?: string;
 }
+
+/** Duration thresholds (ms) for performance alerts */
+export const DURATION_THRESHOLDS = {
+  /** Requests slower than this are logged as "slow" */
+  SLOW: 3000,
+  /** Requests slower than this are logged as "very_slow" */
+  VERY_SLOW: 10000,
+  /** Requests slower than this are logged as "critical" */
+  CRITICAL: 30000,
+};
 
 export function createRequestId(): string {
   return `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
@@ -51,9 +62,31 @@ export function createLogger(functionName: string, requestId: string) {
       this.warn("auth_failure", { reason });
     },
 
-    /** Log request completion */
+    /** 
+     * Log request completion with performance classification.
+     * Emits warnings for slow requests.
+     */
     requestEnd(status: number, durationMs?: number) {
-      this.info("request_end", { status, duration_ms: durationMs });
+      const extra: Record<string, unknown> = { status, duration_ms: durationMs };
+      
+      if (durationMs !== undefined) {
+        if (durationMs >= DURATION_THRESHOLDS.CRITICAL) {
+          extra.performance = "critical";
+          this.error("request_end_critical", extra);
+        } else if (durationMs >= DURATION_THRESHOLDS.VERY_SLOW) {
+          extra.performance = "very_slow";
+          this.warn("request_end_very_slow", extra);
+        } else if (durationMs >= DURATION_THRESHOLDS.SLOW) {
+          extra.performance = "slow";
+          this.warn("request_end_slow", extra);
+        } else {
+          extra.performance = "normal";
+          this.info("request_end", extra);
+        }
+      } else {
+        this.info("request_end", extra);
+      }
     },
   };
 }
+

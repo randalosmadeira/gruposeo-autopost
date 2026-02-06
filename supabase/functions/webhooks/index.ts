@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createLogger, createRequestId } from "../_shared/logger.ts";
+
+const FUNCTION_NAME = "webhooks";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,6 +13,10 @@ const corsHeaders = {
 const WEBHOOK_SECRET = Deno.env.get("WEBHOOK_SECRET") || "default-secret";
 
 serve(async (req) => {
+  const requestId = createRequestId();
+  const log = createLogger(FUNCTION_NAME, requestId);
+  const startTime = Date.now();
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -19,10 +26,12 @@ serve(async (req) => {
     const source = url.searchParams.get("source");
     const event = url.searchParams.get("event");
 
+    log.requestStart(req.method, `${source}/${event}`);
+
     // Validate webhook secret for security
     const providedSecret = req.headers.get("x-webhook-secret");
     if (providedSecret !== WEBHOOK_SECRET) {
-      console.warn("Invalid webhook secret provided");
+      log.authFailure("invalid_webhook_secret");
       return new Response(
         JSON.stringify({ success: false, error: "Unauthorized" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -35,7 +44,7 @@ serve(async (req) => {
 
     const body = await req.json();
     
-    console.log(`Webhook received: source=${source}, event=${event}`, JSON.stringify(body).substring(0, 500));
+    log.info("webhook_received", { source, event, bodyLength: JSON.stringify(body).length });
 
     switch (source) {
       // === WORDPRESS WEBHOOKS ===
@@ -62,7 +71,7 @@ serve(async (req) => {
                 })
                 .eq("id", article.id);
 
-              console.log(`Article ${article.id} marked as published`);
+              log.info("article_marked_published", { article_id: article.id });
             }
             break;
           }
@@ -87,19 +96,19 @@ serve(async (req) => {
                 })
                 .eq("id", article.id);
 
-              console.log(`Article ${article.id} unpublished due to WordPress deletion`);
+              log.info("article_unpublished", { article_id: article.id });
             }
             break;
           }
 
           case "post_updated": {
             // WordPress notifies when a post is updated
-            console.log("WordPress post updated:", body);
+            log.info("wordpress_post_updated", { post_id: body.post_id });
             break;
           }
 
           default:
-            console.log(`Unknown WordPress event: ${event}`);
+            log.warn("unknown_wordpress_event", { event });
         }
         break;
       }
@@ -121,7 +130,7 @@ serve(async (req) => {
                 })
                 .eq("id", article_id);
 
-              console.log(`Article ${article_id} updated from AI service`);
+              log.info("article_updated_from_ai", { article_id });
             }
             break;
           }
@@ -138,13 +147,13 @@ serve(async (req) => {
                 })
                 .eq("id", article_id);
 
-              console.log(`Article ${article_id} failed: ${error_message}`);
+              log.warn("article_generation_failed", { article_id, error: error_message });
             }
             break;
           }
 
           default:
-            console.log(`Unknown AI service event: ${event}`);
+            log.warn("unknown_ai_service_event", { event });
         }
         break;
       }
@@ -172,9 +181,9 @@ serve(async (req) => {
                 .insert(inserts);
 
               if (error) {
-                console.error("Failed to insert news items:", error);
+                log.error("news_insert_failed", { error: error.message });
               } else {
-                console.log(`Inserted ${inserts.length} news items for agent ${agent_id}`);
+                log.info("news_items_inserted", { agent_id, count: inserts.length });
               }
             }
             break;
@@ -192,20 +201,21 @@ serve(async (req) => {
                 })
                 .eq("id", agent_id);
 
-              console.log(`Agent ${agent_id} error logged: ${error_message}`);
+              log.warn("agent_error_logged", { agent_id, error: error_message });
             }
             break;
           }
 
           default:
-            console.log(`Unknown news agent event: ${event}`);
+            log.warn("unknown_news_agent_event", { event });
         }
         break;
       }
 
       // === GENERIC/TEST WEBHOOK ===
       case "test": {
-        console.log("Test webhook received:", body);
+        log.info("test_webhook_received");
+        log.requestEnd(200, Date.now() - startTime);
         return new Response(
           JSON.stringify({ 
             success: true, 
@@ -218,7 +228,8 @@ serve(async (req) => {
       }
 
       default:
-        console.log(`Unknown webhook source: ${source}`);
+        log.warn("unknown_webhook_source", { source });
+        log.requestEnd(400, Date.now() - startTime);
         return new Response(
           JSON.stringify({ 
             success: false, 
@@ -229,13 +240,15 @@ serve(async (req) => {
         );
     }
 
+    log.requestEnd(200, Date.now() - startTime);
     return new Response(
       JSON.stringify({ success: true, message: "Webhook processado" }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
-    console.error("Webhook error:", error);
+    log.error("webhook_error", { error: error instanceof Error ? error.message : "unknown" });
+    log.requestEnd(500, Date.now() - startTime);
     return new Response(
       JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Erro interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -1,4 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createLogger, createRequestId } from "../_shared/logger.ts";
+
+const FUNCTION_NAME = "test-wordpress-connection";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -72,15 +75,23 @@ async function discoverWordPressPath(baseUrl: string): Promise<{ found: boolean;
 }
 
 serve(async (req) => {
+  const requestId = createRequestId();
+  const log = createLogger(FUNCTION_NAME, requestId);
+  const startTime = Date.now();
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    log.requestStart(req.method);
+
     const body: TestConnectionRequest = await req.json();
     const { wordpress_url, use_plugin, api_key, wordpress_username, wordpress_app_password } = body;
 
     if (!wordpress_url) {
+      log.warn("missing_url");
+      log.requestEnd(400, Date.now() - startTime);
       return new Response(
         JSON.stringify({ success: false, error: "URL do WordPress não fornecida" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -91,7 +102,7 @@ serve(async (req) => {
     
     // Clean up URL: remove any existing wp-json paths that may have been incorrectly included
     baseUrl = baseUrl.replace(/\/wp-json(\/.*)?$/, "");
-    console.log(`Cleaned base URL: ${baseUrl}`);
+    log.info("testing_connection", { baseUrl, use_plugin: !!use_plugin });
 
     // Plugin-based authentication
     if (use_plugin && api_key) {
@@ -100,10 +111,10 @@ serve(async (req) => {
       
       if (discovery.found && discovery.path) {
         baseUrl = `${baseUrl}${discovery.path}`;
-        console.log(`Using discovered WordPress path: ${baseUrl}`);
+        log.info("discovered_wp_path", { path: discovery.path });
       }
 
-      console.log(`Testing plugin connection to: ${baseUrl}/wp-json/cfrdm/v1/test`);
+      log.info("testing_plugin", { url: `${baseUrl}/wp-json/cfrdm/v1/test` });
       
       try {
         const pluginResponse = await fetch(`${baseUrl}/wp-json/cfrdm/v1/test`, {
@@ -117,8 +128,7 @@ serve(async (req) => {
         const contentType = pluginResponse.headers.get("content-type") || "";
         const responseText = await pluginResponse.text();
         
-        console.log(`Plugin response status: ${pluginResponse.status}, Content-Type: ${contentType}`);
-        console.log(`Plugin response preview: ${responseText.substring(0, 300)}`);
+        log.info("plugin_response", { status: pluginResponse.status, contentType });
 
         if (!contentType.includes("application/json")) {
           // Try health check endpoint first (doesn't require auth)
@@ -130,11 +140,12 @@ serve(async (req) => {
           const healthContentType = healthResponse.headers.get("content-type") || "";
           
           if (!healthContentType.includes("application/json")) {
-            // If we didn't discover a path earlier, mention that
             const pathHint = !discovery.found 
               ? " Se o WordPress está em uma subpasta (ex: /blog), inclua na URL."
               : "";
             
+            log.warn("plugin_not_found", { discoveredPath: discovery.path });
+            log.requestEnd(200, Date.now() - startTime);
             return new Response(
               JSON.stringify({ 
                 success: false, 
@@ -146,6 +157,8 @@ serve(async (req) => {
             );
           }
 
+          log.warn("invalid_api_key");
+          log.requestEnd(200, Date.now() - startTime);
           return new Response(
             JSON.stringify({ 
               success: false, 
@@ -159,6 +172,8 @@ serve(async (req) => {
         const pluginData = JSON.parse(responseText);
 
         if (pluginResponse.ok && pluginData.success) {
+          log.info("plugin_connection_success", { site: pluginData.site });
+          log.requestEnd(200, Date.now() - startTime);
           return new Response(
             JSON.stringify({ 
               success: true, 
@@ -171,6 +186,8 @@ serve(async (req) => {
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         } else {
+          log.warn("plugin_auth_failed", { message: pluginData.message });
+          log.requestEnd(200, Date.now() - startTime);
           return new Response(
             JSON.stringify({ 
               success: false, 
@@ -181,7 +198,8 @@ serve(async (req) => {
           );
         }
       } catch (pluginError) {
-        console.error("Plugin connection error:", pluginError);
+        log.error("plugin_connection_error", { error: pluginError instanceof Error ? pluginError.message : "unknown" });
+        log.requestEnd(200, Date.now() - startTime);
         return new Response(
           JSON.stringify({ 
             success: false, 
@@ -195,6 +213,8 @@ serve(async (req) => {
 
     // Standard Application Password authentication
     if (!wordpress_username || !wordpress_app_password) {
+      log.warn("missing_credentials");
+      log.requestEnd(400, Date.now() - startTime);
       return new Response(
         JSON.stringify({ success: false, error: "Credenciais não fornecidas" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -206,13 +226,13 @@ serve(async (req) => {
     
     if (discovery.found && discovery.path) {
       baseUrl = `${baseUrl}${discovery.path}`;
-      console.log(`Using discovered WordPress path: ${baseUrl}`);
+      log.info("discovered_wp_path", { path: discovery.path });
     }
 
     const apiUrl = `${baseUrl}/wp-json/wp/v2/posts?per_page=1`;
     const auth = btoa(`${wordpress_username}:${wordpress_app_password}`);
 
-    console.log(`Testing standard connection to: ${apiUrl}`);
+    log.info("testing_standard_api", { url: apiUrl });
 
     const response = await fetch(apiUrl, {
       method: "GET",
@@ -225,8 +245,7 @@ serve(async (req) => {
     const contentType = response.headers.get("content-type") || "";
     const responseText = await response.text();
     
-    console.log(`Response status: ${response.status}, Content-Type: ${contentType}`);
-    console.log(`Response preview: ${responseText.substring(0, 200)}`);
+    log.info("standard_api_response", { status: response.status, contentType });
 
     if (response.ok) {
       if (!contentType.includes("application/json")) {
@@ -246,6 +265,8 @@ serve(async (req) => {
           ? " Se o WordPress está em uma subpasta (ex: /blog), inclua na URL."
           : "";
         
+        log.warn("rest_api_html_response");
+        log.requestEnd(200, Date.now() - startTime);
         return new Response(
           JSON.stringify({ 
             success: false, 
@@ -262,6 +283,8 @@ serve(async (req) => {
       try {
         postsData = JSON.parse(responseText);
       } catch {
+        log.warn("invalid_json_response");
+        log.requestEnd(200, Date.now() - startTime);
         return new Response(
           JSON.stringify({ 
             success: false, 
@@ -294,9 +317,11 @@ serve(async (req) => {
                        userData.roles?.includes('author');
         }
       } catch (userError) {
-        console.log("User info fetch failed (non-critical):", userError);
+        log.info("user_info_fetch_failed", { error: "non-critical" });
       }
 
+      log.info("connection_success", { canPublish });
+      log.requestEnd(200, Date.now() - startTime);
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -309,7 +334,7 @@ serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } else {
-      console.error("WordPress API error:", response.status, responseText.substring(0, 500));
+      log.warn("wordpress_api_error", { status: response.status });
 
       let errorMessage = "Falha na conexão";
       let hint = "";
@@ -334,6 +359,7 @@ serve(async (req) => {
         hint = "Verifique se o site está acessível e a REST API está funcionando.";
       }
 
+      log.requestEnd(200, Date.now() - startTime);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -346,7 +372,7 @@ serve(async (req) => {
       );
     }
   } catch (error) {
-    console.error("Connection test error:", error);
+    log.error("connection_test_error", { error: error instanceof Error ? error.message : "unknown" });
     
     let errorMessage = "Não foi possível conectar ao site WordPress.";
     let hint = "Verifique se a URL está correta e o site está acessível.";
@@ -363,6 +389,7 @@ serve(async (req) => {
       }
     }
 
+    log.requestEnd(200, Date.now() - startTime);
     return new Response(
       JSON.stringify({ success: false, error: errorMessage, hint }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
