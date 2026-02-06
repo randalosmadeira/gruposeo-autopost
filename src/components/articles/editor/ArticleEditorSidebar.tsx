@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   Sparkles,
   RefreshCw,
@@ -66,109 +67,119 @@ export function ArticleEditorSidebar({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="config" className="flex-1 overflow-auto m-0 p-4 space-y-6">
-          {/* Configurations Header */}
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center">
-              <Settings className="w-4 h-4 text-primary" />
-            </div>
-            <h3 className="font-semibold">Configurações</h3>
-          </div>
-
-          {/* Title */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">Título</Label>
-              <Button
-                size="sm"
-                onClick={() => onRegenerate('title')}
-                disabled={isRegenerating === 'title'}
-                className="h-7 text-xs gap-1"
-              >
-                {isRegenerating === 'title' ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3 h-3" />
-                )}
-                Recriar com IA
-              </Button>
-            </div>
-            <Input
-              value={article.title || ''}
-              onChange={(e) => onFieldUpdate('title', e.target.value)}
-              placeholder="Título do artigo"
-              className="text-sm"
-            />
-          </div>
-
-          {/* Featured Image */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">Imagem Destacada</Label>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onRegenerate('image')}
-                disabled={isRegenerating === 'image'}
-                className="h-7 text-xs gap-1"
-              >
-                {isRegenerating === 'image' ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-3 h-3" />
-                )}
-                Refazer
-              </Button>
-            </div>
-            {article.featured_image_url ? (
-              <img
-                src={article.featured_image_url}
-                alt="Featured"
-                className="w-full h-44 object-cover rounded-lg border"
-              />
-            ) : (
-              <div className="w-full h-44 bg-muted rounded-lg border flex items-center justify-center">
-                <ImageIcon className="w-8 h-8 text-muted-foreground" />
+        <TabsContent value="config" className="flex-1 m-0">
+          <ScrollArea className="h-[calc(100vh-280px)]">
+            <div className="p-4 space-y-6">
+              {/* Configurations Header */}
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center">
+                  <Settings className="w-4 h-4 text-primary" />
+                </div>
+                <h3 className="font-semibold">Configurações</h3>
               </div>
-            )}
-          </div>
 
-          {/* Meta Description */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">Meta-Descrição</Label>
-              <Button
-                size="sm"
-                onClick={() => onRegenerate('excerpt')}
-                disabled={isRegenerating === 'excerpt'}
-                className="h-7 text-xs gap-1"
-              >
-                {isRegenerating === 'excerpt' ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
+              {/* Title */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">Título</Label>
+                  <Button
+                    size="sm"
+                    onClick={() => onRegenerate('title')}
+                    disabled={isRegenerating === 'title'}
+                    className="h-7 text-xs gap-1"
+                  >
+                    {isRegenerating === 'title' ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3 h-3" />
+                    )}
+                    Recriar com IA
+                  </Button>
+                </div>
+                <Input
+                  value={article.title || ''}
+                  onChange={(e) => onFieldUpdate('title', e.target.value)}
+                  placeholder="Título do artigo"
+                  className="text-sm"
+                />
+              </div>
+
+              {/* Featured Image */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">Imagem Destacada</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onRegenerate('image')}
+                    disabled={isRegenerating === 'image'}
+                    className="h-7 text-xs gap-1"
+                  >
+                    {isRegenerating === 'image' ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3 h-3" />
+                    )}
+                    Refazer
+                  </Button>
+                </div>
+                {article.featured_image_url ? (
+                  <img
+                    src={article.featured_image_url}
+                    alt="Featured"
+                    className="w-full h-44 object-cover rounded-lg border"
+                  />
                 ) : (
-                  <Sparkles className="w-3 h-3" />
+                  <div className="w-full h-44 bg-muted rounded-lg border flex items-center justify-center">
+                    <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                  </div>
                 )}
-                Recriar com IA
-              </Button>
+              </div>
+
+              {/* Meta Description */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">Meta-Descrição</Label>
+                  <Button
+                    size="sm"
+                    onClick={() => onRegenerate('excerpt')}
+                    disabled={isRegenerating === 'excerpt'}
+                    className="h-7 text-xs gap-1"
+                  >
+                    {isRegenerating === 'excerpt' ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3 h-3" />
+                    )}
+                    Recriar com IA
+                  </Button>
+                </div>
+                <Textarea
+                  value={article.excerpt || ''}
+                  onChange={(e) => onFieldUpdate('excerpt', e.target.value)}
+                  placeholder="Descrição curta para SEO"
+                  rows={4}
+                  className="text-sm resize-none"
+                />
+                <p className="text-xs text-muted-foreground text-right">
+                  {excerptLength}/160 caracteres
+                </p>
+              </div>
             </div>
-            <Textarea
-              value={article.excerpt || ''}
-              onChange={(e) => onFieldUpdate('excerpt', e.target.value)}
-              placeholder="Descrição curta para SEO"
-              rows={4}
-              className="text-sm resize-none"
-            />
-            <p className="text-xs text-muted-foreground text-right">
-              {excerptLength}/160 caracteres
-            </p>
-          </div>
+          </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="seo" className="flex-1 overflow-auto m-0 p-4">
-          <SEOOptimizationPanel 
-            content={article.content} 
-            keyword={article.keyword} 
-          />
+        <TabsContent value="seo" className="flex-1 m-0">
+          <ScrollArea className="h-[calc(100vh-280px)]">
+            <div className="p-4">
+              <SEOOptimizationPanel 
+                content={article.content} 
+                keyword={article.keyword}
+                title={article.title}
+                excerpt={article.excerpt}
+              />
+            </div>
+          </ScrollArea>
         </TabsContent>
       </Tabs>
 

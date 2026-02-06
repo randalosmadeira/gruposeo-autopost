@@ -1,9 +1,10 @@
+import { useMemo } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Copy, Code } from 'lucide-react';
 import { sanitizeHTML } from '@/lib/sanitize';
 import { useToast } from '@/hooks/use-toast';
+import { marked } from 'marked';
 
 interface ArticleEditorContentProps {
   content: string | null;
@@ -22,6 +23,21 @@ export function ArticleEditorContent({
 }: ArticleEditorContentProps) {
   const { toast } = useToast();
 
+  // Convert markdown to HTML if needed
+  const processedContent = useMemo(() => {
+    if (!content) return '';
+    
+    // Check if content looks like HTML (starts with a tag)
+    const isHTML = content.trim().startsWith('<');
+    
+    if (isHTML) {
+      return content;
+    }
+    
+    // Convert markdown to HTML
+    return marked.parse(content, { async: false }) as string;
+  }, [content]);
+
   const handleCopyHTML = async () => {
     try {
       await navigator.clipboard.writeText(content || '');
@@ -36,6 +52,17 @@ export function ArticleEditorContent({
         variant: 'destructive',
       });
     }
+  };
+
+  // Format HTML for display with syntax highlighting-like appearance
+  const formatHTMLForDisplay = (html: string) => {
+    // Basic formatting - add newlines after closing tags for readability
+    return html
+      .replace(/></g, '>\n<')
+      .replace(/(<\/?(h[1-6]|p|div|section|ul|ol|li|blockquote|table|tr|td|th|thead|tbody)[^>]*>)/gi, '\n$1')
+      .split('\n')
+      .filter(line => line.trim())
+      .join('\n');
   };
 
   if (activeTab === 'html') {
@@ -53,10 +80,28 @@ export function ArticleEditorContent({
           </Button>
         </div>
         
-        {/* HTML Content */}
+        {/* HTML Content with syntax display */}
         <ScrollArea className="flex-1">
-          <pre className="p-4 text-sm font-mono whitespace-pre-wrap break-words text-muted-foreground leading-relaxed">
-            {content || '<p>Sem conteúdo</p>'}
+          <pre className="p-4 text-sm font-mono leading-relaxed">
+            {processedContent ? (
+              formatHTMLForDisplay(processedContent).split('\n').map((line, index) => {
+                // Simple syntax coloring using semantic tokens
+                const coloredLine = line
+                  .replace(/(&lt;|<)(\/?)(\w+)/g, '<span class="text-primary">$1$2$3</span>')
+                  .replace(/(data-[\w-]+|class|id|href|src|alt)=/g, '<span class="text-chart-4">$1</span>=')
+                  .replace(/="([^"]*)"/g, '="<span class="text-chart-2">$1</span>"');
+                
+                return (
+                  <div 
+                    key={index} 
+                    className="hover:bg-muted/30 px-2 -mx-2 rounded"
+                    dangerouslySetInnerHTML={{ __html: coloredLine }}
+                  />
+                );
+              })
+            ) : (
+              <span className="text-muted-foreground">&lt;p&gt;Sem conteúdo&lt;/p&gt;</span>
+            )}
           </pre>
         </ScrollArea>
       </div>
@@ -85,23 +130,29 @@ export function ArticleEditorContent({
             </h1>
           )}
 
-          {/* Content with styled H2 badges */}
-          <div 
-            className="prose prose-sm max-w-none
-              [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-8 [&_h2]:mb-4
-              [&_h2]:before:content-['H2'] [&_h2]:before:px-2 [&_h2]:before:py-0.5 [&_h2]:before:text-xs 
+          {/* Content with styled headings */}
+          <article 
+            className="prose prose-lg max-w-none
+              [&_h2]:relative [&_h2]:pl-12 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-8 [&_h2]:mb-4
+              [&_h2]:before:content-['H2'] [&_h2]:before:absolute [&_h2]:before:left-0 
+              [&_h2]:before:px-2 [&_h2]:before:py-0.5 [&_h2]:before:text-xs 
               [&_h2]:before:font-medium [&_h2]:before:bg-primary [&_h2]:before:text-primary-foreground 
-              [&_h2]:before:rounded
-              [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mt-6 [&_h3]:mb-3
-              [&_p]:leading-relaxed [&_p]:mb-4
+              [&_h2]:before:rounded [&_h2]:before:top-1
+              [&_h3]:relative [&_h3]:pl-12 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mt-6 [&_h3]:mb-3
+              [&_h3]:before:content-['H3'] [&_h3]:before:absolute [&_h3]:before:left-0 
+              [&_h3]:before:px-2 [&_h3]:before:py-0.5 [&_h3]:before:text-xs 
+              [&_h3]:before:font-medium [&_h3]:before:bg-chart-4 [&_h3]:before:text-primary-foreground 
+              [&_h3]:before:rounded [&_h3]:before:top-0.5
+              [&_p]:leading-relaxed [&_p]:mb-4 [&_p]:text-foreground
               [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-4
               [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mb-4
-              [&_li]:mb-1
-              [&_strong]:font-semibold
-              [&_a]:text-primary [&_a]:underline"
+              [&_li]:mb-2 [&_li]:leading-relaxed
+              [&_strong]:font-bold [&_strong]:text-foreground
+              [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2
+              [&_blockquote]:border-l-4 [&_blockquote]:border-primary [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:my-4"
             dangerouslySetInnerHTML={{ 
               __html: sanitizeHTML(
-                content || '<p class="text-muted-foreground">Sem conteúdo</p>'
+                processedContent || '<p class="text-muted-foreground">Sem conteúdo</p>'
               ) 
             }}
           />
