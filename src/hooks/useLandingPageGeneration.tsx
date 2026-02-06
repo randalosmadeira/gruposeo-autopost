@@ -33,6 +33,12 @@ export interface LandingPageConfig {
   tone: string;
   customTone?: string;
   pointOfView: string;
+  // NEW: Audience Type
+  audienceType: 'b2b' | 'b2c' | 'both';
+  // NEW: Secondary Keywords (long-tail)
+  secondaryKeywords: string;
+  // NEW: Segment for compliance
+  segment: 'general' | 'juridico' | 'saude' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'educacao';
   // Advanced settings
   usePlatformCredits: boolean;
   seoOptimization: boolean;

@@ -30,7 +30,82 @@ interface LandingPageConfig {
   conclusion: boolean;
   faq: boolean;
   template?: string;
+  // NEW fields
+  audienceType?: 'b2b' | 'b2c' | 'both';
+  secondaryKeywords?: string;
+  segment?: 'general' | 'juridico' | 'saude' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'educacao';
+  tone?: string;
+  pointOfView?: string;
 }
+
+// Segment-specific compliance rules
+const segmentCompliance: Record<string, { rules: string; disclaimers: string; tone: string }> = {
+  general: {
+    rules: '',
+    disclaimers: '',
+    tone: 'profissional e persuasivo',
+  },
+  juridico: {
+    rules: `
+COMPLIANCE OAB (Resolução 02/2015):
+- PROIBIDO: termos como "o melhor advogado", "garantia de resultado", "preços mais baixos"
+- PROIBIDO: captação de clientela, promessas de êxito, comparações com outros escritórios
+- USE: linguagem informativa e educativa, foco em orientação jurídica
+- INCLUA: disclaimers sobre análise de caso específico ser necessária`,
+    disclaimers: 'Este artigo tem caráter informativo e não substitui a consulta a um advogado para análise do seu caso específico.',
+    tone: 'formal, técnico mas acessível, educativo',
+  },
+  saude: {
+    rules: `
+COMPLIANCE ÁREA DA SAÚDE:
+- INCLUA: credenciais profissionais quando mencionar recomendações
+- PROIBIDO: promessas de cura, diagnósticos à distância, substituir consulta médica
+- USE: linguagem empática, baseada em evidências científicas
+- CITE: fontes médicas confiáveis quando possível`,
+    disclaimers: 'As informações deste artigo não substituem a consulta com profissionais de saúde. Procure sempre orientação médica qualificada.',
+    tone: 'empático, profissional, baseado em evidências',
+  },
+  fintech: {
+    rules: `
+DIRETRIZES FINTECH/FINANÇAS:
+- INCLUA: dados de mercado atualizados, glossário de termos quando necessário
+- USE: transparência sobre riscos de investimento
+- MENCIONE: regulamentação aplicável (BACEN, CVM quando relevante)
+- EVITE: promessas de retorno garantido`,
+    disclaimers: 'Investimentos envolvem riscos. Rentabilidade passada não garante resultados futuros. Consulte um profissional antes de investir.',
+    tone: 'confiável, técnico, orientado a dados',
+  },
+  ecommerce: {
+    rules: `
+DIRETRIZES E-COMMERCE:
+- INCLUA: prova social (reviews, avaliações, números de vendas)
+- USE: gatilhos de escassez e urgência quando genuínos
+- DESTAQUE: políticas de devolução, garantias, segurança do pagamento
+- FOQUE: benefícios e transformação do produto`,
+    disclaimers: '',
+    tone: 'persuasivo, urgente, focado em benefícios',
+  },
+  'b2b-saas': {
+    rules: `
+DIRETRIZES B2B SAAS:
+- FOQUE: ROI, métricas de negócio, economia de tempo/custo
+- INCLUA: cases de uso, comparativos com alternativas
+- DEMONSTRE: integrações, segurança de dados, escalabilidade
+- USE: linguagem que ressoa com decisores (CTOs, CEOs, gerentes)`,
+    disclaimers: '',
+    tone: 'profissional, estratégico, orientado a resultados',
+  },
+  educacao: {
+    rules: `
+DIRETRIZES EDUCAÇÃO:
+- FOQUE: transformação do aluno, metodologia de ensino
+- INCLUA: roadmaps de aprendizado, pré-requisitos, outcomes
+- DEMONSTRE: credenciais do instrutor, certificações oferecidas
+- USE: linguagem inspiradora e motivacional`,
+    disclaimers: '',
+    tone: 'inspirador, didático, encorajador',
+  },
+};
 
 const wordCountRanges = {
   short: { min: 600, max: 1000 },
@@ -122,18 +197,42 @@ const nicheTemplates: Record<string, { structure: string; tone: string; elements
 function buildSystemPrompt(config: LandingPageConfig): string {
   const wordRange = wordCountRanges[config.size];
   const template = config.template ? nicheTemplates[config.template] : null;
+  const segment = config.segment || 'general';
+  const compliance = segmentCompliance[segment] || segmentCompliance.general;
+  const audienceType = config.audienceType || 'both';
+  
+  // Parse secondary keywords
+  const secondaryKws = config.secondaryKeywords 
+    ? config.secondaryKeywords.split(',').map(k => k.trim()).filter(k => k.length > 0)
+    : [];
+  
+  // Audience type description
+  const audienceDesc = {
+    'b2b': 'empresas e decisores de negócio (tom profissional, foco em ROI, métricas e eficiência)',
+    'b2c': 'consumidores finais (tom mais emocional, foco em benefícios pessoais e transformação)',
+    'both': 'tanto empresas (B2B) quanto consumidores finais (B2C), balanceando linguagem técnica com acessibilidade',
+  }[audienceType];
   
   let systemPrompt = `Você é um Redator SEO Sênior e Especialista em Copywriting de Vendas. Você cria ARTIGOS PERSUASIVOS que:
 1. Ranqueiam na primeira página do Google, Bing e buscadores
 2. São indexados e reconhecidos como autoridade pelas IAs (ChatGPT, Claude, Gemini, Manus)
-3. Convertem leitores B2B e B2C em clientes através de técnicas avançadas de persuasão
+3. Convertem leitores em clientes através de técnicas avançadas de persuasão
 4. Estabelecem autoridade, credibilidade e referência no nicho
+
+=== TIPO DE PÚBLICO ===
+PÚBLICO-ALVO: ${audienceDesc}
+${audienceType === 'b2b' ? 'FOQUE em: ROI, economia de tempo/custo, casos de uso empresarial, métricas de sucesso' : ''}
+${audienceType === 'b2c' ? 'FOQUE em: transformação pessoal, benefícios emocionais, facilidade de uso, satisfação' : ''}
 
 === DIRETRIZES DE SEO AVANÇADO ===
 
+PALAVRA-CHAVE PRINCIPAL: "${config.keyword}"
+${secondaryKws.length > 0 ? `PALAVRAS-CHAVE SECUNDÁRIAS (long-tail): ${secondaryKws.join(', ')}` : ''}
+
 OTIMIZAÇÃO PARA BUSCADORES:
-- Palavra-chave principal "${config.keyword}" no H1, primeiro parágrafo e distribuída naturalmente (densidade 0.5-1.5%)
+- Palavra-chave principal no H1, primeiro parágrafo e distribuída naturalmente (densidade 0.5-1.5%)
 - Use variações semânticas, sinônimos e termos LSI (Latent Semantic Indexing)
+${secondaryKws.length > 0 ? `- Distribua as palavras-chave secundárias naturalmente ao longo do texto` : ''}
 - Aplique palavras-chave de cauda longa naturalmente no conteúdo
 - Estrutura de headings semântica: H1 > H2 > H3 (apenas um H1)
 - URLs, meta descriptions e alt texts otimizados
@@ -167,6 +266,8 @@ FRAMEWORK AIDA:
 3. DESEJO: Benefícios e transformação
 4. AÇÃO: CTAs claros e urgentes
 
+${compliance.rules ? `=== COMPLIANCE DO SEGMENTO (${segment.toUpperCase()}) ===${compliance.rules}` : ''}
+
 === ESPECIFICAÇÕES DO CONTEÚDO ===
 
 REGRAS OBRIGATÓRIAS:
@@ -176,15 +277,17 @@ REGRAS OBRIGATÓRIAS:
 - Parágrafos curtos (2-4 linhas) otimizados para mobile
 - Variação no tamanho das frases para ritmo natural
 - Negrito para palavras-chave e pontos importantes
+- TOM DE VOZ: ${compliance.tone || config.tone || 'profissional e persuasivo'}
 
 TIPO DE OFERTA: ${config.offerType}
 ${config.location ? `ALCANCE GEOGRÁFICO: ${config.location} (adapte linguagem regional quando aplicável)` : ''}
 
-PÚBLICO-ALVO: ${config.targetAudience}
+PÚBLICO-ALVO ESPECÍFICO: ${config.targetAudience}
 DOR PRINCIPAL: ${config.painPoint}
 ${config.differentials ? `DIFERENCIAIS COMPETITIVOS: ${config.differentials}` : ''}
 OBJETIVO DE CONVERSÃO: ${config.ctaObjective}
-${config.additionalInfo ? `INFORMAÇÕES ADICIONAIS: ${config.additionalInfo}` : ''}`;
+${config.additionalInfo ? `INFORMAÇÕES ADICIONAIS: ${config.additionalInfo}` : ''}
+${compliance.disclaimers ? `\nDISCLAIMER OBRIGATÓRIO: Inclua ao final do artigo: "${compliance.disclaimers}"` : ''}`;
 
   // Add company info
   if (config.companyName || config.companyPhone || config.companyAddress) {
@@ -241,12 +344,22 @@ Antes de entregar, verifique:
 
 function buildUserPrompt(config: LandingPageConfig): string {
   const template = config.template ? nicheTemplates[config.template] : null;
+  const segment = config.segment || 'general';
+  const audienceType = config.audienceType || 'both';
+  
+  // Parse secondary keywords for user prompt
+  const secondaryKws = config.secondaryKeywords 
+    ? config.secondaryKeywords.split(',').map(k => k.trim()).filter(k => k.length > 0)
+    : [];
   
   return `Crie um ARTIGO DE VENDAS PERSUASIVO e otimizado para SEO sobre: "${config.title || config.keyword}"
 
 ${template ? `Use a estrutura do template ${config.template} como base, adaptando para formato de artigo de blog.` : ''}
 
 OBJETIVO DE CONVERSÃO: ${config.ctaObjective}
+PÚBLICO: ${audienceType === 'b2b' ? 'Empresas (B2B)' : audienceType === 'b2c' ? 'Consumidores (B2C)' : 'B2B e B2C'}
+SEGMENTO: ${segment.toUpperCase()}
+${secondaryKws.length > 0 ? `KEYWORDS SECUNDÁRIAS PARA INCLUIR: ${secondaryKws.slice(0, 5).join(', ')}` : ''}
 
 INSTRUÇÕES DE EXECUÇÃO:
 1. Comece com um HOOK emocional ou dado impactante nos primeiros 3 segundos de leitura
@@ -256,12 +369,14 @@ INSTRUÇÕES DE EXECUÇÃO:
 5. Integre prova social, autoridade e credenciais naturalmente
 6. Distribua CTAs sutis ao longo do texto (não apenas no final)
 7. Termine com urgência genuína e caminho claro para ação
+${segment !== 'general' ? `8. IMPORTANTE: Siga rigorosamente as regras de compliance do segmento ${segment.toUpperCase()}` : ''}
 
 LEMBRE-SE:
 - Este artigo será indexado pelo Google, Bing e lido por IAs como ChatGPT e Claude
 - O conteúdo deve estabelecer a empresa/profissional como AUTORIDADE no assunto
 - Equilibre técnica de vendas com valor real entregue ao leitor
 - O leitor deve sentir que ganhou conhecimento mesmo que não compre
+${secondaryKws.length > 0 ? `- Inclua as palavras-chave secundárias de forma natural e relevante` : ''}
 
 Comece agora com o artigo completo:`;
 }
