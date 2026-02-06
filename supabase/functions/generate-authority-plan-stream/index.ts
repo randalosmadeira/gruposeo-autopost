@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createLogger, createRequestId } from "../_shared/logger.ts";
+
+const FUNCTION_NAME = "generate-authority-plan-stream";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -81,15 +84,22 @@ async function generateImage(prompt: string): Promise<string | null> {
 }
 
 serve(async (req) => {
+  const requestId = createRequestId();
+  const log = createLogger(FUNCTION_NAME, requestId);
+  const startTime = Date.now();
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  log.requestStart(req.method);
+
   // ========== AUTHENTICATION (must happen before streaming) ==========
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
+  if (!authHeader?.startsWith("Bearer ")) {
+    log.authFailure("missing_or_invalid_header");
     return new Response(
-      JSON.stringify({ error: "Autorização necessária" }),
+      JSON.stringify({ error: "Autorização necessária", request_id: requestId }),
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -101,13 +111,16 @@ serve(async (req) => {
     global: { headers: { Authorization: authHeader } },
   });
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const token = authHeader.replace("Bearer ", "");
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
   if (authError || !user) {
+    log.authFailure(authError?.message || "user_not_found");
     return new Response(
-      JSON.stringify({ error: "Usuário não autenticado" }),
+      JSON.stringify({ error: "Usuário não autenticado", request_id: requestId }),
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
+  log.authSuccess(user.id);
   // ========== END AUTHENTICATION ==========
 
   const encoder = new TextEncoder();
@@ -127,6 +140,8 @@ serve(async (req) => {
       const body: AuthorityPlanRequest = await req.json();
       const { centralTheme, satelliteCount, projectId, language, publicationMode } = body;
 
+      log.info("generation_started", { theme: centralTheme, satelliteCount, projectId });
+
       // Validate project ownership if projectId is provided
       if (projectId) {
         const { data: project, error: projectError } = await supabaseAdmin
@@ -137,7 +152,8 @@ serve(async (req) => {
           .single();
 
         if (projectError || !project) {
-          await sendEvent("error", { message: "Projeto não encontrado ou acesso negado" });
+          log.warn("project_access_denied", { projectId });
+          await sendEvent("error", { message: "Projeto não encontrado ou acesso negado", request_id: requestId });
           await writer.close();
           return;
         }
@@ -150,11 +166,11 @@ serve(async (req) => {
       const { data: logEntry } = await supabaseAdmin
         .from("generation_logs")
         .insert({
-          user_id: user.id, // Use authenticated user's ID
+          user_id: user.id,
           generation_type: "authority_plan",
           status: "running",
           total_steps: totalSteps,
-          metadata: { centralTheme, satelliteCount, projectId },
+          metadata: { centralTheme, satelliteCount, projectId, request_id: requestId },
         })
         .select()
         .single();
@@ -210,7 +226,7 @@ serve(async (req) => {
       const { data: pillarArticle, error: pillarError } = await supabaseAdmin
         .from("articles")
         .insert({
-          user_id: user.id, // Use authenticated user's ID
+          user_id: user.id,
           project_id: projectId,
           keyword: pillarPlan.keyword,
           title: pillarPlan.title,
@@ -226,7 +242,11 @@ serve(async (req) => {
         .select()
         .single();
 
-      if (pillarError) throw pillarError;
+      if (pillarError) {
+        log.error("pillar_save_error", { error: pillarError.message });
+        throw pillarError;
+      }
+      log.info("pillar_created", { articleId: pillarArticle.id });
       await sendEvent("pillar_created", { id: pillarArticle.id, title: pillarArticle.title, featured_image_url: pillarImage });
 
       // Generate satellite plans
@@ -273,7 +293,7 @@ serve(async (req) => {
         const { data: article, error } = await supabaseAdmin
           .from("articles")
           .insert({
-            user_id: user.id, // Use authenticated user's ID
+            user_id: user.id,
             project_id: projectId,
             keyword: plan.keyword,
             title: plan.title,
@@ -291,6 +311,7 @@ serve(async (req) => {
 
         if (!error && article) {
           satellites.push(article);
+          log.info("satellite_created", { index: i + 1, articleId: article.id });
           await sendEvent("satellite_created", { index: i + 1, id: article.id, title: article.title, featured_image_url: image });
         }
 
@@ -302,11 +323,15 @@ serve(async (req) => {
         await supabaseAdmin.from("generation_logs").update({ status: "completed", completed_at: new Date().toISOString(), completed_steps: totalSteps }).eq("id", logId);
       }
 
+      log.info("generation_completed", { pillarId: pillarArticle.id, satelliteCount: satellites.length });
+      log.requestEnd(200, Date.now() - startTime);
+
       await sendEvent("complete", { success: true, pillar: pillarArticle, satellites, totalArticles: 1 + satellites.length });
       await writer.close();
     } catch (error) {
-      console.error("Generation error:", error);
-      await sendEvent("error", { message: error instanceof Error ? error.message : "Unknown error" });
+      log.error("generation_error", { error: error instanceof Error ? error.message : "unknown" });
+      log.requestEnd(500, Date.now() - startTime);
+      await sendEvent("error", { message: error instanceof Error ? error.message : "Unknown error", request_id: requestId });
       await writer.close();
     }
   })();

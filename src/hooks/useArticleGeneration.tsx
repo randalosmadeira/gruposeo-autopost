@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useToast } from './use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { createErrorToastContent } from '@/components/ui/error-toast';
 
 const GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-article`;
 
@@ -73,32 +74,33 @@ export function useArticleGeneration() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido', request_id: undefined }));
+        const requestId = errorData.request_id;
         
         if (response.status === 429) {
-          toast({
-            title: 'Limite excedido',
-            description: 'Muitas requisições. Aguarde alguns segundos e tente novamente.',
-            variant: 'destructive',
-          });
+          toast(createErrorToastContent(
+            'Limite excedido',
+            'Muitas requisições. Aguarde alguns segundos e tente novamente.',
+            requestId
+          ));
         } else if (response.status === 402) {
-          toast({
-            title: 'Créditos insuficientes',
-            description: 'Adicione créditos à sua conta para continuar gerando artigos.',
-            variant: 'destructive',
-          });
+          toast(createErrorToastContent(
+            'Créditos insuficientes',
+            'Adicione créditos à sua conta para continuar gerando artigos.',
+            requestId
+          ));
         } else if (response.status === 401) {
-          toast({
-            title: 'Sessão expirada',
-            description: 'Por favor, faça login novamente.',
-            variant: 'destructive',
-          });
+          toast(createErrorToastContent(
+            'Sessão expirada',
+            'Por favor, faça login novamente.',
+            requestId
+          ));
         } else {
-          toast({
-            title: 'Erro na geração',
-            description: errorData.error || 'Falha ao gerar artigo',
-            variant: 'destructive',
-          });
+          toast(createErrorToastContent(
+            'Erro na geração',
+            errorData.error || 'Falha ao gerar artigo',
+            requestId
+          ));
         }
         setIsGenerating(false);
         return null;
@@ -195,11 +197,10 @@ export function useArticleGeneration() {
       return fullContent;
     } catch (error) {
       console.error('Generation error:', error);
-      toast({
-        title: 'Erro na geração',
-        description: error instanceof Error ? error.message : 'Erro desconhecido',
-        variant: 'destructive',
-      });
+      toast(createErrorToastContent(
+        'Erro na geração',
+        error instanceof Error ? error.message : 'Erro desconhecido'
+      ));
       setIsGenerating(false);
       return null;
     }
