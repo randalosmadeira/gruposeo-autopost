@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.parse-rss]
 verify_jwt = false
+
+[functions.execute-news-agents]
+verify_jwt = false
