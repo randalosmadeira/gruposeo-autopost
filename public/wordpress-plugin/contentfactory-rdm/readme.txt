@@ -4,7 +4,7 @@ Tags: content, seo, articles, automation, ai, image-optimization, indexing
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.2.0
+Stable tag: 2.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,6 +65,16 @@ Sim! Na versão 2.1, o plugin notifica automaticamente o Google e o Bing quando 
 Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject schema) e FAQs automaticamente.
 
 == Changelog ==
+
+= 2.2.1 =
+* **CRÍTICO**: Corrigido conflito com Elementor e page builders que causava tela branca
+* **CRÍTICO**: Corrigido erro de tabela não existente durante ativação
+* **CORRIGIDO**: Lazy loading de dependências para evitar conflitos de memória
+* **CORRIGIDO**: Hooks agora verificam se page builders estão salvando antes de executar
+* **CORRIGIDO**: Logger não falha mais quando tabelas não existem
+* **MELHORADO**: Detecção de Elementor, Beaver Builder, Divi e WPBakery
+* **MELHORADO**: Hooks de save_post usam prioridade baixa (100) para evitar conflitos
+* **MELHORADO**: Classes são carregadas sob demanda (lazy loading)
 
 = 2.2.0 =
 * **NOVO**: Validador de Schema JSON-LD antes da publicação

@@ -3,7 +3,7 @@
  * Plugin Name: ContentFactory RDM
  * Plugin URI: https://gruposeo.marketing/contentfactory
  * Description: Integração avançada com ContentFactory para publicação automática de artigos, sincronização, otimização de imagens, links internos e indexação SEO automática.
- * Version: 2.2.0
+ * Version: 2.2.1
  * Author: GRUPO SEO MARKETING
  * Author URI: https://gruposeo.marketing
  * License: GPL v2 or later
@@ -20,24 +20,69 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '2.2.0');
+define('CFRDM_VERSION', '2.2.1');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
 define('CFRDM_LOG_TABLE', 'cfrdm_logs');
 define('CFRDM_NEWS_TABLE', 'cfrdm_news');
 
-// Include required files
-require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-api.php';
-require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-webhooks.php';
-require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-articles.php';
-require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-admin.php';
-require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-logger.php';
-require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-image-optimizer.php';
-require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-sync.php';
-require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-internal-links.php';
-require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-indexing.php';
-require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-schema-validator.php';
+/**
+ * CRITICAL: Lazy load includes to prevent conflicts with page builders
+ * Only load classes when needed to avoid memory issues and conflicts
+ */
+function cfrdm_load_dependencies() {
+    static $loaded = false;
+    
+    if ($loaded) {
+        return;
+    }
+    
+    $loaded = true;
+    
+    // Core classes - always needed
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-logger.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-api.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-articles.php';
+}
+
+/**
+ * Load admin dependencies only when needed
+ */
+function cfrdm_load_admin_dependencies() {
+    cfrdm_load_dependencies();
+    
+    static $admin_loaded = false;
+    
+    if ($admin_loaded) {
+        return;
+    }
+    
+    $admin_loaded = true;
+    
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-admin.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-image-optimizer.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-sync.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-internal-links.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-indexing.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-schema-validator.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-webhooks.php';
+}
+
+/**
+ * Check if tables exist
+ */
+function cfrdm_tables_exist() {
+    global $wpdb;
+    
+    $logs_table = $wpdb->prefix . CFRDM_LOG_TABLE;
+    $result = $wpdb->get_var($wpdb->prepare(
+        "SHOW TABLES LIKE %s",
+        $logs_table
+    ));
+    
+    return !empty($result);
+}
 
 /**
  * Main plugin class
@@ -45,6 +90,7 @@ require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-schema-validator.php';
 class ContentFactory_RDM {
     
     private static $instance = null;
+    private $tables_verified = false;
     
     public static function get_instance() {
         if (null === self::$instance) {
@@ -54,67 +100,231 @@ class ContentFactory_RDM {
     }
     
     private function __construct() {
-        $this->init_hooks();
+        // Wait for WordPress to fully load before initializing hooks
+        add_action('plugins_loaded', array($this, 'init_hooks'), 10);
     }
     
-    private function init_hooks() {
-        // Activation/Deactivation hooks
+    public function init_hooks() {
+        // Activation/Deactivation hooks MUST be registered immediately
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
         
-        // Admin hooks
-        add_action('admin_menu', array($this, 'add_admin_menu'));
-        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
-        add_action('admin_init', array($this, 'register_settings'));
+        // Only load in admin or REST API contexts to avoid conflicts
+        if (is_admin()) {
+            $this->init_admin_hooks();
+        }
         
-        // REST API
+        // REST API hooks - load only when needed
         add_action('rest_api_init', array($this, 'register_rest_routes'));
-        
-        // Webhooks
-        add_action('transition_post_status', array('CFRDM_Webhooks', 'on_post_status_change'), 10, 3);
-        add_action('before_delete_post', array('CFRDM_Webhooks', 'on_post_delete'));
-        
-        // Image optimization hooks
-        add_action('add_attachment', array('CFRDM_Image_Optimizer', 'optimize_on_upload'));
-        add_filter('wp_generate_attachment_metadata', array('CFRDM_Image_Optimizer', 'optimize_thumbnails'), 10, 2);
-        
-        // Auto-correction hooks
-        add_action('save_post', array('CFRDM_Sync', 'auto_correct_post'), 20, 3);
-        
-        // Internal linking hooks
-        new CFRDM_Internal_Links();
         
         // Plugin action links
         add_filter('plugin_action_links_' . CFRDM_PLUGIN_BASENAME, array($this, 'add_action_links'));
         
-        // AJAX handlers
-        add_action('wp_ajax_cfrdm_clear_logs', array('CFRDM_Admin', 'ajax_clear_logs'));
-        add_action('wp_ajax_cfrdm_export_logs', array('CFRDM_Admin', 'ajax_export_logs'));
-        add_action('wp_ajax_cfrdm_sync_stats', array('CFRDM_Admin', 'ajax_sync_stats'));
-        add_action('wp_ajax_cfrdm_dismiss_news', array('CFRDM_Admin', 'ajax_dismiss_news'));
-        add_action('wp_ajax_cfrdm_run_autocorrect', array('CFRDM_Admin', 'ajax_run_autocorrect'));
-        add_action('wp_ajax_cfrdm_analyze_links', array('CFRDM_Admin', 'ajax_analyze_links'));
-        add_action('wp_ajax_cfrdm_generate_links', array('CFRDM_Admin', 'ajax_generate_links'));
-        add_action('wp_ajax_cfrdm_validate_schema', array('CFRDM_Admin', 'ajax_validate_schema'));
+        // Cron jobs - only schedule if not already scheduled
+        add_action('init', array($this, 'schedule_cron_jobs'));
         
-        // Cron jobs
+        // Cron callbacks
         add_action('cfrdm_daily_cleanup', array($this, 'daily_cleanup'));
-        add_action('cfrdm_sync_stats', array('CFRDM_Sync', 'sync_stats_to_platform'));
-        add_action('cfrdm_fetch_news', array('CFRDM_Sync', 'fetch_platform_news'));
+        add_action('cfrdm_sync_stats', array($this, 'sync_stats_callback'));
+        add_action('cfrdm_fetch_news', array($this, 'fetch_news_callback'));
+    }
+    
+    private function init_admin_hooks() {
+        add_action('admin_menu', array($this, 'add_admin_menu'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+        add_action('admin_init', array($this, 'register_settings'));
         
-        // Schedule cron jobs
-        if (!wp_next_scheduled('cfrdm_daily_cleanup')) {
-            wp_schedule_event(time(), 'daily', 'cfrdm_daily_cleanup');
+        // AJAX handlers - load dependencies only when AJAX is called
+        add_action('wp_ajax_cfrdm_clear_logs', array($this, 'handle_ajax_clear_logs'));
+        add_action('wp_ajax_cfrdm_export_logs', array($this, 'handle_ajax_export_logs'));
+        add_action('wp_ajax_cfrdm_sync_stats', array($this, 'handle_ajax_sync_stats'));
+        add_action('wp_ajax_cfrdm_dismiss_news', array($this, 'handle_ajax_dismiss_news'));
+        add_action('wp_ajax_cfrdm_run_autocorrect', array($this, 'handle_ajax_run_autocorrect'));
+        add_action('wp_ajax_cfrdm_analyze_links', array($this, 'handle_ajax_analyze_links'));
+        add_action('wp_ajax_cfrdm_generate_links', array($this, 'handle_ajax_generate_links'));
+        add_action('wp_ajax_cfrdm_validate_schema', array($this, 'handle_ajax_validate_schema'));
+        
+        // Webhook hooks - only for posts, exclude Elementor and other page builders
+        add_action('transition_post_status', array($this, 'handle_post_status_change'), 100, 3);
+        add_action('before_delete_post', array($this, 'handle_post_delete'), 100);
+        
+        // Image optimization hooks - lower priority to avoid conflicts
+        add_action('add_attachment', array($this, 'handle_attachment_upload'), 100);
+        add_filter('wp_generate_attachment_metadata', array($this, 'handle_attachment_metadata'), 100, 2);
+        
+        // Auto-correction hooks - only for regular posts, lower priority
+        add_action('save_post_post', array($this, 'handle_save_post'), 100, 3);
+    }
+    
+    /**
+     * AJAX Handlers with lazy loading
+     */
+    public function handle_ajax_clear_logs() {
+        cfrdm_load_admin_dependencies();
+        CFRDM_Admin::ajax_clear_logs();
+    }
+    
+    public function handle_ajax_export_logs() {
+        cfrdm_load_admin_dependencies();
+        CFRDM_Admin::ajax_export_logs();
+    }
+    
+    public function handle_ajax_sync_stats() {
+        cfrdm_load_admin_dependencies();
+        CFRDM_Admin::ajax_sync_stats();
+    }
+    
+    public function handle_ajax_dismiss_news() {
+        cfrdm_load_admin_dependencies();
+        CFRDM_Admin::ajax_dismiss_news();
+    }
+    
+    public function handle_ajax_run_autocorrect() {
+        cfrdm_load_admin_dependencies();
+        CFRDM_Admin::ajax_run_autocorrect();
+    }
+    
+    public function handle_ajax_analyze_links() {
+        cfrdm_load_admin_dependencies();
+        CFRDM_Admin::ajax_analyze_links();
+    }
+    
+    public function handle_ajax_generate_links() {
+        cfrdm_load_admin_dependencies();
+        CFRDM_Admin::ajax_generate_links();
+    }
+    
+    public function handle_ajax_validate_schema() {
+        cfrdm_load_admin_dependencies();
+        CFRDM_Admin::ajax_validate_schema();
+    }
+    
+    /**
+     * Hook handlers with Elementor protection
+     */
+    public function handle_post_status_change($new_status, $old_status, $post) {
+        // Skip if Elementor is saving
+        if ($this->is_page_builder_saving($post)) {
+            return;
         }
-        if (!wp_next_scheduled('cfrdm_sync_stats')) {
-            wp_schedule_event(time(), 'hourly', 'cfrdm_sync_stats');
+        
+        // Only process regular posts
+        if ($post->post_type !== 'post') {
+            return;
         }
-        if (!wp_next_scheduled('cfrdm_fetch_news')) {
-            wp_schedule_event(time(), 'twicedaily', 'cfrdm_fetch_news');
+        
+        cfrdm_load_admin_dependencies();
+        CFRDM_Webhooks::on_post_status_change($new_status, $old_status, $post);
+    }
+    
+    public function handle_post_delete($post_id) {
+        $post = get_post($post_id);
+        if (!$post || $post->post_type !== 'post') {
+            return;
         }
+        
+        cfrdm_load_admin_dependencies();
+        CFRDM_Webhooks::on_post_delete($post_id);
+    }
+    
+    public function handle_attachment_upload($attachment_id) {
+        // Skip if doing autosave or bulk edit
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+        
+        cfrdm_load_admin_dependencies();
+        CFRDM_Image_Optimizer::optimize_on_upload($attachment_id);
+    }
+    
+    public function handle_attachment_metadata($metadata, $attachment_id) {
+        cfrdm_load_admin_dependencies();
+        return CFRDM_Image_Optimizer::optimize_thumbnails($metadata, $attachment_id);
+    }
+    
+    public function handle_save_post($post_id, $post, $update) {
+        // Skip if Elementor or other page builders are active
+        if ($this->is_page_builder_saving($post)) {
+            return;
+        }
+        
+        // Skip autosaves and revisions
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+        
+        if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) {
+            return;
+        }
+        
+        cfrdm_load_admin_dependencies();
+        CFRDM_Sync::auto_correct_post($post_id, $post, $update);
+    }
+    
+    /**
+     * Check if a page builder is currently saving
+     */
+    private function is_page_builder_saving($post) {
+        // Elementor detection
+        if (defined('ELEMENTOR_VERSION')) {
+            // Check if this is an Elementor autosave or action
+            if (isset($_POST['action']) && strpos($_POST['action'], 'elementor') !== false) {
+                return true;
+            }
+            
+            // Check for Elementor data in post meta being saved
+            if (isset($_POST['_elementor_data'])) {
+                return true;
+            }
+        }
+        
+        // Beaver Builder detection
+        if (class_exists('FLBuilderModel')) {
+            if (isset($_POST['fl_builder_data'])) {
+                return true;
+            }
+        }
+        
+        // Divi Builder detection
+        if (defined('ET_BUILDER_PLUGIN_VERSION')) {
+            if (isset($_POST['et_pb_use_builder']) || isset($_POST['et_builder_version'])) {
+                return true;
+            }
+        }
+        
+        // WPBakery Page Builder detection
+        if (defined('WPB_VC_VERSION')) {
+            if (isset($_POST['vc_grid_id'])) {
+                return true;
+            }
+        }
+        
+        // Check for common page builder post types
+        $excluded_types = array(
+            'elementor_library',
+            'fl-builder-template',
+            'et_pb_layout',
+            'vc_grid_item',
+            'revision',
+            'nav_menu_item',
+            'custom_css',
+            'customize_changeset',
+            'oembed_cache',
+            'user_request',
+            'wp_block',
+        );
+        
+        if (in_array($post->post_type, $excluded_types, true)) {
+            return true;
+        }
+        
+        return false;
     }
     
     public function activate() {
+        // Create database tables FIRST
+        $this->create_tables();
+        
         // Generate API key if not exists
         if (!get_option('cfrdm_api_key')) {
             update_option('cfrdm_api_key', wp_generate_uuid4());
@@ -141,14 +351,14 @@ class ContentFactory_RDM {
             }
         }
         
-        // Create database tables
-        $this->create_tables();
-        
         // Flush rewrite rules
         flush_rewrite_rules();
         
-        // Log activation
-        CFRDM_Logger::log('system', 'Plugin ativado', array('version' => CFRDM_VERSION));
+        // Log activation AFTER tables are created
+        if (cfrdm_tables_exist()) {
+            cfrdm_load_dependencies();
+            CFRDM_Logger::log('system', 'Plugin ativado', array('version' => CFRDM_VERSION));
+        }
     }
     
     public function deactivate() {
@@ -159,7 +369,10 @@ class ContentFactory_RDM {
         
         flush_rewrite_rules();
         
-        CFRDM_Logger::log('system', 'Plugin desativado');
+        if (cfrdm_tables_exist()) {
+            cfrdm_load_dependencies();
+            CFRDM_Logger::log('system', 'Plugin desativado');
+        }
     }
     
     private function create_tables() {
@@ -211,9 +424,27 @@ class ContentFactory_RDM {
         dbDelta($sql_news);
     }
     
+    public function schedule_cron_jobs() {
+        if (!wp_next_scheduled('cfrdm_daily_cleanup')) {
+            wp_schedule_event(time(), 'daily', 'cfrdm_daily_cleanup');
+        }
+        if (!wp_next_scheduled('cfrdm_sync_stats')) {
+            wp_schedule_event(time(), 'hourly', 'cfrdm_sync_stats');
+        }
+        if (!wp_next_scheduled('cfrdm_fetch_news')) {
+            wp_schedule_event(time(), 'twicedaily', 'cfrdm_fetch_news');
+        }
+    }
+    
     public function add_admin_menu() {
-        // Get unread news count
-        $unread_count = CFRDM_Sync::get_unread_news_count();
+        cfrdm_load_admin_dependencies();
+        
+        // Get unread news count safely
+        $unread_count = 0;
+        if (cfrdm_tables_exist()) {
+            $unread_count = CFRDM_Sync::get_unread_news_count();
+        }
+        
         $menu_title = __('ContentFactory', 'contentfactory-rdm');
         if ($unread_count > 0) {
             $menu_title .= ' <span class="awaiting-mod">' . $unread_count . '</span>';
@@ -374,6 +605,7 @@ class ContentFactory_RDM {
     }
     
     public function register_rest_routes() {
+        cfrdm_load_dependencies();
         CFRDM_API::register_routes();
     }
     
@@ -385,6 +617,12 @@ class ContentFactory_RDM {
     }
     
     public function daily_cleanup() {
+        if (!cfrdm_tables_exist()) {
+            return;
+        }
+        
+        cfrdm_load_admin_dependencies();
+        
         // Clean old logs
         $retention_days = get_option('cfrdm_log_retention_days', 30);
         CFRDM_Logger::cleanup_old_logs($retention_days);
@@ -396,7 +634,27 @@ class ContentFactory_RDM {
             'log_retention_days' => $retention_days
         ));
     }
+    
+    public function sync_stats_callback() {
+        if (!cfrdm_tables_exist()) {
+            return;
+        }
+        
+        cfrdm_load_admin_dependencies();
+        CFRDM_Sync::sync_stats_to_platform();
+    }
+    
+    public function fetch_news_callback() {
+        if (!cfrdm_tables_exist()) {
+            return;
+        }
+        
+        cfrdm_load_admin_dependencies();
+        CFRDM_Sync::fetch_platform_news();
+    }
 }
 
-// Initialize plugin
-ContentFactory_RDM::get_instance();
+// Initialize plugin on plugins_loaded to ensure WordPress is fully loaded
+add_action('plugins_loaded', function() {
+    ContentFactory_RDM::get_instance();
+}, 5);
