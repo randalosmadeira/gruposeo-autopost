@@ -109,6 +109,11 @@ export function BulkPublishModal({
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'connected' | 'error'>('idle');
+  const [healthStatus, setHealthStatus] = useState<{
+    status: 'healthy' | 'degraded' | 'offline' | 'unknown';
+    message: string;
+    responseTime?: number;
+  }>({ status: 'unknown', message: '' });
   const [isPublishing, setIsPublishing] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -181,6 +186,7 @@ export function BulkPublishModal({
       setCategories([]);
       setCategoryError(null);
       setConnectionStatus('idle');
+      setHealthStatus({ status: 'unknown', message: '' });
       setIsPublishing(false);
       setRetryMode(false);
     }
@@ -200,29 +206,55 @@ export function BulkPublishModal({
     [wordpressSites, siteSearch]
   );
 
-  // Load categories when project is selected
+  // Load categories and check health when project is selected
   const handleLoadCategories = async () => {
     if (!selectedProject) return;
     
     setIsLoadingCategories(true);
     setCategoryError(null);
     setConnectionStatus('testing');
+    setHealthStatus({ status: 'unknown', message: 'Verificando conexão...' });
+    
+    const startTime = Date.now();
     
     try {
       const result = await fetchCategories(selectedProject);
+      const responseTime = Date.now() - startTime;
       
       if (result.error) {
         setCategoryError(result.error);
         setConnectionStatus('error');
         setCategories([]);
+        setHealthStatus({
+          status: 'offline',
+          message: result.error,
+          responseTime,
+        });
       } else {
         setCategories(result.categories);
         setConnectionStatus('connected');
+        
+        // Determine health based on response time
+        const healthMsg = responseTime > 5000 
+          ? `Conexão lenta (${(responseTime / 1000).toFixed(1)}s)`
+          : `Conectado (${responseTime}ms)`;
+        
+        setHealthStatus({
+          status: responseTime > 5000 ? 'degraded' : 'healthy',
+          message: healthMsg,
+          responseTime,
+        });
       }
     } catch (error) {
       console.error('Error loading categories:', error);
+      const responseTime = Date.now() - startTime;
       setCategoryError('Erro inesperado ao carregar categorias');
       setConnectionStatus('error');
+      setHealthStatus({
+        status: 'offline',
+        message: 'Falha na conexão',
+        responseTime,
+      });
     } finally {
       setIsLoadingCategories(false);
     }
@@ -238,21 +270,35 @@ export function BulkPublishModal({
   
   // Validation: Can proceed from destination to categories
   const canProceedToCategories = useMemo(() => {
-    return !!(platform && selectedProject);
-  }, [platform, selectedProject]);
+    // Must have platform and project selected
+    if (!platform || !selectedProject) return false;
+    
+    // Must not be in testing state
+    if (connectionStatus === 'testing') return false;
+    
+    // Must not have critical connection error (offline status)
+    if (healthStatus.status === 'offline') return false;
+    
+    return true;
+  }, [platform, selectedProject, connectionStatus, healthStatus.status]);
 
   // Validation: Can publish
   const canPublish = useMemo(() => {
     if (!platform || !selectedProject) return false;
     
+    // Block publishing if site is offline
+    if (healthStatus.status === 'offline') return false;
+    
     // For WordPress, categories are optional - user can publish without them
     return true;
-  }, [platform, selectedProject]);
+  }, [platform, selectedProject, healthStatus.status]);
 
   // Get validation message for disabled button
   const getValidationMessage = (): string | null => {
     if (!platform) return 'Selecione uma plataforma de destino';
     if (!selectedProject) return 'Selecione um site WordPress conectado';
+    if (connectionStatus === 'testing') return 'Verificando conexão com o WordPress...';
+    if (healthStatus.status === 'offline') return 'Site WordPress indisponível. Corrija o problema antes de publicar.';
     return null;
   };
 
@@ -766,27 +812,40 @@ export function BulkPublishModal({
                             {selectedProjectDetails.wordpress_url || selectedProjectDetails.domain}
                           </p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col items-end gap-1">
                           {connectionStatus === 'testing' && (
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <Loader2 className="w-3 h-3 animate-spin" />
                               Verificando...
                             </div>
                           )}
-                          {connectionStatus === 'connected' && (
+                          {connectionStatus === 'connected' && healthStatus.status === 'healthy' && (
                             <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800">
                               <CheckCircle2 className="w-3 h-3 mr-1" />
-                              Conectado
+                              Saudável
+                            </Badge>
+                          )}
+                          {connectionStatus === 'connected' && healthStatus.status === 'degraded' && (
+                            <Badge variant="outline" className="bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800">
+                              <Clock className="w-3 h-3 mr-1" />
+                              Lento
                             </Badge>
                           )}
                           {connectionStatus === 'error' && (
                             <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">
                               <AlertCircle className="w-3 h-3 mr-1" />
-                              Erro
+                              Offline
                             </Badge>
                           )}
                           {connectionStatus === 'idle' && (
-                            <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                            <Badge variant="outline" className="text-muted-foreground border-muted">
+                              Aguardando...
+                            </Badge>
+                          )}
+                          {healthStatus.responseTime && connectionStatus !== 'testing' && (
+                            <span className="text-xs text-muted-foreground">
+                              {healthStatus.responseTime}ms
+                            </span>
                           )}
                         </div>
                       </div>
