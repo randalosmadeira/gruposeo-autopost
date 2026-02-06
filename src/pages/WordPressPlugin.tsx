@@ -20,19 +20,19 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '2.2.1';
+const PLUGIN_VERSION = '2.3.0';
 const PLUGIN_LAST_UPDATE = '2025-02-06';
 
 const features = [
   {
     icon: Plug,
     title: 'Conexão Segura',
-    description: 'API Key única gerada automaticamente para autenticação segura entre WordPress e ContentFactory.',
+    description: 'API Key única com verificação automática de conexão entre WordPress e ContentFactory.',
   },
   {
     icon: FileText,
     title: 'Gestão de Artigos',
-    description: 'Crie, edite e publique artigos diretamente do ContentFactory para seu WordPress.',
+    description: 'Crie, edite e publique artigos com suporte a schemas HowTo, Review e FAQ.',
   },
   {
     icon: Webhook,
@@ -41,18 +41,18 @@ const features = [
   },
   {
     icon: Settings,
-    title: 'Configurações Flexíveis',
-    description: 'Defina categorias, autores e status padrão para seus artigos.',
+    title: 'Autor Padrão',
+    description: 'Configure autor, categoria e status padrão para artigos publicados via API.',
   },
   {
     icon: Shield,
-    title: 'SEO Integrado',
-    description: 'Suporte nativo para Yoast SEO e Rank Math.',
+    title: 'SEO Completo',
+    description: 'Suporte nativo para Yoast SEO, Rank Math e All in One SEO com Focus Keyword.',
   },
   {
     icon: Zap,
-    title: 'REST API Completa',
-    description: 'API documentada para integrações personalizadas.',
+    title: 'Deduplicação de Imagens',
+    description: 'Sistema MD5 que evita downloads duplicados e economiza espaço em disco.',
   },
 ];
 
@@ -97,6 +97,8 @@ export default function WordPressPluginPage() {
         { path: 'includes/class-cfrdm-diagnostics-page.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-diagnostics-page.php' },
         { path: 'includes/class-cfrdm-indexing.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-indexing.php' },
         { path: 'includes/class-cfrdm-schema-validator.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-schema-validator.php' },
+        { path: 'includes/class-cfrdm-media.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-media.php' },
+        { path: 'includes/class-cfrdm-seo.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-seo.php' },
         { path: 'assets/css/admin.css', url: '/wordpress-plugin/contentfactory-rdm/assets/css/admin.css' },
         { path: 'assets/js/admin.js', url: '/wordpress-plugin/contentfactory-rdm/assets/js/admin.js' },
       ];

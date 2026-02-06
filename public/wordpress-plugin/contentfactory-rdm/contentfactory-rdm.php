@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '2.2.1');
+define('CFRDM_VERSION', '2.3.0');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -46,6 +46,8 @@ function cfrdm_load_dependencies() {
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-webhooks.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-api.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-articles.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-media.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-seo.php';
 }
 
 /**

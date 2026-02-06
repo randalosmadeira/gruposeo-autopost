@@ -26,7 +26,7 @@ class CFRDM_Schema_Validator {
         ),
         'Review' => array(
             'required' => array('@type', 'itemReviewed', 'reviewRating', 'author'),
-            'recommended' => array('datePublished', 'reviewBody'),
+            'recommended' => array('datePublished', 'reviewBody', 'positiveNotes', 'negativeNotes'),
         ),
         'FAQPage' => array(
             'required' => array('@type', 'mainEntity'),
@@ -55,6 +55,39 @@ class CFRDM_Schema_Validator {
         'AggregateRating' => array(
             'required' => array('@type', 'ratingValue'),
             'recommended' => array('bestRating', 'worstRating', 'ratingCount'),
+        ),
+        // NEW: HowTo schema for tutorials and guides
+        'HowTo' => array(
+            'required' => array('@type', 'name', 'step'),
+            'recommended' => array('description', 'image', 'totalTime', 'estimatedCost', 'supply', 'tool'),
+        ),
+        'HowToStep' => array(
+            'required' => array('@type', 'text'),
+            'recommended' => array('name', 'url', 'image'),
+        ),
+        'HowToSection' => array(
+            'required' => array('@type', 'name', 'itemListElement'),
+            'recommended' => array(),
+        ),
+        // NEW: Enhanced Review with pros/cons
+        'ItemList' => array(
+            'required' => array('@type', 'itemListElement'),
+            'recommended' => array('name', 'numberOfItems'),
+        ),
+        // Recipe schema (common for HowTo variants)
+        'Recipe' => array(
+            'required' => array('@type', 'name', 'recipeIngredient', 'recipeInstructions'),
+            'recommended' => array('image', 'author', 'datePublished', 'description', 'prepTime', 'cookTime', 'totalTime', 'nutrition'),
+        ),
+        // Video schema
+        'VideoObject' => array(
+            'required' => array('@type', 'name', 'description', 'thumbnailUrl', 'uploadDate'),
+            'recommended' => array('contentUrl', 'duration', 'embedUrl'),
+        ),
+        // LocalBusiness schema
+        'LocalBusiness' => array(
+            'required' => array('@type', 'name', 'address'),
+            'recommended' => array('telephone', 'openingHours', 'geo', 'image', 'priceRange'),
         ),
     );
     
@@ -303,6 +336,137 @@ class CFRDM_Schema_Validator {
                 'name' => get_the_title($post->ID),
                 'description' => get_the_excerpt($post->ID),
             );
+            
+            // Add Review schema with pros/cons
+            $pros = get_post_meta($post->ID, '_cfrdm_review_pros', true);
+            $cons = get_post_meta($post->ID, '_cfrdm_review_cons', true);
+            $rating = get_post_meta($post->ID, '_cfrdm_review_rating', true);
+            
+            $review_schema = array(
+                '@context' => 'https://schema.org',
+                '@type' => 'Review',
+                'itemReviewed' => array(
+                    '@type' => 'Product',
+                    'name' => get_the_title($post->ID),
+                ),
+                'author' => array(
+                    '@type' => 'Person',
+                    'name' => $author_name,
+                ),
+                'datePublished' => get_the_date('c', $post->ID),
+                'reviewBody' => get_the_excerpt($post->ID),
+            );
+            
+            // Add rating if available
+            if ($rating) {
+                $review_schema['reviewRating'] = array(
+                    '@type' => 'Rating',
+                    'ratingValue' => floatval($rating),
+                    'bestRating' => 5,
+                    'worstRating' => 1,
+                );
+            }
+            
+            // Add pros (positiveNotes)
+            if ($pros && is_array($pros)) {
+                $review_schema['positiveNotes'] = array(
+                    '@type' => 'ItemList',
+                    'itemListElement' => array_map(function($pro, $index) {
+                        return array(
+                            '@type' => 'ListItem',
+                            'position' => $index + 1,
+                            'name' => $pro,
+                        );
+                    }, $pros, array_keys($pros)),
+                );
+            }
+            
+            // Add cons (negativeNotes)
+            if ($cons && is_array($cons)) {
+                $review_schema['negativeNotes'] = array(
+                    '@type' => 'ItemList',
+                    'itemListElement' => array_map(function($con, $index) {
+                        return array(
+                            '@type' => 'ListItem',
+                            'position' => $index + 1,
+                            'name' => $con,
+                        );
+                    }, $cons, array_keys($cons)),
+                );
+            }
+            
+            $schemas['Review'] = $review_schema;
+        }
+        
+        // HowTo schema for tutorial/guide articles
+        $is_howto = get_post_meta($post->ID, '_cfrdm_is_howto', true);
+        $howto_steps = get_post_meta($post->ID, '_cfrdm_howto_steps', true);
+        
+        if ($is_howto && $howto_steps && is_array($howto_steps)) {
+            $howto_schema = array(
+                '@context' => 'https://schema.org',
+                '@type' => 'HowTo',
+                'name' => get_the_title($post->ID),
+                'description' => get_the_excerpt($post->ID),
+                'step' => array(),
+            );
+            
+            // Add optional time
+            $total_time = get_post_meta($post->ID, '_cfrdm_howto_time', true);
+            if ($total_time) {
+                $howto_schema['totalTime'] = 'PT' . intval($total_time) . 'M';
+            }
+            
+            // Add steps
+            foreach ($howto_steps as $index => $step) {
+                $step_data = array(
+                    '@type' => 'HowToStep',
+                    'position' => $index + 1,
+                    'text' => is_array($step) ? ($step['text'] ?? '') : $step,
+                );
+                
+                if (is_array($step)) {
+                    if (!empty($step['name'])) {
+                        $step_data['name'] = $step['name'];
+                    }
+                    if (!empty($step['image'])) {
+                        $step_data['image'] = $step['image'];
+                    }
+                    if (!empty($step['url'])) {
+                        $step_data['url'] = $step['url'];
+                    }
+                }
+                
+                $howto_schema['step'][] = $step_data;
+            }
+            
+            // Add supplies if available
+            $supplies = get_post_meta($post->ID, '_cfrdm_howto_supplies', true);
+            if ($supplies && is_array($supplies)) {
+                $howto_schema['supply'] = array_map(function($supply) {
+                    return array(
+                        '@type' => 'HowToSupply',
+                        'name' => $supply,
+                    );
+                }, $supplies);
+            }
+            
+            // Add tools if available
+            $tools = get_post_meta($post->ID, '_cfrdm_howto_tools', true);
+            if ($tools && is_array($tools)) {
+                $howto_schema['tool'] = array_map(function($tool) {
+                    return array(
+                        '@type' => 'HowToTool',
+                        'name' => $tool,
+                    );
+                }, $tools);
+            }
+            
+            if ($featured_image_url) {
+                $howto_schema['image'] = $featured_image_url;
+            }
+            
+            $schemas['HowTo'] = $howto_schema;
         }
         
         // Breadcrumb schema
