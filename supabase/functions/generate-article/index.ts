@@ -105,7 +105,7 @@ serve(async (req) => {
   try {
     // ========== AUTHENTICATION ==========
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
         JSON.stringify({ error: "Autorização necessária" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -120,9 +120,15 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // Verify user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // IMPORTANT: In Edge Functions there is no session storage; pass the JWT explicitly.
+    const token = authHeader.replace("Bearer ", "");
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+
     if (authError || !user) {
+      console.error("Auth error:", authError);
       return new Response(
         JSON.stringify({ error: "Usuário não autenticado" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
