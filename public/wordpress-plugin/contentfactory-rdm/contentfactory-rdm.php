@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: ContentFactory RDM
- * Plugin URI: https://contentfactory.rdm.com.br
- * Description: Integração completa com a plataforma ContentFactory RDM para gestão de artigos SEO, publicação automática, sincronização bidirecional, otimização de imagens e logging avançado.
- * Version: 2.0.0
- * Author: ContentFactory RDM
- * Author URI: https://contentfactory.rdm.com.br
+ * Plugin URI: https://gruposeo.marketing/contentfactory
+ * Description: Integração avançada com ContentFactory para publicação automática de artigos, sincronização, otimização de imagens, links internos e indexação SEO automática.
+ * Version: 2.1.0
+ * Author: GRUPO SEO MARKETING
+ * Author URI: https://gruposeo.marketing
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: contentfactory-rdm
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '2.0.0');
+define('CFRDM_VERSION', '2.1.0');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -36,6 +36,7 @@ require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-logger.php';
 require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-image-optimizer.php';
 require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-sync.php';
 require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-internal-links.php';
+require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-indexing.php';
 
 /**
  * Main plugin class
