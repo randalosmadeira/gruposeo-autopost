@@ -340,6 +340,113 @@ export function useWordPressAPI(projectId: string | null) {
     }
   }, [projectId]);
 
+  // === HEALTH CHECK ===
+  const checkHealth = useCallback(async (): Promise<{
+    success: boolean;
+    status: 'healthy' | 'degraded' | 'offline';
+    message: string;
+    details?: {
+      restApi: boolean;
+      authentication: boolean;
+      categories: boolean;
+      responseTime: number;
+    };
+  }> => {
+    if (!projectId) {
+      return { 
+        success: false, 
+        status: 'offline', 
+        message: 'ID do projeto não fornecido' 
+      };
+    }
+
+    const startTime = Date.now();
+    const details = {
+      restApi: false,
+      authentication: false,
+      categories: false,
+      responseTime: 0,
+    };
+
+    try {
+      // Test 1: Check if REST API is accessible (get categories)
+      const categoriesResult = await callWordPressAPI<unknown[]>('get-categories', {
+        projectId,
+        perPage: 1,
+      });
+
+      details.responseTime = Date.now() - startTime;
+
+      if (!categoriesResult.success) {
+        const errorMsg = categoriesResult.error || '';
+        
+        // Check for critical PHP error
+        if (errorMsg.includes('<p>') || errorMsg.includes('erro crítico') || errorMsg.includes('critical')) {
+          return {
+            success: false,
+            status: 'offline',
+            message: 'Site WordPress com erro crítico (HTTP 500). Desative plugins conflitantes ou reinstale o plugin ContentFactory RDM v2.2.1+.',
+            details,
+          };
+        }
+
+        // Check for authentication error
+        if (errorMsg.includes('401') || errorMsg.includes('Unauthorized') || errorMsg.includes('autenticação')) {
+          details.restApi = true;
+          return {
+            success: false,
+            status: 'degraded',
+            message: 'Falha na autenticação. Verifique usuário e senha do aplicativo WordPress.',
+            details,
+          };
+        }
+
+        // Check for connection error
+        if (errorMsg.includes('ECONNREFUSED') || errorMsg.includes('conexão') || errorMsg.includes('timeout')) {
+          return {
+            success: false,
+            status: 'offline',
+            message: 'Não foi possível conectar ao site WordPress. Verifique se a URL está correta e o site está online.',
+            details,
+          };
+        }
+
+        return {
+          success: false,
+          status: 'degraded',
+          message: errorMsg || 'Erro desconhecido ao verificar o WordPress',
+          details,
+        };
+      }
+
+      // All checks passed
+      details.restApi = true;
+      details.authentication = true;
+      details.categories = true;
+
+      // Determine health status based on response time
+      const status = details.responseTime > 5000 ? 'degraded' : 'healthy';
+      const message = status === 'healthy' 
+        ? 'WordPress conectado e funcionando corretamente'
+        : `WordPress conectado, mas com resposta lenta (${(details.responseTime / 1000).toFixed(1)}s)`;
+
+      return {
+        success: true,
+        status,
+        message,
+        details,
+      };
+    } catch (error) {
+      details.responseTime = Date.now() - startTime;
+      return {
+        success: false,
+        status: 'offline',
+        message: error instanceof Error ? error.message : 'Erro ao verificar saúde do WordPress',
+        details,
+      };
+    }
+  }, [projectId]);
+
   // === SEO ===
   const updateYoastMeta = useCallback(async (postId: number, seoData: {
     seoTitle?: string;
@@ -418,5 +525,7 @@ export function useWordPressAPI(projectId: string | null) {
     // SEO
     updateYoastMeta,
     updateRankMathMeta,
+    // Health
+    checkHealth,
   };
 }
