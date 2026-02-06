@@ -59,6 +59,7 @@ import { useWordPressPublish } from '@/hooks/useWordPressPublish';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { BulkPublishModal } from '@/components/articles/BulkPublishModal';
 
 // Status configuration with icons and colors
 const statusConfig: Record<string, { 
@@ -204,140 +205,7 @@ function SuccessModal({
   );
 }
 
-// Bulk Publish Modal Component
-function BulkPublishModal({
-  isOpen,
-  onClose,
-  selectedCount,
-  projects,
-  onPublish,
-  isPublishing
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  selectedCount: number;
-  projects: Array<{ id: string; name: string; domain: string }>;
-  onPublish: (projectId: string) => void;
-  isPublishing: boolean;
-}) {
-  const [selectedProject, setSelectedProject] = useState<string>('');
-  const [step, setStep] = useState<'destination' | 'publishing'>('destination');
-
-  useEffect(() => {
-    if (!isOpen) {
-      setStep('destination');
-      setSelectedProject('');
-    }
-  }, [isOpen]);
-
-  const handlePublish = () => {
-    if (selectedProject) {
-      setStep('publishing');
-      onPublish(selectedProject);
-    }
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader className="pb-4 border-b">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Upload className="w-5 h-5 text-primary" />
-            </div>
-            <div className="flex-1">
-              <DialogTitle className="text-xl font-semibold">
-                Publicar artigos em massa
-              </DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground mt-1">
-                Publique {selectedCount} artigos selecionados de uma vez no destino escolhido.
-              </DialogDescription>
-            </div>
-          </div>
-          
-          <div className="mt-3">
-            <Badge className="bg-primary/10 text-primary text-sm px-3 py-1">
-              {selectedCount} artigos selecionados
-            </Badge>
-          </div>
-        </DialogHeader>
-        
-        <div className="flex-1 overflow-y-auto py-6 px-1">
-          {step === 'destination' && (
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  Selecione o projeto de destino
-                </label>
-                <Select value={selectedProject} onValueChange={setSelectedProject}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Escolha um projeto WordPress" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.filter(p => p.domain).map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        <div className="flex items-center gap-2">
-                          <Globe className="w-4 h-4 text-primary" />
-                          <div>
-                            <span className="font-medium">{project.name}</span>
-                            <span className="text-xs text-muted-foreground ml-2">
-                              {project.domain}
-                            </span>
-                          </div>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {projects.filter(p => p.domain).length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Globe className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>Nenhum projeto WordPress configurado.</p>
-                  <p className="text-sm">Configure um projeto com WordPress primeiro.</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {step === 'publishing' && (
-            <div className="flex flex-col items-center justify-center py-8">
-              <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-              <h3 className="text-lg font-medium">Publicando artigos...</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Aguarde enquanto os artigos são publicados.
-              </p>
-            </div>
-          )}
-        </div>
-        
-        {step === 'destination' && (
-          <DialogFooter className="pt-4 border-t">
-            <div className="flex items-center justify-between w-full">
-              <span className="text-sm text-muted-foreground">
-                Pronto para publicar {selectedCount} artigos
-              </span>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={onClose}>
-                  Cancelar
-                </Button>
-                <Button 
-                  onClick={handlePublish}
-                  disabled={!selectedProject || isPublishing}
-                  className="bg-primary hover:bg-primary/90"
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Publicar {selectedCount} artigos
-                </Button>
-              </div>
-            </div>
-          </DialogFooter>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
+// Using BulkPublishModal from @/components/articles/BulkPublishModal
 
 // Publishing Progress Component
 function PublishingProgress({ 
@@ -468,24 +336,20 @@ export default function ArticlesList() {
     setSelectedArticles(new Set());
   };
 
-  // Bulk publish
-  const handleBulkPublish = async (projectId?: string) => {
-    const selectedItems = articles.filter(a => selectedArticles.has(a.id));
-    const articlesToPublish = selectedItems
-      .filter(a => a.status !== 'published')
-      .map(a => ({ id: a.id, title: a.title, project_id: projectId || a.project_id }));
+  // Bulk publish - called from the new BulkPublishModal
+  const handleBulkPublish = async (articlesWithCategories: Array<{ id: string; title: string; selectedCategories: string[]; publishStatus: string }>, projectId: string) => {
+    const articlesToPublish = articlesWithCategories.map(a => ({ 
+      id: a.id, 
+      title: a.title, 
+      project_id: projectId,
+      categories: a.selectedCategories
+    }));
 
     if (articlesToPublish.length === 0) {
-      toast({
-        title: 'Nenhum artigo para publicar',
-        description: 'Selecione artigos que ainda não foram publicados.',
-        variant: 'destructive',
-      });
-      return;
+      return { success: 0, failed: 0 };
     }
 
     setPublishProgress({ current: 0, total: articlesToPublish.length });
-    setShowPublishModal(false);
 
     const result = await publishMultiple(articlesToPublish);
     
@@ -500,6 +364,8 @@ export default function ArticlesList() {
     setTimeout(() => {
       setRecentlyPublished(new Set());
     }, 3000);
+
+    return result;
   };
 
   // Bulk delete
@@ -953,7 +819,11 @@ export default function ArticlesList() {
       <BulkPublishModal
         isOpen={showPublishModal}
         onClose={() => setShowPublishModal(false)}
-        selectedCount={selectedArticles.size}
+        selectedArticles={articles.filter(a => selectedArticles.has(a.id)).map(a => ({ 
+          id: a.id, 
+          title: a.title, 
+          project_id: a.project_id 
+        }))}
         projects={projects}
         onPublish={handleBulkPublish}
         isPublishing={isPublishing}
