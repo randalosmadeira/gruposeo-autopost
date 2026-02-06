@@ -77,6 +77,56 @@ export type Database = {
           },
         ]
       }
+      article_reports: {
+        Row: {
+          admin_notes: string | null
+          article_id: string
+          category: string
+          created_at: string
+          credits_refunded: number | null
+          description: string
+          id: string
+          resolved_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          article_id: string
+          category: string
+          created_at?: string
+          credits_refunded?: number | null
+          description: string
+          id?: string
+          resolved_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_notes?: string | null
+          article_id?: string
+          category?: string
+          created_at?: string
+          credits_refunded?: number | null
+          description?: string
+          id?: string
+          resolved_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "article_reports_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       articles: {
         Row: {
           config: Json | null
