@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -6,6 +6,7 @@ import {
   Upload,
   Loader2,
   AlertTriangle,
+  Save,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -43,20 +44,50 @@ const statusLabels: Record<string, { label: string; className: string }> = {
   error: { label: 'Erro', className: 'bg-red-100 text-red-700' },
 };
 
+const AUTOSAVE_DELAY = 3000; // 3 seconds
+
 export function ArticleEditor({ article, onSave, onPublish, isPublishing }: ArticleEditorProps) {
   const [editedArticle, setEditedArticle] = useState<Article>(article);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<'visual' | 'html'>('visual');
   const [isRegenerating, setIsRegenerating] = useState<'title' | 'excerpt' | 'image' | 'content' | null>(null);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const { toast } = useToast();
+  
+  // Autosave refs
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
 
   const updateField = useCallback(<K extends keyof Article>(field: K, value: Article[K]) => {
     setEditedArticle(prev => ({ ...prev, [field]: value }));
     setHasChanges(true);
   }, []);
 
-  const handleSave = async () => {
+  // Autosave effect
+  useEffect(() => {
+    if (!hasChanges) return;
+    
+    // Clear previous timeout
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    
+    // Set new timeout for autosave
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      performAutoSave();
+    }, AUTOSAVE_DELAY);
+    
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [editedArticle, hasChanges]);
+
+  const performAutoSave = async () => {
+    if (!hasChanges) return;
+    
     setIsSaving(true);
     try {
       const wordCount = editedArticle.content?.split(/\s+/).filter(Boolean).length || 0;
@@ -83,6 +114,48 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
       if (error) throw error;
 
       setHasChanges(false);
+      setLastSaved(new Date());
+      onSave?.({ ...editedArticle, word_count: wordCount });
+    } catch (error) {
+      console.error('Autosave error:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSave = async () => {
+    // Clear any pending autosave
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    
+    setIsSaving(true);
+    try {
+      const wordCount = editedArticle.content?.split(/\s+/).filter(Boolean).length || 0;
+      
+      const currentConfig = (editedArticle as any).config || {};
+      const updatedConfig = {
+        ...currentConfig,
+        wordpress_categories: editedArticle.wordpress_categories || [],
+      };
+      
+      const { error } = await supabase
+        .from('articles')
+        .update({
+          title: editedArticle.title,
+          content: sanitizeHTML(editedArticle.content || ''),
+          excerpt: editedArticle.excerpt,
+          slug: editedArticle.slug,
+          featured_image_url: editedArticle.featured_image_url,
+          word_count: wordCount,
+          config: updatedConfig,
+        })
+        .eq('id', editedArticle.id);
+
+      if (error) throw error;
+
+      setHasChanges(false);
+      setLastSaved(new Date());
       onSave?.({ ...editedArticle, word_count: wordCount });
       
       toast({
@@ -154,6 +227,16 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
 
   const status = statusLabels[editedArticle.status] || statusLabels.draft;
 
+  // Format last saved time
+  const formatLastSaved = () => {
+    if (!lastSaved) return null;
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - lastSaved.getTime()) / 1000);
+    if (diff < 60) return 'Salvo agora';
+    if (diff < 3600) return `Salvo há ${Math.floor(diff / 60)} min`;
+    return `Salvo às ${lastSaved.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-120px)] bg-background">
       {/* Header */}
@@ -199,17 +282,20 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
           {/* Toolbar */}
           <ArticleEditorToolbar 
             hasChanges={hasChanges} 
-            isSaving={isSaving} 
+            isSaving={isSaving}
+            lastSaved={formatLastSaved()}
+            editorRef={editorRef}
           />
 
-          {/* Content */}
-          <div className="flex-1 p-4 overflow-hidden">
+          {/* Content with scroll */}
+          <div className="flex-1 overflow-hidden">
             <ArticleEditorContent
               content={editedArticle.content}
               featuredImageUrl={editedArticle.featured_image_url}
               title={editedArticle.title}
               activeTab={activeTab}
               onContentChange={(content) => updateField('content', content)}
+              editorRef={editorRef}
             />
           </div>
         </div>
@@ -222,6 +308,9 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
           onFieldUpdate={updateField}
           onRegenerate={handleRegenerate}
           isRegenerating={isRegenerating}
+          onSave={handleSave}
+          isSaving={isSaving}
+          hasChanges={hasChanges}
         />
       </div>
     </div>
