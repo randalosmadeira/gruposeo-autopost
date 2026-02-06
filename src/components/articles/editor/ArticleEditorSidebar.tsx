@@ -58,10 +58,10 @@ export function ArticleEditorSidebar({
   const excerptLength = article.excerpt?.length || 0;
 
   return (
-    <div className="w-80 flex flex-col border-l bg-card">
+    <div className="w-80 flex flex-col border-l bg-card h-full">
       {/* Config/SEO Tabs */}
-      <Tabs value={configTab} onValueChange={(v) => setConfigTab(v as 'config' | 'seo')} className="flex-1 flex flex-col">
-        <TabsList className="w-full rounded-none border-b h-12 bg-transparent p-0">
+      <Tabs value={configTab} onValueChange={(v) => setConfigTab(v as 'config' | 'seo')} className="flex-1 flex flex-col min-h-0">
+        <TabsList className="w-full rounded-none border-b h-12 bg-transparent p-0 shrink-0">
           <TabsTrigger 
             value="config" 
             className="flex-1 h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent gap-2"
@@ -78,7 +78,7 @@ export function ArticleEditorSidebar({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="config" className="flex-1 m-0 overflow-hidden">
+        <TabsContent value="config" className="flex-1 m-0 min-h-0 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="p-4 space-y-6">
               {/* Configurations Header */}
@@ -193,7 +193,7 @@ export function ArticleEditorSidebar({
           </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="seo" className="flex-1 m-0 overflow-hidden">
+        <TabsContent value="seo" className="flex-1 m-0 min-h-0 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="p-4">
               <SEOOptimizationPanel 
@@ -208,7 +208,7 @@ export function ArticleEditorSidebar({
       </Tabs>
 
       {/* Editor/HTML Toggle + Save Button */}
-      <div className="border-t p-3 space-y-3">
+      <div className="border-t p-3 space-y-3 shrink-0 bg-card">
         <Tabs value={activeTab} onValueChange={(v) => onActiveTabChange(v as 'visual' | 'html')}>
           <TabsList className="w-full">
             <TabsTrigger value="visual" className="flex-1 gap-2">
