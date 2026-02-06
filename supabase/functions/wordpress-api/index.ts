@@ -12,12 +12,11 @@ interface WordPressCredentials {
   wordpress_app_password: string;
 }
 
-// Helper to make WordPress API calls
 async function wpFetch(
   credentials: WordPressCredentials,
   endpoint: string,
   options: RequestInit = {}
-): Promise<{ data?: any; error?: string; status: number }> {
+): Promise<{ data?: unknown; error?: string; status: number }> {
   const { wordpress_url, wordpress_username, wordpress_app_password } = credentials;
   const baseUrl = wordpress_url.replace(/\/$/, "");
   const apiUrl = `${baseUrl}/wp-json/wp/v2${endpoint}`;
@@ -70,51 +69,75 @@ serve(async (req) => {
   try {
     const url = new URL(req.url);
     const action = url.searchParams.get("action");
+
+    // Health check doesn't need authentication
+    if (action === "health") {
+      return new Response(
+        JSON.stringify({ success: true, message: "WordPress API Proxy online", timestamp: new Date().toISOString() }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ========== AUTHENTICATION ==========
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Autorização necessária" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Usuário não autenticado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    // ========== END AUTHENTICATION ==========
+
+    // Use service role for database operations
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = req.method !== "GET" ? await req.json() : {};
     const { projectId, ...params } = body;
 
-    if (!projectId && action !== "health") {
+    if (!projectId) {
       return new Response(
         JSON.stringify({ success: false, error: "projectId é obrigatório" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Get WordPress credentials from project
-    let credentials: WordPressCredentials | null = null;
-    if (projectId) {
-      const { data: project, error } = await supabase
-        .from("projects")
-        .select("wordpress_url, wordpress_username, wordpress_app_password")
-        .eq("id", projectId)
-        .single();
+    // Get WordPress credentials and verify ownership
+    const { data: project, error } = await supabaseAdmin
+      .from("projects")
+      .select("wordpress_url, wordpress_username, wordpress_app_password")
+      .eq("id", projectId)
+      .eq("user_id", user.id) // IMPORTANT: Validate user owns the project
+      .single();
 
-      if (error || !project?.wordpress_url) {
-        return new Response(
-          JSON.stringify({ success: false, error: "Credenciais WordPress não encontradas" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      credentials = project as WordPressCredentials;
+    if (error || !project?.wordpress_url) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Credenciais WordPress não encontradas ou acesso negado" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
+    const credentials = project as WordPressCredentials;
     let result;
 
     switch (action) {
-      // === HEALTH CHECK ===
-      case "health":
-        return new Response(
-          JSON.stringify({ success: true, message: "WordPress API Proxy online", timestamp: new Date().toISOString() }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-
-      // === POSTS ===
       case "get-posts":
-        result = await wpFetch(credentials!, `/posts?per_page=${params.perPage || 10}&page=${params.page || 1}`);
+        result = await wpFetch(credentials, `/posts?per_page=${params.perPage || 10}&page=${params.page || 1}`);
         break;
 
       case "get-post":
@@ -124,11 +147,11 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        result = await wpFetch(credentials!, `/posts/${params.postId}`);
+        result = await wpFetch(credentials, `/posts/${params.postId}`);
         break;
 
       case "create-post":
-        result = await wpFetch(credentials!, "/posts", {
+        result = await wpFetch(credentials, "/posts", {
           method: "POST",
           body: JSON.stringify({
             title: params.title,
@@ -150,7 +173,7 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        result = await wpFetch(credentials!, `/posts/${params.postId}`, {
+        result = await wpFetch(credentials, `/posts/${params.postId}`, {
           method: "PUT",
           body: JSON.stringify({
             title: params.title,
@@ -172,18 +195,17 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        result = await wpFetch(credentials!, `/posts/${params.postId}?force=${params.force || false}`, {
+        result = await wpFetch(credentials, `/posts/${params.postId}?force=${params.force || false}`, {
           method: "DELETE",
         });
         break;
 
-      // === CATEGORIES ===
       case "get-categories":
-        result = await wpFetch(credentials!, `/categories?per_page=${params.perPage || 100}`);
+        result = await wpFetch(credentials, `/categories?per_page=${params.perPage || 100}`);
         break;
 
       case "create-category":
-        result = await wpFetch(credentials!, "/categories", {
+        result = await wpFetch(credentials, "/categories", {
           method: "POST",
           body: JSON.stringify({
             name: params.name,
@@ -194,13 +216,12 @@ serve(async (req) => {
         });
         break;
 
-      // === TAGS ===
       case "get-tags":
-        result = await wpFetch(credentials!, `/tags?per_page=${params.perPage || 100}`);
+        result = await wpFetch(credentials, `/tags?per_page=${params.perPage || 100}`);
         break;
 
       case "create-tag":
-        result = await wpFetch(credentials!, "/tags", {
+        result = await wpFetch(credentials, "/tags", {
           method: "POST",
           body: JSON.stringify({
             name: params.name,
@@ -210,9 +231,8 @@ serve(async (req) => {
         });
         break;
 
-      // === MEDIA ===
       case "get-media":
-        result = await wpFetch(credentials!, `/media?per_page=${params.perPage || 20}`);
+        result = await wpFetch(credentials, `/media?per_page=${params.perPage || 20}`);
         break;
 
       case "upload-media":
@@ -223,12 +243,11 @@ serve(async (req) => {
           );
         }
 
-        const { wordpress_url, wordpress_username, wordpress_app_password } = credentials!;
+        const { wordpress_url, wordpress_username, wordpress_app_password } = credentials;
         const baseUrl = wordpress_url.replace(/\/$/, "");
         const mediaApiUrl = `${baseUrl}/wp-json/wp/v2/media`;
         const auth = btoa(`${wordpress_username}:${wordpress_app_password}`);
 
-        // Convert base64 to binary
         const base64Data = params.imageData.replace(/^data:image\/\w+;base64,/, "");
         const binaryString = atob(base64Data);
         const bytes = new Uint8Array(binaryString.length);
@@ -253,16 +272,14 @@ serve(async (req) => {
         }
         break;
 
-      // === USERS ===
       case "get-users":
-        result = await wpFetch(credentials!, `/users?per_page=${params.perPage || 100}`);
+        result = await wpFetch(credentials, `/users?per_page=${params.perPage || 100}`);
         break;
 
       case "get-current-user":
-        result = await wpFetch(credentials!, "/users/me");
+        result = await wpFetch(credentials, "/users/me");
         break;
 
-      // === SEO PLUGINS ===
       case "update-yoast-meta":
         if (!params.postId) {
           return new Response(
@@ -270,7 +287,7 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        result = await wpFetch(credentials!, `/posts/${params.postId}`, {
+        result = await wpFetch(credentials, `/posts/${params.postId}`, {
           method: "PUT",
           body: JSON.stringify({
             yoast_head_json: {
@@ -293,7 +310,7 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        result = await wpFetch(credentials!, `/posts/${params.postId}`, {
+        result = await wpFetch(credentials, `/posts/${params.postId}`, {
           method: "PUT",
           body: JSON.stringify({
             meta: {

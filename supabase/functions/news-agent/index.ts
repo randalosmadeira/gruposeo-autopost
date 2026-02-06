@@ -1,11 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions"; // AI Gateway
+const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 interface NewsSearchResult {
   title: string;
@@ -16,7 +17,6 @@ interface NewsSearchResult {
 }
 
 async function searchNews(topic: string, language: string, country: string): Promise<NewsSearchResult[]> {
-  // Use Google News RSS as a free source
   const query = encodeURIComponent(topic);
   const googleNewsUrl = `https://news.google.com/rss/search?q=${query}&hl=${language}&gl=${country}&ceid=${country}:${language.split('-')[0]}`;
   
@@ -24,7 +24,6 @@ async function searchNews(topic: string, language: string, country: string): Pro
     const response = await fetch(googleNewsUrl);
     const xmlText = await response.text();
     
-    // Parse RSS XML
     const items: NewsSearchResult[] = [];
     const itemRegex = /<item>([\s\S]*?)<\/item>/g;
     let match;
@@ -121,6 +120,31 @@ serve(async (req) => {
   }
 
   try {
+    // ========== AUTHENTICATION ==========
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Autorização necessária" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Usuário não autenticado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    // ========== END AUTHENTICATION ==========
+
     const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!AI_API_KEY) {
       throw new Error("AI API key is not configured");
@@ -129,7 +153,6 @@ serve(async (req) => {
     const { action, agentId, topics, language, country, promptTemplate, limit } = await req.json();
 
     if (action === "search") {
-      // Search for news based on topics
       const allNews: NewsSearchResult[] = [];
       
       for (const topic of topics) {
@@ -137,7 +160,6 @@ serve(async (req) => {
         allNews.push(...news);
       }
       
-      // Remove duplicates by title
       const uniqueNews = allNews.filter((item, index, self) =>
         index === self.findIndex(t => t.title === item.title)
       ).slice(0, limit || 10);
@@ -168,14 +190,12 @@ serve(async (req) => {
     }
 
     if (action === "run") {
-      // Run the full agent workflow
       const results: { title: string; content: string; source: string }[] = [];
       
       for (const topic of topics.slice(0, 3)) {
         const news = await searchNews(topic, language || "pt-BR", country || "BR");
         
         if (news.length > 0) {
-          // Pick the most recent news
           const selectedNews = news[0];
           
           const article = await generateArticle(
@@ -195,7 +215,6 @@ serve(async (req) => {
           }
         }
         
-        // Limit to avoid rate limiting
         if (results.length >= (limit || 1)) break;
       }
 
