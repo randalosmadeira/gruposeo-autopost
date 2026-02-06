@@ -46,17 +46,270 @@ import {
   Pencil,
   Check,
   AlertTriangle,
+  GripVertical,
+  Youtube,
+  Instagram,
+  Linkedin,
+  Twitter,
+  Facebook,
+  Globe,
+  Newspaper,
+  ShoppingBag,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// Link types for categorization
+export type LinkType = 'article' | 'video' | 'social' | 'ecommerce' | 'resource' | 'external';
 
 export interface InternalLink {
   id: string;
   anchor: string;
   url: string;
   source: 'manual' | 'suggested' | 'imported';
+  type?: LinkType;
+}
+
+// Detect link type from URL
+function detectLinkType(url: string): LinkType {
+  const lowerUrl = url.toLowerCase();
+  
+  // Video platforms
+  if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be') || 
+      lowerUrl.includes('vimeo.com') || lowerUrl.includes('dailymotion.com') ||
+      lowerUrl.includes('tiktok.com')) {
+    return 'video';
+  }
+  
+  // Social media
+  if (lowerUrl.includes('instagram.com') || lowerUrl.includes('facebook.com') ||
+      lowerUrl.includes('twitter.com') || lowerUrl.includes('x.com') ||
+      lowerUrl.includes('linkedin.com') || lowerUrl.includes('pinterest.com') ||
+      lowerUrl.includes('threads.net')) {
+    return 'social';
+  }
+  
+  // E-commerce
+  if (lowerUrl.includes('amazon.com') || lowerUrl.includes('mercadolivre') ||
+      lowerUrl.includes('shopee') || lowerUrl.includes('aliexpress') ||
+      lowerUrl.includes('/produto') || lowerUrl.includes('/product') ||
+      lowerUrl.includes('shop.') || lowerUrl.includes('/loja')) {
+    return 'ecommerce';
+  }
+  
+  // Internal articles (relative URLs or common patterns)
+  if (lowerUrl.startsWith('/') || lowerUrl.includes('/artigo') ||
+      lowerUrl.includes('/blog') || lowerUrl.includes('/post') ||
+      lowerUrl.includes('/news') || lowerUrl.includes('/noticia')) {
+    return 'article';
+  }
+  
+  // Resources (PDFs, docs, tools)
+  if (lowerUrl.includes('.pdf') || lowerUrl.includes('/download') ||
+      lowerUrl.includes('/ferramenta') || lowerUrl.includes('/tool') ||
+      lowerUrl.includes('/template') || lowerUrl.includes('/recurso')) {
+    return 'resource';
+  }
+  
+  return 'external';
+}
+
+// Get icon and color for link type
+function getLinkTypeConfig(type: LinkType): { icon: React.ReactNode; label: string; color: string } {
+  switch (type) {
+    case 'video':
+      return { icon: <Youtube className="w-3 h-3" />, label: 'Vídeo', color: 'border-red-300 text-red-700 bg-red-50' };
+    case 'social':
+      return { icon: <Instagram className="w-3 h-3" />, label: 'Social', color: 'border-pink-300 text-pink-700 bg-pink-50' };
+    case 'article':
+      return { icon: <Newspaper className="w-3 h-3" />, label: 'Artigo', color: 'border-blue-300 text-blue-700 bg-blue-50' };
+    case 'ecommerce':
+      return { icon: <ShoppingBag className="w-3 h-3" />, label: 'Loja', color: 'border-green-300 text-green-700 bg-green-50' };
+    case 'resource':
+      return { icon: <BookOpen className="w-3 h-3" />, label: 'Recurso', color: 'border-orange-300 text-orange-700 bg-orange-50' };
+    default:
+      return { icon: <Globe className="w-3 h-3" />, label: 'Externo', color: 'border-gray-300 text-gray-700 bg-gray-50' };
+  }
+}
+
+// Sortable Link Item Component
+interface SortableLinkItemProps {
+  link: InternalLink;
+  index: number;
+  editingLinkId: string | null;
+  editingAnchor: string;
+  setEditingAnchor: (value: string) => void;
+  startEditing: (link: InternalLink) => void;
+  saveEditing: () => void;
+  cancelEditing: () => void;
+  removeLink: (id: string) => void;
+}
+
+function SortableLinkItem({
+  link,
+  index,
+  editingLinkId,
+  editingAnchor,
+  setEditingAnchor,
+  startEditing,
+  saveEditing,
+  cancelEditing,
+  removeLink,
+}: SortableLinkItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: link.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const linkType = link.type || detectLinkType(link.url);
+  const typeConfig = getLinkTypeConfig(linkType);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex items-center gap-2 p-3 rounded-lg border bg-background hover:border-primary/30 transition-colors group",
+        isDragging && "opacity-50 shadow-lg ring-2 ring-primary/20"
+      )}
+    >
+      {/* Drag Handle */}
+      <button
+        {...attributes}
+        {...listeners}
+        className="flex-shrink-0 cursor-grab active:cursor-grabbing p-1 rounded hover:bg-muted transition-colors touch-none"
+      >
+        <GripVertical className="w-4 h-4 text-muted-foreground" />
+      </button>
+
+      {/* Index */}
+      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
+        {index + 1}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        {editingLinkId === link.id ? (
+          <div className="flex items-center gap-2">
+            <Input
+              value={editingAnchor}
+              onChange={(e) => setEditingAnchor(e.target.value)}
+              className="h-7 text-sm"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveEditing();
+                if (e.key === 'Escape') cancelEditing();
+              }}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+              onClick={saveEditing}
+            >
+              <Check className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={cancelEditing}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        ) : (
+          <p
+            className="text-sm font-medium truncate cursor-pointer hover:text-primary transition-colors"
+            onClick={() => startEditing(link)}
+            title="Clique para editar"
+          >
+            {link.anchor}
+          </p>
+        )}
+        <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+          <ExternalLink className="w-3 h-3" />
+          {link.url}
+        </p>
+      </div>
+
+      {/* Type Badge */}
+      <Badge
+        variant="outline"
+        className={cn('text-xs gap-1', typeConfig.color)}
+      >
+        {typeConfig.icon}
+        {typeConfig.label}
+      </Badge>
+
+      {/* Source Badge */}
+      <Badge
+        variant="outline"
+        className={cn(
+          'text-xs',
+          link.source === 'suggested'
+            ? 'border-amber-300 text-amber-700'
+            : link.source === 'imported'
+            ? 'border-purple-300 text-purple-700'
+            : 'border-gray-300 text-gray-700'
+        )}
+      >
+        {link.source === 'suggested' ? 'Auto' : link.source === 'imported' ? 'CSV' : 'Manual'}
+      </Badge>
+
+      {/* Edit Button */}
+      {editingLinkId !== link.id && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-muted-foreground hover:text-primary"
+          onClick={() => startEditing(link)}
+          title="Editar texto âncora"
+        >
+          <Pencil className="w-4 h-4" />
+        </Button>
+      )}
+
+      {/* Delete Button */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+        onClick={() => removeLink(link.id)}
+      >
+        <Trash2 className="w-4 h-4" />
+      </Button>
+    </div>
+  );
 }
 
 interface Article {
@@ -103,6 +356,33 @@ export function InternalLinksManager({
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
   const [editingAnchor, setEditingAnchor] = useState('');
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle drag end for reordering
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id) {
+      const oldIndex = links.findIndex(l => l.id === active.id);
+      const newIndex = links.findIndex(l => l.id === over.id);
+      
+      const reorderedLinks = arrayMove(links, oldIndex, newIndex);
+      onLinksChange(reorderedLinks);
+      
+      toast({ title: 'Links reordenados!' });
+    }
+  };
 
   // Fetch existing articles for suggestions
   useEffect(() => {
@@ -798,103 +1078,57 @@ export function InternalLinksManager({
         </div>
       )}
 
-      {/* Links List */}
+      {/* Links List with Drag and Drop */}
       {links.length > 0 ? (
-        <ScrollArea className="h-[200px]">
-          <div className="space-y-2 pr-4">
-            {links.map((link, index) => (
-              <div
-                key={link.id}
-                className="flex items-center gap-3 p-3 rounded-lg border bg-background hover:border-primary/30 transition-colors group"
-              >
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
-                  {index + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  {editingLinkId === link.id ? (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={editingAnchor}
-                        onChange={(e) => setEditingAnchor(e.target.value)}
-                        className="h-7 text-sm"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') saveEditing();
-                          if (e.key === 'Escape') cancelEditing();
-                        }}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
-                        onClick={saveEditing}
-                      >
-                        <Check className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={cancelEditing}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <p 
-                      className="text-sm font-medium truncate cursor-pointer hover:text-primary transition-colors"
-                      onClick={() => startEditing(link)}
-                      title="Clique para editar"
-                    >
-                      {link.anchor}
-                    </p>
-                  )}
-                  <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-                    <ExternalLink className="w-3 h-3" />
-                    {link.url}
-                  </p>
-                </div>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    'text-xs',
-                    link.source === 'suggested'
-                      ? 'border-amber-300 text-amber-700'
-                      : link.source === 'imported'
-                      ? 'border-purple-300 text-purple-700'
-                      : 'border-gray-300 text-gray-700'
-                  )}
-                >
-                  {link.source === 'suggested' ? 'Auto' : link.source === 'imported' ? 'CSV' : 'Manual'}
-                </Badge>
-                {editingLinkId !== link.id && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-muted-foreground hover:text-primary"
-                    onClick={() => startEditing(link)}
-                    title="Editar texto âncora"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => removeLink(link.id)}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext items={links.map(l => l.id)} strategy={verticalListSortingStrategy}>
+            <ScrollArea className="h-[240px]">
+              <div className="space-y-2 pr-4">
+                {links.map((link, index) => (
+                  <SortableLinkItem
+                    key={link.id}
+                    link={link}
+                    index={index}
+                    editingLinkId={editingLinkId}
+                    editingAnchor={editingAnchor}
+                    setEditingAnchor={setEditingAnchor}
+                    startEditing={startEditing}
+                    saveEditing={saveEditing}
+                    cancelEditing={cancelEditing}
+                    removeLink={removeLink}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
-        </ScrollArea>
+            </ScrollArea>
+          </SortableContext>
+        </DndContext>
       ) : (
         <div className="text-center py-8 text-muted-foreground">
           <Link2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
           <p className="text-sm">Nenhum link interno adicionado</p>
           <p className="text-xs">Use os botões acima para adicionar links</p>
+        </div>
+      )}
+
+      {/* Link Type Legend */}
+      {links.length > 0 && (
+        <div className="flex flex-wrap gap-2 p-2 rounded-lg bg-muted/30">
+          <span className="text-xs text-muted-foreground mr-1">Tipos:</span>
+          {(['article', 'video', 'social', 'ecommerce', 'resource', 'external'] as LinkType[]).map(type => {
+            const config = getLinkTypeConfig(type);
+            const count = links.filter(l => (l.type || detectLinkType(l.url)) === type).length;
+            if (count === 0) return null;
+            return (
+              <Badge key={type} variant="outline" className={cn('text-xs gap-1', config.color)}>
+                {config.icon}
+                {config.label}: {count}
+              </Badge>
+            );
+          })}
         </div>
       )}
 
