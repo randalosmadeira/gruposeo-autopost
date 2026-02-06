@@ -7,7 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -21,12 +20,16 @@ import {
 import { 
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
 import { 
   FileText, 
   Plus, 
   Search, 
-  MoreHorizontal, 
+  MoreVertical, 
   Eye, 
   Pencil, 
   Trash2, 
@@ -40,80 +43,81 @@ import {
   CheckCircle2,
   PartyPopper,
   Folder,
-  Check,
-  Bell,
-  Coins,
-  ChevronDown,
   Globe,
   Calendar,
   Clock,
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  Link as LinkIcon,
+  FileCheck,
+  Inbox
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useArticles } from '@/hooks/useArticles';
 import { useProjects } from '@/hooks/useProjects';
 import { useWordPressPublish } from '@/hooks/useWordPressPublish';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-const statusConfig: Record<string, { label: string; icon: React.ReactNode; className: string; bgColor: string }> = {
+// Status configuration with icons and colors
+const statusConfig: Record<string, { 
+  label: string; 
+  icon: React.ReactNode; 
+  bgColor: string;
+  textColor: string;
+  borderColor: string;
+}> = {
   draft: { 
     label: 'Rascunho', 
     icon: <FileText className="w-3 h-3" />,
-    className: 'bg-muted text-muted-foreground border-muted-foreground/20',
-    bgColor: 'bg-muted/30'
+    bgColor: 'bg-gray-100',
+    textColor: 'text-gray-800',
+    borderColor: 'border-gray-200'
   },
   generating: { 
     label: 'Em criação', 
     icon: <Loader2 className="w-3 h-3 animate-spin" />,
-    className: 'bg-amber-100 text-amber-700 border-amber-200',
-    bgColor: 'bg-amber-50'
+    bgColor: 'bg-yellow-100',
+    textColor: 'text-yellow-800',
+    borderColor: 'border-yellow-200'
   },
   ready: { 
     label: 'Finalizado', 
-    icon: <CheckCircle2 className="w-3 h-3" />,
-    className: 'bg-blue-100 text-blue-700 border-blue-200',
-    bgColor: 'bg-blue-50'
+    icon: <FileCheck className="w-3 h-3" />,
+    bgColor: 'bg-blue-100',
+    textColor: 'text-blue-800',
+    borderColor: 'border-blue-200'
   },
   published: { 
     label: 'Publicado', 
-    icon: <Globe className="w-3 h-3" />,
-    className: 'bg-green-100 text-green-700 border-green-200',
-    bgColor: 'bg-green-50'
+    icon: <CheckCircle2 className="w-3 h-3" />,
+    bgColor: 'bg-green-100',
+    textColor: 'text-green-800',
+    borderColor: 'border-green-200'
   },
   error: { 
     label: 'Erro', 
     icon: <AlertCircle className="w-3 h-3" />,
-    className: 'bg-red-100 text-red-700 border-red-200',
-    bgColor: 'bg-red-50'
+    bgColor: 'bg-red-100',
+    textColor: 'text-red-800',
+    borderColor: 'border-red-200'
   },
   queued: { 
     label: 'Na Fila', 
-    icon: <Clock className="w-3 h-3" />,
-    className: 'bg-orange-100 text-orange-700 border-orange-200',
-    bgColor: 'bg-orange-50'
+    icon: <Inbox className="w-3 h-3" />,
+    bgColor: 'bg-gray-100',
+    textColor: 'text-gray-800',
+    borderColor: 'border-gray-200'
   },
   scheduled: { 
     label: 'Agendado', 
-    icon: <Calendar className="w-3 h-3" />,
-    className: 'bg-purple-100 text-purple-700 border-purple-200',
-    bgColor: 'bg-purple-50'
+    icon: <Clock className="w-3 h-3" />,
+    bgColor: 'bg-blue-100',
+    textColor: 'text-blue-800',
+    borderColor: 'border-blue-200'
   },
 };
-
-const statusTabs = [
-  { value: 'all', label: 'Todos', count: 0 },
-  { value: 'published', label: 'Publicado', count: 0 },
-  { value: 'scheduled', label: 'Agendado', count: 0 },
-  { value: 'ready', label: 'Finalizado', count: 0 },
-  { value: 'generating', label: 'Em criação', count: 0 },
-  { value: 'queued', label: 'Na Fila', count: 0 },
-  { value: 'error', label: 'Erro', count: 0 },
-];
 
 // Success Modal Component
 function SuccessModal({ 
@@ -138,22 +142,20 @@ function SuccessModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md text-center border-0 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/50 dark:to-emerald-950/50">
+      <DialogContent className="sm:max-w-md text-center border-0 bg-gradient-to-br from-green-50 to-emerald-50">
         <div className="flex flex-col items-center py-6 space-y-4">
-          {/* Animated Icon */}
           <div className="relative">
             <div className="absolute inset-0 animate-ping bg-green-400/30 rounded-full" />
-            <div className="relative bg-gradient-to-br from-green-500 to-emerald-600 p-4 rounded-full animate-scale-in">
+            <div className="relative bg-gradient-to-br from-green-500 to-emerald-600 p-4 rounded-full">
               <CheckCircle2 className="w-12 h-12 text-white" />
             </div>
           </div>
 
-          {/* Confetti Animation */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
             {[...Array(12)].map((_, i) => (
               <div
                 key={i}
-                className="absolute animate-fade-in"
+                className="absolute"
                 style={{
                   left: `${10 + (i % 6) * 15}%`,
                   top: `${20 + Math.floor(i / 6) * 30}%`,
@@ -168,23 +170,21 @@ function SuccessModal({
             ))}
           </div>
 
-          {/* Success Message */}
-          <div className="space-y-2 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-            <h3 className="text-2xl font-bold text-green-700 dark:text-green-400">
+          <div className="space-y-2">
+            <h3 className="text-2xl font-bold text-green-700">
               Publicação Concluída! 🎉
             </h3>
-            <p className="text-green-600 dark:text-green-300">
+            <p className="text-green-600">
               {successCount} artigo{successCount > 1 ? 's' : ''} publicado{successCount > 1 ? 's' : ''} com sucesso
               {failedCount > 0 && (
-                <span className="block text-sm text-amber-600 dark:text-amber-400 mt-1">
+                <span className="block text-sm text-amber-600 mt-1">
                   {failedCount} artigo{failedCount > 1 ? 's' : ''} não {failedCount > 1 ? 'puderam' : 'pôde'} ser publicado{failedCount > 1 ? 's' : ''}
                 </span>
               )}
             </p>
           </div>
 
-          {/* Progress Bar Animation */}
-          <div className="w-full max-w-xs h-1.5 bg-green-200 dark:bg-green-800 rounded-full overflow-hidden">
+          <div className="w-full max-w-xs h-1.5 bg-green-200 rounded-full overflow-hidden">
             <div 
               className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full transition-all duration-[3500ms] ease-linear"
               style={{ width: isOpen ? '100%' : '0%' }}
@@ -194,11 +194,146 @@ function SuccessModal({
           <Button 
             variant="outline" 
             onClick={onClose}
-            className="mt-2 border-green-300 text-green-700 hover:bg-green-100 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-900/50"
+            className="mt-2 border-green-300 text-green-700 hover:bg-green-100"
           >
             Continuar
           </Button>
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Bulk Publish Modal Component
+function BulkPublishModal({
+  isOpen,
+  onClose,
+  selectedCount,
+  projects,
+  onPublish,
+  isPublishing
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  selectedCount: number;
+  projects: Array<{ id: string; name: string; domain: string }>;
+  onPublish: (projectId: string) => void;
+  isPublishing: boolean;
+}) {
+  const [selectedProject, setSelectedProject] = useState<string>('');
+  const [step, setStep] = useState<'destination' | 'publishing'>('destination');
+
+  useEffect(() => {
+    if (!isOpen) {
+      setStep('destination');
+      setSelectedProject('');
+    }
+  }, [isOpen]);
+
+  const handlePublish = () => {
+    if (selectedProject) {
+      setStep('publishing');
+      onPublish(selectedProject);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="pb-4 border-b">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Upload className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <DialogTitle className="text-xl font-semibold">
+                Publicar artigos em massa
+              </DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground mt-1">
+                Publique {selectedCount} artigos selecionados de uma vez no destino escolhido.
+              </DialogDescription>
+            </div>
+          </div>
+          
+          <div className="mt-3">
+            <Badge className="bg-primary/10 text-primary text-sm px-3 py-1">
+              {selectedCount} artigos selecionados
+            </Badge>
+          </div>
+        </DialogHeader>
+        
+        <div className="flex-1 overflow-y-auto py-6 px-1">
+          {step === 'destination' && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">
+                  Selecione o projeto de destino
+                </label>
+                <Select value={selectedProject} onValueChange={setSelectedProject}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Escolha um projeto WordPress" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.filter(p => p.domain).map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        <div className="flex items-center gap-2">
+                          <Globe className="w-4 h-4 text-primary" />
+                          <div>
+                            <span className="font-medium">{project.name}</span>
+                            <span className="text-xs text-muted-foreground ml-2">
+                              {project.domain}
+                            </span>
+                          </div>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {projects.filter(p => p.domain).length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Globe className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>Nenhum projeto WordPress configurado.</p>
+                  <p className="text-sm">Configure um projeto com WordPress primeiro.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 'publishing' && (
+            <div className="flex flex-col items-center justify-center py-8">
+              <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
+              <h3 className="text-lg font-medium">Publicando artigos...</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Aguarde enquanto os artigos são publicados.
+              </p>
+            </div>
+          )}
+        </div>
+        
+        {step === 'destination' && (
+          <DialogFooter className="pt-4 border-t">
+            <div className="flex items-center justify-between w-full">
+              <span className="text-sm text-muted-foreground">
+                Pronto para publicar {selectedCount} artigos
+              </span>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={onClose}>
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={handlePublish}
+                  disabled={!selectedProject || isPublishing}
+                  className="bg-primary hover:bg-primary/90"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Publicar {selectedCount} artigos
+                </Button>
+              </div>
+            </div>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -219,12 +354,10 @@ function PublishingProgress({
   const progress = total > 0 ? (current / total) * 100 : 0;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 animate-fade-in">
+    <div className="fixed bottom-6 right-6 z-50">
       <div className="bg-card border shadow-lg rounded-xl p-4 min-w-[280px]">
         <div className="flex items-center gap-3 mb-3">
-          <div className="relative">
-            <Loader2 className="w-6 h-6 text-primary animate-spin" />
-          </div>
+          <Loader2 className="w-6 h-6 text-primary animate-spin" />
           <div>
             <p className="font-medium text-sm">Publicando artigos...</p>
             <p className="text-xs text-muted-foreground">
@@ -249,15 +382,15 @@ export default function ArticlesList() {
   const { projects } = useProjects();
   const { publishMultiple, isPublishing } = useWordPressPublish();
   const { toast } = useToast();
-  const { user } = useAuth();
   
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [projectFilter, setProjectFilter] = useState('all');
   const [selectedArticles, setSelectedArticles] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
   // Success modal state
@@ -270,13 +403,22 @@ export default function ArticlesList() {
   // Recently published articles for highlight animation
   const [recentlyPublished, setRecentlyPublished] = useState<Set<string>>(new Set());
 
-  // Calculate status counts
-  const statusCounts = useMemo(() => {
+  // Status tabs configuration
+  const statusTabs = useMemo(() => {
     const counts: Record<string, number> = { all: articles.length };
     articles.forEach(a => {
       counts[a.status] = (counts[a.status] || 0) + 1;
     });
-    return counts;
+    
+    return [
+      { value: 'all', label: 'Todos', count: counts.all || 0 },
+      { value: 'published', label: 'Publicado', count: counts.published || 0 },
+      { value: 'scheduled', label: 'Agendado', count: counts.scheduled || 0 },
+      { value: 'ready', label: 'Finalizado', count: counts.ready || 0 },
+      { value: 'generating', label: 'Em criação', count: counts.generating || 0 },
+      { value: 'queued', label: 'Na Fila', count: counts.queued || 0 },
+      { value: 'error', label: 'Erro', count: counts.error || 0 },
+    ];
   }, [articles]);
 
   // Filter articles
@@ -326,37 +468,35 @@ export default function ArticlesList() {
     setSelectedArticles(new Set());
   };
 
-  // Bulk publish with progress tracking
-  const handleBulkPublish = async () => {
+  // Bulk publish
+  const handleBulkPublish = async (projectId?: string) => {
     const selectedItems = articles.filter(a => selectedArticles.has(a.id));
     const articlesToPublish = selectedItems
-      .filter(a => a.project_id && a.status !== 'published')
-      .map(a => ({ id: a.id, title: a.title, project_id: a.project_id }));
+      .filter(a => a.status !== 'published')
+      .map(a => ({ id: a.id, title: a.title, project_id: projectId || a.project_id }));
 
     if (articlesToPublish.length === 0) {
       toast({
         title: 'Nenhum artigo para publicar',
-        description: 'Selecione artigos vinculados a projetos WordPress.',
+        description: 'Selecione artigos que ainda não foram publicados.',
         variant: 'destructive',
       });
       return;
     }
 
     setPublishProgress({ current: 0, total: articlesToPublish.length });
+    setShowPublishModal(false);
 
     const result = await publishMultiple(articlesToPublish);
     
-    // Set recently published for animation
     const publishedIds = new Set(articlesToPublish.slice(0, result.success).map(a => a.id));
     setRecentlyPublished(publishedIds);
     
-    // Show success modal
     setPublishResult(result);
     setShowSuccessModal(true);
     
     clearSelection();
 
-    // Clear recently published highlight after animation
     setTimeout(() => {
       setRecentlyPublished(new Set());
     }, 3000);
@@ -387,14 +527,25 @@ export default function ArticlesList() {
     });
   };
 
+  // Copy article link
+  const handleCopyLink = (articleId: string) => {
+    const article = articles.find(a => a.id === articleId);
+    if (article?.published_url) {
+      navigator.clipboard.writeText(article.published_url);
+      toast({ title: 'Link copiado!' });
+    }
+  };
+
   // Get project name
   const getProjectName = (projectId: string | null) => {
     if (!projectId) return null;
     return projects.find(p => p.id === projectId)?.name;
   };
 
-  // Get user initials
-  const userInitials = user?.email?.substring(0, 2).toUpperCase() || 'U';
+  // Refresh handler
+  const handleRefresh = () => {
+    window.location.reload();
+  };
 
   if (isLoading) {
     return (
@@ -409,7 +560,6 @@ export default function ArticlesList() {
       {/* Page Header */}
       <header className="sticky top-0 z-40 bg-card border-b">
         <div className="flex items-center justify-between px-6 py-4">
-          {/* Left Side */}
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold text-foreground">Artigos</h1>
             <Badge 
@@ -420,22 +570,17 @@ export default function ArticlesList() {
             </Badge>
           </div>
           
-          {/* Right Side */}
-          <div className="flex items-center gap-3">
-            {/* New Article Button */}
-            <Button asChild className="bg-primary hover:bg-primary/90">
-              <Link to="/gerador-artigos">
-                <Plus className="w-4 h-4 mr-2" />
-                Novo Artigo
-              </Link>
-            </Button>
-          </div>
+          <Button asChild className="bg-primary hover:bg-primary/90">
+            <Link to="/gerador-artigos">
+              <Plus className="w-4 h-4 mr-2" />
+              Novo Artigo
+            </Link>
+          </Button>
         </div>
       </header>
 
       {/* Filters and Actions Bar */}
       <div className="px-6 py-4 bg-card border-b space-y-4">
-        {/* Row 1: Search and Project Filter */}
         <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
           {/* Search */}
           <div className="relative flex-1 max-w-md w-full">
@@ -452,7 +597,7 @@ export default function ArticlesList() {
             />
           </div>
           
-          {/* Project Filter Dropdown */}
+          {/* Project Filter */}
           <Select value={projectFilter} onValueChange={handleFilterChange(setProjectFilter)}>
             <SelectTrigger className="w-full lg:w-64 bg-background">
               <div className="flex items-center gap-2">
@@ -471,47 +616,33 @@ export default function ArticlesList() {
                   <span>Todos os projetos</span>
                 </div>
               </SelectItem>
-              
               <DropdownMenuSeparator />
-              
               {projects.map((project) => (
                 <SelectItem key={project.id} value={project.id}>
                   <div className="flex items-center gap-2">
                     <Folder className="w-4 h-4 text-amber-600" />
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">{project.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {project.domain || 'Sem website'}
-                      </span>
-                    </div>
+                    <span className="text-sm font-medium">{project.name}</span>
                   </div>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           
-          {/* Spacer */}
           <div className="flex-1 hidden lg:block" />
           
           {/* Action Buttons */}
           <div className="flex items-center gap-2 w-full lg:w-auto">
-            {/* Publish in Bulk */}
             <Button
               variant="default"
               size="sm"
               disabled={selectedArticles.size === 0 || isPublishing}
-              onClick={handleBulkPublish}
+              onClick={() => setShowPublishModal(true)}
               className="bg-primary hover:bg-primary/90 flex-1 lg:flex-none"
             >
-              {isPublishing ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : (
-                <Upload className="w-4 h-4 mr-2" />
-              )}
+              <Upload className="w-4 h-4 mr-2" />
               Publicar em massa
             </Button>
             
-            {/* Delete Selected */}
             <Button
               variant="destructive"
               size="sm"
@@ -520,76 +651,49 @@ export default function ArticlesList() {
               className="flex-1 lg:flex-none"
             >
               <Trash2 className="w-4 h-4 mr-2" />
-              Excluir ({selectedArticles.size})
+              Excluir selecionados ({selectedArticles.size})
             </Button>
           </div>
         </div>
       </div>
 
       {/* Status Tabs */}
-      <div className="px-6 py-3 bg-muted/30 border-b">
-        <div className="flex items-center justify-between">
-          <Tabs value={statusFilter} onValueChange={handleFilterChange(setStatusFilter)} className="w-auto">
-            <TabsList className="bg-transparent h-auto p-0 gap-1">
-              {statusTabs.map((tab) => {
-                const count = statusCounts[tab.value] || 0;
-                return (
-                  <TabsTrigger
-                    key={tab.value}
-                    value={tab.value}
-                    className={cn(
-                      "rounded-full px-4 py-1.5 text-sm font-medium transition-all",
-                      "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm",
-                      "data-[state=inactive]:bg-background data-[state=inactive]:hover:bg-muted"
-                    )}
-                  >
-                    {tab.label}
-                    {count > 0 && (
-                      <span className={cn(
-                        "ml-1.5 text-xs",
-                        statusFilter === tab.value ? "opacity-80" : "text-muted-foreground"
-                      )}>
-                        ({count})
-                      </span>
-                    )}
-                  </TabsTrigger>
-                );
-              })}
-            </TabsList>
-          </Tabs>
+      <div className="px-6 py-3 bg-card border-b overflow-x-auto">
+        <div className="flex items-center gap-2">
+          {statusTabs.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => handleFilterChange(setStatusFilter)(tab.value)}
+              className={cn(
+                "px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap",
+                statusFilter === tab.value
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              {tab.label}
+              {tab.count > 0 && (
+                <span className={cn(
+                  "ml-2 px-1.5 py-0.5 text-xs rounded",
+                  statusFilter === tab.value
+                    ? "bg-primary-foreground/20 text-primary-foreground"
+                    : "bg-muted text-muted-foreground"
+                )}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
           
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => window.location.reload()}
-            className="text-muted-foreground hover:text-foreground"
+          <button 
+            onClick={handleRefresh}
+            className="p-2 ml-2 text-muted-foreground hover:text-foreground hover:bg-muted 
+                       rounded-lg transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
-          </Button>
+          </button>
         </div>
       </div>
-
-      {/* Selection Info Bar */}
-      {selectedArticles.size > 0 && (
-        <div className="px-6 py-3 bg-primary/5 border-b animate-fade-in">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Badge className="bg-primary text-primary-foreground">
-                {selectedArticles.size} selecionado{selectedArticles.size > 1 ? 's' : ''}
-              </Badge>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearSelection}
-                className="text-muted-foreground h-7"
-              >
-                <X className="w-3 h-3 mr-1" />
-                Limpar seleção
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Main Content - Table */}
       <div className="p-6">
@@ -619,143 +723,112 @@ export default function ArticlesList() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableHead className="w-12">
+                    <TableHead className="w-12 px-6">
                       <Checkbox
                         checked={selectedArticles.size === paginatedArticles.length && paginatedArticles.length > 0}
                         onCheckedChange={toggleSelectAll}
+                        className="w-4 h-4"
                       />
                     </TableHead>
-                    <TableHead className="w-24">Imagem</TableHead>
-                    <TableHead>Título</TableHead>
-                    <TableHead className="w-40">Projeto</TableHead>
-                    <TableHead className="w-32">Status</TableHead>
-                    <TableHead className="w-36">Data</TableHead>
-                    <TableHead className="w-20 text-center">Ações</TableHead>
+                    <TableHead className="px-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Imagem
+                    </TableHead>
+                    <TableHead className="px-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Título
+                    </TableHead>
+                    <TableHead className="px-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Status
+                    </TableHead>
+                    <TableHead className="w-16 px-4 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Ações
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedArticles.map((article) => {
                     const status = statusConfig[article.status] || statusConfig.draft;
                     const isRecentlyPublished = recentlyPublished.has(article.id);
-                    const projectName = getProjectName(article.project_id);
                     
                     return (
                       <TableRow 
                         key={article.id} 
                         className={cn(
-                          "group transition-all duration-500",
+                          "hover:bg-muted/30 transition-colors",
                           selectedArticles.has(article.id) && "bg-primary/5",
-                          isRecentlyPublished && "bg-green-100 dark:bg-green-900/30 animate-pulse"
+                          isRecentlyPublished && "bg-green-50 animate-pulse"
                         )}
                       >
                         {/* Checkbox */}
-                        <TableCell>
-                          <div className="relative">
-                            <Checkbox
-                              checked={selectedArticles.has(article.id)}
-                              onCheckedChange={() => toggleSelect(article.id)}
-                            />
-                            {isRecentlyPublished && (
-                              <div className="absolute -right-1 -top-1">
-                                <CheckCircle2 className="w-4 h-4 text-green-600 animate-scale-in" />
+                        <TableCell className="px-6 py-4">
+                          <Checkbox
+                            checked={selectedArticles.has(article.id)}
+                            onCheckedChange={() => toggleSelect(article.id)}
+                            className="w-4 h-4"
+                          />
+                        </TableCell>
+                        
+                        {/* Thumbnail */}
+                        <TableCell className="px-4 py-4">
+                          <div className="w-20 h-14 rounded-lg overflow-hidden bg-muted">
+                            {article.featured_image_url ? (
+                              <img
+                                src={article.featured_image_url}
+                                alt={article.title || ''}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <ImageIcon className="w-5 h-5 text-muted-foreground" />
                               </div>
                             )}
                           </div>
                         </TableCell>
                         
-                        {/* Image */}
-                        <TableCell>
-                          {article.featured_image_url ? (
-                            <img
-                              src={article.featured_image_url}
-                              alt=""
-                              className="w-20 h-14 object-cover rounded-lg border"
-                            />
-                          ) : (
-                            <div className="w-20 h-14 bg-muted rounded-lg border flex items-center justify-center">
-                              <div className="text-center">
-                                <ImageIcon className="w-5 h-5 text-muted-foreground mx-auto" />
-                                <span className="text-[9px] text-muted-foreground">Sem imagem</span>
-                              </div>
-                            </div>
-                          )}
-                        </TableCell>
-                        
-                        {/* Title */}
-                        <TableCell>
-                          <div className="space-y-1 max-w-md">
-                            <p className="font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors cursor-pointer"
-                               onClick={() => navigate(`/articles/${article.id}`)}>
+                        {/* Title & Description */}
+                        <TableCell className="px-4 py-4">
+                          <div className="space-y-1 max-w-lg">
+                            <h3 
+                              className="text-sm font-medium text-foreground line-clamp-1 cursor-pointer hover:text-primary transition-colors"
+                              onClick={() => navigate(`/articles/${article.id}`)}
+                            >
                               {article.title || article.keyword}
-                            </p>
+                            </h3>
                             {article.excerpt && (
-                              <p className="text-xs text-muted-foreground line-clamp-1">
+                              <p className="text-xs text-muted-foreground line-clamp-2">
                                 {article.excerpt}
                               </p>
                             )}
-                            {article.word_count && (
-                              <span className="text-xs text-muted-foreground">
-                                {article.word_count.toLocaleString()} palavras
-                              </span>
-                            )}
                           </div>
                         </TableCell>
                         
-                        {/* Project */}
-                        <TableCell>
-                          {projectName ? (
-                            <div className="flex items-center gap-2">
-                              <Folder className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                              <span className="text-sm text-foreground truncate max-w-[120px]">
-                                {projectName}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        
-                        {/* Status */}
-                        <TableCell>
+                        {/* Status Badge */}
+                        <TableCell className="px-4 py-4">
                           <Badge 
                             variant="outline"
                             className={cn(
-                              'font-normal transition-all duration-300 gap-1.5',
-                              status.className,
-                              isRecentlyPublished && 'bg-green-500 text-white border-green-500 animate-scale-in'
+                              'inline-flex items-center gap-1.5 font-normal border',
+                              status.bgColor,
+                              status.textColor,
+                              status.borderColor,
+                              isRecentlyPublished && 'bg-green-500 text-white border-green-500'
                             )}
                           >
                             {isRecentlyPublished ? (
-                              <>
-                                <CheckCircle2 className="w-3 h-3" />
-                                Publicado!
-                              </>
+                              <CheckCircle2 className="w-3 h-3" />
                             ) : (
-                              <>
-                                {status.icon}
-                                {status.label}
-                              </>
+                              status.icon
                             )}
+                            {isRecentlyPublished ? 'Publicado!' : status.label}
                           </Badge>
                         </TableCell>
                         
-                        {/* Date */}
-                        <TableCell>
-                          <div className="text-sm text-muted-foreground">
-                            {format(new Date(article.created_at), "dd MMM yyyy", { locale: ptBR })}
-                          </div>
-                          <div className="text-xs text-muted-foreground/70">
-                            {format(new Date(article.created_at), "HH:mm", { locale: ptBR })}
-                          </div>
-                        </TableCell>
-                        
-                        {/* Actions */}
-                        <TableCell>
+                        {/* Actions Menu */}
+                        <TableCell className="px-4 py-4">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
+                              <button className="p-1.5 hover:bg-muted rounded transition-colors">
+                                <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                              </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-48">
                               <DropdownMenuItem onClick={() => navigate(`/articles/${article.id}`)}>
@@ -767,27 +840,26 @@ export default function ArticlesList() {
                                 Editar
                               </DropdownMenuItem>
                               {article.published_url && (
-                                <DropdownMenuItem asChild>
-                                  <a href={article.published_url} target="_blank" rel="noopener noreferrer">
-                                    <ExternalLink className="w-4 h-4 mr-2" />
-                                    Ver publicado
-                                  </a>
-                                </DropdownMenuItem>
+                                <>
+                                  <DropdownMenuItem onClick={() => handleCopyLink(article.id)}>
+                                    <LinkIcon className="w-4 h-4 mr-2" />
+                                    Copiar link
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem asChild>
+                                    <a href={article.published_url} target="_blank" rel="noopener noreferrer">
+                                      <ExternalLink className="w-4 h-4 mr-2" />
+                                      Ver publicado
+                                    </a>
+                                  </DropdownMenuItem>
+                                </>
                               )}
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem 
-                                disabled={!article.project_id || article.status === 'published'}
-                              >
-                                <Upload className="w-4 h-4 mr-2" />
-                                Publicar
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
+                                className="text-destructive focus:text-destructive focus:bg-destructive/10"
                                 onClick={() => deleteArticle.mutate(article.id)}
                               >
                                 <Trash2 className="w-4 h-4 mr-2" />
-                                Excluir
+                                Apagar
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -798,22 +870,33 @@ export default function ArticlesList() {
                 </TableBody>
               </Table>
 
-              {/* Pagination */}
-              <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-4 border-t bg-muted/30 gap-4">
-                <div className="text-sm text-muted-foreground">
-                  {selectedArticles.size > 0 ? (
-                    <span className="font-medium text-primary">
-                      {selectedArticles.size} de {filteredArticles.length} selecionados
-                    </span>
-                  ) : (
-                    <span>Total: {filteredArticles.length} artigos</span>
-                  )}
+              {/* Pagination Footer */}
+              <div className="px-6 py-4 bg-muted/30 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
+                {/* Selection Counter */}
+                <div className="flex items-center gap-2">
+                  <div className={cn(
+                    "flex items-center justify-center w-8 h-8 text-sm font-medium rounded",
+                    selectedArticles.size > 0 
+                      ? "bg-primary/10 text-primary" 
+                      : "bg-muted text-muted-foreground"
+                  )}>
+                    {selectedArticles.size}
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    de {filteredArticles.length} linha(s) selecionada(s)
+                  </span>
                 </div>
                 
+                {/* Pagination Controls */}
                 <div className="flex flex-col sm:flex-row items-center gap-4">
-                  {/* Items per page */}
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground whitespace-nowrap">Itens por página</span>
+                  <span className="text-sm text-muted-foreground">
+                    Página {currentPage} de {totalPages}
+                  </span>
+                  
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      Itens por página:
+                    </span>
                     <Select
                       value={String(itemsPerPage)}
                       onValueChange={(val) => {
@@ -821,43 +904,35 @@ export default function ArticlesList() {
                         setCurrentPage(1);
                       }}
                     >
-                      <SelectTrigger className="w-16 h-8 bg-background">
+                      <SelectTrigger className="w-20 h-8 bg-background">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="10">10</SelectItem>
-                        <SelectItem value="25">25</SelectItem>
+                        <SelectItem value="20">20</SelectItem>
                         <SelectItem value="50">50</SelectItem>
                         <SelectItem value="100">100</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   
-                  {/* Page info */}
-                  <span className="text-sm text-muted-foreground whitespace-nowrap">
-                    Página {currentPage} de {totalPages}
-                  </span>
-                  
-                  {/* Navigation */}
-                  <div className="flex gap-1">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      disabled={currentPage === 1}
+                  <div className="flex items-center gap-1">
+                    <button
                       onClick={() => setCurrentPage(p => p - 1)}
+                      disabled={currentPage === 1}
+                      className="p-2 hover:bg-muted rounded disabled:opacity-50 
+                                 disabled:cursor-not-allowed transition-colors"
                     >
                       <ChevronLeft className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      disabled={currentPage === totalPages}
+                    </button>
+                    <button
                       onClick={() => setCurrentPage(p => p + 1)}
+                      disabled={currentPage === totalPages}
+                      className="p-2 hover:bg-muted rounded disabled:opacity-50 
+                                 disabled:cursor-not-allowed transition-colors"
                     >
                       <ChevronRight className="w-4 h-4" />
-                    </Button>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -872,6 +947,16 @@ export default function ArticlesList() {
         onClose={() => setShowSuccessModal(false)}
         successCount={publishResult.success}
         failedCount={publishResult.failed}
+      />
+
+      {/* Bulk Publish Modal */}
+      <BulkPublishModal
+        isOpen={showPublishModal}
+        onClose={() => setShowPublishModal(false)}
+        selectedCount={selectedArticles.size}
+        projects={projects}
+        onPublish={handleBulkPublish}
+        isPublishing={isPublishing}
       />
 
       {/* Publishing Progress */}
