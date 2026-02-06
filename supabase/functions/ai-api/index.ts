@@ -30,14 +30,14 @@ async function callLovableAI(model: string, messages: any[], options: any = {}) 
     throw new Error("LOVABLE_API_KEY não configurada");
   }
 
-  const response = await fetch("https://ai.lovable.dev/v1/chat/completions", {
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${LOVABLE_API_KEY}`,
     },
     body: JSON.stringify({
-      model,
+      model: model || "google/gemini-3-flash-preview",
       messages,
       max_tokens: options.maxTokens || 4096,
       temperature: options.temperature || 0.7,
@@ -45,6 +45,12 @@ async function callLovableAI(model: string, messages: any[], options: any = {}) 
   });
 
   if (!response.ok) {
+    if (response.status === 429) {
+      throw new Error("Rate limit excedido. Tente novamente em alguns segundos.");
+    }
+    if (response.status === 402) {
+      throw new Error("Créditos de IA insuficientes.");
+    }
     const error = await response.text();
     throw new Error(`AI API error: ${response.status} - ${error}`);
   }
