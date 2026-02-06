@@ -971,9 +971,9 @@ export default function ArticleGeneratorV2() {
             {appState === 'form' && (
               <>
                 {validationErrors.length > 0 && (
-                  <div className="p-3 rounded-lg mb-2 space-y-1" style={{ backgroundColor: '#FEE2E2' }}>
+                  <div className="p-3 rounded-lg mb-2 space-y-1 bg-destructive/10 border border-destructive/20 animate-scale-in">
                     {validationErrors.map((error, idx) => (
-                      <p key={idx} className="text-sm flex items-center gap-2" style={{ color: '#DC2626' }}>
+                      <p key={idx} className="text-sm flex items-center gap-2 text-destructive">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
                         {error}
                       </p>
@@ -990,13 +990,12 @@ export default function ArticleGeneratorV2() {
                     handleGenerateOutline();
                   }}
                   disabled={isGenerating || !config.keyword.trim()}
-                  className="w-full h-12 text-base transition-transform hover:-translate-y-0.5"
-                  style={{ backgroundColor: colors.primary }}
+                  className="w-full h-12 text-base transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                 >
                   <Play className="w-5 h-5 mr-2" />
                   Gerar Esboço do Artigo
                 </Button>
-                <p className="text-xs text-center" style={{ color: colors.textSecondary }}>
+                <p className="text-xs text-center text-muted-foreground">
                   Custo total: {totalCredits} {totalCredits === 1 ? 'crédito' : 'créditos'} • Disponível: {userCredits}
                 </p>
               </>
@@ -1007,8 +1006,7 @@ export default function ArticleGeneratorV2() {
                 <Button
                   onClick={handleGenerate}
                   disabled={isGenerating}
-                  className="w-full h-12 text-base transition-transform hover:-translate-y-0.5"
-                  style={{ backgroundColor: colors.primary }}
+                  className="w-full h-12 text-base transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                 >
                   {isGenerating ? (
                     <>
@@ -1025,7 +1023,7 @@ export default function ArticleGeneratorV2() {
                 <Button
                   onClick={handleReset}
                   variant="outline"
-                  className="w-full h-10"
+                  className="w-full h-10 transition-colors duration-200"
                 >
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Reiniciar & Começar de Novo
