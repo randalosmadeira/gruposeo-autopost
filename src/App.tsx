@@ -13,6 +13,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const ArticleTypeSelection = lazy(() => import("./pages/ArticleTypeSelection"));
 const ArticleGenerator = lazy(() => import("./pages/ArticleGenerator"));
 const ArticleGeneratorV2 = lazy(() => import("./pages/ArticleGeneratorV2"));
+const BulkArticleGenerator = lazy(() => import("./pages/BulkArticleGenerator"));
 const ArticlesList = lazy(() => import("./pages/ArticlesList"));
 const ArticleViewPage = lazy(() => import("./pages/ArticleViewPage"));
 const ArticleEditPage = lazy(() => import("./pages/ArticleEditPage"));
@@ -56,7 +57,7 @@ const App = () => (
                 <Route path="/articles" element={<ArticlesList />} />
                 <Route path="/articles/new" element={<ArticleGeneratorV2 />} />
                 <Route path="/articles/new/:type" element={<ArticleGenerator />} />
-                <Route path="/articles/bulk" element={<ArticleTypeSelection />} />
+                <Route path="/articles/bulk" element={<BulkArticleGenerator />} />
                 <Route path="/articles/:id/edit" element={<ArticleEditPage />} />
                 <Route path="/articles/:id" element={<ArticleViewPage />} />
                 <Route path="/landing-page/new" element={<LandingPageGenerator />} />
