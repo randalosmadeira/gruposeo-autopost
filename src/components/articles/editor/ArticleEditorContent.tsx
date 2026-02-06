@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useCallback } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Copy, Code } from 'lucide-react';
@@ -12,6 +12,7 @@ interface ArticleEditorContentProps {
   title: string | null;
   activeTab: 'visual' | 'html';
   onContentChange: (content: string) => void;
+  editorRef?: React.RefObject<HTMLDivElement>;
 }
 
 export function ArticleEditorContent({
@@ -20,8 +21,11 @@ export function ArticleEditorContent({
   title,
   activeTab,
   onContentChange,
+  editorRef: externalEditorRef,
 }: ArticleEditorContentProps) {
   const { toast } = useToast();
+  const internalEditorRef = useRef<HTMLDivElement>(null);
+  const editorRef = externalEditorRef || internalEditorRef;
 
   // Convert markdown to HTML if needed
   const processedContent = useMemo(() => {
@@ -130,9 +134,17 @@ export function ArticleEditorContent({
             </h1>
           )}
 
-          {/* Content with styled headings */}
+          {/* Editable Content */}
           <article 
-            className="prose prose-lg max-w-none
+            ref={editorRef}
+            contentEditable
+            suppressContentEditableWarning
+            onInput={(e) => {
+              const newContent = (e.target as HTMLDivElement).innerHTML;
+              onContentChange(newContent);
+            }}
+            className="prose prose-lg max-w-none outline-none min-h-[400px]
+              focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 rounded-lg p-2 -m-2
               [&_h2]:relative [&_h2]:pl-12 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-8 [&_h2]:mb-4
               [&_h2]:before:content-['H2'] [&_h2]:before:absolute [&_h2]:before:left-0 
               [&_h2]:before:px-2 [&_h2]:before:py-0.5 [&_h2]:before:text-xs 
@@ -152,7 +164,7 @@ export function ArticleEditorContent({
               [&_blockquote]:border-l-4 [&_blockquote]:border-primary [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:my-4"
             dangerouslySetInnerHTML={{ 
               __html: sanitizeHTML(
-                processedContent || '<p class="text-muted-foreground">Sem conteúdo</p>'
+                processedContent || '<p>Clique aqui para começar a escrever...</p>'
               ) 
             }}
           />

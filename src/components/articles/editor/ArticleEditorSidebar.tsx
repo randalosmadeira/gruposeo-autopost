@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { 
   Sparkles,
   RefreshCw,
@@ -13,9 +14,11 @@ import {
   Settings,
   Wand2,
   Eye,
-  Code
+  Code,
+  FolderOpen
 } from 'lucide-react';
 import { SEOOptimizationPanel } from './SEOOptimizationPanel';
+import { WordPressCategorySelector } from '../WordPressCategorySelector';
 
 interface Article {
   id: string;
@@ -24,6 +27,8 @@ interface Article {
   content: string | null;
   excerpt: string | null;
   featured_image_url: string | null;
+  project_id?: string | null;
+  wordpress_categories?: number[];
 }
 
 interface ArticleEditorSidebarProps {
@@ -164,6 +169,21 @@ export function ArticleEditorSidebar({
                 <p className="text-xs text-muted-foreground text-right">
                   {excerptLength}/160 caracteres
                 </p>
+              </div>
+
+              {/* WordPress Categories */}
+              <Separator />
+              
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <FolderOpen className="w-4 h-4 text-primary" />
+                  <Label className="text-sm font-medium">Publicação WordPress</Label>
+                </div>
+                <WordPressCategorySelector
+                  projectId={article.project_id || null}
+                  selectedCategories={article.wordpress_categories || []}
+                  onCategoriesChange={(categories) => onFieldUpdate('wordpress_categories', categories)}
+                />
               </div>
             </div>
           </ScrollArea>
