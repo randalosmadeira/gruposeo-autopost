@@ -55,7 +55,6 @@ import {
 import { cn } from '@/lib/utils';
 import { useArticles } from '@/hooks/useArticles';
 import { useProjects } from '@/hooks/useProjects';
-import { useWordPressPublish } from '@/hooks/useWordPressPublish';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -207,48 +206,10 @@ function SuccessModal({
 
 // Using BulkPublishModal from @/components/articles/BulkPublishModal
 
-// Publishing Progress Component
-function PublishingProgress({ 
-  isPublishing, 
-  current, 
-  total 
-}: { 
-  isPublishing: boolean; 
-  current: number; 
-  total: number;
-}) {
-  if (!isPublishing) return null;
-
-  const progress = total > 0 ? (current / total) * 100 : 0;
-
-  return (
-    <div className="fixed bottom-6 right-6 z-50">
-      <div className="bg-card border shadow-lg rounded-xl p-4 min-w-[280px]">
-        <div className="flex items-center gap-3 mb-3">
-          <Loader2 className="w-6 h-6 text-primary animate-spin" />
-          <div>
-            <p className="font-medium text-sm">Publicando artigos...</p>
-            <p className="text-xs text-muted-foreground">
-              {current} de {total} concluído{current > 1 ? 's' : ''}
-            </p>
-          </div>
-        </div>
-        <div className="h-2 bg-muted rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-primary rounded-full transition-all duration-300 ease-out"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function ArticlesList() {
   const navigate = useNavigate();
   const { articles, isLoading, deleteArticle } = useArticles();
   const { projects } = useProjects();
-  const { publishMultiple, isPublishing } = useWordPressPublish();
   const { toast } = useToast();
   
   const [search, setSearch] = useState('');
@@ -264,9 +225,6 @@ export default function ArticlesList() {
   // Success modal state
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [publishResult, setPublishResult] = useState({ success: 0, failed: 0 });
-  
-  // Publishing progress state
-  const [publishProgress, setPublishProgress] = useState({ current: 0, total: 0 });
   
   // Recently published articles for highlight animation
   const [recentlyPublished, setRecentlyPublished] = useState<Set<string>>(new Set());
@@ -336,36 +294,26 @@ export default function ArticlesList() {
     setSelectedArticles(new Set());
   };
 
-  // Bulk publish - called from the new BulkPublishModal
-  const handleBulkPublish = async (articlesWithCategories: Array<{ id: string; title: string; selectedCategories: string[]; publishStatus: string }>, projectId: string) => {
-    const articlesToPublish = articlesWithCategories.map(a => ({ 
-      id: a.id, 
-      title: a.title, 
-      project_id: projectId,
-      categories: a.selectedCategories
-    }));
-
-    if (articlesToPublish.length === 0) {
-      return { success: 0, failed: 0 };
-    }
-
-    setPublishProgress({ current: 0, total: articlesToPublish.length });
-
-    const result = await publishMultiple(articlesToPublish);
+  // Handle publish complete callback from BulkPublishModal
+  const handlePublishComplete = (result: { success: number; failed: number }) => {
+    setPublishResult(result);
     
-    const publishedIds = new Set(articlesToPublish.slice(0, result.success).map(a => a.id));
+    // Set recently published articles for highlight effect
+    const publishedIds = new Set(
+      Array.from(selectedArticles).slice(0, result.success)
+    );
     setRecentlyPublished(publishedIds);
     
-    setPublishResult(result);
+    // Show success modal
     setShowSuccessModal(true);
     
+    // Clear selection
     clearSelection();
-
+    
+    // Remove highlight after 3 seconds
     setTimeout(() => {
       setRecentlyPublished(new Set());
     }, 3000);
-
-    return result;
   };
 
   // Bulk delete
@@ -501,7 +449,7 @@ export default function ArticlesList() {
             <Button
               variant="default"
               size="sm"
-              disabled={selectedArticles.size === 0 || isPublishing}
+              disabled={selectedArticles.size === 0}
               onClick={() => setShowPublishModal(true)}
               className="bg-primary hover:bg-primary/90 flex-1 lg:flex-none"
             >
@@ -825,15 +773,7 @@ export default function ArticlesList() {
           project_id: a.project_id 
         }))}
         projects={projects}
-        onPublish={handleBulkPublish}
-        isPublishing={isPublishing}
-      />
-
-      {/* Publishing Progress */}
-      <PublishingProgress
-        isPublishing={isPublishing}
-        current={publishProgress.current}
-        total={publishProgress.total}
+        onPublishComplete={handlePublishComplete}
       />
 
       {/* Delete Confirmation Dialog */}
