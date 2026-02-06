@@ -1,12 +1,15 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sparkles, FileText, AlignLeft, Heading } from 'lucide-react';
+import { Sparkles, FileText, AlignLeft, Heading, Search, Check, X, AlertCircle } from 'lucide-react';
+import { marked } from 'marked';
 
 interface SEOOptimizationPanelProps {
   content: string | null;
   keyword: string;
+  title: string | null;
+  excerpt: string | null;
 }
 
 interface KeywordAnalysis {
@@ -17,55 +20,128 @@ interface KeywordAnalysis {
   status: 'good' | 'warning' | 'bad';
 }
 
-export function SEOOptimizationPanel({ content, keyword }: SEOOptimizationPanelProps) {
+interface SEOCheck {
+  label: string;
+  passed: boolean;
+  message: string;
+}
+
+export function SEOOptimizationPanel({ content, keyword, title, excerpt }: SEOOptimizationPanelProps) {
+  const [filterMode, setFilterMode] = useState<'all' | 'improve'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
   const analysis = useMemo(() => {
-    const text = content?.replace(/<[^>]*>/g, ' ').toLowerCase() || '';
+    // Convert markdown to HTML if needed
+    let htmlContent = content || '';
+    const isHTML = htmlContent.trim().startsWith('<');
+    if (!isHTML && htmlContent) {
+      htmlContent = marked.parse(htmlContent, { async: false }) as string;
+    }
+    
+    const text = htmlContent.replace(/<[^>]*>/g, ' ').toLowerCase();
     const words = text.split(/\s+/).filter(Boolean);
     const wordCount = words.length;
     
-    // Count paragraphs and headings
-    const paragraphs = (content?.match(/<p[^>]*>/gi) || []).length;
-    const headings = (content?.match(/<h[2-6][^>]*>/gi) || []).length;
+    // Count paragraphs and headings from HTML
+    const paragraphs = (htmlContent.match(/<p[^>]*>/gi) || []).length;
+    const h2Count = (htmlContent.match(/<h2[^>]*>/gi) || []).length;
+    const h3Count = (htmlContent.match(/<h3[^>]*>/gi) || []).length;
+    const headings = h2Count + h3Count + (htmlContent.match(/<h[4-6][^>]*>/gi) || []).length;
+    
+    // Link and image counts
+    const internalLinks = (htmlContent.match(/<a[^>]*href=["'][^"']*["'][^>]*>/gi) || []).length;
+    const images = (htmlContent.match(/<img[^>]*>/gi) || []).length;
     
     // Extract keywords and count occurrences
     const wordFrequency: Record<string, number> = {};
     words.forEach(word => {
-      if (word.length > 3) {
-        wordFrequency[word] = (wordFrequency[word] || 0) + 1;
+      const cleanWord = word.replace(/[^\wáéíóúâêîôûãõç]/gi, '');
+      if (cleanWord.length > 3) {
+        wordFrequency[cleanWord] = (wordFrequency[cleanWord] || 0) + 1;
       }
     });
     
-    // Calculate SEO score (simplified)
-    let score = 0;
-    if (wordCount >= 1500) score += 20;
-    else if (wordCount >= 1000) score += 15;
-    else if (wordCount >= 500) score += 10;
-    
-    if (headings >= 5) score += 20;
-    else if (headings >= 3) score += 15;
-    else if (headings >= 1) score += 10;
-    
-    if (paragraphs >= 10) score += 20;
-    else if (paragraphs >= 5) score += 15;
-    else if (paragraphs >= 3) score += 10;
-    
-    // Check main keyword presence
+    // Main keyword analysis
     const mainKeyword = keyword.toLowerCase();
     const keywordCount = (text.match(new RegExp(mainKeyword.replace(/\s+/g, '\\s+'), 'gi')) || []).length;
-    if (keywordCount >= 5) score += 20;
-    else if (keywordCount >= 3) score += 15;
-    else if (keywordCount >= 1) score += 10;
+    const keywordDensity = wordCount > 0 ? (keywordCount / wordCount) * 100 : 0;
     
-    // Additional factors
-    if (content?.includes('<a ')) score += 10;
-    if (content?.includes('<img ')) score += 10;
+    // SEO Checks
+    const seoChecks: SEOCheck[] = [
+      {
+        label: 'Palavra-chave no título',
+        passed: title?.toLowerCase().includes(mainKeyword) || false,
+        message: title?.toLowerCase().includes(mainKeyword) 
+          ? 'A palavra-chave está presente no título' 
+          : 'Adicione a palavra-chave ao título',
+      },
+      {
+        label: 'Palavra-chave na meta descrição',
+        passed: excerpt?.toLowerCase().includes(mainKeyword) || false,
+        message: excerpt?.toLowerCase().includes(mainKeyword) 
+          ? 'A palavra-chave está na meta descrição' 
+          : 'Adicione a palavra-chave à meta descrição',
+      },
+      {
+        label: 'Tamanho da meta descrição',
+        passed: (excerpt?.length || 0) >= 120 && (excerpt?.length || 0) <= 160,
+        message: (excerpt?.length || 0) < 120 
+          ? 'Meta descrição muito curta (mín. 120 caracteres)'
+          : (excerpt?.length || 0) > 160 
+            ? 'Meta descrição muito longa (máx. 160 caracteres)'
+            : 'Tamanho ideal da meta descrição',
+      },
+      {
+        label: 'Densidade da palavra-chave',
+        passed: keywordDensity >= 0.5 && keywordDensity <= 2.5,
+        message: keywordDensity < 0.5 
+          ? `Densidade baixa (${keywordDensity.toFixed(1)}%). Adicione mais ocorrências`
+          : keywordDensity > 2.5 
+            ? `Densidade alta (${keywordDensity.toFixed(1)}%). Reduza ocorrências`
+            : `Densidade ideal: ${keywordDensity.toFixed(1)}%`,
+      },
+      {
+        label: 'Subtítulos H2',
+        passed: h2Count >= 3,
+        message: h2Count >= 3 
+          ? `${h2Count} subtítulos H2 encontrados` 
+          : `Apenas ${h2Count} H2. Adicione mais subtítulos`,
+      },
+      {
+        label: 'Conteúdo mínimo',
+        passed: wordCount >= 1500,
+        message: wordCount >= 1500 
+          ? `${wordCount} palavras - conteúdo extenso` 
+          : `${wordCount} palavras. Recomendado: 1500+`,
+      },
+      {
+        label: 'Links internos',
+        passed: internalLinks >= 2,
+        message: internalLinks >= 2 
+          ? `${internalLinks} links encontrados` 
+          : `Apenas ${internalLinks} link(s). Adicione mais`,
+      },
+      {
+        label: 'Imagens no conteúdo',
+        passed: images >= 1,
+        message: images >= 1 
+          ? `${images} imagem(ns) encontrada(s)` 
+          : 'Adicione imagens ao conteúdo',
+      },
+    ];
+    
+    // Calculate SEO score based on checks
+    const passedChecks = seoChecks.filter(c => c.passed).length;
+    let score = Math.round((passedChecks / seoChecks.length) * 100);
     
     // Generate keyword suggestions with targets
+    const targetDensity = 1.5; // Ideal keyword density percentage
     const topKeywords: KeywordAnalysis[] = Object.entries(wordFrequency)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
+      .slice(0, 15)
       .map(([word, count]) => {
-        const target = Math.max(3, Math.ceil(wordCount / 300));
+        const idealCount = Math.round((wordCount * targetDensity) / 100);
+        const target = Math.max(3, idealCount);
         const percentage = Math.min(100, (count / target) * 100);
         return {
           word,
@@ -77,14 +153,16 @@ export function SEOOptimizationPanel({ content, keyword }: SEOOptimizationPanelP
       });
     
     return {
-      score: Math.min(100, score),
+      score,
       wordCount,
       paragraphs,
       headings,
       keywords: topKeywords,
+      seoChecks,
       analyzedTerms: topKeywords.length,
+      keywordDensity,
     };
-  }, [content, keyword]);
+  }, [content, keyword, title, excerpt]);
 
   const getScoreColor = (score: number) => {
     if (score >= 70) return 'text-green-500';
@@ -106,6 +184,13 @@ export function SEOOptimizationPanel({ content, keyword }: SEOOptimizationPanelP
     }
   };
 
+  const filteredKeywords = analysis.keywords
+    .filter(kw => {
+      if (filterMode === 'improve' && kw.status === 'good') return false;
+      if (searchQuery && !kw.word.includes(searchQuery.toLowerCase())) return false;
+      return true;
+    });
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -121,7 +206,7 @@ export function SEOOptimizationPanel({ content, keyword }: SEOOptimizationPanelP
 
       {/* Score Circle */}
       <div className="flex flex-col items-center py-4">
-        <div className="relative w-32 h-32">
+        <div className="relative w-28 h-28">
           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
             <circle
               cx="50"
@@ -145,10 +230,10 @@ export function SEOOptimizationPanel({ content, keyword }: SEOOptimizationPanelP
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className={`text-3xl font-bold ${getScoreColor(analysis.score)}`}>
+            <span className={`text-2xl font-bold ${getScoreColor(analysis.score)}`}>
               {analysis.score}%
             </span>
-            <span className={`text-sm font-medium ${getScoreColor(analysis.score)}`}>
+            <span className={`text-xs font-medium ${getScoreColor(analysis.score)}`}>
               {getScoreLabel(analysis.score)}
             </span>
           </div>
@@ -157,21 +242,51 @@ export function SEOOptimizationPanel({ content, keyword }: SEOOptimizationPanelP
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 text-center">
-        <div className="flex flex-col items-center">
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div className="flex flex-col items-center p-2 bg-muted/30 rounded-lg">
           <FileText className="w-4 h-4 text-muted-foreground mb-1" />
           <span className="text-lg font-semibold">{analysis.wordCount}</span>
           <span className="text-xs text-muted-foreground">Palavras</span>
         </div>
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center p-2 bg-muted/30 rounded-lg">
           <AlignLeft className="w-4 h-4 text-muted-foreground mb-1" />
           <span className="text-lg font-semibold">{analysis.paragraphs}</span>
           <span className="text-xs text-muted-foreground">Parágrafos</span>
         </div>
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center p-2 bg-muted/30 rounded-lg">
           <Heading className="w-4 h-4 text-muted-foreground mb-1" />
           <span className="text-lg font-semibold">{analysis.headings}</span>
           <span className="text-xs text-muted-foreground">Subtítulos</span>
+        </div>
+      </div>
+
+      {/* SEO Checklist */}
+      <div className="space-y-2">
+        <h4 className="text-sm font-medium flex items-center gap-2">
+          <AlertCircle className="w-4 h-4" />
+          Verificações SEO
+        </h4>
+        <div className="space-y-1.5 max-h-32 overflow-y-auto">
+          {analysis.seoChecks.map((check, index) => (
+            <div 
+              key={index} 
+              className={`flex items-start gap-2 text-xs p-2 rounded ${
+                check.passed ? 'bg-green-500/10' : 'bg-red-500/10'
+              }`}
+            >
+              {check.passed ? (
+                <Check className="w-3.5 h-3.5 text-green-600 mt-0.5 shrink-0" />
+              ) : (
+                <X className="w-3.5 h-3.5 text-red-600 mt-0.5 shrink-0" />
+              )}
+              <div>
+                <span className={`font-medium ${check.passed ? 'text-green-700' : 'text-red-700'}`}>
+                  {check.label}
+                </span>
+                <p className="text-muted-foreground">{check.message}</p>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -179,39 +294,46 @@ export function SEOOptimizationPanel({ content, keyword }: SEOOptimizationPanelP
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">Palavras-chave</span>
-          <div className="flex gap-2">
-            <Badge variant="secondary" className="text-xs">Todas</Badge>
-            <Badge variant="outline" className="text-xs">Melhorar</Badge>
+          <div className="flex gap-1">
+            <Badge 
+              variant={filterMode === 'all' ? 'default' : 'outline'}
+              className="text-xs cursor-pointer"
+              onClick={() => setFilterMode('all')}
+            >
+              Todas
+            </Badge>
+            <Badge 
+              variant={filterMode === 'improve' ? 'default' : 'outline'}
+              className="text-xs cursor-pointer"
+              onClick={() => setFilterMode('improve')}
+            >
+              Melhorar
+            </Badge>
           </div>
         </div>
 
         <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Buscar palavra-chave..."
-            className="pl-8 h-9 text-sm"
+            className="pl-8 h-8 text-sm"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
-          <svg
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" />
-          </svg>
         </div>
 
-        <ScrollArea className="h-48">
-          <div className="space-y-3 pr-2">
-            {analysis.keywords.map((kw, index) => (
-              <div key={index} className="space-y-1.5">
+        <ScrollArea className="h-40">
+          <div className="space-y-2.5 pr-2">
+            {filteredKeywords.map((kw, index) => (
+              <div key={index} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
                   <span className="truncate">{kw.word}</span>
-                  <span className={`text-xs ${
+                  <span className={`text-xs flex items-center gap-1 ${
                     kw.status === 'good' ? 'text-green-600' : 
                     kw.status === 'warning' ? 'text-yellow-600' : 'text-red-600'
                   }`}>
-                    {kw.status === 'good' ? '✓' : '✗'} {kw.count}/{kw.target}
+                    {kw.status === 'good' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                    {kw.count}/{kw.target}
                   </span>
                 </div>
                 <div className="h-1.5 bg-muted rounded-full overflow-hidden">
