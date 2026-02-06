@@ -43,6 +43,15 @@ class CFRDM_Webhooks {
             return;
         }
         
+        // Get schema validation if publishing
+        $schema_validation = null;
+        if ($new_status === 'publish') {
+            $schema_validation = CFRDM_Schema_Validator::validate_post_schemas($post->ID);
+        }
+        
+        // Get article type
+        $article_type = get_post_meta($post->ID, '_cfrdm_article_type', true);
+        
         self::send_webhook($event, array(
             'post_id' => $post->ID,
             'post_title' => $post->post_title,
@@ -51,8 +60,12 @@ class CFRDM_Webhooks {
             'old_status' => $old_status,
             'author_id' => $post->post_author,
             'cfrdm_id' => get_post_meta($post->ID, '_cfrdm_article_id', true),
+            'article_type' => $article_type ?: 'blog',
             'categories' => wp_get_post_categories($post->ID),
             'tags' => wp_get_post_tags($post->ID, array('fields' => 'ids')),
+            'schema_validation' => $schema_validation,
+            'has_featured_image' => has_post_thumbnail($post->ID),
+            'word_count' => str_word_count(strip_tags($post->post_content)),
         ));
     }
     

@@ -13,9 +13,9 @@ interface ArticleConfig {
   tone: string;
   pointOfView: string;
   language: string;
-  type: 'blog' | 'sales';
+  type: 'blog' | 'sales' | 'review' | 'comparison';
   // Advanced SEO fields
-  contentType?: 'how-to' | 'listicle' | 'pillar' | 'comparative' | 'opinion' | 'news';
+  contentType?: 'how-to' | 'listicle' | 'pillar' | 'comparative' | 'review' | 'opinion' | 'news';
   segment?: 'legal' | 'health' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'education' | 'general';
   goal?: 'inform' | 'convert' | 'educate' | 'engage';
   intentType?: 'informational' | 'navigational' | 'transactional' | 'commercial';

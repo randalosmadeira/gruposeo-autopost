@@ -52,41 +52,77 @@ serve(async (req) => {
         switch (event) {
           case "post_published": {
             // WordPress notifies when a post is published
-            const { post_id, post_url, post_title, site_url } = body;
+            const { data } = body;
+            const { post_id, post_url, post_title, site_url, cfrdm_id, schema_validation, article_type, word_count, has_featured_image } = data || body;
             
-            // Find matching article by WordPress post ID or title
-            const { data: article } = await supabase
-              .from("articles")
-              .select("id")
-              .or(`title.eq.${post_title}`)
-              .single();
+            // Find matching article by cfrdm_id (article UUID) or title
+            let article = null;
+            
+            if (cfrdm_id) {
+              const { data: articleData } = await supabase
+                .from("articles")
+                .select("id, config")
+                .eq("id", cfrdm_id)
+                .single();
+              article = articleData;
+            }
+            
+            if (!article) {
+              const { data: articleData } = await supabase
+                .from("articles")
+                .select("id, config")
+                .eq("title", post_title)
+                .single();
+              article = articleData;
+            }
 
             if (article) {
+              // Merge schema validation into config
+              const updatedConfig = {
+                ...(article.config || {}),
+                wordpress_post_id: post_id,
+                schema_validation: schema_validation || null,
+                last_validation_at: new Date().toISOString(),
+              };
+
               await supabase
                 .from("articles")
                 .update({
                   status: "published",
                   published_at: new Date().toISOString(),
                   published_url: post_url,
+                  word_count: word_count || null,
+                  config: updatedConfig,
                 })
                 .eq("id", article.id);
 
-              log.info("article_marked_published", { article_id: article.id });
+              log.info("article_marked_published", { 
+                article_id: article.id,
+                schema_valid: schema_validation?.valid ?? null,
+                schema_errors: schema_validation?.errors?.length ?? 0,
+                schema_warnings: schema_validation?.warnings?.length ?? 0,
+              });
             }
             break;
           }
 
           case "post_deleted": {
             // WordPress notifies when a post is deleted
-            const { post_id, post_url } = body;
+            const { data } = body;
+            const { post_id, post_url, cfrdm_id } = data || body;
             
-            const { data: article } = await supabase
-              .from("articles")
-              .select("id")
-              .eq("published_url", post_url)
-              .single();
+            let articleId = cfrdm_id;
+            
+            if (!articleId && post_url) {
+              const { data: articleData } = await supabase
+                .from("articles")
+                .select("id")
+                .eq("published_url", post_url)
+                .single();
+              articleId = articleData?.id;
+            }
 
-            if (article) {
+            if (articleId) {
               await supabase
                 .from("articles")
                 .update({
@@ -94,16 +130,79 @@ serve(async (req) => {
                   published_at: null,
                   published_url: null,
                 })
-                .eq("id", article.id);
+                .eq("id", articleId);
 
-              log.info("article_unpublished", { article_id: article.id });
+              log.info("article_unpublished", { article_id: articleId });
             }
             break;
           }
 
           case "post_updated": {
-            // WordPress notifies when a post is updated
-            log.info("wordpress_post_updated", { post_id: body.post_id });
+            // WordPress notifies when a post is updated - update schema validation
+            const { data } = body;
+            const { post_id, cfrdm_id, schema_validation } = data || body;
+            
+            if (cfrdm_id && schema_validation) {
+              const { data: article } = await supabase
+                .from("articles")
+                .select("id, config")
+                .eq("id", cfrdm_id)
+                .single();
+
+              if (article) {
+                const updatedConfig = {
+                  ...(article.config || {}),
+                  schema_validation: schema_validation,
+                  last_validation_at: new Date().toISOString(),
+                };
+
+                await supabase
+                  .from("articles")
+                  .update({ config: updatedConfig })
+                  .eq("id", article.id);
+
+                log.info("article_schema_updated", { 
+                  article_id: article.id,
+                  schema_valid: schema_validation?.valid,
+                });
+              }
+            }
+            break;
+          }
+
+          case "schema_validation": {
+            // Dedicated schema validation webhook
+            const { data } = body;
+            const { cfrdm_id, schema_validation, post_url } = data || body;
+            
+            if (cfrdm_id && schema_validation) {
+              const { data: article } = await supabase
+                .from("articles")
+                .select("id, config")
+                .eq("id", cfrdm_id)
+                .single();
+
+              if (article) {
+                const updatedConfig = {
+                  ...(article.config || {}),
+                  schema_validation: schema_validation,
+                  last_validation_at: new Date().toISOString(),
+                  google_test_url: `https://search.google.com/test/rich-results?url=${encodeURIComponent(post_url || '')}`,
+                };
+
+                await supabase
+                  .from("articles")
+                  .update({ config: updatedConfig })
+                  .eq("id", article.id);
+
+                log.info("schema_validation_received", { 
+                  article_id: article.id,
+                  valid: schema_validation?.valid,
+                  errors: schema_validation?.errors?.length || 0,
+                  warnings: schema_validation?.warnings?.length || 0,
+                });
+              }
+            }
             break;
           }
 

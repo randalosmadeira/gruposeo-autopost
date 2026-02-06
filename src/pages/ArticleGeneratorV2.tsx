@@ -335,9 +335,9 @@ export default function ArticleGeneratorV2() {
         tone: config.tone,
         pointOfView: config.pointOfView,
         language: config.language,
-        type: 'blog',
+        type: config.contentType === 'review' ? 'review' : (config.contentType === 'comparative' ? 'comparison' : 'blog'),
         // Advanced SEO fields
-        contentType: config.contentType as 'how-to' | 'listicle' | 'pillar' | 'comparative' | 'opinion' | 'news',
+        contentType: config.contentType as 'how-to' | 'listicle' | 'pillar' | 'comparative' | 'review' | 'opinion' | 'news',
         segment: config.segment as 'legal' | 'health' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'education' | 'general',
         goal: config.goal as 'inform' | 'convert' | 'educate' | 'engage',
         intentType: config.intentType as 'informational' | 'navigational' | 'transactional' | 'commercial',

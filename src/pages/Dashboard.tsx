@@ -10,6 +10,7 @@ import { NewsAgentsSummary } from '@/components/dashboard/NewsAgentsSummary';
 import { AuthorityPlannerSummary } from '@/components/dashboard/AuthorityPlannerSummary';
 import { RecentArticlesList } from '@/components/dashboard/RecentArticlesList';
 import { WordPressProjectStats } from '@/components/dashboard/WordPressProjectStats';
+import { SchemaValidationPanel } from '@/components/dashboard/SchemaValidationPanel';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -57,17 +58,20 @@ export default function Dashboard() {
       {/* WordPress Stats por Projeto */}
       <WordPressProjectStats />
 
-      {/* Agents + Authority Row */}
+      {/* Schema Validation + Agents Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SchemaValidationPanel />
         <NewsAgentsSummary 
           activeAgents={activeAgentsCount}
           publishedToday={0}
         />
-        <AuthorityPlannerSummary 
-          plansCreated={0}
-          totalArticles={0}
-        />
       </div>
+
+      {/* Authority Planner */}
+      <AuthorityPlannerSummary 
+        plansCreated={0}
+        totalArticles={0}
+      />
 
       {/* Recent Articles */}
       <RecentArticlesList articles={articles?.slice(0, 5) || []} />
