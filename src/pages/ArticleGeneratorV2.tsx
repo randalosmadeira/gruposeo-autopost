@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +46,16 @@ import { useProjects } from '@/hooks/useProjects';
 import { useArticleGeneration } from '@/hooks/useArticleGeneration';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { 
+  ProgressScreen, 
+  defaultGenerationSteps,
+  OutlineEditor,
+  generateDefaultOutline,
+  ArticleEditor,
+  defaultArticleData,
+  type OutlineSection,
+  type ArticleData
+} from '@/components/article-generator';
 
 // Design system colors
 const colors = {
@@ -192,7 +202,18 @@ export default function ArticleGeneratorV2() {
   const [config, setConfig] = useState<ArticleConfig>(defaultConfig);
   const [showTutorial, setShowTutorial] = useState(true);
   const [generatingTitle, setGeneratingTitle] = useState(false);
-  const [generationPhase, setGenerationPhase] = useState<'idle' | 'outline' | 'article'>('idle');
+  const [generationPhase, setGenerationPhase] = useState<'idle' | 'outline' | 'generating' | 'complete'>('idle');
+  
+  // Outline state
+  const [outlineSections, setOutlineSections] = useState<OutlineSection[]>([]);
+  
+  // Generation progress state
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [currentGenerationStep, setCurrentGenerationStep] = useState('');
+  const [generationSteps, setGenerationSteps] = useState(defaultGenerationSteps);
+  
+  // Article editor state
+  const [articleData, setArticleData] = useState<ArticleData>(defaultArticleData);
 
   const updateConfig = <K extends keyof ArticleConfig>(key: K, value: ArticleConfig[K]) => {
     setConfig(prev => ({ ...prev, [key]: value }));
@@ -227,6 +248,30 @@ export default function ArticleGeneratorV2() {
     }, 1500);
   };
 
+  // Simulate generation progress
+  const simulateGeneration = useCallback(async () => {
+    const steps = [...defaultGenerationSteps];
+    const stepDuration = 1500; // ms per step
+    
+    for (let i = 0; i < steps.length; i++) {
+      // Mark current step as in-progress
+      steps[i].status = 'in-progress';
+      if (i > 0) steps[i - 1].status = 'completed';
+      setGenerationSteps([...steps]);
+      setCurrentGenerationStep(steps[i].title);
+      setGenerationProgress(((i + 0.5) / steps.length) * 100);
+      
+      await new Promise(resolve => setTimeout(resolve, stepDuration));
+      
+      // Mark last step as completed
+      if (i === steps.length - 1) {
+        steps[i].status = 'completed';
+        setGenerationSteps([...steps]);
+        setGenerationProgress(100);
+      }
+    }
+  }, []);
+
   const handleGenerate = async () => {
     if (!config.keyword.trim()) {
       toast({
@@ -236,6 +281,11 @@ export default function ArticleGeneratorV2() {
       });
       return;
     }
+
+    setGenerationPhase('generating');
+    
+    // Start progress simulation
+    await simulateGeneration();
 
     const result = await generateArticle({
       keyword: config.keyword,
@@ -254,10 +304,33 @@ export default function ArticleGeneratorV2() {
     });
 
     if (result) {
-      setGenerationPhase('idle');
-      navigate('/articles');
+      // Convert outline to article sections
+      const articleSections = outlineSections.map((section, idx) => ({
+        id: section.id,
+        title: section.title,
+        content: `<p>Conteúdo da seção "${section.title}" será gerado aqui.</p>`,
+        level: section.level,
+      }));
+      
+      setArticleData({
+        title: config.title || `${config.keyword}: Guia Completo`,
+        intro: result.substring(0, 500) || '<p>Introdução do artigo...</p>',
+        sections: articleSections,
+        featuredImage: undefined,
+      });
+      
+      setGenerationPhase('complete');
+      toast({
+        title: 'Artigo gerado!',
+        description: 'Seu artigo está pronto para edição e publicação.',
+      });
     } else {
-      setGenerationPhase('idle');
+      setGenerationPhase('outline');
+      toast({
+        title: 'Erro na geração',
+        description: 'Ocorreu um erro. Tente novamente.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -270,19 +343,25 @@ export default function ArticleGeneratorV2() {
       });
       return;
     }
+    
+    // Generate outline sections based on keyword
+    const sections = generateDefaultOutline(config.keyword);
+    setOutlineSections(sections);
     setGenerationPhase('outline');
-    // Simulate outline generation - in real implementation this would call an API
-    setTimeout(() => {
-      toast({
-        title: 'Esboço gerado!',
-        description: 'Revise a estrutura e clique em "Gerar Artigo Completo".',
-      });
-    }, 2000);
+    
+    toast({
+      title: 'Esboço gerado!',
+      description: 'Revise a estrutura e clique em "Gerar Artigo Completo".',
+    });
   };
 
   const handleReset = () => {
     setConfig(defaultConfig);
     setGenerationPhase('idle');
+    setOutlineSections([]);
+    setGenerationProgress(0);
+    setGenerationSteps(defaultGenerationSteps);
+    setArticleData(defaultArticleData);
     toast({
       title: 'Configurações reiniciadas',
       description: 'Todos os campos foram limpos.',
@@ -859,177 +938,227 @@ export default function ArticleGeneratorV2() {
           </div>
         </div>
 
-        {/* Right Panel - Preview */}
+        {/* Right Panel - Dynamic based on phase */}
         <div className="w-1/2 overflow-hidden" style={{ backgroundColor: colors.background }}>
-          <ScrollArea className="h-full">
-            <div className="p-6">
-              {/* Preview Header */}
-              <div className="flex items-center gap-2 mb-2">
-                <Eye className="w-5 h-5" style={{ color: colors.primary }} />
-                <h2 className="text-lg font-semibold" style={{ color: colors.textPrimary }}>
-                  Prévia em Tempo Real
-                </h2>
-              </div>
-              <p className="text-sm mb-6" style={{ color: colors.textSecondary }}>
-                Prévia do artigo em tempo real
-              </p>
+          {/* Show Progress Screen during generation */}
+          {generationPhase === 'generating' && (
+            <ProgressScreen
+              currentStep={currentGenerationStep}
+              progress={generationProgress}
+              steps={generationSteps}
+            />
+          )}
 
-              <div 
-                className="rounded-lg border p-6 min-h-[500px]"
-                style={{ borderColor: colors.border }}
-              >
-                {config.title || config.keyword ? (
-                  <article className="space-y-6">
-                    {/* Article Title */}
-                    <h1 className="text-2xl font-bold" style={{ color: colors.textPrimary }}>
-                      {config.title || `[Título sobre: ${config.keyword}]`}
-                    </h1>
-                    
-                    {/* Metadata Tags */}
-                    <div className="flex flex-wrap gap-2">
-                      <Badge 
-                        variant="secondary" 
-                        className="text-xs"
-                        style={{ backgroundColor: colors.lightBlue }}
-                      >
-                        Tamanho: {articleSizes.find(s => s.value === config.size)?.words}
-                      </Badge>
-                      <Badge 
-                        variant="secondary" 
-                        className="text-xs"
-                        style={{ backgroundColor: colors.lightBlue }}
-                      >
-                        Idioma: {config.language === 'pt-BR' ? '🇧🇷 Português' : config.language === 'en-US' ? '🇺🇸 English' : '🇪🇸 Español'}
-                      </Badge>
-                      <Badge 
-                        variant="secondary" 
-                        className="text-xs"
-                        style={{ backgroundColor: colors.lightBlue }}
-                      >
-                        Tom: {config.tone.charAt(0).toUpperCase() + config.tone.slice(1)}
-                      </Badge>
-                      <Badge 
-                        variant="secondary" 
-                        className="text-xs"
-                        style={{ backgroundColor: colors.lightBlue }}
-                      >
-                        Ponto de Vista: {pointsOfView.find(p => p.value === config.pointOfView)?.label || config.pointOfView}
-                      </Badge>
-                    </div>
+          {/* Show Outline Editor after outline is generated */}
+          {generationPhase === 'outline' && (
+            <OutlineEditor
+              sections={outlineSections}
+              onSectionsChange={setOutlineSections}
+              onGenerate={handleGenerate}
+              onReset={handleReset}
+              isGenerating={isGenerating}
+              totalCredits={totalCredits}
+            />
+          )}
 
-                    {/* Meta Description Preview */}
-                    {config.metaDescription && (
+          {/* Show Article Editor when complete */}
+          {generationPhase === 'complete' && (
+            <ArticleEditor
+              title={articleData.title}
+              intro={articleData.intro}
+              sections={articleData.sections}
+              featuredImage={articleData.featuredImage}
+              onTitleChange={(title) => setArticleData(prev => ({ ...prev, title }))}
+              onIntroChange={(intro) => setArticleData(prev => ({ ...prev, intro }))}
+              onSectionChange={(id, field, value) => {
+                setArticleData(prev => ({
+                  ...prev,
+                  sections: prev.sections.map(s =>
+                    s.id === id ? { ...s, [field]: value } : s
+                  ),
+                }));
+              }}
+              onPublish={() => {
+                toast({
+                  title: 'Publicação',
+                  description: 'Funcionalidade de publicação em desenvolvimento.',
+                });
+              }}
+            />
+          )}
+
+          {/* Show Preview in idle mode */}
+          {generationPhase === 'idle' && (
+            <ScrollArea className="h-full">
+              <div className="p-6">
+                {/* Preview Header */}
+                <div className="flex items-center gap-2 mb-2">
+                  <Eye className="w-5 h-5" style={{ color: colors.primary }} />
+                  <h2 className="text-lg font-semibold" style={{ color: colors.textPrimary }}>
+                    Prévia em Tempo Real
+                  </h2>
+                </div>
+                <p className="text-sm mb-6" style={{ color: colors.textSecondary }}>
+                  Prévia do artigo em tempo real
+                </p>
+
+                <div 
+                  className="rounded-lg border p-6 min-h-[500px]"
+                  style={{ borderColor: colors.border }}
+                >
+                  {config.title || config.keyword ? (
+                    <article className="space-y-6">
+                      {/* Article Title */}
+                      <h1 className="text-2xl font-bold" style={{ color: colors.textPrimary }}>
+                        {config.title || `[Título sobre: ${config.keyword}]`}
+                      </h1>
+                      
+                      {/* Metadata Tags */}
+                      <div className="flex flex-wrap gap-2">
+                        <Badge 
+                          variant="secondary" 
+                          className="text-xs"
+                          style={{ backgroundColor: colors.lightBlue }}
+                        >
+                          Tamanho: {articleSizes.find(s => s.value === config.size)?.words}
+                        </Badge>
+                        <Badge 
+                          variant="secondary" 
+                          className="text-xs"
+                          style={{ backgroundColor: colors.lightBlue }}
+                        >
+                          Idioma: {config.language === 'pt-BR' ? '🇧🇷 Português' : config.language === 'en-US' ? '🇺🇸 English' : '🇪🇸 Español'}
+                        </Badge>
+                        <Badge 
+                          variant="secondary" 
+                          className="text-xs"
+                          style={{ backgroundColor: colors.lightBlue }}
+                        >
+                          Tom: {config.tone.charAt(0).toUpperCase() + config.tone.slice(1)}
+                        </Badge>
+                        <Badge 
+                          variant="secondary" 
+                          className="text-xs"
+                          style={{ backgroundColor: colors.lightBlue }}
+                        >
+                          Ponto de Vista: {pointsOfView.find(p => p.value === config.pointOfView)?.label || config.pointOfView}
+                        </Badge>
+                      </div>
+
+                      {/* Meta Description Preview */}
+                      {config.metaDescription && (
+                        <div 
+                          className="p-4 rounded-lg text-sm"
+                          style={{ backgroundColor: colors.lightBlue }}
+                        >
+                          <strong className="block mb-1" style={{ color: colors.textPrimary }}>Meta Descrição:</strong>
+                          <p style={{ color: colors.textSecondary }}>
+                            Descubra tudo sobre {config.keyword || '[palavra-chave]'}. 
+                            Guia completo com dicas práticas e informações atualizadas para {new Date().getFullYear()}.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Content Placeholder */}
                       <div 
-                        className="p-4 rounded-lg text-sm"
-                        style={{ backgroundColor: colors.lightBlue }}
+                        className="p-6 rounded-lg border-2 border-dashed text-center"
+                        style={{ borderColor: colors.border }}
                       >
-                        <strong className="block mb-1" style={{ color: colors.textPrimary }}>Meta Descrição:</strong>
-                        <p style={{ color: colors.textSecondary }}>
-                          Descubra tudo sobre {config.keyword || '[palavra-chave]'}. 
-                          Guia completo com dicas práticas e informações atualizadas para {new Date().getFullYear()}.
+                        <FileText className="w-8 h-8 mx-auto mb-2" style={{ color: colors.border }} />
+                        <p className="text-sm" style={{ color: colors.textSecondary }}>
+                          O conteúdo do artigo aparecerá aqui quando gerado
                         </p>
                       </div>
-                    )}
 
-                    {/* Content Placeholder */}
-                    <div 
-                      className="p-6 rounded-lg border-2 border-dashed text-center"
-                      style={{ borderColor: colors.border }}
-                    >
-                      <FileText className="w-8 h-8 mx-auto mb-2" style={{ color: colors.border }} />
-                      <p className="text-sm" style={{ color: colors.textSecondary }}>
-                        O conteúdo do artigo aparecerá aqui quando gerado
-                      </p>
-                    </div>
-
-                    {/* Included Elements */}
-                    <div className="pt-4 border-t" style={{ borderColor: colors.border }}>
-                      <p className="text-sm font-medium mb-3" style={{ color: colors.textPrimary }}>
-                        Elementos incluídos:
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {config.metaDescription && (
-                          <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
-                            📝 Meta Descrição
-                          </Badge>
-                        )}
-                        {config.lists && (
-                          <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
-                            📋 Listas
-                          </Badge>
-                        )}
-                        {config.tables && (
-                          <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
-                            📊 Tabelas
-                          </Badge>
-                        )}
-                        {config.conclusion && (
-                          <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
-                            ✅ Conclusão
-                          </Badge>
-                        )}
-                        {config.faq && (
-                          <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
-                            ❓ FAQ
-                          </Badge>
-                        )}
-                        {config.internalLinking && (
-                          <Badge variant="secondary" style={{ backgroundColor: colors.secondary }}>
-                            🔗 Linkagem Interna
-                          </Badge>
-                        )}
-                        {config.seoOptimization && (
-                          <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
-                            🔍 SEO Otimizado
-                          </Badge>
-                        )}
-                        {config.realtimeData && (
-                          <Badge variant="secondary" style={{ backgroundColor: colors.secondary }}>
-                            🌐 Dados em Tempo Real
-                          </Badge>
-                        )}
-                        {config.humanizeContent && (
-                          <Badge variant="secondary" style={{ backgroundColor: colors.tertiary }}>
-                            👤 Conteúdo Humanizado
-                          </Badge>
-                        )}
-                        {config.generateImages && (
-                          <Badge variant="secondary" style={{ backgroundColor: colors.pink }}>
-                            🖼️ {config.imageCount} {config.imageCount === 1 ? 'Imagem' : 'Imagens'} IA
-                          </Badge>
-                        )}
+                      {/* Included Elements */}
+                      <div className="pt-4 border-t" style={{ borderColor: colors.border }}>
+                        <p className="text-sm font-medium mb-3" style={{ color: colors.textPrimary }}>
+                          Elementos incluídos:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {config.metaDescription && (
+                            <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
+                              📝 Meta Descrição
+                            </Badge>
+                          )}
+                          {config.lists && (
+                            <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
+                              📋 Listas
+                            </Badge>
+                          )}
+                          {config.tables && (
+                            <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
+                              📊 Tabelas
+                            </Badge>
+                          )}
+                          {config.conclusion && (
+                            <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
+                              ✅ Conclusão
+                            </Badge>
+                          )}
+                          {config.faq && (
+                            <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
+                              ❓ FAQ
+                            </Badge>
+                          )}
+                          {config.internalLinking && (
+                            <Badge variant="secondary" style={{ backgroundColor: colors.secondary }}>
+                              🔗 Linkagem Interna
+                            </Badge>
+                          )}
+                          {config.seoOptimization && (
+                            <Badge variant="secondary" style={{ backgroundColor: colors.lightBlue }}>
+                              🔍 SEO Otimizado
+                            </Badge>
+                          )}
+                          {config.realtimeData && (
+                            <Badge variant="secondary" style={{ backgroundColor: colors.secondary }}>
+                              🌐 Dados em Tempo Real
+                            </Badge>
+                          )}
+                          {config.humanizeContent && (
+                            <Badge variant="secondary" style={{ backgroundColor: colors.tertiary }}>
+                              👤 Conteúdo Humanizado
+                            </Badge>
+                          )}
+                          {config.generateImages && (
+                            <Badge variant="secondary" style={{ backgroundColor: colors.pink }}>
+                              🖼️ {config.imageCount} {config.imageCount === 1 ? 'Imagem' : 'Imagens'} IA
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Model Info */}
-                    <div 
-                      className="p-3 rounded-lg text-xs"
-                      style={{ backgroundColor: colors.backgroundSecondary }}
-                    >
-                      <strong style={{ color: colors.textPrimary }}>Modelo:</strong>{' '}
-                      <span style={{ color: colors.textSecondary }}>{selectedModel.label} - {selectedModel.technical}</span>
+                      {/* Model Info */}
+                      <div 
+                        className="p-3 rounded-lg text-xs"
+                        style={{ backgroundColor: colors.backgroundSecondary }}
+                      >
+                        <strong style={{ color: colors.textPrimary }}>Modelo:</strong>{' '}
+                        <span style={{ color: colors.textSecondary }}>{selectedModel.label} - {selectedModel.technical}</span>
+                      </div>
+                    </article>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-[400px] text-center">
+                      <div 
+                        className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
+                        style={{ backgroundColor: colors.backgroundSecondary }}
+                      >
+                        <FileText className="w-8 h-8" style={{ color: colors.border }} />
+                      </div>
+                      <p className="text-lg font-medium mb-2" style={{ color: colors.textPrimary }}>
+                        Gerador de Artigos IA
+                      </p>
+                      <p className="text-sm max-w-xs" style={{ color: colors.textSecondary }}>
+                        Preencha os detalhes à esquerda para ver uma prévia da 
+                        estrutura e conteúdo do seu artigo.
+                      </p>
                     </div>
-                  </article>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-[400px] text-center">
-                    <div 
-                      className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
-                      style={{ backgroundColor: colors.backgroundSecondary }}
-                    >
-                      <FileText className="w-8 h-8" style={{ color: colors.border }} />
-                    </div>
-                    <p className="text-lg font-medium mb-2" style={{ color: colors.textPrimary }}>
-                      Gerador de Artigos IA
-                    </p>
-                    <p className="text-sm max-w-xs" style={{ color: colors.textSecondary }}>
-                      Preencha os detalhes à esquerda para ver uma prévia da 
-                      estrutura e conteúdo do seu artigo.
-                    </p>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          </ScrollArea>
+            </ScrollArea>
+          )}
         </div>
       </div>
     </div>
