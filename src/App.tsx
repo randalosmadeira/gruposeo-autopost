@@ -12,6 +12,7 @@ import { Layout } from "@/components/layout/Layout";
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const ArticleTypeSelection = lazy(() => import("./pages/ArticleTypeSelection"));
 const ArticleGenerator = lazy(() => import("./pages/ArticleGenerator"));
+const ArticleGeneratorV2 = lazy(() => import("./pages/ArticleGeneratorV2"));
 const ArticlesList = lazy(() => import("./pages/ArticlesList"));
 const ProjectsList = lazy(() => import("./pages/ProjectsList"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
@@ -50,7 +51,7 @@ const App = () => (
               >
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/articles" element={<ArticlesList />} />
-                <Route path="/articles/new" element={<ArticleTypeSelection />} />
+                <Route path="/articles/new" element={<ArticleGeneratorV2 />} />
                 <Route path="/articles/new/:type" element={<ArticleGenerator />} />
                 <Route path="/articles/bulk" element={<ArticleTypeSelection />} />
                 <Route path="/authority-planner" element={<AuthorityPlanner />} />
