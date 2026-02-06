@@ -21,6 +21,9 @@ class CFRDM_Indexing {
         // Add image schema for featured images
         add_action('wp_head', array(__CLASS__, 'add_image_schema'));
         
+        // Add Product/Review schema for review and comparison articles
+        add_action('wp_head', array(__CLASS__, 'add_product_review_schema'));
+        
         // Notify search engines on publish
         add_action('publish_post', array(__CLASS__, 'notify_search_engines'), 10, 2);
         
@@ -397,6 +400,276 @@ class CFRDM_Indexing {
             return $default;
         }
         return wp_strip_all_tags($value);
+    }
+    
+    /**
+     * Add Product and Review schema for review/comparison articles
+     */
+    public static function add_product_review_schema() {
+        if (!is_single()) {
+            return;
+        }
+        
+        global $post;
+        
+        // Only for ContentFactory articles
+        $cfrdm_id = get_post_meta($post->ID, '_cfrdm_article_id', true);
+        if (empty($cfrdm_id)) {
+            return;
+        }
+        
+        // Get article type from meta
+        $article_type = get_post_meta($post->ID, '_cfrdm_article_type', true);
+        
+        // Only for review and comparison articles
+        if (!in_array($article_type, array('review', 'comparison'), true)) {
+            return;
+        }
+        
+        // Extract product data from content or meta
+        $products = self::extract_products_from_content($post);
+        
+        if (empty($products)) {
+            return;
+        }
+        
+        // Get author info for review
+        $author_name = get_the_author_meta('display_name', $post->post_author);
+        $site_name = get_bloginfo('name');
+        
+        foreach ($products as $product) {
+            // Product Schema
+            $product_schema = array(
+                '@context' => 'https://schema.org',
+                '@type' => 'Product',
+                'name' => $product['name'],
+                'description' => $product['description'] ?? get_the_excerpt($post->ID),
+                'brand' => array(
+                    '@type' => 'Brand',
+                    'name' => $product['brand'] ?? $site_name,
+                ),
+            );
+            
+            // Add image if available
+            if (!empty($product['image'])) {
+                $product_schema['image'] = $product['image'];
+            } elseif (has_post_thumbnail($post->ID)) {
+                $product_schema['image'] = get_the_post_thumbnail_url($post->ID, 'full');
+            }
+            
+            // Add offers if price is available
+            if (!empty($product['price'])) {
+                $product_schema['offers'] = array(
+                    '@type' => 'Offer',
+                    'price' => $product['price'],
+                    'priceCurrency' => $product['currency'] ?? 'BRL',
+                    'availability' => 'https://schema.org/InStock',
+                    'url' => $product['url'] ?? get_permalink($post->ID),
+                );
+            }
+            
+            // Add aggregate rating if available
+            if (!empty($product['rating'])) {
+                $product_schema['aggregateRating'] = array(
+                    '@type' => 'AggregateRating',
+                    'ratingValue' => $product['rating'],
+                    'bestRating' => '5',
+                    'worstRating' => '1',
+                    'ratingCount' => $product['rating_count'] ?? '1',
+                );
+            }
+            
+            // Add review
+            $product_schema['review'] = array(
+                '@type' => 'Review',
+                'reviewRating' => array(
+                    '@type' => 'Rating',
+                    'ratingValue' => $product['rating'] ?? '4',
+                    'bestRating' => '5',
+                    'worstRating' => '1',
+                ),
+                'author' => array(
+                    '@type' => 'Person',
+                    'name' => $author_name,
+                ),
+                'publisher' => array(
+                    '@type' => 'Organization',
+                    'name' => $site_name,
+                ),
+                'datePublished' => get_the_date('c', $post->ID),
+                'reviewBody' => $product['review_body'] ?? get_the_excerpt($post->ID),
+            );
+            
+            // Add pros and cons if available
+            if (!empty($product['pros']) || !empty($product['cons'])) {
+                $product_schema['review']['positiveNotes'] = array(
+                    '@type' => 'ItemList',
+                    'itemListElement' => array_map(function($pro, $index) {
+                        return array(
+                            '@type' => 'ListItem',
+                            'position' => $index + 1,
+                            'name' => $pro,
+                        );
+                    }, $product['pros'] ?? array(), array_keys($product['pros'] ?? array())),
+                );
+                
+                $product_schema['review']['negativeNotes'] = array(
+                    '@type' => 'ItemList',
+                    'itemListElement' => array_map(function($con, $index) {
+                        return array(
+                            '@type' => 'ListItem',
+                            'position' => $index + 1,
+                            'name' => $con,
+                        );
+                    }, $product['cons'] ?? array(), array_keys($product['cons'] ?? array())),
+                );
+            }
+            
+            echo '<script type="application/ld+json">' . wp_json_encode($product_schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . '</script>' . "\n";
+        }
+        
+        // For comparison articles, add ItemList schema
+        if ($article_type === 'comparison' && count($products) > 1) {
+            self::add_comparison_schema($post, $products);
+        }
+    }
+    
+    /**
+     * Extract products from article content or meta
+     */
+    private static function extract_products_from_content($post) {
+        $products = array();
+        
+        // First, try to get products from meta (if stored by ContentFactory)
+        $meta_products = get_post_meta($post->ID, '_cfrdm_products', true);
+        if (!empty($meta_products) && is_array($meta_products)) {
+            return $meta_products;
+        }
+        
+        // Try to get from article config JSON
+        $config = get_post_meta($post->ID, '_cfrdm_config', true);
+        if (!empty($config)) {
+            $config_data = json_decode($config, true);
+            if (!empty($config_data['products'])) {
+                return $config_data['products'];
+            }
+        }
+        
+        // Extract from content using patterns
+        $content = $post->post_content;
+        
+        // Pattern 1: Look for product titles in H2/H3 with ratings
+        // Example: <h2>1. iPhone 15 Pro - 4.8/5</h2>
+        if (preg_match_all('/<h[23][^>]*>(?:\d+\.\s*)?([^<]+?)(?:\s*[-–]\s*(\d+(?:\.\d+)?)\s*\/\s*5)?<\/h[23]>/i', $content, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $product_name = trim($match[1]);
+                $rating = isset($match[2]) ? floatval($match[2]) : null;
+                
+                // Skip non-product headings (FAQ, Conclusão, etc.)
+                $skip_words = array('FAQ', 'Perguntas', 'Conclusão', 'Introdução', 'Comparação', 'Resumo', 'Índice');
+                $should_skip = false;
+                foreach ($skip_words as $skip) {
+                    if (stripos($product_name, $skip) !== false) {
+                        $should_skip = true;
+                        break;
+                    }
+                }
+                
+                if (!$should_skip && strlen($product_name) > 3) {
+                    $products[] = array(
+                        'name' => $product_name,
+                        'rating' => $rating,
+                        'description' => self::extract_product_description($content, $product_name),
+                        'pros' => self::extract_pros_cons($content, $product_name, 'pros'),
+                        'cons' => self::extract_pros_cons($content, $product_name, 'cons'),
+                    );
+                }
+            }
+        }
+        
+        // Pattern 2: Look for explicit product blocks
+        // Example: <!-- product:Nome do Produto -->
+        if (preg_match_all('/<!--\s*product:([^>]+)\s*-->/i', $content, $matches)) {
+            foreach ($matches[1] as $product_name) {
+                $products[] = array(
+                    'name' => trim($product_name),
+                    'description' => self::extract_product_description($content, trim($product_name)),
+                );
+            }
+        }
+        
+        // Limit to first 10 products to avoid schema bloat
+        return array_slice($products, 0, 10);
+    }
+    
+    /**
+     * Extract product description from content
+     */
+    private static function extract_product_description($content, $product_name) {
+        // Find the first paragraph after the product heading
+        $pattern = '/<h[23][^>]*>[^<]*' . preg_quote($product_name, '/') . '[^<]*<\/h[23]>\s*<p>([^<]+)<\/p>/i';
+        if (preg_match($pattern, $content, $match)) {
+            return wp_strip_all_tags($match[1]);
+        }
+        return '';
+    }
+    
+    /**
+     * Extract pros and cons for a product
+     */
+    private static function extract_pros_cons($content, $product_name, $type = 'pros') {
+        $items = array();
+        
+        // Look for lists with pros/cons markers
+        $markers = $type === 'pros' 
+            ? array('✓', '✔', '👍', 'Prós', 'Vantagens', 'Pontos positivos')
+            : array('✗', '✘', '👎', 'Contras', 'Desvantagens', 'Pontos negativos');
+        
+        foreach ($markers as $marker) {
+            $pattern = '/' . preg_quote($marker, '/') . '\s*:?\s*([^<\n]+)/i';
+            if (preg_match_all($pattern, $content, $matches)) {
+                foreach ($matches[1] as $item) {
+                    $clean_item = trim(wp_strip_all_tags($item));
+                    if (strlen($clean_item) > 3 && strlen($clean_item) < 200) {
+                        $items[] = $clean_item;
+                    }
+                }
+            }
+        }
+        
+        return array_slice(array_unique($items), 0, 5);
+    }
+    
+    /**
+     * Add ItemList schema for comparison articles
+     */
+    private static function add_comparison_schema($post, $products) {
+        $list_items = array();
+        $position = 1;
+        
+        foreach ($products as $product) {
+            $list_items[] = array(
+                '@type' => 'ListItem',
+                'position' => $position,
+                'item' => array(
+                    '@type' => 'Product',
+                    'name' => $product['name'],
+                    'description' => $product['description'] ?? '',
+                ),
+            );
+            $position++;
+        }
+        
+        $comparison_schema = array(
+            '@context' => 'https://schema.org',
+            '@type' => 'ItemList',
+            'name' => get_the_title($post->ID),
+            'description' => get_the_excerpt($post->ID),
+            'numberOfItems' => count($products),
+            'itemListElement' => $list_items,
+        );
+        
+        echo '<script type="application/ld+json">' . wp_json_encode($comparison_schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . '</script>' . "\n";
     }
 }
 
