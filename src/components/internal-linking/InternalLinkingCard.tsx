@@ -255,6 +255,53 @@ export function InternalLinkingCard({ projectId, onProjectSelect }: InternalLink
     }
   };
 
+  // Connection status state
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
+  const [connectionMessage, setConnectionMessage] = useState('');
+
+  // Check project connection when selected
+  const checkProjectConnection = useCallback(async (projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    setConnectionStatus('checking');
+    setConnectionMessage('Verificando conexão...');
+
+    try {
+      // Test WordPress connection
+      if (project.wordpress_url) {
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-wordpress-connection`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              wordpress_url: project.wordpress_url,
+              username: project.wordpress_username || '',
+            }),
+          }
+        );
+
+        if (response.ok) {
+          setConnectionStatus('success');
+          setConnectionMessage('Conexão estabelecida com sucesso');
+        } else {
+          setConnectionStatus('error');
+          setConnectionMessage('Falha ao conectar com o site WordPress');
+        }
+      } else {
+        setConnectionStatus('error');
+        setConnectionMessage('URL do WordPress não configurada');
+      }
+    } catch (error) {
+      setConnectionStatus('error');
+      setConnectionMessage('Erro ao verificar conexão');
+    }
+  }, [projects]);
+
+  // Get selected project
+  const selectedProjectData = projects.find(p => p.id === selectedProject);
+
   return (
     <Card>
       <CardHeader className="pb-4">
@@ -280,23 +327,78 @@ export function InternalLinkingCard({ projectId, onProjectSelect }: InternalLink
 
       <CardContent className="space-y-6">
         {/* Project Selector */}
-        <div>
-          <label className="text-sm font-medium mb-2 block">
+        <div className="space-y-3">
+          <label className="text-sm font-medium block">
             Selecionar Projeto Conectado
           </label>
-          <Select value={selectedProject} onValueChange={handleProjectChange}>
+          <Select 
+            value={selectedProject} 
+            onValueChange={(value) => {
+              handleProjectChange(value);
+              checkProjectConnection(value);
+            }}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Escolha um projeto" />
             </SelectTrigger>
             <SelectContent>
               {projects.filter(p => p.is_connected).map((project) => (
                 <SelectItem key={project.id} value={project.id}>
-                  {project.name}
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded bg-muted flex items-center justify-center text-xs font-medium">
+                      {project.name.substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex flex-col">
+                      <span>{project.name}</span>
+                      <span className="text-xs text-muted-foreground">{project.wordpress_url || project.domain}</span>
+                    </div>
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground mt-2">
+
+          {/* Connection Status Display */}
+          {selectedProject && selectedProjectData && (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+              <div className="w-8 h-8 rounded bg-background flex items-center justify-center">
+                <Link2 className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">WordPress</span>
+                  <span className="text-xs text-muted-foreground truncate">
+                    {selectedProjectData.wordpress_url || selectedProjectData.domain}
+                  </span>
+                  <a 
+                    href={selectedProjectData.wordpress_url || `https://${selectedProjectData.domain}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    Abrir site ↗
+                  </a>
+                  {/* Status Badge */}
+                  {connectionStatus === 'checking' && (
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  )}
+                  {connectionStatus === 'success' && (
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                  )}
+                  {connectionStatus === 'error' && (
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                  )}
+                </div>
+                {connectionStatus !== 'idle' && (
+                  <p className={`text-xs mt-1 ${connectionStatus === 'success' ? 'text-green-600' : connectionStatus === 'error' ? 'text-red-600' : 'text-muted-foreground'}`}>
+                    {connectionMessage}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
             Escolha um dos seus projetos conectados. O site precisa ter pelo menos 5 artigos publicados para habilitar a distribuição automática de links internos.
           </p>
         </div>
