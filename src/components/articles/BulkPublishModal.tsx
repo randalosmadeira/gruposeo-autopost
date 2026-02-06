@@ -33,16 +33,16 @@ import { supabase } from '@/integrations/supabase/client';
 function WordPressIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 1.5c4.687 0 8.5 3.813 8.5 8.5 0 4.687-3.813 8.5-8.5 8.5-4.687 0-8.5-3.813-8.5-8.5 0-4.687 3.813-8.5 8.5-8.5zM4.5 12c0 1.846.673 3.536 1.784 4.847L9.67 7.5c.127-.32.287-.55.48-.69-.846.272-1.59.72-2.24 1.345A6.99 6.99 0 0 0 5 12h-.5zm7.5 7c-1.1 0-2.136-.257-3.06-.71l3.24-9.41c.323-.94.583-1.62.78-2.03.1-.2.2-.37.28-.5.09-.14.16-.24.24-.31l.06-.06c.1-.1.23-.15.38-.18.04-.01.08-.01.12-.01.16 0 .32.05.45.15.13.1.23.23.3.4.06.17.1.35.1.55 0 .2-.04.42-.13.68l-2.33 6.77 1.17.4c.26.1.48.25.65.45.17.2.29.45.36.73.07.28.08.57.05.87-.03.3-.13.58-.3.85l-.17.25-.02.02-.01.01c-.15.15-.34.28-.57.37-.23.1-.49.14-.78.14l-.4-.02-2.48-.83.08-.23.77-2.24-1.37 3.98c-.32.93-.17 1.24.07 1.45.16.14.37.23.61.27.16.03.34.04.52.04zm6.5-2.5l-3.57-9.5c.16-.02.32-.02.48-.02 1.1 0 2.136.257 3.06.71l-.92 2.66 2.14 6.23c.2-.53.35-1.08.45-1.65.1-.57.15-1.15.15-1.73 0-1.1-.18-2.15-.53-3.13a7.012 7.012 0 0 0-1.47-2.56 7.012 7.012 0 0 0-2.25-1.74c-.84-.43-1.75-.7-2.7-.82l-.06.18-.88 2.58 3.03 8.79c.63-.35 1.2-.78 1.7-1.28.5-.5.93-1.06 1.27-1.68a6.99 6.99 0 0 0 .65-1.87l-.59-.07z"/>
+      <path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 1.5c4.687 0 8.5 3.813 8.5 8.5 0 4.687-3.813 8.5-8.5 8.5-4.687 0-8.5-3.813-8.5-8.5 0-4.687 3.813-8.5 8.5-8.5z"/>
     </svg>
   );
 }
 
-// Wix Icon Component
+// Wix Icon Component (disabled for now)
 function WixIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M20 12c0 4.41-3.59 8-8 8s-8-3.59-8-8 3.59-8 8-8 8 3.59 8 8zm-8-6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 9l-3-3 1.41-1.41L11 12.17l3.59-3.58L16 10l-5 5z"/>
+      <path d="M20 12c0 4.41-3.59 8-8 8s-8-3.59-8-8 3.59-8 8-8 8 3.59 8 8zm-8-6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6z"/>
     </svg>
   );
 }
@@ -54,8 +54,9 @@ type Step = 'destination' | 'categories' | 'publishing';
 interface ArticleWithCategories {
   id: string;
   title: string;
-  selectedCategories: string[];
+  selectedCategories: number[];
   publishStatus: PublishStatus;
+  errorMessage?: string;
 }
 
 interface Category {
@@ -68,8 +69,7 @@ interface BulkPublishModalProps {
   onClose: () => void;
   selectedArticles: Array<{ id: string; title: string | null; project_id: string | null }>;
   projects: Array<{ id: string; name: string; domain: string; wordpress_url?: string | null }>;
-  onPublish: (articles: ArticleWithCategories[], projectId: string) => Promise<{ success: number; failed: number }>;
-  isPublishing: boolean;
+  onPublishComplete: (result: { success: number; failed: number }) => void;
 }
 
 export function BulkPublishModal({
@@ -77,19 +77,18 @@ export function BulkPublishModal({
   onClose,
   selectedArticles,
   projects,
-  onPublish,
-  isPublishing
+  onPublishComplete
 }: BulkPublishModalProps) {
   const [step, setStep] = useState<Step>('destination');
   const [platform, setPlatform] = useState<Platform>(null);
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [siteSearch, setSiteSearch] = useState('');
   const [applySameCategoriesForAll, setApplySameCategoriesForAll] = useState(true);
-  const [globalCategories, setGlobalCategories] = useState<string[]>([]);
+  const [globalCategories, setGlobalCategories] = useState<number[]>([]);
   const [articlesWithCategories, setArticlesWithCategories] = useState<ArticleWithCategories[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
-  const [publishingResults, setPublishingResults] = useState({ success: 0, failed: 0 });
+  const [isPublishing, setIsPublishing] = useState(false);
 
   // Fetch categories from WordPress
   const fetchCategories = useCallback(async (projectId: string) => {
@@ -98,7 +97,7 @@ export function BulkPublishModal({
         body: { action: 'get-categories', projectId, perPage: 100 },
       });
       if (error) throw error;
-      return data?.data || [];
+      return data?.data?.categories || data?.categories || [];
     } catch (error) {
       console.error('Error fetching categories:', error);
       return [];
@@ -121,7 +120,7 @@ export function BulkPublishModal({
       setSelectedProject('');
       setGlobalCategories([]);
       setCategories([]);
-      setPublishingResults({ success: 0, failed: 0 });
+      setIsPublishing(false);
     }
   }, [isOpen, selectedArticles]);
 
@@ -146,8 +145,8 @@ export function BulkPublishModal({
     setIsLoadingCategories(true);
     try {
       const result = await fetchCategories(selectedProject);
-      if (result?.categories) {
-        setCategories(result.categories);
+      if (Array.isArray(result)) {
+        setCategories(result);
       }
     } catch (error) {
       console.error('Error loading categories:', error);
@@ -163,24 +162,24 @@ export function BulkPublishModal({
   }, [selectedProject, platform]);
 
   // Toggle global category
-  const toggleGlobalCategory = (categoryName: string) => {
+  const toggleGlobalCategory = (categoryId: number) => {
     setGlobalCategories(prev => 
-      prev.includes(categoryName)
-        ? prev.filter(c => c !== categoryName)
-        : [...prev, categoryName]
+      prev.includes(categoryId)
+        ? prev.filter(c => c !== categoryId)
+        : [...prev, categoryId]
     );
   };
 
   // Toggle individual article category
-  const toggleArticleCategory = (articleId: string, categoryName: string) => {
+  const toggleArticleCategory = (articleId: string, categoryId: number) => {
     setArticlesWithCategories(prev => 
       prev.map(a => {
         if (a.id !== articleId) return a;
         return {
           ...a,
-          selectedCategories: a.selectedCategories.includes(categoryName)
-            ? a.selectedCategories.filter(c => c !== categoryName)
-            : [...a.selectedCategories, categoryName]
+          selectedCategories: a.selectedCategories.includes(categoryId)
+            ? a.selectedCategories.filter(c => c !== categoryId)
+            : [...a.selectedCategories, categoryId]
         };
       })
     );
@@ -201,11 +200,43 @@ export function BulkPublishModal({
     }
   };
 
-  // Start publishing
+  // Publish a single article
+  const publishSingleArticle = async (articleId: string, categoryIds: number[]): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('publish-to-wordpress', {
+        body: { 
+          articleId, 
+          projectId: selectedProject,
+          categories: categoryIds
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Falha ao publicar');
+      }
+
+      return { success: true };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Erro desconhecido' 
+      };
+    }
+  };
+
+  // Start publishing - real implementation
   const handleStartPublishing = async () => {
     setStep('publishing');
-    
-    // Update articles status to publishing one by one
+    setIsPublishing(true);
+
+    let successCount = 0;
+    let failedCount = 0;
+
+    // Publish articles one by one with animation delay
     for (let i = 0; i < articlesWithCategories.length; i++) {
       const article = articlesWithCategories[i];
       
@@ -216,22 +247,37 @@ export function BulkPublishModal({
         )
       );
 
-      // Simulate publishing delay (in real implementation, this would be actual API call)
-      await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+      // Small delay for visual feedback
+      await new Promise(resolve => setTimeout(resolve, 300));
 
-      // Set article to success or error (90% success rate for demo)
-      const isSuccess = Math.random() > 0.1;
+      // Actually publish the article
+      const result = await publishSingleArticle(article.id, article.selectedCategories);
+
+      // Update article status with animation
       setArticlesWithCategories(prev => 
         prev.map((a, idx) => 
-          idx === i ? { ...a, publishStatus: isSuccess ? 'success' : 'error' } : a
+          idx === i ? { 
+            ...a, 
+            publishStatus: result.success ? 'success' : 'error',
+            errorMessage: result.error
+          } : a
         )
       );
 
-      setPublishingResults(prev => ({
-        success: prev.success + (isSuccess ? 1 : 0),
-        failed: prev.failed + (isSuccess ? 0 : 1)
-      }));
+      if (result.success) {
+        successCount++;
+      } else {
+        failedCount++;
+      }
+
+      // Small delay between articles to avoid rate limiting
+      if (i < articlesWithCategories.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
     }
+
+    setIsPublishing(false);
+    onPublishComplete({ success: successCount, failed: failedCount });
   };
 
   // Get publish status counts
@@ -260,9 +306,13 @@ export function BulkPublishModal({
     return labels[status];
   };
 
+  const getCategoryName = (categoryId: number): string => {
+    return categories.find(c => c.id === categoryId)?.name || `Categoria ${categoryId}`;
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+    <Dialog open={isOpen} onOpenChange={(open) => !isPublishing && !open && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0 animate-scale-in">
         {/* Header */}
         <DialogHeader className="px-6 py-4 border-b">
           <div className="flex items-center gap-3">
@@ -277,12 +327,14 @@ export function BulkPublishModal({
                 Publique {selectedArticles.length} artigos selecionados de uma vez no destino escolhido.
               </DialogDescription>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-muted rounded transition-colors"
-            >
-              <X className="w-5 h-5 text-muted-foreground" />
-            </button>
+            {!isPublishing && (
+              <button
+                onClick={onClose}
+                className="p-1 hover:bg-muted rounded transition-colors"
+              >
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            )}
           </div>
           
           <div className="mt-3">
@@ -296,9 +348,9 @@ export function BulkPublishModal({
             {['destination', 'categories', 'publishing'].map((s, idx) => (
               <div key={s} className="flex items-center">
                 <div className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors",
+                  "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300",
                   step === s 
-                    ? "bg-primary text-primary-foreground" 
+                    ? "bg-primary text-primary-foreground scale-110" 
                     : idx < ['destination', 'categories', 'publishing'].indexOf(step)
                       ? "bg-green-500 text-white"
                       : "bg-muted text-muted-foreground"
@@ -311,7 +363,7 @@ export function BulkPublishModal({
                 </div>
                 {idx < 2 && (
                   <div className={cn(
-                    "w-12 h-0.5 mx-2",
+                    "w-12 h-0.5 mx-2 transition-colors duration-300",
                     idx < ['destination', 'categories', 'publishing'].indexOf(step)
                       ? "bg-green-500"
                       : "bg-muted"
@@ -326,7 +378,7 @@ export function BulkPublishModal({
         <div className="flex-1 overflow-y-auto px-6 py-6">
           {/* STEP 1: Destination */}
           {step === 'destination' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-fade-in">
               {/* Platform Selection */}
               <section>
                 <div className="flex items-start gap-3 mb-4">
@@ -344,12 +396,12 @@ export function BulkPublishModal({
                 </div>
                 
                 {/* Platform Cards */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* WordPress Card */}
                   <button
                     onClick={() => setPlatform('wordpress')}
                     className={cn(
-                      "p-4 border-2 rounded-lg transition-all text-left",
+                      "p-4 border-2 rounded-lg transition-all text-left hover-scale",
                       "hover:border-primary/50 hover:bg-primary/5",
                       platform === 'wordpress'
                         ? "border-primary bg-primary/5 shadow-sm"
@@ -358,7 +410,7 @@ export function BulkPublishModal({
                   >
                     <div className="flex items-start gap-3">
                       <div className={cn(
-                        "w-10 h-10 rounded-lg flex items-center justify-center",
+                        "w-10 h-10 rounded-lg flex items-center justify-center transition-colors",
                         platform === 'wordpress' ? "bg-primary" : "bg-muted"
                       )}>
                         <WordPressIcon className={cn(
@@ -375,19 +427,15 @@ export function BulkPublishModal({
                         </p>
                       </div>
                       {platform === 'wordpress' && (
-                        <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                        <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0 animate-scale-in" />
                       )}
                     </div>
                   </button>
                   
-                  {/* Wix Card */}
+                  {/* Wix Card - Disabled */}
                   <button
-                    onClick={() => setPlatform('wix')}
-                    className={cn(
-                      "p-4 border-2 rounded-lg transition-all text-left opacity-50 cursor-not-allowed",
-                      "border-border bg-card"
-                    )}
                     disabled
+                    className="p-4 border-2 rounded-lg text-left opacity-50 cursor-not-allowed border-border bg-card"
                   >
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-muted">
@@ -408,7 +456,7 @@ export function BulkPublishModal({
               
               {/* Site Selection */}
               {platform && (
-                <section className="space-y-3">
+                <section className="space-y-3 animate-fade-in">
                   <label className="text-sm font-medium text-foreground">
                     Site conectado
                   </label>
@@ -473,11 +521,11 @@ export function BulkPublishModal({
               
               {/* Categories Section - WordPress Only */}
               {platform === 'wordpress' && selectedProject && (
-                <section className="space-y-4">
+                <section className="space-y-4 animate-fade-in">
                   <div className="flex items-center justify-between">
                     <div className="flex items-start gap-3">
-                      <div className="p-2 bg-purple-100 rounded-lg">
-                        <Tag className="w-5 h-5 text-purple-600" />
+                      <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                        <Tag className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                       </div>
                       <div>
                         <h3 className="text-base font-semibold text-foreground">
@@ -531,8 +579,8 @@ export function BulkPublishModal({
                           <div key={category.id} className="flex items-center gap-2">
                             <Checkbox
                               id={`global-${category.id}`}
-                              checked={globalCategories.includes(category.name)}
-                              onCheckedChange={() => toggleGlobalCategory(category.name)}
+                              checked={globalCategories.includes(category.id)}
+                              onCheckedChange={() => toggleGlobalCategory(category.id)}
                             />
                             <label
                               htmlFor={`global-${category.id}`}
@@ -550,12 +598,12 @@ export function BulkPublishModal({
             </div>
           )}
 
-          {/* STEP 2: Categories */}
+          {/* STEP 2: Categories Review */}
           {step === 'categories' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-fade-in">
               {applySameCategoriesForAll ? (
                 <div className="text-center py-8">
-                  <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
+                  <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3 animate-scale-in" />
                   <h3 className="text-lg font-medium text-foreground">
                     Categorias configuradas
                   </h3>
@@ -566,9 +614,9 @@ export function BulkPublishModal({
                   </p>
                   {globalCategories.length > 0 && (
                     <div className="flex flex-wrap justify-center gap-2 mt-4">
-                      {globalCategories.map(cat => (
-                        <Badge key={cat} className="bg-primary/10 text-primary">
-                          {cat}
+                      {globalCategories.map(catId => (
+                        <Badge key={catId} className="bg-primary/10 text-primary">
+                          {getCategoryName(catId)}
                         </Badge>
                       ))}
                     </div>
@@ -577,8 +625,8 @@ export function BulkPublishModal({
               ) : (
                 <div className="space-y-6">
                   <div className="flex items-start gap-3 mb-4">
-                    <div className="p-2 bg-purple-100 rounded-lg">
-                      <Tag className="w-5 h-5 text-purple-600" />
+                    <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                      <Tag className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                     </div>
                     <div>
                       <h3 className="text-base font-semibold text-foreground">
@@ -591,19 +639,19 @@ export function BulkPublishModal({
                   </div>
 
                   {articlesWithCategories.map((article, index) => (
-                    <article key={article.id} className="space-y-3">
+                    <article key={article.id} className="space-y-3 animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
                       <h4 className="text-sm font-medium text-foreground">
                         {article.title}
                       </h4>
                       
                       {article.selectedCategories.length > 0 && (
                         <div className="flex flex-wrap gap-2">
-                          {article.selectedCategories.map(category => (
+                          {article.selectedCategories.map(catId => (
                             <Badge 
-                              key={category}
+                              key={catId}
                               className="bg-primary/10 text-primary text-xs px-2 py-1"
                             >
-                              {category}
+                              {getCategoryName(catId)}
                             </Badge>
                           ))}
                         </div>
@@ -614,8 +662,8 @@ export function BulkPublishModal({
                           <div key={category.id} className="flex items-center gap-2">
                             <Checkbox
                               id={`${article.id}-${category.id}`}
-                              checked={article.selectedCategories.includes(category.name)}
-                              onCheckedChange={() => toggleArticleCategory(article.id, category.name)}
+                              checked={article.selectedCategories.includes(category.id)}
+                              onCheckedChange={() => toggleArticleCategory(article.id, category.id)}
                             />
                             <label
                               htmlFor={`${article.id}-${category.id}`}
@@ -639,33 +687,41 @@ export function BulkPublishModal({
 
           {/* STEP 3: Publishing */}
           {step === 'publishing' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-fade-in">
               {/* Success Counter */}
-              <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
-                <span className="text-sm font-medium text-green-800">
+              <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg">
+                <span className="text-sm font-medium text-green-800 dark:text-green-200">
                   Status da publicação
                 </span>
-                <Badge className="bg-green-600 text-white px-3 py-1">
-                  {statusCounts.success} sucesso{statusCounts.success !== 1 ? 's' : ''}
-                </Badge>
+                <div className="flex gap-2">
+                  <Badge className="bg-green-600 text-white px-3 py-1">
+                    {statusCounts.success} sucesso{statusCounts.success !== 1 ? 's' : ''}
+                  </Badge>
+                  {statusCounts.error > 0 && (
+                    <Badge className="bg-red-600 text-white px-3 py-1">
+                      {statusCounts.error} erro{statusCounts.error !== 1 ? 's' : ''}
+                    </Badge>
+                  )}
+                </div>
               </div>
               
               {/* Publishing List */}
               <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
-                {articlesWithCategories.map(article => (
+                {articlesWithCategories.map((article, index) => (
                   <div
                     key={article.id}
                     className={cn(
-                      "flex items-center justify-between p-4 rounded-lg border-2 transition-all",
-                      article.publishStatus === 'success' && "bg-green-50 border-green-200",
-                      article.publishStatus === 'publishing' && "bg-blue-50 border-blue-200",
+                      "flex items-center justify-between p-4 rounded-lg border-2 transition-all duration-300",
+                      article.publishStatus === 'success' && "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900",
+                      article.publishStatus === 'publishing' && "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900 scale-[1.02]",
                       article.publishStatus === 'waiting' && "bg-muted/50 border-border",
-                      article.publishStatus === 'error' && "bg-red-50 border-red-200"
+                      article.publishStatus === 'error' && "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900"
                     )}
+                    style={{ animationDelay: `${index * 50}ms` }}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       {article.publishStatus === 'success' && (
-                        <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+                        <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 animate-scale-in" />
                       )}
                       {article.publishStatus === 'publishing' && (
                         <Loader2 className="w-5 h-5 text-blue-600 flex-shrink-0 animate-spin" />
@@ -677,17 +733,24 @@ export function BulkPublishModal({
                         <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
                       )}
                       
-                      <span className="text-sm font-medium text-foreground truncate">
-                        {article.title}
-                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium text-foreground truncate block">
+                          {article.title}
+                        </span>
+                        {article.errorMessage && (
+                          <span className="text-xs text-red-600 dark:text-red-400 truncate block">
+                            {article.errorMessage}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     
                     <span className={cn(
                       "text-sm font-medium ml-4 flex-shrink-0",
-                      article.publishStatus === 'success' && "text-green-700",
-                      article.publishStatus === 'publishing' && "text-blue-700",
+                      article.publishStatus === 'success' && "text-green-700 dark:text-green-300",
+                      article.publishStatus === 'publishing' && "text-blue-700 dark:text-blue-300",
                       article.publishStatus === 'waiting' && "text-muted-foreground",
-                      article.publishStatus === 'error' && "text-red-700"
+                      article.publishStatus === 'error' && "text-red-700 dark:text-red-300"
                     )}>
                       {getPublishStatusLabel(article.publishStatus)}
                     </span>
@@ -702,8 +765,9 @@ export function BulkPublishModal({
                 </span>
                 
                 {allProcessed ? (
-                  <Button onClick={onClose}>
-                    Fechar
+                  <Button onClick={onClose} className="bg-green-600 hover:bg-green-700">
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Concluído
                   </Button>
                 ) : (
                   <Button disabled className="bg-primary">
@@ -719,7 +783,7 @@ export function BulkPublishModal({
         {/* Footer */}
         {step !== 'publishing' && (
           <DialogFooter className="px-6 py-4 border-t">
-            <div className="flex items-center justify-between w-full">
+            <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-3">
               <span className="text-sm text-muted-foreground">
                 {step === 'destination' 
                   ? `Pronto para publicar ${selectedArticles.length} artigos`
