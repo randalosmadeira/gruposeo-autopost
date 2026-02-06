@@ -26,6 +26,7 @@ const WordPressPlugin = lazy(() => import("./pages/WordPressPlugin"));
 const LandingPageGenerator = lazy(() => import("./pages/LandingPageGenerator"));
 const Auth = lazy(() => import("./pages/Auth"));
 const HelpPage = lazy(() => import("./pages/HelpPage"));
+const NewsRewriter = lazy(() => import("./pages/NewsRewriter"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -71,6 +72,7 @@ const App = () => (
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/wordpress-plugin" element={<WordPressPlugin />} />
                 <Route path="/help" element={<HelpPage />} />
+                <Route path="/news-rewriter" element={<NewsRewriter />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
