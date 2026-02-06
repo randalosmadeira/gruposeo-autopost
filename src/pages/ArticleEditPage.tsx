@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ArticleEditor } from '@/components/articles/ArticleEditor';
+import { ArticleBreadcrumbs } from '@/components/articles/ArticleBreadcrumbs';
 import { useWordPressPublish } from '@/hooks/useWordPressPublish';
 
 interface Article {
@@ -136,17 +137,18 @@ export default function ArticleEditPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* Header with Breadcrumbs */}
       <header className="sticky top-0 z-40 bg-card border-b">
-        <div className="flex items-center gap-4 px-6 py-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/articles')}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Voltar
-          </Button>
-          <div className="h-6 w-px bg-border" />
-          <span className="text-sm text-muted-foreground">
-            Editando artigo
-          </span>
+        <div className="flex items-center justify-between px-6 py-3">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/articles')}>
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <ArticleBreadcrumbs 
+              articleTitle={article.title || article.keyword} 
+              mode="edit" 
+            />
+          </div>
         </div>
       </header>
 
