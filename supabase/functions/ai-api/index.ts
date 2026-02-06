@@ -9,9 +9,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Lovable AI Gateway
+// Lovable AI Gateway - No external API keys needed
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 
 interface AIRequest {
   action: string;
@@ -58,29 +57,38 @@ async function callLovableAI(model: string, messages: any[], options: any = {}) 
   return await response.json();
 }
 
-// Helper to call Gemini directly (for image generation)
-async function callGeminiImage(prompt: string) {
-  if (!GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY não configurada");
+// Helper to call Lovable AI Gateway for image generation
+async function callLovableImageAI(prompt: string, quality: 'standard' | 'high' = 'standard') {
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY não configurada");
   }
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseModalities: ["TEXT", "IMAGE"],
-        },
-      }),
-    }
-  );
+  const model = quality === 'high' 
+    ? "google/gemini-3-pro-image-preview" 
+    : "google/gemini-2.5-flash-image";
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "user", content: prompt }],
+      modalities: ["image", "text"],
+    }),
+  });
 
   if (!response.ok) {
+    if (response.status === 429) {
+      throw new Error("Rate limit excedido. Tente novamente.");
+    }
+    if (response.status === 402) {
+      throw new Error("Créditos de IA insuficientes.");
+    }
     const error = await response.text();
-    throw new Error(`Gemini API error: ${response.status} - ${error}`);
+    throw new Error(`AI Gateway error: ${response.status} - ${error}`);
   }
 
   return await response.json();
@@ -236,7 +244,7 @@ Formato JSON:
         break;
       }
 
-      // === IMAGE GENERATION ===
+      // === IMAGE GENERATION (via Lovable AI Gateway) ===
       case "generate-image": {
         if (!imagePrompt) {
           return new Response(
@@ -245,19 +253,19 @@ Formato JSON:
           );
         }
 
-        const response = await callGeminiImage(imagePrompt);
+        const imageResponse = await callLovableImageAI(imagePrompt);
         
-        // Extract image from response
-        const parts = response.candidates?.[0]?.content?.parts || [];
-        const imagePart = parts.find((p: any) => p.inlineData);
+        // Extract image from Lovable AI Gateway response
+        const message = imageResponse.choices?.[0]?.message;
+        const images = message?.images || [];
         
-        if (imagePart?.inlineData) {
+        if (images.length > 0 && images[0]?.image_url?.url) {
           result = {
-            image: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
-            mimeType: imagePart.inlineData.mimeType,
+            image: images[0].image_url.url,
+            alt: `Imagem gerada para: ${imagePrompt.slice(0, 50)}...`,
           };
         } else {
-          result = { error: "Nenhuma imagem gerada" };
+          result = { error: "Nenhuma imagem gerada", debug: message?.content };
         }
         break;
       }
