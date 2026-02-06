@@ -24,6 +24,7 @@ const AuthorityPlanner = lazy(() => import("./pages/AuthorityPlanner"));
 const NewsAgents = lazy(() => import("./pages/NewsAgents"));
 const CreateNewsAgent = lazy(() => import("./pages/CreateNewsAgent"));
 const WordPressPlugin = lazy(() => import("./pages/WordPressPlugin"));
+const WordPressMonitor = lazy(() => import("./pages/WordPressMonitor"));
 const LandingPageGenerator = lazy(() => import("./pages/LandingPageGenerator"));
 const BulkSalesPagesGenerator = lazy(() => import("./pages/BulkSalesPagesGenerator"));
 const Auth = lazy(() => import("./pages/Auth"));
@@ -78,6 +79,7 @@ const App = () => (
                 <Route path="/topical-maps" element={<Dashboard />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/wordpress-plugin" element={<WordPressPlugin />} />
+                <Route path="/wordpress-monitor" element={<WordPressMonitor />} />
                 <Route path="/help" element={<HelpPage />} />
                 <Route path="/news-rewriter" element={<NewsRewriter />} />
                 <Route path="/bulk-generator" element={<BulkKeywordGenerator />} />
