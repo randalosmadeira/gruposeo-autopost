@@ -1,32 +1,18 @@
 import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { 
-  Save, 
-  Eye, 
-  Code, 
-  Image as ImageIcon, 
-  Loader2,
-  Upload,
-  Sparkles,
-  RefreshCw,
-  Settings,
-  Search as SearchIcon,
   Download,
+  Upload,
+  Loader2,
   AlertTriangle,
-  FolderOpen
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { WordPressCategorySelector } from './WordPressCategorySelector';
 import { sanitizeHTML } from '@/lib/sanitize';
+import { ArticleEditorToolbar } from './editor/ArticleEditorToolbar';
+import { ArticleEditorContent } from './editor/ArticleEditorContent';
+import { ArticleEditorSidebar } from './editor/ArticleEditorSidebar';
 
 interface Article {
   id: string;
@@ -52,8 +38,8 @@ interface ArticleEditorProps {
 const statusLabels: Record<string, { label: string; className: string }> = {
   draft: { label: 'Rascunho', className: 'bg-muted text-muted-foreground' },
   generating: { label: 'Em criação', className: 'bg-amber-100 text-amber-700' },
-  ready: { label: 'Pronto', className: 'bg-blue-100 text-blue-700' },
-  published: { label: 'Publicado', className: 'bg-green-100 text-green-700' },
+  ready: { label: 'Finalizado', className: 'bg-green-100 text-green-700' },
+  published: { label: 'Publicado', className: 'bg-blue-100 text-blue-700' },
   error: { label: 'Erro', className: 'bg-red-100 text-red-700' },
 };
 
@@ -62,7 +48,6 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<'visual' | 'html'>('visual');
-  const [configTab, setConfigTab] = useState<'config' | 'seo'>('config');
   const [isRegenerating, setIsRegenerating] = useState<'title' | 'excerpt' | 'image' | 'content' | null>(null);
   const { toast } = useToast();
 
@@ -76,7 +61,6 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
     try {
       const wordCount = editedArticle.content?.split(/\s+/).filter(Boolean).length || 0;
       
-      // Build config with WordPress categories
       const currentConfig = (editedArticle as any).config || {};
       const updatedConfig = {
         ...currentConfig,
@@ -169,318 +153,76 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
   };
 
   const status = statusLabels[editedArticle.status] || statusLabels.draft;
-  const wordCount = editedArticle.content?.split(/\s+/).filter(Boolean).length || 0;
-  const excerptLength = editedArticle.excerpt?.length || 0;
 
   return (
-    <div className="flex gap-6 h-full">
-      {/* Main Editor */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold truncate max-w-md">
-              {editedArticle.title || editedArticle.keyword}
-            </h1>
-            <Badge className={status.className}>{status.label}</Badge>
-            {hasChanges && (
-              <Badge variant="outline" className="text-orange-600 border-orange-300">
-                Não salvo
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
-              <Download className="w-4 h-4 mr-2" />
-              Exportar
-            </Button>
-            <Button
-              size="sm"
-              onClick={handlePublish}
-              disabled={isPublishing || hasChanges}
-              className="bg-primary"
-            >
-              {isPublishing ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : (
-                <Upload className="w-4 h-4 mr-2" />
-              )}
-              Publicar
-            </Button>
-            {editedArticle.status === 'error' && (
-              <Button variant="destructive" size="icon">
-                <AlertTriangle className="w-4 h-4" />
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Toolbar */}
-        <div className="flex items-center gap-2 p-2 border rounded-lg mb-4 bg-card">
-          <select className="px-3 py-1.5 border rounded text-sm bg-background">
-            <option>Título 1 (H1)</option>
-            <option>Título 2 (H2)</option>
-            <option>Título 3 (H3)</option>
-            <option>Parágrafo</option>
-          </select>
-          <div className="h-6 w-px bg-border" />
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 font-bold">B</Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 italic">I</Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">🔗</Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 line-through">S</Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 underline">U</Button>
-          <div className="h-6 w-px bg-border" />
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">•</Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">1.</Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">→</Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">←</Button>
-          <div className="h-6 w-px bg-border" />
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">🖼️</Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">📊</Button>
-          <div className="flex-1" />
-          <Badge variant="outline" className="text-primary border-primary">
-            ✓ Pronto
+    <div className="flex flex-col h-[calc(100vh-120px)] bg-background">
+      {/* Header */}
+      <header className="flex items-center justify-between px-4 py-3 bg-card border-b">
+        <div className="flex items-center gap-3">
+          <h1 className="text-base font-semibold truncate max-w-md">
+            {editedArticle.title || editedArticle.keyword}
+          </h1>
+          <Badge className={`${status.className} font-normal`}>
+            • {status.label}
           </Badge>
         </div>
-
-        {/* Content Area */}
-        <Card className="flex-1 overflow-hidden">
-          <CardContent className="p-0 h-full">
-            {activeTab === 'html' ? (
-              <Textarea
-                value={editedArticle.content || ''}
-                onChange={(e) => updateField('content', e.target.value)}
-                placeholder="<h2>Título da seção</h2><p>Conteúdo...</p>"
-                className="h-full min-h-[500px] font-mono text-sm border-0 rounded-none resize-none"
-              />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-2">
+            <Download className="w-4 h-4" />
+            Exportar
+          </Button>
+          <Button
+            size="sm"
+            onClick={handlePublish}
+            disabled={isPublishing || hasChanges}
+            className="gap-2"
+          >
+            {isPublishing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <ScrollArea className="h-full">
-                <div 
-                  className="p-6 prose prose-sm max-w-none"
-                  dangerouslySetInnerHTML={{ 
-                    __html: sanitizeHTML(
-                      editedArticle.content || '<p class="text-muted-foreground">Sem conteúdo</p>'
-                    ) 
-                  }}
-                />
-              </ScrollArea>
+              <Upload className="w-4 h-4" />
             )}
-          </CardContent>
-        </Card>
-
-        {/* Word count */}
-        <div className="mt-2 text-sm text-muted-foreground">
-          {wordCount} palavras
-        </div>
-      </div>
-
-      {/* Sidebar */}
-      <div className="w-80 flex flex-col">
-        {/* Config/SEO Tabs */}
-        <Tabs value={configTab} onValueChange={(v) => setConfigTab(v as 'config' | 'seo')} className="flex-1">
-          <TabsList className="w-full mb-4">
-            <TabsTrigger value="config" className="flex-1">
-              <Settings className="w-4 h-4 mr-2" />
-              Config
-            </TabsTrigger>
-            <TabsTrigger value="seo" className="flex-1">
-              <SearchIcon className="w-4 h-4 mr-2" />
-              SEO
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="config" className="space-y-4 mt-0">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Settings className="w-4 h-4" />
-                  Configurações
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Title */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Título</Label>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={() => handleRegenerate('title')}
-                      disabled={isRegenerating === 'title'}
-                      className="bg-primary h-7 text-xs"
-                    >
-                      {isRegenerating === 'title' ? (
-                        <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                      ) : (
-                        <Sparkles className="w-3 h-3 mr-1" />
-                      )}
-                      Recriar com IA
-                    </Button>
-                  </div>
-                  <Input
-                    value={editedArticle.title || ''}
-                    onChange={(e) => updateField('title', e.target.value)}
-                    placeholder="Título do artigo"
-                    className="text-sm"
-                  />
-                </div>
-
-                {/* Featured Image */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Imagem Destacada</Label>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleRegenerate('image')}
-                      disabled={isRegenerating === 'image'}
-                      className="h-7 text-xs"
-                    >
-                      {isRegenerating === 'image' ? (
-                        <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                      ) : (
-                        <RefreshCw className="w-3 h-3 mr-1" />
-                      )}
-                      Refazer
-                    </Button>
-                  </div>
-                  {editedArticle.featured_image_url ? (
-                    <img
-                      src={editedArticle.featured_image_url}
-                      alt="Featured"
-                      className="w-full h-40 object-cover rounded-lg border"
-                    />
-                  ) : (
-                    <div className="w-full h-40 bg-muted rounded-lg border flex items-center justify-center">
-                      <ImageIcon className="w-8 h-8 text-muted-foreground" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Meta Description */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Meta-Descrição</Label>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={() => handleRegenerate('excerpt')}
-                      disabled={isRegenerating === 'excerpt'}
-                      className="bg-primary h-7 text-xs"
-                    >
-                      {isRegenerating === 'excerpt' ? (
-                        <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                      ) : (
-                        <Sparkles className="w-3 h-3 mr-1" />
-                      )}
-                      Recriar com IA
-                    </Button>
-                  </div>
-                  <Textarea
-                    value={editedArticle.excerpt || ''}
-                    onChange={(e) => updateField('excerpt', e.target.value)}
-                    placeholder="Descrição curta para SEO"
-                    rows={4}
-                    className="text-sm resize-none"
-                  />
-                  <p className="text-xs text-muted-foreground text-right">
-                    {excerptLength}/160 caracteres
-                  </p>
-                </div>
-
-                {/* Content Regenerate */}
-                <div className="pt-2 border-t">
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => handleRegenerate('content')}
-                    disabled={isRegenerating === 'content'}
-                  >
-                    {isRegenerating === 'content' ? (
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    ) : (
-                      <Sparkles className="w-4 h-4 mr-2" />
-                    )}
-                    Recriar Conteúdo com IA
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* WordPress Categories */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <FolderOpen className="w-4 h-4" />
-                  Publicação WordPress
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <WordPressCategorySelector
-                  projectId={editedArticle.project_id || null}
-                  selectedCategories={editedArticle.wordpress_categories || []}
-                  onCategoriesChange={(categories) => updateField('wordpress_categories', categories)}
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="seo" className="space-y-4 mt-0">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Análise SEO</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span>Palavra-chave</span>
-                  <Badge variant="secondary">{editedArticle.keyword}</Badge>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span>Contagem de palavras</span>
-                  <Badge variant={wordCount >= 1500 ? 'default' : 'secondary'}>
-                    {wordCount}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span>Meta descrição</span>
-                  <Badge variant={excerptLength >= 150 && excerptLength <= 160 ? 'default' : 'secondary'}>
-                    {excerptLength}/160
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-
-        {/* Editor/HTML Toggle */}
-        <div className="mt-4">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'visual' | 'html')}>
-            <TabsList className="w-full">
-              <TabsTrigger value="visual" className="flex-1">
-                <Eye className="w-4 h-4 mr-2" />
-                Editor
-              </TabsTrigger>
-              <TabsTrigger value="html" className="flex-1">
-                <Code className="w-4 h-4 mr-2" />
-                HTML
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-
-        {/* Save Button */}
-        <Button
-          className="mt-4 w-full"
-          onClick={handleSave}
-          disabled={isSaving || !hasChanges}
-        >
-          {isSaving ? (
-            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-          ) : (
-            <Save className="w-4 h-4 mr-2" />
+            Publicar
+          </Button>
+          {editedArticle.status === 'error' && (
+            <Button variant="destructive" size="icon" className="w-8 h-8">
+              <AlertTriangle className="w-4 h-4" />
+            </Button>
           )}
-          Salvar Alterações
-        </Button>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Editor Area */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Toolbar */}
+          <ArticleEditorToolbar 
+            hasChanges={hasChanges} 
+            isSaving={isSaving} 
+          />
+
+          {/* Content */}
+          <div className="flex-1 p-4 overflow-hidden">
+            <ArticleEditorContent
+              content={editedArticle.content}
+              featuredImageUrl={editedArticle.featured_image_url}
+              title={editedArticle.title}
+              activeTab={activeTab}
+              onContentChange={(content) => updateField('content', content)}
+            />
+          </div>
+        </div>
+
+        {/* Sidebar */}
+        <ArticleEditorSidebar
+          article={editedArticle}
+          activeTab={activeTab}
+          onActiveTabChange={setActiveTab}
+          onFieldUpdate={updateField}
+          onRegenerate={handleRegenerate}
+          isRegenerating={isRegenerating}
+        />
       </div>
     </div>
   );

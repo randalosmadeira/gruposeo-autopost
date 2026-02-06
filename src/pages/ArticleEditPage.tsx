@@ -136,31 +136,13 @@ export default function ArticleEditPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header with Breadcrumbs */}
-      <header className="sticky top-0 z-40 bg-card border-b">
-        <div className="flex items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/articles')}>
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <ArticleBreadcrumbs 
-              articleTitle={article.title || article.keyword} 
-              mode="edit" 
-            />
-          </div>
-        </div>
-      </header>
-
-      {/* Editor */}
-      <div className="p-6">
-        <ArticleEditor
-          article={article}
-          onSave={handleSave}
-          onPublish={handlePublish}
-          isPublishing={isPublishing}
-        />
-      </div>
+    <div className="min-h-screen bg-background flex flex-col">
+      <ArticleEditor
+        article={article}
+        onSave={handleSave}
+        onPublish={handlePublish}
+        isPublishing={isPublishing}
+      />
     </div>
   );
 }

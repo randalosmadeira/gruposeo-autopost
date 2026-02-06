@@ -1,0 +1,192 @@
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { 
+  Sparkles,
+  RefreshCw,
+  Loader2,
+  Image as ImageIcon,
+  Settings,
+  Wand2,
+  Eye,
+  Code
+} from 'lucide-react';
+import { SEOOptimizationPanel } from './SEOOptimizationPanel';
+
+interface Article {
+  id: string;
+  title: string | null;
+  keyword: string;
+  content: string | null;
+  excerpt: string | null;
+  featured_image_url: string | null;
+}
+
+interface ArticleEditorSidebarProps {
+  article: Article;
+  activeTab: 'visual' | 'html';
+  onActiveTabChange: (tab: 'visual' | 'html') => void;
+  onFieldUpdate: <K extends keyof Article>(field: K, value: Article[K]) => void;
+  onRegenerate: (type: 'title' | 'excerpt' | 'image' | 'content') => void;
+  isRegenerating: 'title' | 'excerpt' | 'image' | 'content' | null;
+}
+
+export function ArticleEditorSidebar({
+  article,
+  activeTab,
+  onActiveTabChange,
+  onFieldUpdate,
+  onRegenerate,
+  isRegenerating,
+}: ArticleEditorSidebarProps) {
+  const [configTab, setConfigTab] = useState<'config' | 'seo'>('config');
+  const excerptLength = article.excerpt?.length || 0;
+
+  return (
+    <div className="w-80 flex flex-col border-l bg-card">
+      {/* Config/SEO Tabs */}
+      <Tabs value={configTab} onValueChange={(v) => setConfigTab(v as 'config' | 'seo')} className="flex-1 flex flex-col">
+        <TabsList className="w-full rounded-none border-b h-12 bg-transparent p-0">
+          <TabsTrigger 
+            value="config" 
+            className="flex-1 h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Config
+          </TabsTrigger>
+          <TabsTrigger 
+            value="seo" 
+            className="flex-1 h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent gap-2"
+          >
+            <Wand2 className="w-4 h-4" />
+            SEO
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="config" className="flex-1 overflow-auto m-0 p-4 space-y-6">
+          {/* Configurations Header */}
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center">
+              <Settings className="w-4 h-4 text-primary" />
+            </div>
+            <h3 className="font-semibold">Configurações</h3>
+          </div>
+
+          {/* Title */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Título</Label>
+              <Button
+                size="sm"
+                onClick={() => onRegenerate('title')}
+                disabled={isRegenerating === 'title'}
+                className="h-7 text-xs gap-1"
+              >
+                {isRegenerating === 'title' ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3 h-3" />
+                )}
+                Recriar com IA
+              </Button>
+            </div>
+            <Input
+              value={article.title || ''}
+              onChange={(e) => onFieldUpdate('title', e.target.value)}
+              placeholder="Título do artigo"
+              className="text-sm"
+            />
+          </div>
+
+          {/* Featured Image */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Imagem Destacada</Label>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onRegenerate('image')}
+                disabled={isRegenerating === 'image'}
+                className="h-7 text-xs gap-1"
+              >
+                {isRegenerating === 'image' ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-3 h-3" />
+                )}
+                Refazer
+              </Button>
+            </div>
+            {article.featured_image_url ? (
+              <img
+                src={article.featured_image_url}
+                alt="Featured"
+                className="w-full h-44 object-cover rounded-lg border"
+              />
+            ) : (
+              <div className="w-full h-44 bg-muted rounded-lg border flex items-center justify-center">
+                <ImageIcon className="w-8 h-8 text-muted-foreground" />
+              </div>
+            )}
+          </div>
+
+          {/* Meta Description */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Meta-Descrição</Label>
+              <Button
+                size="sm"
+                onClick={() => onRegenerate('excerpt')}
+                disabled={isRegenerating === 'excerpt'}
+                className="h-7 text-xs gap-1"
+              >
+                {isRegenerating === 'excerpt' ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3 h-3" />
+                )}
+                Recriar com IA
+              </Button>
+            </div>
+            <Textarea
+              value={article.excerpt || ''}
+              onChange={(e) => onFieldUpdate('excerpt', e.target.value)}
+              placeholder="Descrição curta para SEO"
+              rows={4}
+              className="text-sm resize-none"
+            />
+            <p className="text-xs text-muted-foreground text-right">
+              {excerptLength}/160 caracteres
+            </p>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="seo" className="flex-1 overflow-auto m-0 p-4">
+          <SEOOptimizationPanel 
+            content={article.content} 
+            keyword={article.keyword} 
+          />
+        </TabsContent>
+      </Tabs>
+
+      {/* Editor/HTML Toggle */}
+      <div className="border-t p-3">
+        <Tabs value={activeTab} onValueChange={(v) => onActiveTabChange(v as 'visual' | 'html')}>
+          <TabsList className="w-full">
+            <TabsTrigger value="visual" className="flex-1 gap-2">
+              <Eye className="w-4 h-4" />
+              Editor
+            </TabsTrigger>
+            <TabsTrigger value="html" className="flex-1 gap-2">
+              <Code className="w-4 h-4" />
+              HTML
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+    </div>
+  );
+}
