@@ -16,7 +16,9 @@ import {
   Zap,
   FileEdit,
   Layers,
+  Calendar,
 } from 'lucide-react';
+import logoSeo from '@/assets/logo-grupo-seo.png';
 
 interface NavItem {
   label: string;
@@ -36,8 +38,9 @@ const navGroups: NavGroup[] = [
   {
     title: 'Início',
     items: [
-      { label: 'Academia', icon: GraduationCap, href: '/academia' },
       { label: 'Painel', icon: LayoutDashboard, href: '/' },
+      { label: 'Calendário', icon: Calendar, href: '/calendar', badge: 'Novo', badgeVariant: 'orange', iconColor: '#10B981' },
+      { label: 'Academia', icon: GraduationCap, href: '/academia' },
     ],
   },
   {
@@ -59,16 +62,14 @@ const navGroups: NavGroup[] = [
         label: 'Repostagem', 
         icon: FileEdit, 
         href: '/news-rewriter',
-        badge: 'Novo',
-        badgeVariant: 'orange',
         iconColor: '#10B981',
       },
       { 
         label: 'Em Massa', 
         icon: Layers, 
         href: '/bulk-generator',
-        badge: 'Novo',
-        badgeVariant: 'accent',
+        badge: 'Pro',
+        badgeVariant: 'premium',
         iconColor: '#8B5CF6',
       },
     ],
@@ -161,11 +162,13 @@ export function Sidebar() {
       'h-screen flex flex-col bg-gradient-sidebar border-r border-sidebar-border',
       'transition-all duration-300 ease-in-out w-[72px]'
     )}>
-      {/* Logo */}
+      {/* Logo - GRUPO SEO MKT */}
       <div className="flex items-center justify-center px-2 h-16 border-b border-sidebar-border">
-        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-primary shadow-glow-primary">
-          <span className="text-lg font-bold text-primary-foreground">MA</span>
-        </div>
+        <img 
+          src={logoSeo} 
+          alt="GRUPO SEO MKT" 
+          className="w-10 h-10 rounded-xl"
+        />
       </div>
 
       {/* Main Navigation */}

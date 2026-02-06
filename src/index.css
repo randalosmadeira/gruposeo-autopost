@@ -2,19 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ContentFactory RDM - Design System
-   Modern SaaS aesthetic with deep blues, warm oranges, and clean gradients
+/* GRUPO SEO MARKETING - Design System
+   Clean white-background design with orange and blue accent colors
+   Identidade visual baseada na marca SEO MKT
 */
 
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 @layer base {
   :root {
-    /* Base Colors */
-    --background: 210 20% 98%;
+    /* Base Colors - White dominant */
+    --background: 0 0% 100%;
     --foreground: 222 47% 11%;
 
-    /* Card surfaces */
+    /* Card surfaces - Pure white */
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
 
@@ -22,22 +23,22 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    /* Primary: Deep Blue */
-    --primary: 217 91% 60%;
+    /* Primary: Deep Navy Blue (#001957) */
+    --primary: 222 100% 17%;
     --primary-foreground: 0 0% 100%;
-    --primary-dark: 222 47% 25%;
-    --primary-light: 214 100% 97%;
+    --primary-dark: 222 100% 12%;
+    --primary-light: 220 100% 96%;
 
-    /* Secondary: Slate */
-    --secondary: 210 40% 96%;
+    /* Secondary: Light Gray */
+    --secondary: 220 14% 96%;
     --secondary-foreground: 222 47% 11%;
 
     /* Muted */
-    --muted: 210 40% 96%;
+    --muted: 220 14% 96%;
     --muted-foreground: 215 16% 47%;
 
-    /* Accent: Warm Orange */
-    --accent: 25 95% 53%;
+    /* Accent: Warm Orange (from GRUPO SEO MKT logo) */
+    --accent: 30 100% 50%;
     --accent-foreground: 0 0% 100%;
     --accent-light: 38 92% 50%;
 
@@ -63,42 +64,43 @@
     --destructive-foreground: 0 0% 100%;
 
     /* Borders & Inputs */
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 217 91% 60%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 222 100% 17%;
 
     /* Border Radius */
     --radius: 0.75rem;
 
-    /* Sidebar */
-    --sidebar-background: 222 47% 8%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217 91% 60%;
+    /* Sidebar - Dark navy */
+    --sidebar-background: 222 100% 10%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 30 100% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 222 47% 14%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 222 47% 18%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-accent: 222 100% 15%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 222 100% 20%;
+    --sidebar-ring: 30 100% 50%;
 
-    /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%) 0%, hsl(263 70% 50%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(38 92% 50%) 100%);
+    /* Gradients - Orange focus from logo */
+    --gradient-primary: linear-gradient(135deg, hsl(222 100% 17%) 0%, hsl(222 100% 25%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(30 100% 50%) 0%, hsl(40 100% 50%) 100%);
     --gradient-success: linear-gradient(135deg, hsl(142 71% 45%) 0%, hsl(172 66% 50%) 100%);
-    --gradient-info: linear-gradient(135deg, hsl(199 89% 48%) 0%, hsl(217 91% 60%) 100%);
+    --gradient-info: linear-gradient(135deg, hsl(199 89% 48%) 0%, hsl(210 100% 50%) 100%);
     --gradient-premium: linear-gradient(135deg, hsl(263 70% 50%) 0%, hsl(280 85% 60%) 100%);
-    --gradient-dark: linear-gradient(135deg, hsl(222 47% 11%) 0%, hsl(222 47% 20%) 100%);
-    --gradient-sidebar: linear-gradient(180deg, hsl(222 47% 8%) 0%, hsl(222 47% 6%) 100%);
-    --gradient-hero: linear-gradient(135deg, hsl(222 47% 11%) 0%, hsl(222 47% 18%) 50%, hsl(217 91% 25%) 100%);
+    --gradient-dark: linear-gradient(135deg, hsl(222 100% 10%) 0%, hsl(222 100% 17%) 100%);
+    --gradient-sidebar: linear-gradient(180deg, hsl(222 100% 10%) 0%, hsl(222 100% 8%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(222 100% 10%) 0%, hsl(222 100% 15%) 50%, hsl(30 100% 50%) 100%);
+    --gradient-seo: linear-gradient(135deg, hsl(30 100% 50%) 0%, hsl(25 100% 45%) 100%);
 
     /* Shadows */
     --shadow-sm: 0 1px 2px 0 hsl(222 47% 11% / 0.05);
-    --shadow-md: 0 4px 6px -1px hsl(222 47% 11% / 0.1), 0 2px 4px -2px hsl(222 47% 11% / 0.1);
-    --shadow-lg: 0 10px 15px -3px hsl(222 47% 11% / 0.1), 0 4px 6px -4px hsl(222 47% 11% / 0.1);
-    --shadow-xl: 0 20px 25px -5px hsl(222 47% 11% / 0.1), 0 8px 10px -6px hsl(222 47% 11% / 0.1);
-    --shadow-glow-primary: 0 0 20px hsl(217 91% 60% / 0.3);
-    --shadow-glow-accent: 0 0 20px hsl(25 95% 53% / 0.3);
-    --shadow-card: 0 1px 3px 0 hsl(222 47% 11% / 0.08), 0 1px 2px -1px hsl(222 47% 11% / 0.08);
-    --shadow-card-hover: 0 10px 30px -10px hsl(217 91% 60% / 0.15);
+    --shadow-md: 0 4px 6px -1px hsl(222 47% 11% / 0.08), 0 2px 4px -2px hsl(222 47% 11% / 0.08);
+    --shadow-lg: 0 10px 15px -3px hsl(222 47% 11% / 0.08), 0 4px 6px -4px hsl(222 47% 11% / 0.08);
+    --shadow-xl: 0 20px 25px -5px hsl(222 47% 11% / 0.08), 0 8px 10px -6px hsl(222 47% 11% / 0.08);
+    --shadow-glow-primary: 0 0 20px hsl(222 100% 17% / 0.2);
+    --shadow-glow-accent: 0 0 20px hsl(30 100% 50% / 0.3);
+    --shadow-card: 0 1px 3px 0 hsl(222 47% 11% / 0.06), 0 1px 2px -1px hsl(222 47% 11% / 0.06);
+    --shadow-card-hover: 0 10px 30px -10px hsl(30 100% 50% / 0.15);
   }
 
   .dark {
