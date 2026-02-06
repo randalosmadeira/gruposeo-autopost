@@ -61,7 +61,7 @@ async function callWordPressAPI<T>(
   const { data, error } = await supabase.functions.invoke<APIResponse<T>>(
     'wordpress-api',
     {
-      body: params,
+      body: { action, ...params },
       headers: {
         'Content-Type': 'application/json',
       },
