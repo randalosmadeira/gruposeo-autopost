@@ -215,10 +215,15 @@ export function BulkPublishModal({
 
   // Get validation message for disabled button
   const getValidationMessage = (): string | null => {
-    if (!platform) return 'Selecione uma plataforma';
-    if (!selectedProject) return 'Selecione um site';
+    if (!platform) return 'Selecione uma plataforma de destino';
+    if (!selectedProject) return 'Selecione um site WordPress conectado';
     return null;
   };
+
+  // Get selected project details
+  const selectedProjectDetails = useMemo(() => {
+    return projects.find(p => p.id === selectedProject);
+  }, [projects, selectedProject]);
 
   // ========== END VALIDATION FUNCTIONS ==========
 
@@ -431,7 +436,7 @@ export function BulkPublishModal({
         className="bg-primary hover:bg-primary/90"
       >
         <Upload className="w-4 h-4 mr-2" />
-        {step === 'destination' ? 'Continuar' : `Publicar ${selectedArticles.length} artigos`}
+        {step === 'destination' ? 'Continuar' : `Publicar ${selectedArticles.length} artigo${selectedArticles.length !== 1 ? 's' : ''}`}
       </Button>
     );
 
@@ -440,10 +445,13 @@ export function BulkPublishModal({
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span tabIndex={0}>{button}</span>
+              <span tabIndex={0} className="cursor-not-allowed">{button}</span>
             </TooltipTrigger>
-            <TooltipContent>
-              <p>{validationMessage}</p>
+            <TooltipContent side="top" className="bg-destructive text-destructive-foreground">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                <p>{validationMessage}</p>
+              </div>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -619,19 +627,30 @@ export function BulkPublishModal({
                   </div>
                 </section>
                 
-                {/* Site Selection */}
+                {/* Site Selection - Required */}
                 {platform && (
                   <section className="space-y-3 animate-fade-in">
-                    <label className="text-sm font-medium text-foreground">
-                      Site conectado
-                    </label>
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm font-medium text-foreground">
+                        Site conectado
+                      </label>
+                      <Badge variant="outline" className="text-xs border-destructive text-destructive">
+                        Obrigatório
+                      </Badge>
+                    </div>
                     
                     <Select value={selectedProject} onValueChange={setSelectedProject}>
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className={cn(
+                        "w-full",
+                        !selectedProject && "border-destructive/50 focus:ring-destructive"
+                      )}>
                         <div className="flex items-center gap-2">
-                          <LinkIcon className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm">
-                            {projects.find(p => p.id === selectedProject)?.domain || 'Selecione um site'}
+                          <Globe className="w-4 h-4 text-muted-foreground" />
+                          <span className={cn(
+                            "text-sm",
+                            !selectedProject && "text-muted-foreground"
+                          )}>
+                            {selectedProjectDetails?.domain || 'Selecione o site de destino'}
                           </span>
                         </div>
                       </SelectTrigger>
@@ -655,17 +674,17 @@ export function BulkPublishModal({
                         <div className="max-h-64 overflow-y-auto">
                           {filteredSites.length === 0 ? (
                             <div className="p-4 text-center text-sm text-muted-foreground">
-                              Nenhum site encontrado
+                              Nenhum site WordPress encontrado
                             </div>
                           ) : (
                             filteredSites.map(site => (
                               <SelectItem key={site.id} value={site.id}>
                                 <div className="flex items-center gap-3 py-1">
                                   <Globe className="w-4 h-4 text-primary flex-shrink-0" />
-                                  <div>
+                                  <div className="flex flex-col">
                                     <span className="text-sm font-medium">{site.name}</span>
-                                    <span className="text-xs text-muted-foreground ml-2">
-                                      {site.domain}
+                                    <span className="text-xs text-muted-foreground">
+                                      {site.wordpress_url || site.domain}
                                     </span>
                                   </div>
                                 </div>
@@ -676,10 +695,36 @@ export function BulkPublishModal({
                       </SelectContent>
                     </Select>
 
+                    {/* Selected Site Preview */}
+                    {selectedProjectDetails && (
+                      <div className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-lg animate-fade-in">
+                        <div className="p-2 bg-primary/10 rounded-lg">
+                          <Globe className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {selectedProjectDetails.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {selectedProjectDetails.wordpress_url || selectedProjectDetails.domain}
+                          </p>
+                        </div>
+                        <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                      </div>
+                    )}
+
                     {filteredSites.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        Nenhum projeto WordPress configurado. Configure um projeto primeiro.
-                      </p>
+                      <div className="flex items-center gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                        <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-destructive">
+                            Nenhum site WordPress configurado
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Configure um projeto WordPress primeiro para publicar artigos.
+                          </p>
+                        </div>
+                      </div>
                     )}
                   </section>
                 )}
@@ -750,13 +795,29 @@ export function BulkPublishModal({
 
                     {/* Global Categories Selection */}
                     {applySameCategoriesForAll && categories.length > 0 && (
-                      <div className="space-y-3">
-                        <label className="text-sm font-medium text-foreground">
-                          Selecione as categorias
-                        </label>
+                      <div className="space-y-4 p-4 border rounded-lg bg-card">
+                        <div className="flex items-center justify-between">
+                          <label className="text-sm font-medium text-foreground">
+                            Selecione as categorias para todos os artigos
+                          </label>
+                          {globalCategories.length > 0 && (
+                            <Badge variant="secondary" className="bg-primary/10 text-primary">
+                              {globalCategories.length} selecionada{globalCategories.length !== 1 ? 's' : ''}
+                            </Badge>
+                          )}
+                        </div>
                         <div className="grid grid-cols-2 gap-3">
                           {categories.map(category => (
-                            <div key={category.id} className="flex items-center gap-2">
+                            <div 
+                              key={category.id} 
+                              className={cn(
+                                "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:border-primary/50",
+                                globalCategories.includes(category.id) 
+                                  ? "border-primary bg-primary/5" 
+                                  : "border-border bg-background"
+                              )}
+                              onClick={() => toggleGlobalCategory(category.id)}
+                            >
                               <Checkbox
                                 id={`global-${category.id}`}
                                 checked={globalCategories.includes(category.id)}
@@ -764,7 +825,7 @@ export function BulkPublishModal({
                               />
                               <label
                                 htmlFor={`global-${category.id}`}
-                                className="text-sm text-foreground cursor-pointer"
+                                className="text-sm text-foreground cursor-pointer flex-1"
                               >
                                 {category.name}
                               </label>
@@ -827,27 +888,34 @@ export function BulkPublishModal({
                       </div>
                     ) : (
                       articlesWithCategories.map((article, index) => (
-                        <article key={article.id} className="space-y-3 animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
-                          <h4 className="text-sm font-medium text-foreground">
-                            {article.title}
-                          </h4>
+                        <article 
+                          key={article.id} 
+                          className="p-4 border rounded-lg bg-card space-y-4 animate-fade-in" 
+                          style={{ animationDelay: `${index * 50}ms` }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-semibold text-foreground line-clamp-1">
+                              {article.title}
+                            </h4>
+                            {article.selectedCategories.length > 0 && (
+                              <Badge variant="secondary" className="bg-primary/10 text-primary text-xs">
+                                {article.selectedCategories.length} categoria{article.selectedCategories.length !== 1 ? 's' : ''}
+                              </Badge>
+                            )}
+                          </div>
                           
-                          {article.selectedCategories.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                              {article.selectedCategories.map(catId => (
-                                <Badge 
-                                  key={catId}
-                                  className="bg-primary/10 text-primary text-xs px-2 py-1"
-                                >
-                                  {getCategoryName(catId)}
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
-                          
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-2 gap-2">
                             {categories.map(category => (
-                              <div key={category.id} className="flex items-center gap-2">
+                              <div 
+                                key={category.id} 
+                                className={cn(
+                                  "flex items-center gap-3 p-2.5 rounded-md border cursor-pointer transition-all hover:border-primary/50",
+                                  article.selectedCategories.includes(category.id) 
+                                    ? "border-primary bg-primary/5" 
+                                    : "border-border bg-background"
+                                )}
+                                onClick={() => toggleArticleCategory(article.id, category.id)}
+                              >
                                 <Checkbox
                                   id={`${article.id}-${category.id}`}
                                   checked={article.selectedCategories.includes(category.id)}
@@ -855,17 +923,13 @@ export function BulkPublishModal({
                                 />
                                 <label
                                   htmlFor={`${article.id}-${category.id}`}
-                                  className="text-sm text-foreground cursor-pointer"
+                                  className="text-sm text-foreground cursor-pointer flex-1"
                                 >
                                   {category.name}
                                 </label>
                               </div>
                             ))}
                           </div>
-                          
-                          {index < articlesWithCategories.length - 1 && (
-                            <div className="border-b border-border mt-6" />
-                          )}
                         </article>
                       ))
                     )}
