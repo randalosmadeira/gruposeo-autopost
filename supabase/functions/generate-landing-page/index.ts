@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createLogger, createRequestId } from "../_shared/logger.ts";
+
+const FUNCTION_NAME = "generate-landing-page";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -200,16 +203,23 @@ Comece agora com a landing page completa:`;
 }
 
 serve(async (req) => {
+  const requestId = createRequestId();
+  const log = createLogger(FUNCTION_NAME, requestId);
+  const startTime = Date.now();
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    log.requestStart(req.method);
+
     // ========== AUTHENTICATION ==========
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
+      log.authFailure("missing_or_invalid_header");
       return new Response(
-        JSON.stringify({ error: "Autorização necessária" }),
+        JSON.stringify({ error: "Autorização necessária", request_id: requestId }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -224,15 +234,15 @@ serve(async (req) => {
     const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: authError } = await supabase.auth.getClaims(token);
     if (authError || !claimsData?.claims) {
-      console.error("Auth error:", authError);
+      log.authFailure(authError?.message || "claims_not_found");
       return new Response(
-        JSON.stringify({ error: "Usuário não autenticado" }),
+        JSON.stringify({ error: "Usuário não autenticado", request_id: requestId }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
-    const userId = claimsData.claims.sub;
-    console.log("Authenticated user:", userId);
+    const userId = claimsData.claims.sub as string;
+    log.authSuccess(userId);
     // ========== END AUTHENTICATION ==========
 
     const { config } = await req.json() as { config: LandingPageConfig };
@@ -245,7 +255,7 @@ serve(async (req) => {
     const systemPrompt = buildSystemPrompt(config);
     const userPrompt = buildUserPrompt(config);
 
-    console.log("Generating landing page with template:", config.template || "custom");
+    log.info("generation_started", { template: config.template || "custom", keyword: config.keyword });
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -265,31 +275,36 @@ serve(async (req) => {
 
     if (!response.ok) {
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }), {
+        log.warn("rate_limit_exceeded");
+        return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos.", request_id: requestId }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Créditos de IA insuficientes." }), {
+        log.warn("payment_required");
+        return new Response(JSON.stringify({ error: "Créditos de IA insuficientes.", request_id: requestId }), {
           status: 402,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const text = await response.text();
-      console.error("AI gateway error:", response.status, text);
-      return new Response(JSON.stringify({ error: "Erro no gateway de IA" }), {
+      log.error("ai_gateway_error", { status: response.status, response: text });
+      return new Response(JSON.stringify({ error: "Erro no gateway de IA", request_id: requestId }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    log.info("stream_started", { model: "google/gemini-3-flash-preview" });
+
     return new Response(response.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (error) {
-    console.error("generate-landing-page error:", error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Erro desconhecido" }), {
+    log.error("generation_error", { error: error instanceof Error ? error.message : "unknown" });
+    log.requestEnd(500, Date.now() - startTime);
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Erro desconhecido", request_id: requestId }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
