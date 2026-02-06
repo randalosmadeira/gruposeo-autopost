@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '2.4.0';
+const PLUGIN_VERSION = '2.5.0';
 const PLUGIN_LAST_UPDATE = '2025-02-06';
 
 const features = [
@@ -36,13 +36,13 @@ const features = [
   },
   {
     icon: Webhook,
-    title: 'Webhooks em Tempo Real',
-    description: 'Receba notificações automáticas quando posts são criados, editados ou excluídos.',
+    title: 'Social Auto-Poster',
+    description: 'Fila automática para publicação em redes sociais com templates personalizáveis.',
   },
   {
     icon: Settings,
-    title: 'Autor Padrão',
-    description: 'Configure autor, categoria e status padrão para artigos publicados via API.',
+    title: 'Queue System',
+    description: 'Sistema de fila avançado com prioridades, retry automático e backoff exponencial.',
   },
   {
     icon: Shield,
@@ -51,8 +51,8 @@ const features = [
   },
   {
     icon: Zap,
-    title: 'Deduplicação de Imagens',
-    description: 'Sistema MD5 com filtro anti-logo que evita baixar ícones como featured image.',
+    title: 'Cron Scheduler',
+    description: 'Agendador interno com diagnóstico, histórico de execução e controle de jobs.',
   },
 ];
 
@@ -102,6 +102,9 @@ export default function WordPressPluginPage() {
         { path: 'includes/class-cfrdm-structured-logs.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-structured-logs.php' },
         { path: 'includes/class-cfrdm-ai-seo.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-seo.php' },
         { path: 'includes/class-cfrdm-image-filter.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-image-filter.php' },
+        { path: 'includes/class-cfrdm-social-poster.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-social-poster.php' },
+        { path: 'includes/class-cfrdm-cron-scheduler.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-cron-scheduler.php' },
+        { path: 'includes/class-cfrdm-content-queue.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-content-queue.php' },
         { path: 'assets/css/admin.css', url: '/wordpress-plugin/contentfactory-rdm/assets/css/admin.css' },
         { path: 'assets/js/admin.js', url: '/wordpress-plugin/contentfactory-rdm/assets/js/admin.js' },
       ];

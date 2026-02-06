@@ -139,6 +139,131 @@ class CFRDM_API {
             'callback' => array(__CLASS__, 'get_log_stats'),
             'permission_callback' => array(__CLASS__, 'verify_api_key'),
         ));
+        
+        // ===== Social Poster Endpoints =====
+        
+        // Get social accounts
+        register_rest_route('cfrdm/v1', '/social/accounts', array(
+            array(
+                'methods' => 'GET',
+                'callback' => array(__CLASS__, 'get_social_accounts'),
+                'permission_callback' => array(__CLASS__, 'verify_api_key'),
+            ),
+            array(
+                'methods' => 'POST',
+                'callback' => array(__CLASS__, 'add_social_account'),
+                'permission_callback' => array(__CLASS__, 'verify_api_key'),
+            ),
+        ));
+        
+        // Social account actions
+        register_rest_route('cfrdm/v1', '/social/accounts/(?P<id>\d+)', array(
+            array(
+                'methods' => 'PUT',
+                'callback' => array(__CLASS__, 'update_social_account'),
+                'permission_callback' => array(__CLASS__, 'verify_api_key'),
+            ),
+            array(
+                'methods' => 'DELETE',
+                'callback' => array(__CLASS__, 'delete_social_account'),
+                'permission_callback' => array(__CLASS__, 'verify_api_key'),
+            ),
+        ));
+        
+        // Social queue
+        register_rest_route('cfrdm/v1', '/social/queue', array(
+            array(
+                'methods' => 'GET',
+                'callback' => array(__CLASS__, 'get_social_queue'),
+                'permission_callback' => array(__CLASS__, 'verify_api_key'),
+            ),
+            array(
+                'methods' => 'POST',
+                'callback' => array(__CLASS__, 'queue_social_post'),
+                'permission_callback' => array(__CLASS__, 'verify_api_key'),
+            ),
+        ));
+        
+        // Social queue stats
+        register_rest_route('cfrdm/v1', '/social/queue/stats', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'get_social_queue_stats'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Social networks list
+        register_rest_route('cfrdm/v1', '/social/networks', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'get_social_networks'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // ===== Content Queue Endpoints =====
+        
+        // Content queue
+        register_rest_route('cfrdm/v1', '/queue', array(
+            array(
+                'methods' => 'GET',
+                'callback' => array(__CLASS__, 'get_content_queue'),
+                'permission_callback' => array(__CLASS__, 'verify_api_key'),
+            ),
+            array(
+                'methods' => 'POST',
+                'callback' => array(__CLASS__, 'push_to_content_queue'),
+                'permission_callback' => array(__CLASS__, 'verify_api_key'),
+            ),
+        ));
+        
+        // Content queue stats
+        register_rest_route('cfrdm/v1', '/queue/stats', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'get_content_queue_stats'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Content queue item actions
+        register_rest_route('cfrdm/v1', '/queue/(?P<id>\d+)/(?P<action>cancel|retry|pause|resume)', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'content_queue_action'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // ===== Cron Scheduler Endpoints =====
+        
+        // Cron jobs
+        register_rest_route('cfrdm/v1', '/cron/jobs', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'get_cron_jobs'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Cron job toggle
+        register_rest_route('cfrdm/v1', '/cron/jobs/(?P<id>\d+)/toggle', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'toggle_cron_job'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Cron job run manually
+        register_rest_route('cfrdm/v1', '/cron/jobs/(?P<name>[a-zA-Z0-9_-]+)/run', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'run_cron_job'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Cron history
+        register_rest_route('cfrdm/v1', '/cron/history', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'get_cron_history'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Cron diagnostics
+        register_rest_route('cfrdm/v1', '/cron/diagnostics', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'get_cron_diagnostics'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
     }
     
     public static function verify_api_key($request) {
@@ -1022,6 +1147,347 @@ class CFRDM_API {
         return new WP_REST_Response(array(
             'success' => true,
             'data' => $stats,
+        ), 200);
+    }
+    
+    // ===== Social Poster API Methods =====
+    
+    /**
+     * Get social accounts
+     */
+    public static function get_social_accounts($request) {
+        $network = $request->get_param('network');
+        $active_only = $request->get_param('active_only') !== 'false';
+        
+        $accounts = CFRDM_Social_Poster::get_accounts($network, $active_only);
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'data' => $accounts,
+        ), 200);
+    }
+    
+    /**
+     * Add social account
+     */
+    public static function add_social_account($request) {
+        $params = $request->get_json_params();
+        
+        if (empty($params['network']) || empty($params['account_name'])) {
+            return new WP_Error(
+                'missing_fields',
+                __('network e account_name são obrigatórios.', 'contentfactory-rdm'),
+                array('status' => 400)
+            );
+        }
+        
+        $id = CFRDM_Social_Poster::add_account($params);
+        
+        if (!$id) {
+            return new WP_Error(
+                'create_failed',
+                __('Falha ao adicionar conta social.', 'contentfactory-rdm'),
+                array('status' => 500)
+            );
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => __('Conta social adicionada!', 'contentfactory-rdm'),
+            'id' => $id,
+        ), 201);
+    }
+    
+    /**
+     * Update social account
+     */
+    public static function update_social_account($request) {
+        $id = intval($request->get_param('id'));
+        $params = $request->get_json_params();
+        
+        $result = CFRDM_Social_Poster::update_account($id, $params);
+        
+        return new WP_REST_Response(array(
+            'success' => $result !== false,
+            'message' => $result !== false 
+                ? __('Conta atualizada!', 'contentfactory-rdm')
+                : __('Falha ao atualizar.', 'contentfactory-rdm'),
+        ), 200);
+    }
+    
+    /**
+     * Delete social account
+     */
+    public static function delete_social_account($request) {
+        $id = intval($request->get_param('id'));
+        
+        CFRDM_Social_Poster::delete_account($id);
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => __('Conta removida!', 'contentfactory-rdm'),
+        ), 200);
+    }
+    
+    /**
+     * Get social queue
+     */
+    public static function get_social_queue($request) {
+        $args = array(
+            'post_id' => $request->get_param('post_id'),
+            'account_id' => $request->get_param('account_id'),
+            'network' => $request->get_param('network'),
+            'status' => $request->get_param('status'),
+            'limit' => $request->get_param('limit') ?: 50,
+        );
+        
+        $items = CFRDM_Social_Poster::get_queue($args);
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'data' => $items,
+        ), 200);
+    }
+    
+    /**
+     * Queue social post
+     */
+    public static function queue_social_post($request) {
+        $params = $request->get_json_params();
+        
+        if (empty($params['post_id']) || empty($params['account_id'])) {
+            return new WP_Error(
+                'missing_fields',
+                __('post_id e account_id são obrigatórios.', 'contentfactory-rdm'),
+                array('status' => 400)
+            );
+        }
+        
+        $result = CFRDM_Social_Poster::queue_post(
+            $params['post_id'],
+            $params['account_id'],
+            $params['options'] ?? array()
+        );
+        
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => __('Post adicionado à fila!', 'contentfactory-rdm'),
+            'queue_id' => $result,
+        ), 201);
+    }
+    
+    /**
+     * Get social queue stats
+     */
+    public static function get_social_queue_stats($request) {
+        $stats = CFRDM_Social_Poster::get_queue_stats();
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'data' => $stats,
+        ), 200);
+    }
+    
+    /**
+     * Get available social networks
+     */
+    public static function get_social_networks($request) {
+        return new WP_REST_Response(array(
+            'success' => true,
+            'data' => CFRDM_Social_Poster::get_networks(),
+        ), 200);
+    }
+    
+    // ===== Content Queue API Methods =====
+    
+    /**
+     * Get content queue
+     */
+    public static function get_content_queue($request) {
+        $args = array(
+            'queue_type' => $request->get_param('queue_type'),
+            'action' => $request->get_param('action'),
+            'status' => $request->get_param('status'),
+            'post_id' => $request->get_param('post_id'),
+            'article_id' => $request->get_param('article_id'),
+            'project_id' => $request->get_param('project_id'),
+            'limit' => $request->get_param('limit') ?: 50,
+            'offset' => $request->get_param('offset') ?: 0,
+        );
+        
+        $items = CFRDM_Content_Queue::get_items($args);
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'data' => $items,
+        ), 200);
+    }
+    
+    /**
+     * Push to content queue
+     */
+    public static function push_to_content_queue($request) {
+        $params = $request->get_json_params();
+        
+        if (empty($params['queue_type']) || empty($params['action']) || !isset($params['payload'])) {
+            return new WP_Error(
+                'missing_fields',
+                __('queue_type, action e payload são obrigatórios.', 'contentfactory-rdm'),
+                array('status' => 400)
+            );
+        }
+        
+        $id = CFRDM_Content_Queue::push(
+            $params['queue_type'],
+            $params['action'],
+            $params['payload'],
+            $params['options'] ?? array()
+        );
+        
+        if (!$id) {
+            return new WP_Error(
+                'queue_failed',
+                __('Falha ao adicionar à fila.', 'contentfactory-rdm'),
+                array('status' => 500)
+            );
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => __('Item adicionado à fila!', 'contentfactory-rdm'),
+            'queue_id' => $id,
+        ), 201);
+    }
+    
+    /**
+     * Get content queue stats
+     */
+    public static function get_content_queue_stats($request) {
+        $queue_type = $request->get_param('queue_type');
+        $stats = CFRDM_Content_Queue::get_stats($queue_type);
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'data' => $stats,
+        ), 200);
+    }
+    
+    /**
+     * Content queue item action
+     */
+    public static function content_queue_action($request) {
+        $id = intval($request->get_param('id'));
+        $action = $request->get_param('action');
+        
+        switch ($action) {
+            case 'cancel':
+                $result = CFRDM_Content_Queue::cancel($id);
+                break;
+            case 'retry':
+                $result = CFRDM_Content_Queue::retry($id);
+                break;
+            case 'pause':
+                $result = CFRDM_Content_Queue::pause($id);
+                break;
+            case 'resume':
+                $result = CFRDM_Content_Queue::resume($id);
+                break;
+            default:
+                return new WP_Error(
+                    'invalid_action',
+                    __('Ação inválida.', 'contentfactory-rdm'),
+                    array('status' => 400)
+                );
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => $result !== false,
+            'message' => $result !== false 
+                ? __('Ação executada!', 'contentfactory-rdm')
+                : __('Falha ao executar ação.', 'contentfactory-rdm'),
+        ), 200);
+    }
+    
+    // ===== Cron Scheduler API Methods =====
+    
+    /**
+     * Get cron jobs
+     */
+    public static function get_cron_jobs($request) {
+        $enabled_only = $request->get_param('enabled_only') === 'true';
+        $jobs = CFRDM_Cron_Scheduler::get_jobs($enabled_only);
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'data' => $jobs,
+        ), 200);
+    }
+    
+    /**
+     * Toggle cron job
+     */
+    public static function toggle_cron_job($request) {
+        $id = intval($request->get_param('id'));
+        $params = $request->get_json_params();
+        $enabled = isset($params['enabled']) ? (bool) $params['enabled'] : true;
+        
+        $result = CFRDM_Cron_Scheduler::toggle_job($id, $enabled);
+        
+        return new WP_REST_Response(array(
+            'success' => $result !== false,
+            'message' => $result !== false 
+                ? ($enabled ? __('Job ativado!', 'contentfactory-rdm') : __('Job desativado!', 'contentfactory-rdm'))
+                : __('Falha ao alterar status.', 'contentfactory-rdm'),
+        ), 200);
+    }
+    
+    /**
+     * Run cron job manually
+     */
+    public static function run_cron_job($request) {
+        $name = sanitize_text_field($request->get_param('name'));
+        
+        $result = CFRDM_Cron_Scheduler::run_job($name, true);
+        
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => __('Job executado!', 'contentfactory-rdm'),
+            'data' => $result,
+        ), 200);
+    }
+    
+    /**
+     * Get cron history
+     */
+    public static function get_cron_history($request) {
+        $job_name = $request->get_param('job_name');
+        $limit = $request->get_param('limit') ?: 50;
+        
+        $history = CFRDM_Cron_Scheduler::get_history($job_name, $limit);
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'data' => $history,
+        ), 200);
+    }
+    
+    /**
+     * Get cron diagnostics
+     */
+    public static function get_cron_diagnostics($request) {
+        $diagnostics = CFRDM_Cron_Scheduler::get_diagnostics();
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'data' => $diagnostics,
         ), 200);
     }
 }
