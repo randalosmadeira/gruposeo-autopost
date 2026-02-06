@@ -49,12 +49,18 @@ import {
   Wand2,
   Play,
   Settings,
+  Eye,
+  ListChecks,
+  TableIcon,
+  HelpCircle,
+  FileCheck,
+  Bot,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { ToneVoiceConfig, AIModelSelector } from '@/components/shared';
+import { ToneVoiceConfig, AIModelSelector, ContentStructureConfig } from '@/components/shared';
 
 // Types
 interface ArticleRow {
@@ -101,7 +107,26 @@ export default function BulkArticleGenerator() {
     pointOfView: 'terceira-singular',
     language: 'pt-BR',
     aiModel: 'standard',
+    // Content structure options (using same naming as ContentStructureConfig)
+    metaDescription: true,
+    lists: true,
+    tables: false,
+    conclusion: true,
+    faq: true,
+    internalLinking: false,
+    projectId: '',
+    // SEO options
+    seoOptimization: true,
+    humanizeContent: false,
   });
+
+  // Projects for internal linking
+  const { projects } = useProjects();
+  const connectedProjects = projects.filter(p => p.is_connected);
+
+  // Preview dialog state
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+  const [previewArticle, setPreviewArticle] = useState<ArticleRow | null>(null);
 
   // Stats
   const filledArticles = articles.filter(a => a.keyword.trim());
@@ -275,14 +300,15 @@ export default function BulkArticleGenerator() {
               tone: globalConfig.tone === 'custom' ? globalConfig.customTone : globalConfig.tone,
               pointOfView: globalConfig.pointOfView,
               language: globalConfig.language,
-              // SEO defaults
-              seoOptimization: true,
-              includeFaq: true,
+              // Content structure from globalConfig
+              seoOptimization: globalConfig.seoOptimization,
+              includeFaq: globalConfig.faq,
               faqCount: 5,
-              includeTable: false,
-              includeList: true,
-              includeConclusion: true,
-              includeMetaDescription: true,
+              includeTable: globalConfig.tables,
+              includeList: globalConfig.lists,
+              includeConclusion: globalConfig.conclusion,
+              includeMetaDescription: globalConfig.metaDescription,
+              humanizeContent: globalConfig.humanizeContent,
               secondaryKeywords: '',
             },
           },
@@ -417,6 +443,25 @@ export default function BulkArticleGenerator() {
                 onLanguageChange={(v) => setGlobalConfig(prev => ({ ...prev, language: v }))}
               />
 
+              {/* Content Structure */}
+              <ContentStructureConfig
+                metaDescription={globalConfig.metaDescription}
+                onMetaDescriptionChange={(v) => setGlobalConfig(prev => ({ ...prev, metaDescription: v }))}
+                lists={globalConfig.lists}
+                onListsChange={(v) => setGlobalConfig(prev => ({ ...prev, lists: v }))}
+                tables={globalConfig.tables}
+                onTablesChange={(v) => setGlobalConfig(prev => ({ ...prev, tables: v }))}
+                conclusion={globalConfig.conclusion}
+                onConclusionChange={(v) => setGlobalConfig(prev => ({ ...prev, conclusion: v }))}
+                faq={globalConfig.faq}
+                onFaqChange={(v) => setGlobalConfig(prev => ({ ...prev, faq: v }))}
+                internalLinking={globalConfig.internalLinking}
+                onInternalLinkingChange={(v) => setGlobalConfig(prev => ({ ...prev, internalLinking: v }))}
+                projectId={globalConfig.projectId}
+                onProjectIdChange={(v) => setGlobalConfig(prev => ({ ...prev, projectId: v }))}
+                connectedProjects={connectedProjects}
+              />
+
               {/* AI Model */}
               <AIModelSelector
                 value={globalConfig.aiModel}
@@ -529,16 +574,32 @@ export default function BulkArticleGenerator() {
                       {getStatusBadge(article.status)}
                     </TableCell>
                     <TableCell>
-                      {article.status === 'pending' && !article.keyword && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => removeRow(article.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {article.keyword.trim() && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-primary"
+                            onClick={() => {
+                              setPreviewArticle(article);
+                              setShowPreviewDialog(true);
+                            }}
+                            title="Preview do Prompt"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {article.status === 'pending' && !article.keyword && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => removeRow(article.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -630,6 +691,133 @@ export default function BulkArticleGenerator() {
                   Gerar Títulos
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Preview Prompt Dialog */}
+      <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bot className="w-5 h-5 text-primary" />
+              Preview do Prompt
+            </DialogTitle>
+            <DialogDescription>
+              Prévia do que será enviado para a IA para gerar o artigo.
+            </DialogDescription>
+          </DialogHeader>
+          {previewArticle && (
+            <div className="space-y-4 py-4">
+              {/* Article Info */}
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <h4 className="font-semibold text-sm text-muted-foreground">Informações do Artigo</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Palavra-chave:</span>
+                    <p className="font-medium">{previewArticle.keyword}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Título:</span>
+                    <p className="font-medium">{previewArticle.title || `${previewArticle.keyword}: Guia Completo`}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Tamanho:</span>
+                    <p className="font-medium">{articleSizes.find(s => s.value === previewArticle.size)?.label || previewArticle.size}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Tipo:</span>
+                    <p className="font-medium">Blog Informativo</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tone & Voice */}
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <h4 className="font-semibold text-sm text-muted-foreground">Tom de Voz & Estilo</h4>
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Tom:</span>
+                    <p className="font-medium capitalize">{globalConfig.tone === 'custom' ? globalConfig.customTone : globalConfig.tone}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Ponto de Vista:</span>
+                    <p className="font-medium">{globalConfig.pointOfView}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Idioma:</span>
+                    <p className="font-medium">{globalConfig.language}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content Structure */}
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <h4 className="font-semibold text-sm text-muted-foreground">Estrutura do Conteúdo</h4>
+                <div className="flex flex-wrap gap-2">
+                  {globalConfig.metaDescription && (
+                    <Badge variant="secondary" className="gap-1">
+                      <FileCheck className="w-3 h-3" />
+                      Meta Descrição
+                    </Badge>
+                  )}
+                  {globalConfig.lists && (
+                    <Badge variant="secondary" className="gap-1">
+                      <ListChecks className="w-3 h-3" />
+                      Listas
+                    </Badge>
+                  )}
+                  {globalConfig.tables && (
+                    <Badge variant="secondary" className="gap-1">
+                      <TableIcon className="w-3 h-3" />
+                      Tabelas
+                    </Badge>
+                  )}
+                  {globalConfig.conclusion && (
+                    <Badge variant="secondary" className="gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Conclusão
+                    </Badge>
+                  )}
+                  {globalConfig.faq && (
+                    <Badge variant="secondary" className="gap-1">
+                      <HelpCircle className="w-3 h-3" />
+                      FAQ
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* SEO Options */}
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <h4 className="font-semibold text-sm text-muted-foreground">Opções SEO</h4>
+                <div className="flex flex-wrap gap-2">
+                  {globalConfig.seoOptimization && (
+                    <Badge className="bg-green-100 text-green-700 hover:bg-green-100 gap-1">
+                      <Sparkles className="w-3 h-3" />
+                      Otimização SEO
+                    </Badge>
+                  )}
+                  {globalConfig.humanizeContent && (
+                    <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 gap-1">
+                      <Bot className="w-3 h-3" />
+                      Humanizar Conteúdo
+                    </Badge>
+                  )}
+                  {globalConfig.internalLinking && (
+                    <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 gap-1">
+                      <ArrowRight className="w-3 h-3" />
+                      Linkagem Interna
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPreviewDialog(false)}>
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>

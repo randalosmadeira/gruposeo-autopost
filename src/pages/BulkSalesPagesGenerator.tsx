@@ -56,6 +56,12 @@ import {
   Frown,
   Star,
   Settings,
+  Eye,
+  ListChecks,
+  TableIcon,
+  HelpCircle,
+  FileCheck,
+  Bot,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
@@ -120,6 +126,10 @@ export default function BulkSalesPagesGenerator() {
   const [defaultSize, setDefaultSize] = useState('medium');
   const [showHeadlinesDialog, setShowHeadlinesDialog] = useState(false);
   const [generatingHeadlines, setGeneratingHeadlines] = useState(false);
+  
+  // Preview dialog state
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+  const [previewPage, setPreviewPage] = useState<SalesPageRow | null>(null);
 
   // Global config state
   const [globalConfig, setGlobalConfig] = useState({
@@ -754,16 +764,32 @@ export default function BulkSalesPagesGenerator() {
                       {getStatusBadge(page.status)}
                     </TableCell>
                     <TableCell>
-                      {page.status === 'pending' && !page.keyword && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => removeRow(page.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {page.keyword.trim() && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-orange-600"
+                            onClick={() => {
+                              setPreviewPage(page);
+                              setShowPreviewDialog(true);
+                            }}
+                            title="Preview do Prompt"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {page.status === 'pending' && !page.keyword && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => removeRow(page.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -860,6 +886,193 @@ export default function BulkSalesPagesGenerator() {
                   Gerar Headlines
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Preview Prompt Dialog */}
+      <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bot className="w-5 h-5 text-orange-600" />
+              Preview do Prompt
+            </DialogTitle>
+            <DialogDescription>
+              Prévia do que será enviado para a IA para gerar a página de vendas.
+            </DialogDescription>
+          </DialogHeader>
+          {previewPage && (
+            <div className="space-y-4 py-4">
+              {/* Page Info */}
+              <div className="bg-orange-50 p-4 rounded-lg space-y-2 border border-orange-200">
+                <h4 className="font-semibold text-sm text-orange-700">Informações da Página</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Palavra-chave:</span>
+                    <p className="font-medium">{previewPage.keyword}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Headline:</span>
+                    <p className="font-medium">{previewPage.headline || `${previewPage.keyword}: Landing Page`}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Tamanho:</span>
+                    <p className="font-medium">{pageSizes.find(s => s.value === previewPage.size)?.label || previewPage.size}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Localização:</span>
+                    <p className="font-medium">{previewPage.location || 'Brasil'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Company Info */}
+              {(globalConfig.companyName || globalConfig.companyPhone || globalConfig.companyAddress) && (
+                <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                  <h4 className="font-semibold text-sm text-muted-foreground flex items-center gap-2">
+                    <Building2 className="w-4 h-4" />
+                    Dados da Empresa
+                  </h4>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    {globalConfig.companyName && (
+                      <div>
+                        <span className="text-muted-foreground">Nome:</span>
+                        <p className="font-medium">{globalConfig.companyName}</p>
+                      </div>
+                    )}
+                    {globalConfig.companyPhone && (
+                      <div>
+                        <span className="text-muted-foreground">Telefone:</span>
+                        <p className="font-medium">{globalConfig.companyPhone}</p>
+                      </div>
+                    )}
+                    {globalConfig.companyAddress && (
+                      <div>
+                        <span className="text-muted-foreground">Endereço:</span>
+                        <p className="font-medium">{globalConfig.companyAddress}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Sales Strategy */}
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <h4 className="font-semibold text-sm text-muted-foreground flex items-center gap-2">
+                  <Target className="w-4 h-4" />
+                  Estratégia de Vendas
+                </h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Tipo de Oferta:</span>
+                    <p className="font-medium capitalize">{offerTypes.find(o => o.value === globalConfig.offerType)?.label || globalConfig.offerType}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Objetivo do CTA:</span>
+                    <p className="font-medium">{globalConfig.ctaObjective || 'Não definido'}</p>
+                  </div>
+                  {globalConfig.targetAudience && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Público-alvo:</span>
+                      <p className="font-medium">{globalConfig.targetAudience}</p>
+                    </div>
+                  )}
+                  {globalConfig.painPoint && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Dor Principal:</span>
+                      <p className="font-medium">{globalConfig.painPoint}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Tone & Voice */}
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <h4 className="font-semibold text-sm text-muted-foreground">Tom de Voz & Estilo</h4>
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Tom:</span>
+                    <p className="font-medium capitalize">{globalConfig.tone === 'custom' ? globalConfig.customTone : globalConfig.tone}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Ponto de Vista:</span>
+                    <p className="font-medium">{globalConfig.pointOfView}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Idioma:</span>
+                    <p className="font-medium">{globalConfig.language}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content Structure */}
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <h4 className="font-semibold text-sm text-muted-foreground">Estrutura do Conteúdo</h4>
+                <div className="flex flex-wrap gap-2">
+                  {globalConfig.metaDescription && (
+                    <Badge variant="secondary" className="gap-1">
+                      <FileCheck className="w-3 h-3" />
+                      Meta Descrição
+                    </Badge>
+                  )}
+                  {globalConfig.lists && (
+                    <Badge variant="secondary" className="gap-1">
+                      <ListChecks className="w-3 h-3" />
+                      Listas
+                    </Badge>
+                  )}
+                  {globalConfig.tables && (
+                    <Badge variant="secondary" className="gap-1">
+                      <TableIcon className="w-3 h-3" />
+                      Tabelas
+                    </Badge>
+                  )}
+                  {globalConfig.conclusion && (
+                    <Badge variant="secondary" className="gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Conclusão
+                    </Badge>
+                  )}
+                  {globalConfig.faq && (
+                    <Badge variant="secondary" className="gap-1">
+                      <HelpCircle className="w-3 h-3" />
+                      FAQ
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* SEO Options */}
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <h4 className="font-semibold text-sm text-muted-foreground">Opções SEO</h4>
+                <div className="flex flex-wrap gap-2">
+                  {globalConfig.seoOptimization && (
+                    <Badge className="bg-green-100 text-green-700 hover:bg-green-100 gap-1">
+                      <Sparkles className="w-3 h-3" />
+                      Otimização SEO
+                    </Badge>
+                  )}
+                  {globalConfig.humanizeContent && (
+                    <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 gap-1">
+                      <Bot className="w-3 h-3" />
+                      Humanizar Conteúdo
+                    </Badge>
+                  )}
+                  {globalConfig.generateImages && (
+                    <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 gap-1">
+                      <FileText className="w-3 h-3" />
+                      Gerar {globalConfig.imageCount} Imagem(ns)
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPreviewDialog(false)}>
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
