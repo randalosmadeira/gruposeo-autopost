@@ -124,43 +124,53 @@ REGRAS IMPORTANTES:
   return systemPrompt;
 }
 
-// Check if config has advanced fields
+// Check if config has advanced fields - safely handle undefined values
 function hasAdvancedConfig(config: ArticleConfig): boolean {
-  return !!(config.segment || config.contentType || config.intentType || config.goal);
+  return !!(config?.segment || config?.contentType || config?.intentType || config?.goal);
 }
 
-// Build prompt config for advanced system
+// Build prompt config for advanced system with safe defaults
 function buildPromptConfig(config: ArticleConfig): PromptConfig {
+  // Safely parse secondary keywords
+  let secondaryKeywords: string[] = [];
+  if (config.secondaryKeywords) {
+    if (typeof config.secondaryKeywords === 'string') {
+      secondaryKeywords = config.secondaryKeywords.split(',').map(k => k.trim()).filter(Boolean);
+    } else if (Array.isArray(config.secondaryKeywords)) {
+      secondaryKeywords = config.secondaryKeywords;
+    }
+  }
+
   return {
-    title: config.title || '',
-    keyword: config.keyword,
-    secondaryKeywords: config.secondaryKeywords ? config.secondaryKeywords.split(',').map(k => k.trim()) : [],
+    title: config.title || config.keyword || '',
+    keyword: config.keyword || '',
+    secondaryKeywords,
     language: config.language || 'Português Brasileiro',
     currentYear: new Date().getFullYear(),
-    articleLength: config.wordCount,
-    tone: config.tone,
-    pointOfView: config.pointOfView,
+    articleLength: config.wordCount || 'medium',
+    tone: config.tone || 'profissional',
+    pointOfView: config.pointOfView || 'voce',
     contentType: config.contentType || 'how-to',
     segment: config.segment || 'general',
     goal: config.goal || 'inform',
     intentType: config.intentType || 'informational',
-    includeFaq: config.includeFaq,
+    includeFaq: config.includeFaq ?? true,
     faqCount: config.faqCount || 5,
-    includeTable: config.includeTable,
-    includeList: config.includeList,
-    includeConclusion: config.includeConclusion,
+    includeTable: config.includeTable ?? false,
+    includeList: config.includeList ?? true,
+    includeConclusion: config.includeConclusion ?? true,
     includeMetaDescription: config.includeMetaDescription ?? true,
-    internalLinks: config.internalLinks,
-    sourcesContext: config.sourcesContext,
-    companyName: config.companyName,
-    companyPhone: config.companyPhone,
-    companyAddress: config.companyAddress,
-    targetAudience: config.targetAudience,
-    painPoints: config.painPoints,
-    differentials: config.differentials,
-    ctaObjective: config.ctaObjective,
-    additionalInfo: config.additionalInfo,
-    seoOptimization: config.seoOptimization,
+    internalLinks: config.internalLinks || [],
+    sourcesContext: config.sourcesContext || '',
+    companyName: config.companyName || '',
+    companyPhone: config.companyPhone || '',
+    companyAddress: config.companyAddress || '',
+    targetAudience: config.targetAudience || '',
+    painPoints: config.painPoints || '',
+    differentials: config.differentials || '',
+    ctaObjective: config.ctaObjective || '',
+    additionalInfo: config.additionalInfo || '',
+    seoOptimization: config.seoOptimization ?? true,
     humanizeContent: config.humanizeContent ?? false,
     realtimeData: config.realtimeData ?? false,
   };

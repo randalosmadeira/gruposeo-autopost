@@ -243,30 +243,48 @@ export default function BulkArticleGenerator() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user) throw new Error('Não autenticado');
 
-        // Create article
+        // Create article with full config
         const { data: createdArticle, error: createError } = await supabase
           .from('articles')
           .insert({
             user_id: session.user.id,
             keyword: article.keyword,
-            title: article.title || `${article.keyword}: Guia Completo`,
+            title: article.title || `${article.keyword}: Guia Completo ${new Date().getFullYear()}`,
             status: 'generating',
             type: 'blog',
-            config: { size: article.size, bulkGenerated: true },
+            config: { 
+              size: article.size, 
+              bulkGenerated: true,
+              ...globalConfig,
+            },
           })
           .select('id')
           .single();
 
         if (createError) throw createError;
 
-        // Call generation function
+        // Call generation function with full globalConfig including tone/voice
         const { error } = await supabase.functions.invoke('generate-article', {
           body: {
-            articleId: createdArticle.id,
-            keyword: article.keyword,
-            title: article.title || `${article.keyword}: Guia Completo`,
-            wordCount: article.size,
-            type: 'blog',
+            config: {
+              keyword: article.keyword,
+              title: article.title || `${article.keyword}: Guia Completo ${new Date().getFullYear()}`,
+              wordCount: article.size,
+              type: 'blog',
+              // Tone and voice settings from globalConfig
+              tone: globalConfig.tone === 'custom' ? globalConfig.customTone : globalConfig.tone,
+              pointOfView: globalConfig.pointOfView,
+              language: globalConfig.language,
+              // SEO defaults
+              seoOptimization: true,
+              includeFaq: true,
+              faqCount: 5,
+              includeTable: false,
+              includeList: true,
+              includeConclusion: true,
+              includeMetaDescription: true,
+              secondaryKeywords: '',
+            },
           },
         });
 
@@ -294,7 +312,7 @@ export default function BulkArticleGenerator() {
       title: 'Geração concluída!',
       description: `${toGenerate.length} artigos foram processados.`,
     });
-  }, [filledArticles, toast]);
+  }, [filledArticles, globalConfig, toast]);
 
   const getStatusBadge = (status: ArticleRow['status']) => {
     switch (status) {
