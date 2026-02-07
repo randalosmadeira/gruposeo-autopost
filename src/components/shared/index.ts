@@ -3,10 +3,13 @@ export {
   aiModels, 
   openaiModels,
   geminiModels,
+  creditTierModels,
   getModelByValue, 
   getProviderByModel,
+  getCreditTierByValue,
   type AIModel,
   type AIProvider,
+  type CreditTierModel,
 } from './AIModelSelector';
 export { ContentStructureConfig, type ContentStructureProps } from './ContentStructureConfig';
 export { AdvancedSettings } from './AdvancedSettings';
