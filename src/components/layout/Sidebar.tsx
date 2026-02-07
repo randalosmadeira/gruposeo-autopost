@@ -18,6 +18,8 @@ import {
   Layers,
   Calendar,
   Activity,
+  ChevronDown,
+  FileText,
 } from 'lucide-react';
 import logoSeo from '@/assets/logo-grupo-seo.png';
 
@@ -28,6 +30,7 @@ interface NavItem {
   badge?: string;
   badgeVariant?: 'default' | 'accent' | 'premium' | 'orange';
   iconColor?: string;
+  subItems?: NavItem[];
 }
 
 interface NavGroup {
@@ -52,26 +55,34 @@ const navGroups: NavGroup[] = [
         icon: Zap, 
         href: '/articles/bulk',
         iconColor: '#4169E1',
-      },
-      { 
-        label: 'Landing Page', 
-        icon: Target, 
-        href: '/landing-page/new', 
-        iconColor: '#FF6B2B',
-      },
-      { 
-        label: 'Repostagem', 
-        icon: FileEdit, 
-        href: '/news-rewriter',
-        iconColor: '#10B981',
-      },
-      { 
-        label: 'Em Massa', 
-        icon: Layers, 
-        href: '/bulk-generator',
-        badge: 'Pro',
-        badgeVariant: 'premium',
-        iconColor: '#8B5CF6',
+        subItems: [
+          { 
+            label: 'Artigo', 
+            icon: FileText, 
+            href: '/articles/bulk',
+            iconColor: '#4169E1',
+          },
+          { 
+            label: 'Landing Page', 
+            icon: Target, 
+            href: '/landing-page/new', 
+            iconColor: '#FF6B2B',
+          },
+          { 
+            label: 'Repostagem', 
+            icon: FileEdit, 
+            href: '/news-rewriter',
+            iconColor: '#10B981',
+          },
+          { 
+            label: 'Em Massa', 
+            icon: Layers, 
+            href: '/bulk-generator',
+            badge: 'Pro',
+            badgeVariant: 'premium',
+            iconColor: '#8B5CF6',
+          },
+        ],
       },
     ],
   },
@@ -101,11 +112,19 @@ const bottomNavItems: NavItem[] = [
 
 export function Sidebar() {
   const [collapsed] = useState(true);
+  const [expandedMenu, setExpandedMenu] = useState<string | null>('Artigos IA');
   const location = useLocation();
 
   const isActive = (href: string) => {
     if (href === '/') return location.pathname === '/';
     return location.pathname.startsWith(href);
+  };
+
+  const isParentActive = (item: NavItem) => {
+    if (item.subItems) {
+      return item.subItems.some(sub => isActive(sub.href));
+    }
+    return isActive(item.href);
   };
 
   const badgeColors = {
@@ -115,25 +134,90 @@ export function Sidebar() {
     orange: 'bg-orange-500 text-white',
   };
 
-  const NavLink = ({ item }: { item: NavItem }) => {
+  const NavLink = ({ item, isSubItem = false }: { item: NavItem; isSubItem?: boolean }) => {
     const active = isActive(item.href);
+    const parentActive = isParentActive(item);
     const Icon = item.icon;
+    const hasSubItems = item.subItems && item.subItems.length > 0;
+    const isExpanded = expandedMenu === item.label;
+
+    const handleClick = (e: React.MouseEvent) => {
+      if (hasSubItems) {
+        e.preventDefault();
+        setExpandedMenu(isExpanded ? null : item.label);
+      }
+    };
+
+    if (hasSubItems) {
+      return (
+        <div className="relative">
+          <button
+            onClick={handleClick}
+            className={cn(
+              'w-full flex flex-col items-center gap-1 px-2 py-3 rounded-lg transition-all duration-200',
+              'hover:bg-sidebar-accent group relative',
+              parentActive && 'bg-sidebar-accent text-sidebar-primary',
+              !parentActive && 'text-sidebar-foreground/70 hover:text-sidebar-foreground'
+            )}
+          >
+            <div className="relative">
+              <Icon 
+                className={cn(
+                  'w-5 h-5 flex-shrink-0 transition-colors',
+                  parentActive && !item.iconColor && 'text-sidebar-primary'
+                )} 
+                style={item.iconColor ? { color: item.iconColor } : undefined}
+              />
+              <ChevronDown 
+                className={cn(
+                  'absolute -bottom-1 -right-2 w-3 h-3 transition-transform duration-200',
+                  isExpanded && 'rotate-180'
+                )}
+              />
+            </div>
+            <span className={cn(
+              'text-[10px] font-medium text-center leading-tight',
+              collapsed && 'max-w-[60px] truncate'
+            )}>
+              {item.label}
+            </span>
+            {parentActive && (
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-sidebar-primary rounded-r-full" />
+            )}
+          </button>
+          
+          {/* Sub-items dropdown */}
+          <div className={cn(
+            'overflow-hidden transition-all duration-200',
+            isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+          )}>
+            <div className="py-1 space-y-0.5">
+              {item.subItems?.map((subItem) => (
+                <NavLink key={subItem.href + subItem.label} item={subItem} isSubItem />
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <PrefetchLink
         to={item.href}
         prefetchOnHover
         className={cn(
-          'flex flex-col items-center gap-1 px-2 py-3 rounded-lg transition-all duration-200',
+          'flex flex-col items-center gap-1 rounded-lg transition-all duration-200',
           'hover:bg-sidebar-accent group relative',
           active && 'bg-sidebar-accent text-sidebar-primary',
-          !active && 'text-sidebar-foreground/70 hover:text-sidebar-foreground'
+          !active && 'text-sidebar-foreground/70 hover:text-sidebar-foreground',
+          isSubItem ? 'px-1.5 py-2' : 'px-2 py-3'
         )}
       >
         <div className="relative">
           <Icon 
             className={cn(
-              'w-5 h-5 flex-shrink-0 transition-colors',
+              'flex-shrink-0 transition-colors',
+              isSubItem ? 'w-4 h-4' : 'w-5 h-5',
               active && !item.iconColor && 'text-sidebar-primary'
             )} 
             style={item.iconColor ? { color: item.iconColor } : undefined}
@@ -148,12 +232,13 @@ export function Sidebar() {
           )}
         </div>
         <span className={cn(
-          'text-[10px] font-medium text-center leading-tight',
+          'font-medium text-center leading-tight',
+          isSubItem ? 'text-[9px] max-w-[56px]' : 'text-[10px]',
           collapsed && 'max-w-[60px] truncate'
         )}>
           {item.label}
         </span>
-        {active && (
+        {active && !isSubItem && (
           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-sidebar-primary rounded-r-full" />
         )}
       </PrefetchLink>
