@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import { callGemini, generateGeminiImage, extractJSON } from "../_shared/gemini.ts";
 
 const FUNCTION_NAME = "generate-authority-plan-stream";
 
@@ -8,8 +9,6 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 interface AuthorityPlanRequest {
   centralTheme: string;
@@ -29,58 +28,6 @@ interface ArticlePlan {
 
 function createSSEMessage(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-}
-
-async function callAI(messages: { role: string; content: string }[]): Promise<string> {
-  const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!AI_API_KEY) throw new Error("AI API key is not configured");
-
-  const response = await fetch(AI_GATEWAY_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${AI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
-      messages,
-    }),
-  });
-
-  if (!response.ok) {
-    if (response.status === 429) throw new Error("Rate limit exceeded");
-    if (response.status === 402) throw new Error("Payment required");
-    throw new Error(`AI gateway error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || "";
-}
-
-async function generateImage(prompt: string): Promise<string | null> {
-  const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!AI_API_KEY) return null;
-
-  try {
-    const response = await fetch(AI_GATEWAY_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${AI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [{ role: "user", content: prompt }],
-        modalities: ["image", "text"],
-      }),
-    });
-
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.choices?.[0]?.message?.images?.[0]?.image_url?.url || null;
-  } catch {
-    return null;
-  }
 }
 
 serve(async (req) => {
@@ -188,16 +135,17 @@ serve(async (req) => {
       // Step 1: Research
       await updateProgress("Pesquisando tema e palavras-chave...", 0);
       const researchPrompt = `Analyze topic "${centralTheme}" in ${language}. Return JSON: { mainKeyword, secondaryKeywords: [], searchIntent, contentGaps: [] }`;
-      const research = await callAI([{ role: "user", content: researchPrompt }]);
+      const research = await callGemini([{ role: "user", content: researchPrompt }], { model: "flash" });
       await updateProgress("Pesquisa concluída", 1);
 
       // Step 2: Pillar Plan
       await updateProgress("Planejando artigo pilar...", 1);
       const pillarPrompt = `Create pillar article plan for "${centralTheme}" in ${language}. Return JSON: { title, keyword, outline: [] } (8-12 H2 sections)`;
-      const pillarResult = await callAI([{ role: "user", content: pillarPrompt }]);
+      const pillarResult = await callGemini([{ role: "user", content: pillarPrompt }], { model: "flash" });
       let pillarPlan: ArticlePlan;
       try {
-        pillarPlan = { ...JSON.parse(pillarResult), type: "pillar" };
+        const parsed = extractJSON<{ title: string; keyword: string; outline: string[] }>(pillarResult);
+        pillarPlan = parsed ? { ...parsed, type: "pillar" as const } : { title: `Guia Completo: ${centralTheme}`, keyword: centralTheme.toLowerCase(), outline: ["Introdução", "O que é", "Como funciona", "Conclusão"], type: "pillar" as const };
       } catch {
         pillarPlan = { title: `Guia Completo: ${centralTheme}`, keyword: centralTheme.toLowerCase(), outline: ["Introdução", "O que é", "Como funciona", "Conclusão"], type: "pillar" };
       }
@@ -207,11 +155,11 @@ serve(async (req) => {
       // Step 3: Pillar Content
       await updateProgress("Gerando conteúdo do pilar...", 2);
       const pillarContentPrompt = `Write comprehensive article in ${language} as HTML. Title: ${pillarPlan.title}, Keyword: ${pillarPlan.keyword}, Outline: ${pillarPlan.outline.join(", ")}. Return JSON: { content_html, excerpt, slug }`;
-      const pillarContentResult = await callAI([{ role: "user", content: pillarContentPrompt }]);
+      const pillarContentResult = await callGemini([{ role: "user", content: pillarContentPrompt }], { model: "flash" });
       let pillarContent: { content: string; excerpt: string; slug: string };
       try {
-        const parsed = JSON.parse(pillarContentResult);
-        pillarContent = { content: parsed.content_html || parsed.content || "", excerpt: parsed.excerpt || "", slug: parsed.slug || pillarPlan.keyword.replace(/\s+/g, "-") };
+        const parsed = extractJSON<{ content_html?: string; content?: string; excerpt: string; slug: string }>(pillarContentResult);
+        pillarContent = parsed ? { content: parsed.content_html || parsed.content || "", excerpt: parsed.excerpt || "", slug: parsed.slug || pillarPlan.keyword.replace(/\s+/g, "-") } : { content: `<h2>${pillarPlan.title}</h2><p>Conteúdo gerado...</p>`, excerpt: pillarPlan.title, slug: pillarPlan.keyword.replace(/\s+/g, "-") };
       } catch {
         pillarContent = { content: `<h2>${pillarPlan.title}</h2><p>Conteúdo gerado...</p>`, excerpt: pillarPlan.title, slug: pillarPlan.keyword.replace(/\s+/g, "-") };
       }
@@ -219,7 +167,8 @@ serve(async (req) => {
 
       // Step 4: Pillar Image
       await updateProgress("Gerando imagem do pilar...", 3);
-      const pillarImage = await generateImage(`Professional blog featured image for "${pillarPlan.title}". Modern, clean, 16:9 aspect ratio.`);
+      const pillarImageResult = await generateGeminiImage(`Professional blog featured image for "${pillarPlan.title}". Modern, clean, 16:9 aspect ratio.`, { aspectRatio: "16:9" });
+      const pillarImage = pillarImageResult?.imageData || null;
       await updateProgress("Imagem do pilar gerada", 4);
 
       // Save pillar
@@ -252,11 +201,11 @@ serve(async (req) => {
       // Generate satellite plans
       await updateProgress("Definindo artigos satélites...", 4);
       const satellitePrompt = `Generate ${satelliteCount} satellite article ideas for pillar "${pillarPlan.title}" in ${language}. Return JSON: { satellites: [{ title, keyword, outline: [] }] }`;
-      const satelliteResult = await callAI([{ role: "user", content: satellitePrompt }]);
+      const satelliteResult = await callGemini([{ role: "user", content: satellitePrompt }], { model: "flash" });
       let satellitePlans: ArticlePlan[];
       try {
-        const parsed = JSON.parse(satelliteResult);
-        satellitePlans = (parsed.satellites || []).map((s: ArticlePlan) => ({ ...s, type: "satellite" as const }));
+        const parsed = extractJSON<{ satellites: { title: string; keyword: string; outline: string[] }[] }>(satelliteResult);
+        satellitePlans = parsed?.satellites?.map((s) => ({ ...s, type: "satellite" as const })) || [];
       } catch {
         satellitePlans = Array.from({ length: satelliteCount }, (_, i) => ({
           title: `${centralTheme} - Parte ${i + 1}`,
@@ -276,18 +225,19 @@ serve(async (req) => {
         // Content
         await updateProgress(`Gerando satélite ${i + 1}/${satellitePlans.length}: ${plan.title.substring(0, 30)}...`, stepBase);
         const contentPrompt = `Write article in ${language} as HTML. Title: ${plan.title}, link to pillar "${pillarPlan.title}". Return JSON: { content_html, excerpt, slug }`;
-        const contentResult = await callAI([{ role: "user", content: contentPrompt }]);
+        const contentResult = await callGemini([{ role: "user", content: contentPrompt }], { model: "flash" });
         let content: { content: string; excerpt: string; slug: string };
         try {
-          const parsed = JSON.parse(contentResult);
-          content = { content: parsed.content_html || parsed.content || "", excerpt: parsed.excerpt || "", slug: parsed.slug || plan.keyword.replace(/\s+/g, "-") };
+          const parsed = extractJSON<{ content_html?: string; content?: string; excerpt: string; slug: string }>(contentResult);
+          content = parsed ? { content: parsed.content_html || parsed.content || "", excerpt: parsed.excerpt || "", slug: parsed.slug || plan.keyword.replace(/\s+/g, "-") } : { content: `<h2>${plan.title}</h2><p>Conteúdo...</p>`, excerpt: plan.title, slug: plan.keyword.replace(/\s+/g, "-") };
         } catch {
           content = { content: `<h2>${plan.title}</h2><p>Conteúdo...</p>`, excerpt: plan.title, slug: plan.keyword.replace(/\s+/g, "-") };
         }
 
         // Image
         await updateProgress(`Gerando imagem satélite ${i + 1}...`, stepBase + 1);
-        const image = await generateImage(`Blog featured image for "${plan.title}". Professional, 16:9.`);
+        const imageResult = await generateGeminiImage(`Blog featured image for "${plan.title}". Professional, 16:9.`, { aspectRatio: "16:9" });
+        const image = imageResult?.imageData || null;
 
         // Save
         const { data: article, error } = await supabaseAdmin

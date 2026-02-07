@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import { callGemini, generateGeminiImage } from "../_shared/gemini.ts";
 
 const FUNCTION_NAME = "regenerate-content";
 
@@ -60,11 +61,6 @@ serve(async (req) => {
 
     const { type, keyword, currentTitle, currentContent, language = "pt-BR" }: RegenerateRequest = await req.json();
     log.info("regenerate_start", { type, keyword });
-    
-    const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!AI_API_KEY) {
-      throw new Error("AI API key is not configured");
-    }
 
     let prompt = "";
     let systemPrompt = "";
@@ -122,98 +118,51 @@ No text or watermarks.`;
     }
 
     if (useImageModel) {
-      // Use image generation model
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${AI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash-image",
-          messages: [{ role: "user", content: prompt }],
-          modalities: ["image", "text"],
-        }),
+      // Use Gemini Imagen for image generation
+      const imageResult = await generateGeminiImage(prompt, {
+        aspectRatio: "16:9",
       });
 
-      if (!response.ok) {
-        if (response.status === 429) {
-          log.warn("rate_limit", { type });
-          log.requestEnd(429, Date.now() - startTime);
-          return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again later." }), {
-            status: 429,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        if (response.status === 402) {
-          log.warn("insufficient_credits", { type });
-          log.requestEnd(402, Date.now() - startTime);
-          return new Response(JSON.stringify({ error: "Insufficient credits." }), {
-            status: 402,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
+      if (!imageResult) {
+        log.error("image_generation_failed", { type });
         throw new Error("Image generation failed");
       }
 
-      const data = await response.json();
-      const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-
-      log.info("regenerate_complete", { type, success: !!imageUrl });
+      log.info("regenerate_complete", { type, success: true });
       log.requestEnd(200, Date.now() - startTime);
-      return new Response(JSON.stringify({ result: imageUrl, type: "image" }), {
+      return new Response(JSON.stringify({ result: imageResult.imageData, type: "image" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     } else {
-      // Use text model
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${AI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: prompt },
-          ],
-        }),
-      });
-
-      if (!response.ok) {
-        if (response.status === 429) {
-          log.warn("rate_limit", { type });
-          log.requestEnd(429, Date.now() - startTime);
-          return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again later." }), {
-            status: 429,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        if (response.status === 402) {
-          log.warn("insufficient_credits", { type });
-          log.requestEnd(402, Date.now() - startTime);
-          return new Response(JSON.stringify({ error: "Insufficient credits." }), {
-            status: 402,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        throw new Error("Text generation failed");
-      }
-
-      const data = await response.json();
-      const result = data.choices?.[0]?.message?.content?.trim();
+      // Use Gemini for text generation
+      const result = await callGemini(
+        [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: prompt },
+        ],
+        { model: "flash" }
+      );
 
       log.info("regenerate_complete", { type, success: !!result });
       log.requestEnd(200, Date.now() - startTime);
-      return new Response(JSON.stringify({ result, type }), {
+      return new Response(JSON.stringify({ result: result.trim(), type }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
   } catch (error) {
     log.error("regenerate_error", { error: error instanceof Error ? error.message : "unknown" });
     log.requestEnd(500, Date.now() - startTime);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
+    
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    
+    if (errorMessage.includes("Rate limit")) {
+      return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again later." }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

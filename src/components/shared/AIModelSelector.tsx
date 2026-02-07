@@ -12,32 +12,32 @@ export interface AIModel {
 
 export const aiModels: AIModel[] = [
   { 
-    value: 'standard', 
-    label: 'Padrão', 
-    description: 'Qualidade boa para uso geral',
+    value: 'flash', 
+    label: 'Gemini Flash', 
+    description: 'Rápido e eficiente para uso geral',
     credits: 1,
-    technical: 'Mix de modelos escolhidos automaticamente'
+    technical: 'gemini-2.0-flash'
   },
   { 
-    value: 'premium', 
-    label: 'Premium', 
+    value: 'flash-lite', 
+    label: 'Gemini Flash Lite', 
+    description: 'Ultra-rápido, ideal para tarefas simples',
+    credits: 1,
+    technical: 'gemini-2.0-flash-lite'
+  },
+  { 
+    value: 'pro', 
+    label: 'Gemini Pro', 
     description: 'Máxima qualidade e precisão',
     credits: 2,
-    technical: 'gpt-5 + gpt-5-nano'
+    technical: 'gemini-2.5-pro-preview'
   },
   { 
-    value: 'advanced', 
-    label: 'Avançado', 
-    description: 'Qualidade superior com modelos avançados',
-    credits: 3,
-    technical: 'gemini-2.5-pro + gemini-2.5-flash'
-  },
-  { 
-    value: 'professional', 
-    label: 'Profissional', 
-    description: 'Qualidade máxima com modelos de ponta',
-    credits: 4,
-    technical: 'gemini-3-pro-preview + gemini-3-flash-preview'
+    value: 'flash-thinking', 
+    label: 'Gemini Thinking', 
+    description: 'Raciocínio avançado para tarefas complexas',
+    credits: 2,
+    technical: 'gemini-2.0-flash-thinking-exp'
   },
 ];
 

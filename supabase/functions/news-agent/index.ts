@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import { callGemini } from "../_shared/gemini.ts";
 
 const FUNCTION_NAME = "news-agent";
 
@@ -9,22 +10,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-
 interface NewsSearchResult {
   title: string;
   link: string;
   snippet: string;
   source: string;
   date?: string;
-}
-
-interface RSSItem {
-  title: string;
-  link: string;
-  description: string;
-  pubDate: string;
-  source: string;
 }
 
 async function fetchRSSFeeds(feedUrls: string[], limit: number = 10): Promise<NewsSearchResult[]> {
@@ -117,8 +108,7 @@ async function generateArticle(
   newsItem: NewsSearchResult,
   topic: string,
   language: string,
-  promptTemplate: string,
-  apiKey: string
+  promptTemplate: string
 ): Promise<string | null> {
   const systemPrompt = `Você é um jornalista profissional especializado em ${topic}. 
 Escreva artigos informativos, bem estruturados e otimizados para SEO.
@@ -142,30 +132,15 @@ Instruções:
 Formato de saída em Markdown.`;
 
   try {
-    const response = await fetch(AI_GATEWAY_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        max_tokens: 2000,
-      }),
-    });
+    const content = await callGemini(
+      [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      { model: "flash", maxTokens: 2000 }
+    );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI API error:', response.status, errorText);
-      return null;
-    }
-
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || null;
+    return content || null;
   } catch (error) {
     console.error('Error generating article:', error);
     return null;
@@ -212,11 +187,6 @@ serve(async (req) => {
     }
     log.authSuccess(user.id);
     // ========== END AUTHENTICATION ==========
-
-    const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!AI_API_KEY) {
-      throw new Error("AI API key is not configured");
-    }
 
     const { action, agentId, topics, rssFeeds, language, country, promptTemplate, limit } = await req.json();
 
@@ -271,8 +241,7 @@ serve(async (req) => {
         newsItem,
         topic,
         language || "pt-BR",
-        promptTemplate || "news_article",
-        AI_API_KEY
+        promptTemplate || "news_article"
       );
 
       if (!article) {
@@ -300,8 +269,7 @@ serve(async (req) => {
             selectedNews,
             topic,
             language || "pt-BR",
-            promptTemplate || "news_article",
-            AI_API_KEY
+            promptTemplate || "news_article"
           );
 
           if (article) {
@@ -337,8 +305,18 @@ serve(async (req) => {
   } catch (error) {
     log.error("news_agent_error", { error: error instanceof Error ? error.message : "unknown" });
     log.requestEnd(500, Date.now() - startTime);
+    
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    
+    if (errorMessage.includes("Rate limit")) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded. Try again later." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

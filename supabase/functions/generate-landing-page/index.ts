@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import { callGeminiStream, resolveModel } from "../_shared/gemini.ts";
 
 const FUNCTION_NAME = "generate-landing-page";
 
@@ -425,65 +426,40 @@ serve(async (req) => {
     // ========== END AUTHENTICATION ==========
 
     const { config } = await req.json() as { config: LandingPageConfig };
-    
-    const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!AI_API_KEY) {
-      throw new Error("AI API key is not configured");
-    }
 
     const systemPrompt = buildSystemPrompt(config);
     const userPrompt = buildUserPrompt(config);
 
     log.info("generation_started", { template: config.template || "custom", keyword: config.keyword });
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${AI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        stream: true,
-      }),
-    });
+    // Call Gemini API with streaming
+    const streamResponse = await callGeminiStream(
+      [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      { model: "flash" }
+    );
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        log.warn("rate_limit_exceeded");
-        return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos.", request_id: requestId }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        log.warn("payment_required");
-        return new Response(JSON.stringify({ error: "Créditos de IA insuficientes.", request_id: requestId }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const text = await response.text();
-      log.error("ai_gateway_error", { status: response.status, response: text });
-      return new Response(JSON.stringify({ error: "Erro no gateway de IA", request_id: requestId }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    log.info("stream_started", { model: "gemini-2.0-flash" });
 
-    log.info("stream_started", { model: "google/gemini-3-flash-preview" });
-
-    return new Response(response.body, {
+    return new Response(streamResponse.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (error) {
     log.error("generation_error", { error: error instanceof Error ? error.message : "unknown" });
     log.requestEnd(500, Date.now() - startTime);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Erro desconhecido", request_id: requestId }), {
+    
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+    
+    if (errorMessage.includes("Rate limit")) {
+      return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos.", request_id: requestId }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
+    return new Response(JSON.stringify({ error: errorMessage, request_id: requestId }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
