@@ -38,6 +38,8 @@ import {
   Zap,
   Sparkles,
   CheckCircle2,
+  Download,
+  Upload,
 } from 'lucide-react';
 
 export interface ArticleTemplate {
@@ -319,6 +321,79 @@ export function ArticleTemplatesCard() {
     professional: { label: 'Profissional', credits: 4 },
   };
 
+  // Export templates to JSON
+  const handleExportTemplates = () => {
+    const customTemplates = templates.filter(t => !t.isDefault);
+    if (customTemplates.length === 0) {
+      toast({
+        title: 'Nenhum modelo para exportar',
+        description: 'Crie modelos personalizados antes de exportar.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const dataStr = JSON.stringify(customTemplates, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `article-templates-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: 'Templates exportados!',
+      description: `${customTemplates.length} modelo(s) exportado(s) com sucesso.`,
+    });
+  };
+
+  // Import templates from JSON
+  const handleImportTemplates = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const imported = JSON.parse(text) as ArticleTemplate[];
+        
+        if (!Array.isArray(imported)) {
+          throw new Error('Formato inválido');
+        }
+
+        // Validate and clean imported templates
+        const validTemplates = imported.map(t => ({
+          ...t,
+          id: `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          isDefault: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }));
+
+        const customTemplates = templates.filter(t => !t.isDefault);
+        saveTemplates([...templates, ...validTemplates]);
+
+        toast({
+          title: 'Templates importados!',
+          description: `${validTemplates.length} modelo(s) importado(s) com sucesso.`,
+        });
+      } catch (error) {
+        toast({
+          title: 'Erro ao importar',
+          description: 'O arquivo não é um JSON válido de templates.',
+          variant: 'destructive',
+        });
+      }
+    };
+    input.click();
+  };
+
   return (
     <>
       <Card>
@@ -335,10 +410,20 @@ export function ArticleTemplatesCard() {
                 </CardDescription>
               </div>
             </div>
-            <Button onClick={handleCreateTemplate} className="gap-2">
-              <Plus className="w-4 h-4" />
-              Novo Modelo
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleImportTemplates} className="gap-2">
+                <Upload className="w-4 h-4" />
+                Importar
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleExportTemplates} className="gap-2">
+                <Download className="w-4 h-4" />
+                Exportar
+              </Button>
+              <Button onClick={handleCreateTemplate} className="gap-2">
+                <Plus className="w-4 h-4" />
+                Novo Modelo
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
