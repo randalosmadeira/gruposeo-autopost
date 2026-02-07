@@ -1,12 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { callGemini, generateGeminiImage, extractJSON } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 interface AuthorityPlanRequest {
   centralTheme: string;
@@ -24,72 +23,6 @@ interface ArticlePlan {
   type: "pillar" | "satellite";
 }
 
-async function callAI(messages: { role: string; content: string }[], useJsonMode = false): Promise<string> {
-  const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!AI_API_KEY) throw new Error("AI API key is not configured");
-
-  const body: Record<string, unknown> = {
-    model: "google/gemini-3-flash-preview",
-    messages,
-  };
-
-  if (useJsonMode) {
-    body.response_format = { type: "json_object" };
-  }
-
-  const response = await fetch(AI_GATEWAY_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${AI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    if (response.status === 429) throw new Error("Rate limit exceeded. Please try again later.");
-    if (response.status === 402) throw new Error("Payment required. Please add credits to your workspace.");
-    const text = await response.text();
-    console.error("AI error:", response.status, text);
-    throw new Error(`AI gateway error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || "";
-}
-
-async function generateImage(prompt: string): Promise<string | null> {
-  const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!AI_API_KEY) return null;
-
-  try {
-    const response = await fetch(AI_GATEWAY_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${AI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [{ role: "user", content: prompt }],
-        modalities: ["image", "text"],
-      }),
-    });
-
-    if (!response.ok) {
-      console.error("Image generation failed:", response.status);
-      return null;
-    }
-
-    const data = await response.json();
-    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    return imageUrl || null;
-  } catch (error) {
-    console.error("Image generation error:", error);
-    return null;
-  }
-}
-
 async function researchTopic(theme: string, language: string): Promise<string> {
   const systemPrompt = `You are an SEO research expert. Analyze the topic and provide insights in ${language}.
 Return a JSON object with:
@@ -99,10 +32,13 @@ Return a JSON object with:
 - competitorInsights: what top-ranking content covers
 - contentGaps: opportunities to differentiate`;
 
-  const result = await callAI([
-    { role: "system", content: systemPrompt },
-    { role: "user", content: `Research the topic: "${theme}" for the ${language} market` },
-  ]);
+  const result = await callGemini(
+    [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: `Research the topic: "${theme}" for the ${language} market` },
+    ],
+    { model: "flash" }
+  );
 
   return result;
 }
@@ -117,22 +53,24 @@ Return a JSON object with:
 The pillar should be THE definitive guide on the topic, covering everything a beginner to intermediate needs to know.
 Language: ${language}`;
 
-  const result = await callAI([
-    { role: "system", content: systemPrompt },
-    { role: "user", content: `Create a pillar article plan for: "${theme}"\n\nResearch insights:\n${research}` },
-  ]);
+  const result = await callGemini(
+    [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: `Create a pillar article plan for: "${theme}"\n\nResearch insights:\n${research}` },
+    ],
+    { model: "flash" }
+  );
 
-  try {
-    const parsed = JSON.parse(result);
+  const parsed = extractJSON<{ title: string; keyword: string; outline: string[] }>(result);
+  if (parsed) {
     return { ...parsed, type: "pillar" };
-  } catch {
-    return {
-      title: `Guia Completo: ${theme}`,
-      keyword: theme.toLowerCase(),
-      outline: ["Introdução", "O que é", "Por que é importante", "Como funciona", "Melhores práticas", "Conclusão"],
-      type: "pillar",
-    };
   }
+  return {
+    title: `Guia Completo: ${theme}`,
+    keyword: theme.toLowerCase(),
+    outline: ["Introdução", "O que é", "Por que é importante", "Como funciona", "Melhores práticas", "Conclusão"],
+    type: "pillar",
+  };
 }
 
 async function generateSatellitePlans(
@@ -155,22 +93,24 @@ Return a JSON object with:
 
 Language: ${language}`;
 
-  const result = await callAI([
-    { role: "system", content: systemPrompt },
-    { role: "user", content: `Generate ${count} satellite articles for pillar: "${pillarTitle}" on theme: "${theme}"` },
-  ]);
+  const result = await callGemini(
+    [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: `Generate ${count} satellite articles for pillar: "${pillarTitle}" on theme: "${theme}"` },
+    ],
+    { model: "flash" }
+  );
 
-  try {
-    const parsed = JSON.parse(result);
-    return (parsed.satellites || []).map((s: ArticlePlan) => ({ ...s, type: "satellite" as const }));
-  } catch {
-    return Array.from({ length: count }, (_, i) => ({
-      title: `${theme} - Parte ${i + 1}`,
-      keyword: `${theme.toLowerCase()} ${i + 1}`,
-      outline: ["Introdução", "Desenvolvimento", "Dicas práticas", "Conclusão"],
-      type: "satellite" as const,
-    }));
+  const parsed = extractJSON<{ satellites: { title: string; keyword: string; outline: string[] }[] }>(result);
+  if (parsed?.satellites) {
+    return parsed.satellites.map((s) => ({ ...s, type: "satellite" as const }));
   }
+  return Array.from({ length: count }, (_, i) => ({
+    title: `${theme} - Parte ${i + 1}`,
+    keyword: `${theme.toLowerCase()} ${i + 1}`,
+    outline: ["Introdução", "Desenvolvimento", "Dicas práticas", "Conclusão"],
+    type: "satellite" as const,
+  }));
 }
 
 async function generateArticleContent(
@@ -198,25 +138,27 @@ Return a JSON object with:
 - excerpt: a compelling 150-160 char meta description
 - slug: URL-friendly slug`;
 
-  const result = await callAI([
-    { role: "system", content: systemPrompt },
-    { role: "user", content: `Write an article:\nTitle: ${plan.title}\nKeyword: ${plan.keyword}\nOutline: ${plan.outline.join(", ")}` },
-  ]);
+  const result = await callGemini(
+    [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: `Write an article:\nTitle: ${plan.title}\nKeyword: ${plan.keyword}\nOutline: ${plan.outline.join(", ")}` },
+    ],
+    { model: "flash" }
+  );
 
-  try {
-    const parsed = JSON.parse(result);
+  const parsed = extractJSON<{ content_html?: string; content?: string; excerpt: string; slug: string }>(result);
+  if (parsed) {
     return {
       content: parsed.content_html || parsed.content || "",
       excerpt: parsed.excerpt || "",
       slug: parsed.slug || plan.keyword.toLowerCase().replace(/\s+/g, "-"),
     };
-  } catch {
-    return {
-      content: `<h2>${plan.title}</h2><p>Conteúdo em geração...</p>`,
-      excerpt: plan.title,
-      slug: plan.keyword.toLowerCase().replace(/\s+/g, "-"),
-    };
   }
+  return {
+    content: `<h2>${plan.title}</h2><p>Conteúdo em geração...</p>`,
+    excerpt: plan.title,
+    slug: plan.keyword.toLowerCase().replace(/\s+/g, "-"),
+  };
 }
 
 serve(async (req) => {
@@ -241,7 +183,8 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) {
       return new Response(
         JSON.stringify({ success: false, error: "Usuário não autenticado" }),
@@ -255,7 +198,7 @@ serve(async (req) => {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: AuthorityPlanRequest = await req.json();
-    const { centralTheme, satelliteCount, projectId, language, country, publicationMode } = body;
+    const { centralTheme, satelliteCount, projectId, language, publicationMode } = body;
 
     // Validate project ownership if projectId is provided
     if (projectId) {
@@ -291,7 +234,8 @@ serve(async (req) => {
     // Step 4: Generate featured image for pillar
     console.log("Step 4: Generating pillar image...");
     const pillarImagePrompt = `Professional blog featured image for article about "${pillarPlan.title}". Modern, clean design, professional photography style, 16:9 aspect ratio. No text overlays.`;
-    const pillarImage = await generateImage(pillarImagePrompt);
+    const pillarImageResult = await generateGeminiImage(pillarImagePrompt, { aspectRatio: "16:9" });
+    const pillarImage = pillarImageResult?.imageData || null;
 
     // Step 5: Generate pillar article content
     console.log("Step 5: Generating pillar content...");
@@ -302,7 +246,7 @@ serve(async (req) => {
     const { data: pillarArticle, error: pillarError } = await supabaseAdmin
       .from("articles")
       .insert({
-        user_id: user.id, // Use authenticated user's ID
+        user_id: user.id,
         project_id: projectId,
         keyword: pillarPlan.keyword,
         title: pillarPlan.title,
@@ -331,12 +275,13 @@ serve(async (req) => {
       const content = await generateArticleContent(plan, pillarPlan.title, language);
 
       const imagePrompt = `Blog featured image for article: "${plan.title}". Modern, professional style, 16:9 aspect ratio. No text.`;
-      const image = await generateImage(imagePrompt);
+      const imageResult = await generateGeminiImage(imagePrompt, { aspectRatio: "16:9" });
+      const image = imageResult?.imageData || null;
 
       const { data: article, error } = await supabaseAdmin
         .from("articles")
         .insert({
-          user_id: user.id, // Use authenticated user's ID
+          user_id: user.id,
           project_id: projectId,
           keyword: plan.keyword,
           title: plan.title,
@@ -373,6 +318,14 @@ serve(async (req) => {
   } catch (error) {
     console.error("Authority plan generation error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
+    
+    if (message.includes("Rate limit")) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Limite de requisições excedido. Tente novamente." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
     return new Response(
       JSON.stringify({ success: false, error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

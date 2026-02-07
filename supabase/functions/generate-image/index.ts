@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import { generateGeminiImage } from "../_shared/gemini.ts";
 
 const FUNCTION_NAME = "generate-image";
 
@@ -115,11 +116,6 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY não configurada");
-    }
-
     // Build the image prompt
     const imagePrompt = buildImagePrompt(body);
     
@@ -129,72 +125,32 @@ serve(async (req) => {
       style: body.style || 'photorealistic',
     });
 
-    // Use Lovable AI Gateway with image generation model
-    const model = body.quality === 'high' 
-      ? "google/gemini-3-pro-image-preview" 
-      : "google/gemini-2.5-flash-image";
+    // Map aspect ratio to Gemini format
+    const aspectRatioMap: Record<string, "16:9" | "1:1" | "4:3" | "3:4" | "9:16"> = {
+      "16:9": "16:9",
+      "1:1": "1:1",
+      "4:3": "4:3",
+    };
+    const geminiAspectRatio = aspectRatioMap[body.aspectRatio || "16:9"] || "16:9";
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "user", content: imagePrompt }
-        ],
-        modalities: ["image", "text"],
-      }),
+    // Generate image using Gemini Imagen
+    const imageResult = await generateGeminiImage(imagePrompt, {
+      aspectRatio: geminiAspectRatio,
     });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Créditos de IA insuficientes." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const errorText = await response.text();
-      log.error("ai_gateway_error", { status: response.status, error: errorText });
-      throw new Error(`Erro no gateway de IA: ${response.status}`);
-    }
-
-    const aiResponse = await response.json();
-    
-    // Extract image from response
-    const message = aiResponse.choices?.[0]?.message;
-    const images = message?.images || [];
-    const textContent = message?.content || "";
-    
-    if (images.length === 0) {
-      log.error("no_image_generated", { response: aiResponse });
+    if (!imageResult) {
+      log.error("no_image_generated", {});
       return new Response(
         JSON.stringify({ 
           error: "Nenhuma imagem foi gerada. Tente novamente.",
-          debug: textContent,
         }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const imageData = images[0]?.image_url?.url || null;
-    
-    if (!imageData) {
-      throw new Error("Formato de imagem inválido na resposta");
-    }
-
     log.info("image_generated", { 
-      model,
-      hasImage: !!imageData,
-      contentLength: imageData.length,
+      hasImage: true,
+      mimeType: imageResult.mimeType,
     });
 
     // Generate alt text and metadata
@@ -206,11 +162,11 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        image: imageData,
+        image: imageResult.imageData,
         alt: altText,
         title: imageTitle,
         prompt: imagePrompt,
-        model,
+        model: "imagen-3.0-generate-002",
         request_id: requestId,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -219,9 +175,19 @@ serve(async (req) => {
   } catch (error) {
     log.error("generation_error", { error: error instanceof Error ? error.message : "unknown" });
     log.requestEnd(500, Date.now() - startTime);
+    
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+    
+    if (errorMessage.includes("Rate limit")) {
+      return new Response(
+        JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos.", request_id: requestId }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
     return new Response(
       JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Erro desconhecido",
+        error: errorMessage,
         request_id: requestId,
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import { callGemini, generateGeminiImage, extractJSON } from "../_shared/gemini.ts";
 
 const FUNCTION_NAME = "rewrite-news";
 
@@ -8,8 +9,6 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 // MAA System Prompt for journalistic rewriting (Lei 9.610/98 compliance)
 const SYSTEM_PROMPT = `Você é o Assistente MAA Pro, especializado em repostagem jornalística com compliance Lei 9.610/98 (Direitos Autorais).
@@ -67,80 +66,6 @@ interface RewriteRequest {
   keyword?: string;
   language?: string;
   projectId?: string;
-}
-
-async function callAI(messages: { role: string; content: string }[]): Promise<string> {
-  const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!AI_API_KEY) throw new Error("AI API key not configured");
-
-  const response = await fetch(AI_GATEWAY_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${AI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
-      messages,
-    }),
-  });
-
-  if (!response.ok) {
-    if (response.status === 429) throw new Error("Rate limit exceeded");
-    if (response.status === 402) throw new Error("Payment required");
-    throw new Error(`AI gateway error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || "";
-}
-
-async function generateImage(prompt: string): Promise<string | null> {
-  const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!AI_API_KEY) return null;
-
-  try {
-    const response = await fetch(AI_GATEWAY_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${AI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-pro-image-preview",
-        messages: [{ role: "user", content: prompt }],
-        modalities: ["image", "text"],
-      }),
-    });
-
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.choices?.[0]?.message?.images?.[0]?.image_url?.url || null;
-  } catch {
-    return null;
-  }
-}
-
-function extractJsonFromResponse(text: string): any {
-  // Try to find JSON in the response
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    try {
-      return JSON.parse(jsonMatch[0]);
-    } catch {
-      // Try fixing common JSON issues
-      let fixed = jsonMatch[0]
-        .replace(/,\s*}/g, '}')
-        .replace(/,\s*]/g, ']')
-        .replace(/'/g, '"');
-      try {
-        return JSON.parse(fixed);
-      } catch {
-        return null;
-      }
-    }
-  }
-  return null;
 }
 
 serve(async (req) => {
@@ -226,13 +151,27 @@ Se originalidade < 90%, reescreva novamente até atingir 90%+.
 
 Retorne o resultado em formato JSON conforme especificado.`;
 
-    // Call AI
-    const aiResponse = await callAI([
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: userPrompt },
-    ]);
+    // Call Gemini AI
+    const aiResponse = await callGemini(
+      [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
+      { model: "flash" }
+    );
 
-    const parsed = extractJsonFromResponse(aiResponse);
+    const parsed = extractJSON<{
+      title: string;
+      meta_description: string;
+      slug: string;
+      content_html: string;
+      excerpt: string;
+      credits: string;
+      originality_score: number;
+      added_value: string;
+      keywords: string[];
+      word_count: number;
+    }>(aiResponse);
     
     if (!parsed) {
       log.error("json_parse_failed", { response: aiResponse.substring(0, 500) });
@@ -254,7 +193,8 @@ Retorne o resultado em formato JSON conforme especificado.`;
     // Generate featured image
     log.info("generating_image", {});
     const imagePrompt = `Professional news article featured image for: "${parsed.title}". Modern, clean, journalistic style. 16:9 aspect ratio.`;
-    const featuredImage = await generateImage(imagePrompt);
+    const imageResult = await generateGeminiImage(imagePrompt, { aspectRatio: "16:9" });
+    const featuredImage = imageResult?.imageData || null;
 
     // Save article to database
     const { data: article, error: dbError } = await supabaseAdmin
@@ -323,13 +263,6 @@ Retorne o resultado em formato JSON conforme especificado.`;
       return new Response(
         JSON.stringify({ error: "Rate limit exceeded", request_id: requestId }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    
-    if (message.includes("Payment required")) {
-      return new Response(
-        JSON.stringify({ error: "Payment required", request_id: requestId }),
-        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

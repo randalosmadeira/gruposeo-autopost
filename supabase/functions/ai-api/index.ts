@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import { callGemini, generateGeminiImage, extractJSON, getGeminiApiKey, getOpenAIApiKey } from "../_shared/gemini.ts";
 
 const FUNCTION_NAME = "ai-api";
 
@@ -8,9 +9,6 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-// Lovable AI Gateway - No external API keys needed
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
 interface AIRequest {
   action: string;
@@ -21,77 +19,7 @@ interface AIRequest {
   maxTokens?: number;
   temperature?: number;
   imagePrompt?: string;
-}
-
-// Helper to call Lovable AI Gateway
-async function callLovableAI(model: string, messages: any[], options: any = {}) {
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY não configurada");
-  }
-
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: model || "google/gemini-3-flash-preview",
-      messages,
-      max_tokens: options.maxTokens || 4096,
-      temperature: options.temperature || 0.7,
-    }),
-  });
-
-  if (!response.ok) {
-    if (response.status === 429) {
-      throw new Error("Rate limit excedido. Tente novamente em alguns segundos.");
-    }
-    if (response.status === 402) {
-      throw new Error("Créditos de IA insuficientes.");
-    }
-    const error = await response.text();
-    throw new Error(`AI API error: ${response.status} - ${error}`);
-  }
-
-  return await response.json();
-}
-
-// Helper to call Lovable AI Gateway for image generation
-async function callLovableImageAI(prompt: string, quality: 'standard' | 'high' = 'standard') {
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY não configurada");
-  }
-
-  const model = quality === 'high' 
-    ? "google/gemini-3-pro-image-preview" 
-    : "google/gemini-2.5-flash-image";
-
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      modalities: ["image", "text"],
-    }),
-  });
-
-  if (!response.ok) {
-    if (response.status === 429) {
-      throw new Error("Rate limit excedido. Tente novamente.");
-    }
-    if (response.status === 402) {
-      throw new Error("Créditos de IA insuficientes.");
-    }
-    const error = await response.text();
-    throw new Error(`AI Gateway error: ${response.status} - ${error}`);
-  }
-
-  return await response.json();
+  aspectRatio?: "1:1" | "16:9" | "9:16" | "4:3" | "3:4";
 }
 
 serve(async (req) => {
@@ -122,7 +50,7 @@ serve(async (req) => {
     }
 
     const body: AIRequest = await req.json();
-    const { action, model, prompt, systemPrompt, messages, maxTokens, temperature, imagePrompt } = body;
+    const { action, model, prompt, systemPrompt, messages, maxTokens, temperature, imagePrompt, aspectRatio } = body;
 
     log.requestStart(req.method, action);
 
@@ -131,23 +59,29 @@ serve(async (req) => {
     switch (action) {
       // === TEXT GENERATION ===
       case "generate-text": {
-        const selectedModel = model || "google/gemini-2.5-flash";
+        const selectedModel = model || "flash";
         
-        const aiMessages = [];
+        const aiMessages: Array<{ role: "user" | "system" | "assistant" | "model"; content: string }> = [];
         if (systemPrompt) {
           aiMessages.push({ role: "system", content: systemPrompt });
         }
         if (messages) {
-          aiMessages.push(...messages);
+          aiMessages.push(...messages.map(m => ({
+            role: m.role as "user" | "system" | "assistant" | "model",
+            content: m.content,
+          })));
         } else if (prompt) {
           aiMessages.push({ role: "user", content: prompt });
         }
 
-        const response = await callLovableAI(selectedModel, aiMessages, { maxTokens, temperature });
+        const response = await callGemini(aiMessages, { 
+          model: selectedModel, 
+          maxTokens, 
+          temperature 
+        });
         
         result = {
-          text: response.choices?.[0]?.message?.content || "",
-          usage: response.usage,
+          text: response,
           model: selectedModel,
         };
         break;
@@ -155,7 +89,7 @@ serve(async (req) => {
 
       // === GENERATE ARTICLE TITLE ===
       case "generate-title": {
-        const selectedModel = model || "google/gemini-2.5-flash";
+        const selectedModel = model || "flash";
         
         const titlePrompt = `Gere 5 títulos criativos e otimizados para SEO para um artigo sobre: "${prompt}"
 
@@ -167,12 +101,13 @@ Requisitos:
 
 Retorne apenas os títulos, um por linha, numerados.`;
 
-        const response = await callLovableAI(selectedModel, [
-          { role: "user", content: titlePrompt }
-        ], { maxTokens: 500, temperature: 0.8 });
+        const response = await callGemini(
+          [{ role: "user", content: titlePrompt }],
+          { model: selectedModel, maxTokens: 500, temperature: 0.8 }
+        );
 
-        const titles = response.choices?.[0]?.message?.content
-          ?.split("\n")
+        const titles = response
+          .split("\n")
           .filter((line: string) => line.trim())
           .map((line: string) => line.replace(/^\d+\.\s*/, "").trim());
 
@@ -182,7 +117,7 @@ Retorne apenas os títulos, um por linha, numerados.`;
 
       // === GENERATE META DESCRIPTION ===
       case "generate-meta": {
-        const selectedModel = model || "google/gemini-2.5-flash";
+        const selectedModel = model || "flash";
         
         const metaPrompt = `Gere uma meta descrição otimizada para SEO para um artigo sobre: "${prompt}"
 
@@ -194,12 +129,13 @@ Requisitos:
 
 Retorne apenas a meta descrição, sem aspas.`;
 
-        const response = await callLovableAI(selectedModel, [
-          { role: "user", content: metaPrompt }
-        ], { maxTokens: 200, temperature: 0.6 });
+        const response = await callGemini(
+          [{ role: "user", content: metaPrompt }],
+          { model: selectedModel, maxTokens: 200, temperature: 0.6 }
+        );
 
         result = { 
-          metaDescription: response.choices?.[0]?.message?.content?.trim() || "",
+          metaDescription: response.trim(),
           model: selectedModel,
         };
         break;
@@ -207,7 +143,7 @@ Retorne apenas a meta descrição, sem aspas.`;
 
       // === GENERATE OUTLINE ===
       case "generate-outline": {
-        const selectedModel = model || "google/gemini-2.5-flash";
+        const selectedModel = model || "flash";
         
         const outlinePrompt = `Crie uma estrutura de artigo SEO-otimizado para: "${prompt}"
 
@@ -227,24 +163,18 @@ Formato JSON:
   ]
 }`;
 
-        const response = await callLovableAI(selectedModel, [
-          { role: "user", content: outlinePrompt }
-        ], { maxTokens: 2000, temperature: 0.7 });
+        const response = await callGemini(
+          [{ role: "user", content: outlinePrompt }],
+          { model: selectedModel, maxTokens: 2000, temperature: 0.7 }
+        );
 
-        let outline;
-        try {
-          const content = response.choices?.[0]?.message?.content || "";
-          const jsonMatch = content.match(/\{[\s\S]*\}/);
-          outline = jsonMatch ? JSON.parse(jsonMatch[0]) : { sections: [] };
-        } catch {
-          outline = { sections: [], raw: response.choices?.[0]?.message?.content };
-        }
+        const outline = extractJSON<{ sections: unknown[] }>(response) || { sections: [], raw: response };
 
         result = { outline, model: selectedModel };
         break;
       }
 
-      // === IMAGE GENERATION (via Lovable AI Gateway) ===
+      // === IMAGE GENERATION (via Gemini Imagen) ===
       case "generate-image": {
         if (!imagePrompt) {
           return new Response(
@@ -253,19 +183,18 @@ Formato JSON:
           );
         }
 
-        const imageResponse = await callLovableImageAI(imagePrompt);
+        const imageResult = await generateGeminiImage(imagePrompt, {
+          aspectRatio: aspectRatio || "16:9",
+        });
         
-        // Extract image from Lovable AI Gateway response
-        const message = imageResponse.choices?.[0]?.message;
-        const images = message?.images || [];
-        
-        if (images.length > 0 && images[0]?.image_url?.url) {
+        if (imageResult) {
           result = {
-            image: images[0].image_url.url,
+            image: imageResult.imageData,
             alt: `Imagem gerada para: ${imagePrompt.slice(0, 50)}...`,
+            model: "imagen-3.0",
           };
         } else {
-          result = { error: "Nenhuma imagem gerada", debug: message?.content };
+          result = { error: "Nenhuma imagem gerada" };
         }
         break;
       }
@@ -274,12 +203,11 @@ Formato JSON:
       case "list-models": {
         result = {
           models: [
-            { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash", type: "text", speed: "fast" },
-            { id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro", type: "text", speed: "medium" },
-            { id: "google/gemini-3-pro-preview", name: "Gemini 3 Pro", type: "text", speed: "medium" },
-            { id: "openai/gpt-5", name: "GPT-5", type: "text", speed: "slow" },
-            { id: "openai/gpt-5-mini", name: "GPT-5 Mini", type: "text", speed: "fast" },
-            { id: "google/gemini-3-pro-image-preview", name: "Gemini 3 Image", type: "image", speed: "medium" },
+            { id: "flash", name: "Gemini 2.0 Flash", type: "text", speed: "fast" },
+            { id: "flash-lite", name: "Gemini 2.0 Flash Lite", type: "text", speed: "very-fast" },
+            { id: "pro", name: "Gemini 2.5 Pro", type: "text", speed: "medium" },
+            { id: "flash-thinking", name: "Gemini 2.0 Flash Thinking", type: "text", speed: "medium" },
+            { id: "imagen", name: "Imagen 3.0", type: "image", speed: "medium" },
           ],
         };
         break;
@@ -287,10 +215,21 @@ Formato JSON:
 
       // === HEALTH CHECK ===
       case "health": {
+        let hasGeminiKey = false;
+        let hasOpenAIKey = false;
+        
+        try {
+          getGeminiApiKey();
+          hasGeminiKey = true;
+        } catch { /* key not configured */ }
+        
+        hasOpenAIKey = !!getOpenAIApiKey();
+        
         result = {
           status: "online",
-          hasLovableKey: !!LOVABLE_API_KEY,
-          hasGeminiKey: !!GEMINI_API_KEY,
+          hasGeminiKey,
+          hasOpenAIKey,
+          provider: "Google Gemini (direct API)",
           timestamp: new Date().toISOString(),
         };
         break;
@@ -319,8 +258,18 @@ Formato JSON:
   } catch (error) {
     log.error("ai_api_error", { error: error instanceof Error ? error.message : "unknown" });
     log.requestEnd(500, Date.now() - startTime);
+    
+    const errorMessage = error instanceof Error ? error.message : "Erro interno";
+    
+    if (errorMessage.includes("Rate limit")) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Rate limit excedido. Tente novamente." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
     return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Erro interno" }),
+      JSON.stringify({ success: false, error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
