@@ -461,6 +461,59 @@ export type Database = {
         }
         Relationships: []
       }
+      token_usage_logs: {
+        Row: {
+          article_id: string | null
+          created_at: string
+          estimated_cost_usd: number | null
+          id: string
+          input_tokens: number | null
+          metadata: Json | null
+          model: string
+          operation: string
+          output_tokens: number | null
+          provider: string
+          total_tokens: number | null
+          user_id: string
+        }
+        Insert: {
+          article_id?: string | null
+          created_at?: string
+          estimated_cost_usd?: number | null
+          id?: string
+          input_tokens?: number | null
+          metadata?: Json | null
+          model: string
+          operation: string
+          output_tokens?: number | null
+          provider: string
+          total_tokens?: number | null
+          user_id: string
+        }
+        Update: {
+          article_id?: string | null
+          created_at?: string
+          estimated_cost_usd?: number | null
+          id?: string
+          input_tokens?: number | null
+          metadata?: Json | null
+          model?: string
+          operation?: string
+          output_tokens?: number | null
+          provider?: string
+          total_tokens?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "token_usage_logs_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_settings: {
         Row: {
           ai_provider: string | null
@@ -618,6 +671,20 @@ export type Database = {
       }
     }
     Views: {
+      token_usage_summary: {
+        Row: {
+          date: string | null
+          operation: string | null
+          provider: string | null
+          request_count: number | null
+          total_cost_usd: number | null
+          total_input_tokens: number | null
+          total_output_tokens: number | null
+          total_tokens: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
       user_settings_safe: {
         Row: {
           ai_provider: string | null
