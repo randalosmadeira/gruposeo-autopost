@@ -65,7 +65,7 @@ const navGroups: NavGroup[] = [
           { 
             label: 'Artigo', 
             icon: FileText, 
-            href: '/articles/bulk',
+            href: '/articles/types',
             iconColor: '#4169E1',
           },
           { 

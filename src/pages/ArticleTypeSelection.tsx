@@ -184,14 +184,25 @@ function TemplatesCard() {
               <p className="text-xs text-muted-foreground mb-4">Acesse e organize todos os seus templates.</p>
               
               <div className="space-y-2">
-                <Button className="w-full gap-2 h-11 bg-[hsl(30,100%,50%)] hover:bg-[hsl(30,100%,45%)] text-white font-medium">
-                  <Sparkles className="w-4 h-4" />
-                  Acessar Modelos
-                  <ArrowRight className="w-4 h-4" />
+                <Button 
+                  asChild
+                  className="w-full gap-2 h-11 bg-[hsl(30,100%,50%)] hover:bg-[hsl(30,100%,45%)] text-white font-medium"
+                >
+                  <Link to="/settings?tab=templates">
+                    <Sparkles className="w-4 h-4" />
+                    Acessar Modelos
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
                 </Button>
-                <Button variant="outline" className="w-full gap-2 h-11 font-medium">
-                  <Folder className="w-4 h-4" />
-                  Criar com Modelo
+                <Button 
+                  asChild
+                  variant="outline" 
+                  className="w-full gap-2 h-11 font-medium"
+                >
+                  <Link to="/articles/new?useTemplate=true">
+                    <Folder className="w-4 h-4" />
+                    Criar com Modelo
+                  </Link>
                 </Button>
               </div>
             </div>
