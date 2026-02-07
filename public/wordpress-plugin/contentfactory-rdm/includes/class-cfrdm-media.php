@@ -530,4 +530,166 @@ class CFRDM_Media {
             'potential_duplicates_prevented' => max(0, intval($total_hashed) - intval($unique_hashes)),
         );
     }
+    
+    /**
+     * Convert image to WebP format (inspired by SIFET pattern)
+     * 
+     * @param int $attachment_id Attachment ID
+     * @param string $file_path Path to original file
+     * @return int|false WebP attachment ID or false on failure
+     */
+    public static function convert_to_webp($attachment_id, $file_path = null) {
+        // Check if WebP conversion is enabled
+        if (!get_option('cfrdm_convert_webp', false)) {
+            return false;
+        }
+        
+        // Check if already converted
+        if (get_post_meta($attachment_id, '_cfrdm_webp_converted', true)) {
+            return get_post_meta($attachment_id, '_cfrdm_webp_id', true);
+        }
+        
+        // Get file path if not provided
+        if (empty($file_path)) {
+            $file_path = get_attached_file($attachment_id);
+        }
+        
+        if (!$file_path || !file_exists($file_path)) {
+            return false;
+        }
+        
+        // Only convert JPEG and PNG
+        $mime = wp_check_filetype($file_path)['type'];
+        if (!in_array($mime, array('image/jpeg', 'image/png', 'image/jpg'), true)) {
+            return false;
+        }
+        
+        // Check WebP support
+        if (!self::is_webp_supported()) {
+            return false;
+        }
+        
+        try {
+            $webp_path = preg_replace('/\.(jpe?g|png)$/i', '.webp', $file_path);
+            $converted = false;
+            
+            // Try GD first
+            if (function_exists('imagewebp')) {
+                $converted = self::convert_with_gd($file_path, $webp_path);
+            } elseif (class_exists('Imagick')) {
+                $converted = self::convert_with_imagick($file_path, $webp_path);
+            }
+            
+            if ($converted && file_exists($webp_path)) {
+                // Create attachment for WebP
+                $webp_attachment = array(
+                    'post_mime_type' => 'image/webp',
+                    'post_title' => get_the_title($attachment_id) . ' (WebP)',
+                    'post_content' => '',
+                    'post_status' => 'inherit',
+                );
+                
+                $parent = wp_get_post_parent_id($attachment_id);
+                $webp_id = wp_insert_attachment($webp_attachment, $webp_path, $parent);
+                
+                if (!is_wp_error($webp_id)) {
+                    require_once(ABSPATH . 'wp-admin/includes/image.php');
+                    $attach_data = wp_generate_attachment_metadata($webp_id, $webp_path);
+                    wp_update_attachment_metadata($webp_id, $attach_data);
+                    
+                    // Mark as converted
+                    update_post_meta($attachment_id, '_cfrdm_webp_converted', true);
+                    update_post_meta($attachment_id, '_cfrdm_webp_id', $webp_id);
+                    update_post_meta($webp_id, '_cfrdm_webp_original', $attachment_id);
+                    
+                    if (class_exists('CFRDM_Logger')) {
+                        CFRDM_Logger::success('media', 'Imagem convertida para WebP', array(
+                            'original_id' => $attachment_id,
+                            'webp_id' => $webp_id,
+                        ), $attachment_id);
+                    }
+                    
+                    return $webp_id;
+                }
+            }
+        } catch (Exception $e) {
+            if (class_exists('CFRDM_Logger')) {
+                CFRDM_Logger::error('media', 'Falha ao converter para WebP: ' . $e->getMessage());
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Check if WebP is supported on this server
+     */
+    private static function is_webp_supported() {
+        if (function_exists('imagewebp')) {
+            return true;
+        }
+        
+        if (class_exists('Imagick')) {
+            $imagick = new Imagick();
+            return in_array('WEBP', $imagick->queryFormats(), true);
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Convert image using GD library
+     */
+    private static function convert_with_gd($source, $destination) {
+        $info = getimagesize($source);
+        if ($info === false) {
+            return false;
+        }
+        
+        $image = null;
+        
+        switch ($info['mime']) {
+            case 'image/jpeg':
+            case 'image/jpg':
+                $image = imagecreatefromjpeg($source);
+                break;
+            case 'image/png':
+                $image = imagecreatefrompng($source);
+                imagepalettetotruecolor($image);
+                imagealphablending($image, true);
+                imagesavealpha($image, true);
+                break;
+        }
+        
+        if ($image === null) {
+            return false;
+        }
+        
+        $quality = (int) get_option('cfrdm_webp_quality', 80);
+        $result = imagewebp($image, $destination, $quality);
+        imagedestroy($image);
+        
+        return $result;
+    }
+    
+    /**
+     * Convert image using Imagick
+     */
+    private static function convert_with_imagick($source, $destination) {
+        try {
+            $imagick = new Imagick($source);
+            $imagick->setImageFormat('webp');
+            
+            $quality = (int) get_option('cfrdm_webp_quality', 80);
+            $imagick->setImageCompressionQuality($quality);
+            
+            $result = $imagick->writeImage($destination);
+            $imagick->clear();
+            $imagick->destroy();
+            
+            return $result;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
 }

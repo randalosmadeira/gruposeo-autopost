@@ -57,16 +57,38 @@ export function useSettings() {
     mutationFn: async (updates: Omit<UserSettingsUpdate, 'user_id'>) => {
       if (!user) throw new Error('User not authenticated');
       
-      // Updates go directly to the table (not the view)
-      const { data, error } = await supabase
-        .from('user_settings')
-        .update(updates)
+      // Check if settings exist using the safe view (RLS allows reading from view, not table)
+      const { data: existing } = await supabase
+        .from('user_settings_safe')
+        .select('id')
         .eq('user_id', user.id)
-        .select()
-        .single();
+        .maybeSingle();
       
-      if (error) throw error;
-      return data;
+      let result;
+      
+      if (existing) {
+        // Update existing settings - don't use .single() to avoid coercion error
+        const { data, error } = await supabase
+          .from('user_settings')
+          .update(updates)
+          .eq('user_id', user.id)
+          .select();
+        
+        if (error) throw error;
+        result = data?.[0] || null;
+      } else {
+        // Insert new settings
+        const { data, error } = await supabase
+          .from('user_settings')
+          .insert({ user_id: user.id, ...updates })
+          .select()
+          .single();
+        
+        if (error) throw error;
+        result = data;
+      }
+      
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
