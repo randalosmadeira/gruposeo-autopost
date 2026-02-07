@@ -354,8 +354,8 @@ Requirements:
 }
 
 /**
- * Fallback: Generate image using direct Gemini Imagen API
- * Uses the imagen-3.0-generate-001 model which is available in the v1beta API
+ * Fallback: Generate image using Gemini models with image generation capability
+ * Tries multiple models in order of preference
  */
 async function generateGeminiImageDirect(
   prompt: string,
@@ -363,61 +363,76 @@ async function generateGeminiImageDirect(
 ): Promise<{ imageData: string; mimeType: string } | null> {
   const apiKey = getGeminiApiKey();
   
-  // Try Imagen 3 first (the correct image generation model)
-  const model = "imagen-3.0-generate-001";
-  const url = `${GEMINI_API_BASE}/models/${model}:predict?key=${apiKey}`;
-  
   const aspectRatioText = options.aspectRatio || "16:9";
-  const enhancedPrompt = `A professional, high-quality photograph for a blog article. ${prompt}. 
-Style: Modern, clean, professional photography with natural lighting. 
-Aspect ratio: ${aspectRatioText} landscape format.
-No text, watermarks, or logos in the image.
-High resolution, sharp details, suitable for web publication.`;
+  const enhancedPrompt = `Create a professional, high-quality photograph for a blog article.
+
+Topic: ${prompt}
+
+Requirements:
+- Style: Modern, clean, professional photography with natural lighting
+- Aspect ratio: ${aspectRatioText} landscape format
+- No text, watermarks, or logos in the image
+- High resolution, sharp details, suitable for web publication
+- Professional business/editorial quality`;
   
-  const requestBody = {
-    instances: [{ prompt: enhancedPrompt }],
-    parameters: {
-      sampleCount: 1,
-      aspectRatio: aspectRatioText,
-      personGeneration: options.personGeneration || "allow_adult",
-    },
-  };
+  // Try models in order of preference for image generation
+  const modelsToTry = [
+    "gemini-2.0-flash-preview-image-generation",
+    "gemini-2.0-flash-thinking-exp",
+    "gemini-1.5-flash",
+  ];
   
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Imagen 3 API error:", response.status, errorText);
+  for (const model of modelsToTry) {
+    try {
+      console.log(`Trying image generation with model: ${model}`);
       
-      // If Imagen 3 fails, model might not be available
-      // Return null and let the caller handle it gracefully
-      console.log("Imagen 3 not available, image generation skipped");
-      return null;
-    }
-    
-    const data = await response.json();
-    
-    // Imagen 3 returns predictions with bytesBase64Encoded
-    const imageBytes = data.predictions?.[0]?.bytesBase64Encoded;
-    
-    if (imageBytes) {
-      return {
-        imageData: `data:image/png;base64,${imageBytes}`,
-        mimeType: "image/png",
+      const url = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
+      
+      const requestBody = {
+        contents: [{
+          parts: [{ text: enhancedPrompt }]
+        }],
+        generationConfig: {
+          temperature: 0.8,
+        },
       };
+      
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log(`Model ${model} failed: ${response.status}`);
+        continue; // Try next model
+      }
+      
+      const data = await response.json();
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      
+      // Look for image data in response
+      for (const part of parts) {
+        if (part.inlineData?.data) {
+          const mimeType = part.inlineData.mimeType || "image/png";
+          console.log(`Image generated successfully with ${model}`);
+          return {
+            imageData: `data:${mimeType};base64,${part.inlineData.data}`,
+            mimeType,
+          };
+        }
+      }
+      
+      console.log(`Model ${model} responded but no image data`);
+    } catch (error) {
+      console.error(`Error with model ${model}:`, error);
     }
-    
-    console.log("No image data in Imagen 3 response");
-    return null;
-  } catch (error) {
-    console.error("Direct Gemini image generation error:", error);
-    return null;
   }
+  
+  // If all models fail, the API key might not have image generation access
+  console.log("All image generation models failed. Image generation requires Gemini API with image capabilities or Lovable AI credits.");
+  return null;
 }
 
 /**
