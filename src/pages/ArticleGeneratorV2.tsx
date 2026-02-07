@@ -57,12 +57,14 @@ import {
   AIModelSelector,
   aiModels,
   getModelByValue,
+  getProviderByModel,
   ContentStructureConfig,
   AdvancedSettings,
   PublishingOptions,
   SEOAdvancedConfig,
   InternalLinksManager,
   type InternalLink,
+  type AIProvider,
 } from '@/components/shared';
 
 // App states as per spec
@@ -152,7 +154,7 @@ const defaultConfig: ArticleConfig = {
   pointOfView: 'segunda',
   size: 'medium',
   language: 'pt-BR',
-  aiModel: 'standard',
+  aiModel: 'gpt-4o',  // OpenAI GPT-4o as default
   // SEO defaults
   segment: 'general',
   contentType: 'how-to',
@@ -195,6 +197,7 @@ export default function ArticleGeneratorV2() {
   const isMobile = useIsMobile();
   
   const [config, setConfig] = useState<ArticleConfig>(defaultConfig);
+  const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
   const [showTutorial, setShowTutorial] = useState(true);
   const [generatingTitle, setGeneratingTitle] = useState(false);
   const [appState, setAppState] = useState<AppState>('form');
@@ -722,20 +725,35 @@ export default function ArticleGeneratorV2() {
                   <AccordionTrigger className="py-4">
                     <div className="flex items-center gap-2">
                       <Bot className="w-5 h-5" style={{ color: colors.primary }} />
-                      <span className="font-semibold">Modelo de IA</span>
+                      <span className="font-semibold">Provedor & Modelo de IA</span>
+                      <Badge 
+                        variant="secondary" 
+                        className="ml-2 text-xs"
+                        style={{ 
+                          backgroundColor: aiProvider === 'openai' ? '#10a37f20' : '#4285f420',
+                          color: aiProvider === 'openai' ? '#10a37f' : '#4285f4'
+                        }}
+                      >
+                        {aiProvider === 'openai' ? 'OpenAI' : 'Gemini'}
+                      </Badge>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pb-4">
                     <AIModelSelector
                       value={config.aiModel}
                       onChange={(v) => updateConfig('aiModel', v)}
+                      provider={aiProvider}
+                      onProviderChange={setAiProvider}
                       accentColor={colors.primary}
+                      showProviderTabs={true}
                     />
                     <div 
                       className="mt-4 p-3 rounded-lg text-xs"
                       style={{ backgroundColor: colors.lightBlue, color: colors.textSecondary }}
                     >
-                      <strong style={{ color: colors.textPrimary }}>Detalhes técnicos:</strong>{' '}
+                      <strong style={{ color: colors.textPrimary }}>Provedor atual:</strong>{' '}
+                      {aiProvider === 'openai' ? 'OpenAI (GPT-4o)' : 'Google Gemini'} | {' '}
+                      <strong style={{ color: colors.textPrimary }}>Modelo:</strong>{' '}
                       {selectedModel.technical}
                     </div>
                   </AccordionContent>
