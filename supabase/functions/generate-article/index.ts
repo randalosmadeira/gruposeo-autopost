@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
 import { buildAdvancedSEOPrompt, type PromptConfig } from "../_shared/seo-prompt-builder.ts";
-import { callGeminiStream, resolveModel } from "../_shared/gemini.ts";
+import { callAIStream, resolveModel } from "../_shared/gemini.ts";
 
 const FUNCTION_NAME = "generate-article";
 
@@ -267,13 +267,13 @@ Comece agora:`;
       useAdvanced: hasAdvancedConfig(config)
     });
 
-    // Call Gemini API with streaming
-    const streamResponse = await callGeminiStream(
+    // Call OpenAI (primary) with streaming, Gemini fallback
+    const streamResponse = await callAIStream(
       [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      { model: modelAlias }
+      { maxTokens: 8000 }
     );
 
     // Return the streaming response with CORS headers

@@ -230,7 +230,8 @@ Formato JSON:
           hasGeminiKey: providers.gemini,
           hasOpenAIKey: providers.openai,
           imageGeneration: providers.imageGeneration,
-          provider: "Direct API (Gemini + OpenAI)",
+          primaryProvider: providers.primaryProvider,
+          provider: "Direct API (OpenAI primary, Gemini fallback)",
           timestamp: new Date().toISOString(),
         };
         break;

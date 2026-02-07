@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
-import { callGemini, generateGeminiImage } from "../_shared/gemini.ts";
+import { callAI, generateGeminiImage } from "../_shared/gemini.ts";
 
 const FUNCTION_NAME = "regenerate-content";
 
@@ -143,13 +143,13 @@ No text or watermarks.`;
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     } else {
-      // Use Gemini for text generation
-      const result = await callGemini(
+      // Use OpenAI (primary) for text generation with Gemini fallback
+      const result = await callAI(
         [
           { role: "system", content: systemPrompt },
           { role: "user", content: prompt },
         ],
-        { model: "flash" }
+        { maxTokens: 2000 }
       );
 
       log.info("regenerate_complete", { type, success: !!result });
