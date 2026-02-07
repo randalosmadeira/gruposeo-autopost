@@ -261,26 +261,37 @@ export async function callGeminiStream(
 }
 
 /**
- * Generate image using Gemini Imagen API
+ * Generate image using Gemini 2.0 Flash with native image generation
+ * This model supports both text and image output in a single request
  */
 export async function generateGeminiImage(
   prompt: string,
   options: GeminiImageOptions = {}
 ): Promise<{ imageData: string; mimeType: string } | null> {
   const apiKey = getGeminiApiKey();
-  const model = "imagen-3.0-generate-002";
+  // Use gemini-2.0-flash-exp with image generation capability
+  const model = "gemini-2.0-flash-exp";
   
-  const url = `${GEMINI_API_BASE}/models/${model}:predict?key=${apiKey}`;
+  // Enhance prompt for better image generation
+  const enhancedPrompt = `Generate a high-quality professional image based on this description:
+
+${prompt}
+
+Requirements:
+- Aspect ratio: ${options.aspectRatio || "16:9"}
+- Style: Professional, clean, suitable for business/blog use
+- No text or watermarks in the image
+- High resolution and sharp details`;
+  
+  const url = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
   
   const requestBody = {
-    instances: [{ prompt }],
-    parameters: {
-      aspectRatio: options.aspectRatio || "16:9",
-      numberOfImages: options.numberOfImages || 1,
-      personGeneration: options.personGeneration || "allow_adult",
-      outputOptions: {
-        mimeType: "image/webp",
-      },
+    contents: [{
+      parts: [{ text: enhancedPrompt }]
+    }],
+    generationConfig: {
+      responseModalities: ["TEXT", "IMAGE"],
+      temperature: 0.8,
     },
   };
   
@@ -293,26 +304,34 @@ export async function generateGeminiImage(
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Imagen API error:", response.status, errorText);
+      console.error("Gemini image generation error:", response.status, errorText);
       
       if (response.status === 429) {
         throw new Error("Rate limit de imagens excedido.");
       }
+      
+      // Try fallback to text-only model for placeholder
+      console.log("Image generation not available, returning null");
       return null;
     }
     
     const data = await response.json();
-    const imageBytes = data.predictions?.[0]?.bytesBase64Encoded;
     
-    if (!imageBytes) {
-      console.error("No image data in response");
-      return null;
+    // Look for image data in the response
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        const mimeType = part.inlineData.mimeType || "image/png";
+        return {
+          imageData: `data:${mimeType};base64,${part.inlineData.data}`,
+          mimeType,
+        };
+      }
     }
     
-    return {
-      imageData: `data:image/webp;base64,${imageBytes}`,
-      mimeType: "image/webp",
-    };
+    console.error("No image data in Gemini response");
+    return null;
   } catch (error) {
     console.error("Image generation error:", error);
     return null;
