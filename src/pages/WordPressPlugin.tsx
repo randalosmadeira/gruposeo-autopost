@@ -21,7 +21,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 
 const PLUGIN_VERSION = '2.5.0';
-const PLUGIN_LAST_UPDATE = '2026-02-07';
+const PLUGIN_LAST_UPDATE = '2026-02-06';
 
 const features = [
   {
