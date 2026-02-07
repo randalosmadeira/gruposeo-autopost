@@ -1,13 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
-import { callGemini, generateGeminiImage, extractJSON, getGeminiApiKey, getOpenAIApiKey } from "../_shared/gemini.ts";
+import { 
+  callGemini, 
+  callOpenAI,
+  generateGeminiImage, 
+  extractJSON, 
+  hasGeminiKey, 
+  hasOpenAIKey,
+  getAIProvidersStatus,
+} from "../_shared/gemini.ts";
 
 const FUNCTION_NAME = "ai-api";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 interface AIRequest {
@@ -215,21 +223,14 @@ Formato JSON:
 
       // === HEALTH CHECK ===
       case "health": {
-        let hasGeminiKey = false;
-        let hasOpenAIKey = false;
-        
-        try {
-          getGeminiApiKey();
-          hasGeminiKey = true;
-        } catch { /* key not configured */ }
-        
-        hasOpenAIKey = !!getOpenAIApiKey();
+        const providers = getAIProvidersStatus();
         
         result = {
           status: "online",
-          hasGeminiKey,
-          hasOpenAIKey,
-          provider: "Google Gemini (direct API)",
+          hasGeminiKey: providers.gemini,
+          hasOpenAIKey: providers.openai,
+          imageGeneration: providers.imageGeneration,
+          provider: "Direct API (Gemini + OpenAI)",
           timestamp: new Date().toISOString(),
         };
         break;

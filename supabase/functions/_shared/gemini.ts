@@ -1,15 +1,15 @@
 /**
- * Gemini API Helper - Centralized module for Google Gemini AI integration
+ * Gemini & OpenAI API Helper - Direct API Integration
  * 
- * This module provides a unified interface for all Gemini API calls,
- * supporting both text generation and image generation.
+ * This module provides a unified interface for AI calls using
+ * YOUR OWN API keys (GEMINI_API_KEY and OPENAI_API_KEY).
  * 
- * Environment variable required: GEMINI_API_KEY
- * Fallback: OPENAI_API_KEY for OpenAI models (optional complement)
+ * NO Lovable AI Gateway - Direct API calls only.
  */
 
-// Gemini API endpoints
+// API endpoints
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
+const OPENAI_API_BASE = "https://api.openai.com/v1";
 
 // Model mappings - internal names to Gemini model IDs
 export const GEMINI_MODELS = {
@@ -18,7 +18,7 @@ export const GEMINI_MODELS = {
   "flash-lite": "gemini-2.0-flash-lite",
   "pro": "gemini-2.5-pro-preview-06-05",
   "flash-thinking": "gemini-2.0-flash-thinking-exp",
-  // Image models
+  // Image generation model (Imagen 3)
   "imagen": "imagen-3.0-generate-002",
   // Aliases for backward compatibility
   "standard": "gemini-2.0-flash",
@@ -27,11 +27,13 @@ export const GEMINI_MODELS = {
   "professional": "gemini-2.5-pro-preview-06-05",
 } as const;
 
-// OpenAI fallback models (optional)
+// OpenAI models
 export const OPENAI_MODELS = {
   "gpt-4o": "gpt-4o",
   "gpt-4o-mini": "gpt-4o-mini",
   "gpt-4-turbo": "gpt-4-turbo",
+  "dall-e-3": "dall-e-3",
+  "dall-e-2": "dall-e-2",
 } as const;
 
 export interface GeminiTextOptions {
@@ -50,6 +52,7 @@ export interface GeminiImageOptions {
   aspectRatio?: "1:1" | "16:9" | "9:16" | "4:3" | "3:4";
   numberOfImages?: number;
   personGeneration?: "dont_allow" | "allow_adult";
+  provider?: "gemini" | "openai" | "auto";
 }
 
 /**
@@ -64,10 +67,24 @@ export function getGeminiApiKey(): string {
 }
 
 /**
- * Get the optional OpenAI API key for fallback
+ * Get the OpenAI API key
  */
 export function getOpenAIApiKey(): string | null {
   return Deno.env.get("OPENAI_API_KEY") || null;
+}
+
+/**
+ * Check if Gemini API key is available
+ */
+export function hasGeminiKey(): boolean {
+  return !!Deno.env.get("GEMINI_API_KEY");
+}
+
+/**
+ * Check if OpenAI API key is available
+ */
+export function hasOpenAIKey(): boolean {
+  return !!Deno.env.get("OPENAI_API_KEY");
 }
 
 /**
@@ -84,13 +101,12 @@ export function resolveModel(modelAlias: string): string {
     return GEMINI_MODELS[modelAlias as keyof typeof GEMINI_MODELS];
   }
   
-  // Check for legacy Lovable AI Gateway format
+  // Handle legacy format (google/gemini-*)
   if (modelAlias.startsWith("google/")) {
     const cleanModel = modelAlias.replace("google/", "").replace("-preview", "");
     if (cleanModel.includes("gemini-3-flash")) return GEMINI_MODELS.flash;
     if (cleanModel.includes("gemini-3-pro")) return GEMINI_MODELS.pro;
     if (cleanModel.includes("gemini-2.5-flash-lite")) return GEMINI_MODELS["flash-lite"];
-    if (cleanModel.includes("gemini-2.5-flash-image")) return GEMINI_MODELS.imagen;
     if (cleanModel.includes("gemini-2.5-flash")) return GEMINI_MODELS.flash;
     if (cleanModel.includes("gemini-2.5-pro")) return GEMINI_MODELS.pro;
     return GEMINI_MODELS.flash;
@@ -173,7 +189,6 @@ export async function callGemini(
 
 /**
  * Call Gemini API for text generation with streaming
- * Returns a ReadableStream for SSE
  */
 export async function callGeminiStream(
   messages: GeminiMessage[],
@@ -217,7 +232,7 @@ export async function callGeminiStream(
     throw new Error(`Gemini API error: ${response.status}`);
   }
   
-  // Transform Gemini SSE format to OpenAI-compatible format for frontend compatibility
+  // Transform Gemini SSE format to OpenAI-compatible format
   const transformStream = new TransformStream({
     transform(chunk, controller) {
       const text = new TextDecoder().decode(chunk);
@@ -229,7 +244,6 @@ export async function callGeminiStream(
             const data = JSON.parse(line.slice(6));
             const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
             if (content) {
-              // Convert to OpenAI-compatible format
               const openAIFormat = {
                 choices: [{
                   delta: { content },
@@ -238,12 +252,10 @@ export async function callGeminiStream(
               };
               controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(openAIFormat)}\n\n`));
             }
-            // Check for finish reason
             if (data.candidates?.[0]?.finishReason) {
               controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
             }
           } catch {
-            // Pass through as-is if not parseable
             controller.enqueue(chunk);
           }
         }
@@ -261,182 +273,7 @@ export async function callGeminiStream(
 }
 
 /**
- * Generate image using Lovable AI Gateway with Gemini image model
- * Uses google/gemini-2.5-flash-image for image generation
- */
-export async function generateGeminiImage(
-  prompt: string,
-  options: GeminiImageOptions = {}
-): Promise<{ imageData: string; mimeType: string } | null> {
-  // Use Lovable AI Gateway for image generation
-  const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-  
-  if (!lovableApiKey) {
-    console.error("LOVABLE_API_KEY not configured for image generation");
-    // Fallback to direct Gemini API
-    return await generateGeminiImageDirect(prompt, options);
-  }
-  
-  const url = "https://ai.gateway.lovable.dev/v1/chat/completions";
-  
-  const aspectRatioText = options.aspectRatio || "16:9";
-  const enhancedPrompt = `Generate a high-quality professional image based on this description:
-
-${prompt}
-
-Requirements:
-- Aspect ratio: ${aspectRatioText}
-- Style: Professional, clean, suitable for business/blog use
-- No text or watermarks in the image
-- High resolution and sharp details`;
-  
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${lovableApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [
-          {
-            role: "user",
-            content: enhancedPrompt,
-          },
-        ],
-        modalities: ["image", "text"],
-      }),
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Lovable AI Gateway image error:", response.status, errorText);
-      
-      if (response.status === 429) {
-        console.log("Rate limit exceeded, trying direct Gemini API fallback");
-        return await generateGeminiImageDirect(prompt, options);
-      }
-      if (response.status === 402) {
-        console.log("Credits insufficient, trying direct Gemini API fallback");
-        return await generateGeminiImageDirect(prompt, options);
-      }
-      
-      // For other errors, try direct API as fallback
-      console.log("Gateway error, trying direct Gemini API fallback");
-      return await generateGeminiImageDirect(prompt, options);
-    }
-    
-    const data = await response.json();
-    
-    // Extract image from Lovable AI Gateway response
-    const images = data.choices?.[0]?.message?.images;
-    if (images && images.length > 0) {
-      const imageUrl = images[0]?.image_url?.url;
-      if (imageUrl) {
-        // Extract mime type from data URL
-        const mimeMatch = imageUrl.match(/^data:([^;]+);/);
-        const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
-        
-        return {
-          imageData: imageUrl,
-          mimeType,
-        };
-      }
-    }
-    
-    console.error("No image data in Lovable AI Gateway response");
-    return null;
-  } catch (error) {
-    console.error("Image generation error:", error);
-    return null;
-  }
-}
-
-/**
- * Fallback: Generate image using Gemini models with image generation capability
- * Tries multiple models in order of preference
- */
-async function generateGeminiImageDirect(
-  prompt: string,
-  options: GeminiImageOptions = {}
-): Promise<{ imageData: string; mimeType: string } | null> {
-  const apiKey = getGeminiApiKey();
-  
-  const aspectRatioText = options.aspectRatio || "16:9";
-  const enhancedPrompt = `Create a professional, high-quality photograph for a blog article.
-
-Topic: ${prompt}
-
-Requirements:
-- Style: Modern, clean, professional photography with natural lighting
-- Aspect ratio: ${aspectRatioText} landscape format
-- No text, watermarks, or logos in the image
-- High resolution, sharp details, suitable for web publication
-- Professional business/editorial quality`;
-  
-  // Try models in order of preference for image generation
-  const modelsToTry = [
-    "gemini-2.0-flash-preview-image-generation",
-    "gemini-2.0-flash-thinking-exp",
-    "gemini-1.5-flash",
-  ];
-  
-  for (const model of modelsToTry) {
-    try {
-      console.log(`Trying image generation with model: ${model}`);
-      
-      const url = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
-      
-      const requestBody = {
-        contents: [{
-          parts: [{ text: enhancedPrompt }]
-        }],
-        generationConfig: {
-          temperature: 0.8,
-        },
-      };
-      
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.log(`Model ${model} failed: ${response.status}`);
-        continue; // Try next model
-      }
-      
-      const data = await response.json();
-      const parts = data.candidates?.[0]?.content?.parts || [];
-      
-      // Look for image data in response
-      for (const part of parts) {
-        if (part.inlineData?.data) {
-          const mimeType = part.inlineData.mimeType || "image/png";
-          console.log(`Image generated successfully with ${model}`);
-          return {
-            imageData: `data:${mimeType};base64,${part.inlineData.data}`,
-            mimeType,
-          };
-        }
-      }
-      
-      console.log(`Model ${model} responded but no image data`);
-    } catch (error) {
-      console.error(`Error with model ${model}:`, error);
-    }
-  }
-  
-  // If all models fail, the API key might not have image generation access
-  console.log("All image generation models failed. Image generation requires Gemini API with image capabilities or Lovable AI credits.");
-  return null;
-}
-
-/**
- * Call OpenAI API as fallback (requires OPENAI_API_KEY)
+ * Call OpenAI API for text generation
  */
 export async function callOpenAI(
   messages: GeminiMessage[],
@@ -444,12 +281,12 @@ export async function callOpenAI(
 ): Promise<string> {
   const apiKey = getOpenAIApiKey();
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY não configurada. OpenAI está disponível apenas como complemento.");
+    throw new Error("OPENAI_API_KEY não configurada.");
   }
   
   const model = options.model || "gpt-4o-mini";
   
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const response = await fetch(`${OPENAI_API_BASE}/chat/completions`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
@@ -469,6 +306,10 @@ export async function callOpenAI(
   if (!response.ok) {
     const errorText = await response.text();
     console.error("OpenAI API error:", response.status, errorText);
+    
+    if (response.status === 429) {
+      throw new Error("OpenAI rate limit excedido. Tente novamente.");
+    }
     throw new Error(`OpenAI API error: ${response.status}`);
   }
   
@@ -477,18 +318,351 @@ export async function callOpenAI(
 }
 
 /**
- * Universal AI call - tries Gemini first, falls back to OpenAI if configured
+ * Call OpenAI API with streaming
+ */
+export async function callOpenAIStream(
+  messages: GeminiMessage[],
+  options: { model?: string; maxTokens?: number; temperature?: number } = {}
+): Promise<Response> {
+  const apiKey = getOpenAIApiKey();
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY não configurada.");
+  }
+  
+  const model = options.model || "gpt-4o-mini";
+  
+  const response = await fetch(`${OPENAI_API_BASE}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: messages.map(m => ({
+        role: m.role === "model" ? "assistant" : m.role,
+        content: m.content,
+      })),
+      max_tokens: options.maxTokens || 4096,
+      temperature: options.temperature ?? 0.7,
+      stream: true,
+    }),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("OpenAI streaming error:", response.status, errorText);
+    throw new Error(`OpenAI API error: ${response.status}`);
+  }
+  
+  return new Response(response.body, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
+}
+
+/**
+ * Generate image using OpenAI DALL-E 3
+ */
+async function generateImageWithOpenAI(
+  prompt: string,
+  options: GeminiImageOptions = {}
+): Promise<{ imageData: string; mimeType: string } | null> {
+  const apiKey = getOpenAIApiKey();
+  if (!apiKey) {
+    console.log("OpenAI API key not available for image generation");
+    return null;
+  }
+  
+  // Map aspect ratio to DALL-E 3 size
+  const sizeMap: Record<string, string> = {
+    "1:1": "1024x1024",
+    "16:9": "1792x1024",
+    "9:16": "1024x1792",
+    "4:3": "1024x1024", // DALL-E doesn't support 4:3, use square
+    "3:4": "1024x1024",
+  };
+  
+  const size = sizeMap[options.aspectRatio || "16:9"] || "1792x1024";
+  
+  try {
+    console.log("Generating image with OpenAI DALL-E 3...");
+    
+    const response = await fetch(`${OPENAI_API_BASE}/images/generations`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "dall-e-3",
+        prompt: prompt,
+        n: 1,
+        size: size,
+        quality: "hd",
+        response_format: "b64_json",
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("DALL-E 3 error:", response.status, errorText);
+      return null;
+    }
+    
+    const data = await response.json();
+    const imageBase64 = data.data?.[0]?.b64_json;
+    
+    if (imageBase64) {
+      console.log("Image generated successfully with DALL-E 3");
+      return {
+        imageData: `data:image/png;base64,${imageBase64}`,
+        mimeType: "image/png",
+      };
+    }
+    
+    console.log("No image data in DALL-E 3 response");
+    return null;
+  } catch (error) {
+    console.error("DALL-E 3 generation error:", error);
+    return null;
+  }
+}
+
+/**
+ * Generate image using Gemini Imagen 3
+ */
+async function generateImageWithGemini(
+  prompt: string,
+  options: GeminiImageOptions = {}
+): Promise<{ imageData: string; mimeType: string } | null> {
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
+  if (!apiKey) {
+    console.log("Gemini API key not available for image generation");
+    return null;
+  }
+  
+  const aspectRatio = options.aspectRatio || "16:9";
+  
+  // Try Imagen 3 first (requires specific API access)
+  const imagenModels = [
+    "imagen-3.0-generate-002",
+    "imagen-3.0-generate-001",
+  ];
+  
+  for (const model of imagenModels) {
+    try {
+      console.log(`Trying Gemini image generation with ${model}...`);
+      
+      const url = `${GEMINI_API_BASE}/models/${model}:predict?key=${apiKey}`;
+      
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instances: [{ prompt }],
+          parameters: {
+            sampleCount: 1,
+            aspectRatio: aspectRatio,
+            personGeneration: options.personGeneration || "allow_adult",
+          },
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log(`Imagen ${model} failed: ${response.status}`, errorText);
+        continue;
+      }
+      
+      const data = await response.json();
+      const imageBytes = data.predictions?.[0]?.bytesBase64Encoded;
+      
+      if (imageBytes) {
+        console.log(`Image generated successfully with Gemini ${model}`);
+        return {
+          imageData: `data:image/png;base64,${imageBytes}`,
+          mimeType: "image/png",
+        };
+      }
+    } catch (error) {
+      console.error(`Error with Gemini ${model}:`, error);
+    }
+  }
+  
+  // Try experimental image generation models
+  const experimentalModels = [
+    "gemini-2.0-flash-exp-image-generation",
+    "gemini-2.0-flash-preview-image-generation",
+  ];
+  
+  for (const model of experimentalModels) {
+    try {
+      console.log(`Trying experimental model: ${model}...`);
+      
+      const url = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
+      
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            responseModalities: ["IMAGE", "TEXT"],
+          },
+        }),
+      });
+      
+      if (!response.ok) {
+        console.log(`Model ${model} failed: ${response.status}`);
+        continue;
+      }
+      
+      const data = await response.json();
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      
+      for (const part of parts) {
+        if (part.inlineData?.data) {
+          const mimeType = part.inlineData.mimeType || "image/png";
+          console.log(`Image generated with ${model}`);
+          return {
+            imageData: `data:${mimeType};base64,${part.inlineData.data}`,
+            mimeType,
+          };
+        }
+      }
+    } catch (error) {
+      console.error(`Error with ${model}:`, error);
+    }
+  }
+  
+  console.log("All Gemini image models failed");
+  return null;
+}
+
+/**
+ * Generate image - tries Gemini first, then OpenAI as fallback
+ * provider: "gemini" | "openai" | "auto" (default: auto)
+ */
+export async function generateGeminiImage(
+  prompt: string,
+  options: GeminiImageOptions = {}
+): Promise<{ imageData: string; mimeType: string } | null> {
+  const provider = options.provider || "auto";
+  
+  const aspectRatio = options.aspectRatio || "16:9";
+  const enhancedPrompt = `Create a professional, high-quality photograph for a blog article.
+
+${prompt}
+
+Requirements:
+- Aspect ratio: ${aspectRatio} landscape format
+- Style: Modern, clean, professional photography with natural lighting
+- No text, watermarks, or logos
+- High resolution, sharp details, suitable for web publication
+- Professional business/editorial quality`;
+  
+  if (provider === "gemini") {
+    return await generateImageWithGemini(enhancedPrompt, options);
+  }
+  
+  if (provider === "openai") {
+    return await generateImageWithOpenAI(enhancedPrompt, options);
+  }
+  
+  // Auto mode: try Gemini first, then OpenAI
+  console.log("Image generation: trying Gemini first...");
+  let result = await generateImageWithGemini(enhancedPrompt, options);
+  
+  if (result) {
+    return result;
+  }
+  
+  console.log("Gemini failed, trying OpenAI DALL-E 3...");
+  result = await generateImageWithOpenAI(enhancedPrompt, options);
+  
+  if (result) {
+    return result;
+  }
+  
+  console.log("All image generation providers failed");
+  return null;
+}
+
+/**
+ * Universal AI call - tries Gemini first, falls back to OpenAI
  */
 export async function callAI(
   messages: GeminiMessage[],
-  options: GeminiTextOptions & { fallbackToOpenAI?: boolean } = {}
+  options: GeminiTextOptions & { fallbackToOpenAI?: boolean; preferOpenAI?: boolean } = {}
 ): Promise<string> {
+  // If prefer OpenAI and key available, use it first
+  if (options.preferOpenAI && hasOpenAIKey()) {
+    try {
+      return await callOpenAI(messages, {
+        model: "gpt-4o-mini",
+        maxTokens: options.maxTokens,
+        temperature: options.temperature,
+      });
+    } catch (error) {
+      console.warn("OpenAI failed, trying Gemini:", error);
+      if (hasGeminiKey()) {
+        return await callGemini(messages, options);
+      }
+      throw error;
+    }
+  }
+  
+  // Default: try Gemini first
   try {
     return await callGemini(messages, options);
   } catch (error) {
-    if (options.fallbackToOpenAI && getOpenAIApiKey()) {
+    if (options.fallbackToOpenAI && hasOpenAIKey()) {
       console.warn("Gemini failed, falling back to OpenAI:", error);
       return await callOpenAI(messages, {
+        model: "gpt-4o-mini",
+        maxTokens: options.maxTokens,
+        temperature: options.temperature,
+      });
+    }
+    throw error;
+  }
+}
+
+/**
+ * Universal AI call with streaming
+ */
+export async function callAIStream(
+  messages: GeminiMessage[],
+  options: GeminiTextOptions & { fallbackToOpenAI?: boolean; preferOpenAI?: boolean } = {}
+): Promise<Response> {
+  if (options.preferOpenAI && hasOpenAIKey()) {
+    try {
+      return await callOpenAIStream(messages, {
+        model: "gpt-4o-mini",
+        maxTokens: options.maxTokens,
+        temperature: options.temperature,
+      });
+    } catch (error) {
+      console.warn("OpenAI stream failed, trying Gemini:", error);
+      if (hasGeminiKey()) {
+        return await callGeminiStream(messages, options);
+      }
+      throw error;
+    }
+  }
+  
+  try {
+    return await callGeminiStream(messages, options);
+  } catch (error) {
+    if (options.fallbackToOpenAI && hasOpenAIKey()) {
+      console.warn("Gemini stream failed, falling back to OpenAI:", error);
+      return await callOpenAIStream(messages, {
         model: "gpt-4o-mini",
         maxTokens: options.maxTokens,
         temperature: options.temperature,
@@ -502,13 +676,11 @@ export async function callAI(
  * Helper to extract JSON from AI response
  */
 export function extractJSON<T>(text: string): T | null {
-  // Try to find JSON in the response
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
       return JSON.parse(jsonMatch[0]) as T;
     } catch {
-      // Try fixing common JSON issues
       let fixed = jsonMatch[0]
         .replace(/,\s*}/g, '}')
         .replace(/,\s*]/g, ']')
@@ -521,4 +693,22 @@ export function extractJSON<T>(text: string): T | null {
     }
   }
   return null;
+}
+
+/**
+ * Get available AI providers status
+ */
+export function getAIProvidersStatus(): {
+  gemini: boolean;
+  openai: boolean;
+  imageGeneration: boolean;
+} {
+  const hasGemini = hasGeminiKey();
+  const hasOpenAI = hasOpenAIKey();
+  
+  return {
+    gemini: hasGemini,
+    openai: hasOpenAI,
+    imageGeneration: hasGemini || hasOpenAI, // Either can generate images
+  };
 }
