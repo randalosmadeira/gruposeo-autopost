@@ -28,6 +28,7 @@ interface ArticleTypeCardProps {
   badges?: { label: string; variant: 'premium' | 'beta' | 'new' | 'unlimited' }[];
   comingSoon?: boolean;
   iconColor?: string;
+  iconBgColor?: string;
 }
 
 function ArticleTypeCard({
@@ -41,92 +42,63 @@ function ArticleTypeCard({
   badges,
   comingSoon,
   iconColor,
+  iconBgColor,
 }: ArticleTypeCardProps) {
-  const iconStyles = {
-    primary: 'bg-blue-100 text-blue-600',
-    accent: 'bg-orange-100 text-orange-600',
-    default: 'bg-muted text-muted-foreground',
+  const defaultIconStyles = {
+    primary: { bg: '#EBF5FF', color: '#2563EB' },
+    accent: { bg: '#FFF7ED', color: '#EA580C' },
+    default: { bg: '#F3F4F6', color: '#6B7280' },
   };
 
   const buttonStyles = {
     primary: 'bg-primary hover:bg-primary/90 text-primary-foreground',
-    accent: 'bg-orange-500 hover:bg-orange-600 text-white',
+    accent: 'bg-[hsl(30,100%,50%)] hover:bg-[hsl(30,100%,45%)] text-white',
     default: 'bg-foreground text-background hover:bg-foreground/90',
   };
 
-  const badgeStyles = {
-    premium: 'bg-amber-100 text-amber-700 border-amber-200',
-    beta: 'bg-purple-100 text-purple-700 border-purple-200',
-    new: 'bg-orange-100 text-orange-700 border-orange-200',
-    unlimited: 'bg-blue-100 text-blue-700 border-blue-200',
-  };
+  const currentIconBg = iconBgColor || defaultIconStyles[variant].bg;
+  const currentIconColor = iconColor || defaultIconStyles[variant].color;
 
   return (
     <Card className={cn(
-      'group relative border shadow-sm transition-all duration-300',
-      'hover:shadow-md hover:-translate-y-0.5',
+      'group relative border shadow-sm transition-all duration-300 bg-white',
+      'hover:shadow-lg hover:-translate-y-1',
       comingSoon && 'opacity-60 pointer-events-none'
     )}>
       <CardContent className="p-6">
-        {/* Header with Icon and Badges */}
-        <div className="flex items-start justify-between mb-4">
-          <div 
-            className={cn(
-              'w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110',
-              iconStyles[variant]
-            )}
-            style={iconColor ? { backgroundColor: `${iconColor}15`, color: iconColor } : undefined}
-          >
-            <Icon className="w-6 h-6" />
-          </div>
-          {badges && badges.length > 0 && (
-            <div className="flex gap-1.5">
-              {badges.map((badge) => (
-                <Badge
-                  key={badge.label}
-                  variant="outline"
-                  className={cn('text-[10px] px-2 py-0.5 font-medium', badgeStyles[badge.variant])}
-                >
-                  {badge.label}
-                </Badge>
-              ))}
+        {/* Icon */}
+        <div 
+          className="w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110"
+          style={{ backgroundColor: currentIconBg }}
+        >
+          <Icon className="w-6 h-6" style={{ color: currentIconColor }} />
+        </div>
+
+        {/* Title */}
+        <h3 className="text-lg font-bold text-foreground mb-2">{title}</h3>
+        
+        {/* Description */}
+        <p className="text-sm text-muted-foreground mb-5 leading-relaxed">{description}</p>
+
+        {/* Features with checkmarks */}
+        <div className="space-y-2 mb-6">
+          {features.map((feature) => (
+            <div key={feature} className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
+              <span>{feature}</span>
             </div>
-          )}
+          ))}
         </div>
 
-        {/* Title and Subtitle */}
-        <h3 className="text-lg font-semibold text-foreground mb-1">{title}</h3>
-        {subtitle && (
-          <p className="text-xs text-muted-foreground mb-2">{subtitle}</p>
-        )}
-        <p className="text-sm text-muted-foreground mb-4 line-clamp-3">{description}</p>
-
-        {/* Features */}
-        <div className="mb-5">
-          <p className="text-xs font-medium text-muted-foreground mb-2">Principais recursos</p>
-          <div className="flex flex-wrap gap-1.5">
-            {features.map((feature) => (
-              <Badge 
-                key={feature} 
-                variant="secondary" 
-                className="text-xs font-normal px-2 py-0.5"
-              >
-                {feature}
-              </Badge>
-            ))}
-          </div>
-        </div>
-
-        {/* CTA */}
+        {/* CTA Button */}
         {comingSoon ? (
           <div className="text-center py-3">
             <p className="text-sm font-medium text-muted-foreground">Em breve</p>
-            <p className="text-xs text-muted-foreground">Estamos trabalhando nesta funcionalidade</p>
           </div>
         ) : (
-          <Button asChild className={cn('w-full gap-2', buttonStyles[variant])}>
+          <Button asChild className={cn('w-full gap-2 h-11 font-medium', buttonStyles[variant])}>
             <Link to={href}>
-              Criar agora
+              Começar Agora
               <ArrowRight className="w-4 h-4" />
             </Link>
           </Button>
@@ -138,119 +110,164 @@ function ArticleTypeCard({
 
 function TemplatesCard() {
   return (
-    <Card className="border shadow-sm col-span-full lg:col-span-2">
+    <Card className="border shadow-sm bg-white">
       <CardContent className="p-6">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
-            <Folder className="w-6 h-6 text-purple-600" />
-          </div>
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Left side - Icon and Content */}
           <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-lg font-semibold text-foreground">Modelos de Artigo</h3>
-              <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200 text-[10px]">
-                Popular
-              </Badge>
+            <div className="flex items-start gap-4 mb-4">
+              <div 
+                className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: '#FEF3C7' }}
+              >
+                <Folder className="w-6 h-6" style={{ color: '#D97706' }} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-lg font-bold text-foreground">Modelos de Artigo</h3>
+                  <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px] px-2 py-0.5">
+                    Popular
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Configure suas preferências uma vez, reutilize sempre
+                </p>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground mb-4">
-              Configure suas preferências uma vez, reutilize sempre. Crie e gerencie modelos personalizados 
-              com suas configurações preferidas. Economize tempo reutilizando configurações de SEO, tamanho, 
-              tom de voz e muito mais.
+            
+            <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
+              Crie e gerencie modelos personalizados com suas configurações preferidas. 
+              Economize tempo reutilizando configurações de SEO, tamanho, tom de voz e muito mais.
             </p>
-            <div className="flex flex-wrap gap-3 mb-4">
-              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <CheckCircle2 className="w-4 h-4 text-green-500" />
+
+            {/* Features Grid */}
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
                 Configurações salvas
               </div>
-              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Zap className="w-4 h-4 text-amber-500" />
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Zap className="w-4 h-4 text-amber-500 flex-shrink-0" />
                 Reutilização rápida
               </div>
-              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Settings className="w-4 h-4 text-blue-500" />
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Settings className="w-4 h-4 text-blue-500 flex-shrink-0" />
                 Templates personalizados
               </div>
-              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Sparkles className="w-4 h-4 text-purple-500" />
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Sparkles className="w-4 h-4 text-purple-500 flex-shrink-0" />
                 Padrões inteligentes
               </div>
             </div>
-            <div className="flex flex-wrap gap-1.5 mb-5">
-              <Badge variant="secondary" className="text-xs">Gestão Simples</Badge>
-              <Badge variant="secondary" className="text-xs">Modelos Ilimitados</Badge>
-              <Badge variant="secondary" className="text-xs">Sempre Disponível</Badge>
+
+            {/* Tags */}
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary" className="text-xs bg-muted">
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+                Gestão Simples
+              </Badge>
+              <Badge variant="secondary" className="text-xs bg-muted">
+                <Settings className="w-3 h-3 mr-1" />
+                Modelos Ilimitados
+              </Badge>
+              <Badge variant="secondary" className="text-xs bg-muted">
+                <Zap className="w-3 h-3 mr-1" />
+                Sempre Disponível
+              </Badge>
             </div>
           </div>
-          <div className="hidden md:flex flex-col gap-2 min-w-[200px]">
-            <p className="text-sm font-medium text-foreground mb-1">Gerencie seus modelos</p>
-            <p className="text-xs text-muted-foreground mb-3">Acesse e organize todos os seus templates.</p>
-            <Button variant="default" className="w-full gap-2 bg-orange-500 hover:bg-orange-600 text-white">
-              <Sparkles className="w-4 h-4" />
-              Acessar Modelos
-            </Button>
-            <Button variant="outline" className="w-full gap-2">
-              <Folder className="w-4 h-4" />
-              Criar com Modelo
-            </Button>
+
+          {/* Right side - Actions */}
+          <div className="lg:w-[280px] flex flex-col justify-center">
+            <div className="p-5 bg-muted/30 rounded-xl border border-border/50">
+              <p className="font-semibold text-foreground mb-1">Gerencie seus modelos</p>
+              <p className="text-xs text-muted-foreground mb-4">Acesse e organize todos os seus templates.</p>
+              
+              <div className="space-y-2">
+                <Button className="w-full gap-2 h-11 bg-[hsl(30,100%,50%)] hover:bg-[hsl(30,100%,45%)] text-white font-medium">
+                  <Sparkles className="w-4 h-4" />
+                  Acessar Modelos
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" className="w-full gap-2 h-11 font-medium">
+                  <Folder className="w-4 h-4" />
+                  Criar com Modelo
+                </Button>
+              </div>
+            </div>
+
+            {/* Tip */}
+            <div className="mt-4 p-3 bg-purple-50 rounded-lg border border-purple-100">
+              <p className="text-xs text-purple-700 flex items-start gap-2">
+                <Sparkles className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>
+                  <strong>Dica:</strong> Seus modelos salvos aparecerão automaticamente no formulário de criação de artigos.
+                </span>
+              </p>
+            </div>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1.5 bg-muted/50 rounded-lg p-3">
-          <Sparkles className="w-4 h-4 text-purple-500" />
-          <strong>Dica:</strong> Seus modelos salvos aparecerão automaticamente no formulário de criação de artigos.
-        </p>
       </CardContent>
     </Card>
   );
 }
 
 export default function ArticleTypeSelection() {
-  const articleTypes: ArticleTypeCardProps[] = [
+  // First row - 3 main article types
+  const mainArticleTypes: ArticleTypeCardProps[] = [
     {
       title: 'Artigo de Blog',
-      subtitle: 'Conteúdo educacional de qualidade',
       description: 'Crie postagens de blog envolventes e informativas para o seu público. Perfeito para storytelling, tutoriais e conteúdo de liderança de pensamento.',
       icon: FileText,
       features: ['Otimizado para SEO', 'Múltiplos Formatos', 'Imagens Automáticas'],
       href: '/articles/new',
       variant: 'primary',
+      iconBgColor: '#EBF5FF',
+      iconColor: '#2563EB',
     },
     {
       title: 'Página de Vendas',
-      subtitle: 'Domine o Google Local',
-      description: 'Especial para prestadores de serviço e ofertas. Crie páginas que unem SEO Geográfico com roteiros de vendas focados na dor do cliente para gerar leads qualificados.',
+      description: 'Gere páginas híbridas que unem a persuasão do copywriting com a força do SEO. Estrutura inteligente focada em dor, agitação e solução para converter visitantes em leads.',
       icon: Target,
-      features: ['SEO Local Avançado', 'Foco em Leads', 'Copy Persuasiva'],
+      features: ['Copywriting Persuasivo', 'SEO Local e Nacional', 'Foco em Conversão'],
       href: '/landing-page/new',
       variant: 'accent',
-      badges: [{ label: 'Alta Conversão', variant: 'premium' }],
+      iconBgColor: '#FFF7ED',
+      iconColor: '#EA580C',
     },
     {
       title: 'Artigos em Massa',
-      subtitle: 'Escala Global',
       description: 'Gere múltiplos artigos de uma vez para escalar sua produção de conteúdo. Ideal para campanhas de marketing de conteúdo e estratégias de SEO.',
       icon: Layers,
       features: ['Processamento em Lote', 'Baseado em Modelos', 'Economia de Tempo'],
       href: '/bulk-generator',
       variant: 'default',
+      iconBgColor: '#F3F4F6',
+      iconColor: '#6B7280',
     },
+  ];
+
+  // Second row - Review and Best Products
+  const secondRowTypes: ArticleTypeCardProps[] = [
     {
-      title: 'Reviews de Produto',
-      subtitle: 'Análises detalhadas e confiáveis',
-      description: 'Análises completas e imparciais de produtos, destacando prós, contras e recomendações para ajudar seu público a tomar decisões informadas.',
+      title: 'Review de Produto',
+      description: 'Gere análises detalhadas de produtos com prós, contras e uma análise abrangente para ajudar seu público a tomar decisões informadas.',
       icon: Star,
-      features: ['Análise Técnica', 'Comparativo', 'Pontuação'],
+      features: ['Tabelas Comparativas', 'Sistema de Avaliação', 'Pronto para Afiliados'],
       href: '/articles/new/review',
       variant: 'default',
-      comingSoon: true,
+      iconBgColor: '#FEF3C7',
+      iconColor: '#D97706',
     },
     {
-      title: 'Artigos de Notícia',
-      subtitle: 'Conteúdo sempre atualizado',
-      description: 'Crie notícias atualizadas e relevantes sobre temas de interesse do seu público-alvo.',
-      icon: Zap,
-      features: ['Trending Topics', 'Fact Check', 'Atualização Automática'],
-      href: '/news-rewriter',
-      variant: 'default',
-      badges: [{ label: 'NOVO', variant: 'new' }],
+      title: 'Melhores Produtos',
+      description: 'Compare e liste os melhores produtos de uma categoria específica.',
+      icon: Trophy,
+      features: ['Tabelas Comparativas', 'Sistema de Avaliação', 'Pronto para Afiliados'],
+      href: '/articles/new/best-products',
+      variant: 'accent',
+      iconBgColor: '#DCFCE7',
+      iconColor: '#16A34A',
     },
   ];
 
@@ -271,16 +288,16 @@ export default function ArticleTypeSelection() {
         </p>
       </div>
 
-      {/* Cards Grid - Top Row */}
+      {/* First Row - 3 Main Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-        {articleTypes.slice(0, 3).map((type) => (
+        {mainArticleTypes.map((type) => (
           <ArticleTypeCard key={type.title} {...type} />
         ))}
       </div>
 
-      {/* Cards Grid - Second Row */}
+      {/* Second Row - Review and Melhores Produtos */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        {articleTypes.slice(3).map((type) => (
+        {secondRowTypes.map((type) => (
           <ArticleTypeCard key={type.title} {...type} />
         ))}
       </div>

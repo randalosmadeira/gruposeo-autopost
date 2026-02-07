@@ -64,7 +64,8 @@ const App = () => (
               <Route path="/" element={<Dashboard />} />
                 <Route path="/calendar" element={<ContentCalendar />} />
                 <Route path="/academia" element={<Academy />} />
-                <Route path="/articles" element={<ArticlesList />} />
+              <Route path="/articles" element={<ArticlesList />} />
+                <Route path="/articles/types" element={<ArticleTypeSelection />} />
                 <Route path="/articles/new" element={<ArticleGeneratorV2 />} />
                 <Route path="/articles/new/:type" element={<ArticleGenerator />} />
                 <Route path="/articles/bulk" element={<BulkArticleGenerator />} />
