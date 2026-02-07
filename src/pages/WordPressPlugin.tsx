@@ -21,7 +21,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 
 const PLUGIN_VERSION = '2.5.0';
-const PLUGIN_LAST_UPDATE = '2025-02-06';
+const PLUGIN_LAST_UPDATE = '2026-02-07';
 
 const features = [
   {
@@ -112,7 +112,8 @@ export default function WordPressPluginPage() {
       
       // Fetch each file and add to zip
       const fetchPromises = files.map(async (file) => {
-        const response = await fetch(file.url);
+        const url = `${file.url}?v=${encodeURIComponent(`${PLUGIN_VERSION}-${PLUGIN_LAST_UPDATE}`)}`;
+        const response = await fetch(url, { cache: 'no-store' });
         if (!response.ok) {
           throw new Error(`Erro ao carregar ${file.path}`);
         }

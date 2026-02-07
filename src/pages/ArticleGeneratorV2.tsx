@@ -36,6 +36,7 @@ import {
   Link2,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
+import { useSettings } from '@/hooks/useSettings';
 import { useArticleGeneration } from '@/hooks/useArticleGeneration';
 import { useArticleAutoSave } from '@/hooks/useArticleAutoSave';
 import { useWordPressPublish } from '@/hooks/useWordPressPublish';
@@ -182,6 +183,7 @@ export default function ArticleGeneratorV2() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { projects } = useProjects();
+  const { settings } = useSettings();
   const { isGenerating, generateArticle, content: generatedContent } = useArticleGeneration();
   const { publishArticle, isPublishing } = useWordPressPublish();
   const { generateImage, isGenerating: isGeneratingImage, generatedImage } = useImageGeneration();
@@ -372,17 +374,24 @@ export default function ArticleGeneratorV2() {
     if (config.generateImages) {
       setIsImageLoading(true);
       try {
+        const imageModel = settings?.byok_enabled ? (settings?.image_model || undefined) : undefined;
+        const inferredProvider = imageModel?.startsWith('dall-e')
+          ? 'openai'
+          : imageModel?.startsWith('gemini')
+            ? 'gemini'
+            : ((settings?.ai_provider as any) || 'auto');
+
         imageResult = await generateImage({
           title: config.title || config.keyword,
           keywords: config.keyword,
           segment: config.segment as 'legal' | 'health' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'education' | 'general',
           style: config.imageStyle === 'fotorrealístico' ? 'photorealistic' : 
                  config.imageStyle === 'ilustração' ? 'illustration' : 'abstract',
-          quality: config.aiModel === 'premium' ? 'high' : 'standard',
+          quality: 'standard',
+          // Use user's settings for image provider/model when BYOK is enabled
+          provider: settings?.byok_enabled ? inferredProvider : 'auto',
+          model: imageModel,
         });
-        if (imageResult?.image) {
-          setFeaturedImageUrl(imageResult.image);
-        }
       } catch (error) {
         console.error('Error generating image:', error);
       } finally {

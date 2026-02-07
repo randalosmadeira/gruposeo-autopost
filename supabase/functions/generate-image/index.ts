@@ -18,6 +18,9 @@ interface ImageRequest {
   style?: 'photorealistic' | 'illustration' | 'abstract';
   aspectRatio?: '16:9' | '1:1' | '4:3';
   quality?: 'standard' | 'high';
+  // Optional provider/model override
+  provider?: 'openai' | 'gemini' | 'auto';
+  model?: string;
 }
 
 // Mapping segment to visual context
@@ -118,11 +121,25 @@ serve(async (req) => {
 
     // Build the image prompt
     const imagePrompt = buildImagePrompt(body);
-    
+
+    // Resolve provider/model overrides
+    const requestedModel = body.model;
+    const requestedProvider = body.provider;
+    const derivedProvider = requestedModel?.startsWith('dall-e')
+      ? 'openai'
+      : requestedModel?.startsWith('gemini')
+        ? 'gemini'
+        : undefined;
+    const provider = requestedProvider || derivedProvider || 'auto';
+    const openaiQuality = requestedModel === 'dall-e-3-standard' ? 'standard' : 'hd';
+
     log.info("generating_image", { 
       title: body.title,
       segment: body.segment || 'general',
       style: body.style || 'photorealistic',
+      provider,
+      model: requestedModel,
+      openaiQuality: provider === 'openai' ? openaiQuality : undefined,
     });
 
     // Map aspect ratio to Gemini format
@@ -133,9 +150,11 @@ serve(async (req) => {
     };
     const geminiAspectRatio = aspectRatioMap[body.aspectRatio || "16:9"] || "16:9";
 
-    // Generate image using Gemini Imagen
+    // Generate image (OpenAI primary, Gemini fallback), with optional provider override
     const imageResult = await generateGeminiImage(imagePrompt, {
       aspectRatio: geminiAspectRatio,
+      provider,
+      openaiQuality,
     });
 
     if (!imageResult) {

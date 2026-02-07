@@ -13,6 +13,9 @@ interface ImageRequest {
   style?: 'photorealistic' | 'illustration' | 'abstract';
   aspectRatio?: '16:9' | '1:1' | '4:3';
   quality?: 'standard' | 'high';
+  // Optional provider/model override
+  provider?: 'openai' | 'gemini' | 'auto';
+  model?: string;
 }
 
 interface GeneratedImage {
