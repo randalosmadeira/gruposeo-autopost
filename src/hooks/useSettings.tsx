@@ -91,7 +91,11 @@ export function useSettings() {
       return result;
     },
     onSuccess: () => {
+      // Invalidate both the general key and the user-scoped key
       queryClient.invalidateQueries({ queryKey: ['settings'] });
+      if (user?.id) {
+        queryClient.invalidateQueries({ queryKey: ['settings', user.id] });
+      }
       toast({
         title: 'Configurações salvas!',
         description: 'Suas preferências foram atualizadas.',

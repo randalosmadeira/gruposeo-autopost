@@ -59,6 +59,7 @@ export interface GeminiImageOptions {
   numberOfImages?: number;
   personGeneration?: "dont_allow" | "allow_adult";
   provider?: "gemini" | "openai" | "auto";
+  openaiQuality?: "standard" | "hd";
 }
 
 /**
@@ -408,7 +409,7 @@ async function generateImageWithOpenAI(
         prompt: prompt,
         n: 1,
         size: size,
-        quality: "hd",
+        quality: options.openaiQuality === "standard" ? "standard" : "hd",
         response_format: "b64_json",
       }),
     });

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Progress } from '@/components/ui/progress';
 import {
   Select,
   SelectContent,
@@ -13,8 +14,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
 import { Sparkles, Eye, EyeOff, ExternalLink, Infinity, Loader2, Check, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
+const VALIDATE_AI_KEY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-ai-key`;
 
 interface AIConfigCardProps {
   settings: {
@@ -87,6 +91,9 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
     ? settings?.has_gemini_key 
     : settings?.has_openai_key;
 
+  const integrationsConfigured = (settings?.has_openai_key ? 1 : 0) + (settings?.has_gemini_key ? 1 : 0);
+  const integrationsProgress = (integrationsConfigured / 2) * 100;
+
   const handleProviderChange = (provider: string) => {
     setAiProvider(provider);
     setNewApiKey(''); // Clear the input when switching providers
@@ -114,59 +121,67 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
 
     setIsTesting(true);
     try {
-      // Real validation - call the provider's API to verify the key
-      if (aiProvider === 'openai') {
-        const response = await fetch('https://api.openai.com/v1/models', {
-          headers: { 'Authorization': `Bearer ${newApiKey}` }
+      // Validate via backend to avoid exposing key to third-party domains in the browser.
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        toast({
+          title: 'Sessão expirada',
+          description: 'Faça login novamente para validar a chave.',
+          variant: 'destructive',
         });
-        
-        if (response.ok) {
-          toast({
-            title: '✓ Chave OpenAI válida!',
-            description: 'Conexão estabelecida com sucesso.',
-          });
-        } else if (response.status === 401) {
-          toast({
-            title: 'Chave inválida',
-            description: 'A chave API OpenAI não é válida ou expirou.',
-            variant: 'destructive',
-          });
-        } else {
-          toast({
-            title: 'Erro ao validar',
-            description: `Status: ${response.status}`,
-            variant: 'destructive',
-          });
-        }
+        return;
+      }
+
+      const resp = await fetch(VALIDATE_AI_KEY_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ provider: aiProvider, apiKey: newApiKey }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        toast({
+          title: 'Falha ao validar',
+          description: data?.error || `Erro HTTP ${resp.status}`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (data?.valid) {
+        toast({
+          title: '✓ Chave validada',
+          description: `${data.message || 'Conexão estabelecida.'} Salvando...`,
+        });
+
+        // Auto-save key so status updates immediately
+        const updates: Record<string, unknown> =
+          aiProvider === 'gemini'
+            ? { gemini_api_key: newApiKey }
+            : { openai_api_key: newApiKey };
+
+        await onSave(updates);
+        setNewApiKey('');
+
+        toast({
+          title: 'Chave salva!',
+          description: 'Status atualizado com sucesso.',
+        });
       } else {
-        // Gemini validation
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${newApiKey}`
-        );
-        
-        if (response.ok) {
-          toast({
-            title: '✓ Chave Gemini válida!',
-            description: 'Conexão estabelecida com sucesso.',
-          });
-        } else if (response.status === 400 || response.status === 403) {
-          toast({
-            title: 'Chave inválida',
-            description: 'A chave API Gemini não é válida ou está desativada.',
-            variant: 'destructive',
-          });
-        } else {
-          toast({
-            title: 'Erro ao validar',
-            description: `Status: ${response.status}`,
-            variant: 'destructive',
-          });
-        }
+        toast({
+          title: 'Chave inválida',
+          description: data?.message || 'A chave não foi aceita pelo provedor.',
+          variant: 'destructive',
+        });
       }
     } catch (error) {
       toast({
         title: 'Erro de conexão',
-        description: 'Não foi possível conectar ao provedor. Verifique sua conexão.',
+        description: 'Não foi possível validar agora. Tente novamente.',
         variant: 'destructive',
       });
     } finally {
@@ -275,17 +290,31 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
 
             {/* API Key Status and Update */}
             <div className="space-y-3">
+              {/* Integrations health */}
+              <div className="p-3 bg-muted/30 rounded-lg border space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Saúde das integrações</span>
+                  <span className="text-xs text-muted-foreground">
+                    {(settings?.has_openai_key ? 1 : 0) + (settings?.has_gemini_key ? 1 : 0)}/2 configuradas
+                  </span>
+                </div>
+                <Progress value={integrationsProgress} />
+                <p className="text-xs text-muted-foreground">
+                  Estimativa por artigo: 2 chamadas de texto (título + conteúdo) + 1 chamada de imagem (se habilitada no gerador).
+                </p>
+              </div>
+
               {/* Current key status */}
               <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">Status da chave {aiProvider === 'gemini' ? 'Gemini' : 'OpenAI'}:</span>
                   {hasCurrentProviderKey ? (
-                    <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
+                    <Badge variant="secondary" className="text-xs">
                       <Check className="w-3 h-3 mr-1" />
                       Configurada
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="text-muted-foreground">
+                    <Badge variant="outline" className="text-xs text-muted-foreground">
                       <X className="w-3 h-3 mr-1" />
                       Não configurada
                     </Badge>
@@ -351,7 +380,7 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Sua chave será <span className="text-primary">armazenada de forma segura</span> no servidor e nunca será exibida novamente.
+                  Ao testar com sucesso, salvamos a chave automaticamente e o status será atualizado.
                 </p>
               </div>
             </div>
