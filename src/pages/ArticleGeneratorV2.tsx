@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useCallback, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -183,6 +183,7 @@ const defaultConfig: ArticleConfig = {
 
 export default function ArticleGeneratorV2() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { projects } = useProjects();
   const { settings } = useSettings();
@@ -207,7 +208,49 @@ export default function ArticleGeneratorV2() {
   const [appState, setAppState] = useState<AppState>('form');
   const [showPreview, setShowPreview] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  
+  const [templateApplied, setTemplateApplied] = useState(false);
+
+  // Load template from URL parameter
+  useEffect(() => {
+    if (templateApplied) return;
+    
+    const templateId = searchParams.get('template');
+    if (templateId) {
+      // Load template from localStorage
+      const stored = localStorage.getItem('article_templates');
+      const defaultTemplates = [
+        { id: 'default-blog', tone: 'profissional', pointOfView: 'terceira', size: 'medium', language: 'pt-BR', aiModel: 'standard' },
+        { id: 'default-pillar', tone: 'educativo', pointOfView: 'segunda', size: 'very-long', language: 'pt-BR', aiModel: 'premium' },
+        { id: 'default-listicle', tone: 'casual', pointOfView: 'segunda', size: 'medium', language: 'pt-BR', aiModel: 'standard' },
+      ];
+      
+      let allTemplates = [...defaultTemplates];
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          allTemplates = [...defaultTemplates, ...parsed];
+        } catch {}
+      }
+      
+      const template = allTemplates.find(t => t.id === templateId);
+      if (template) {
+        setConfig(prev => ({
+          ...prev,
+          tone: template.tone || prev.tone,
+          pointOfView: template.pointOfView || prev.pointOfView,
+          size: template.size || prev.size,
+          language: template.language || prev.language,
+          aiModel: template.aiModel || prev.aiModel,
+        }));
+        setTemplateApplied(true);
+        toast({
+          title: 'Modelo aplicado!',
+          description: 'As configurações do modelo foram carregadas.',
+        });
+      }
+    }
+  }, [searchParams, templateApplied, toast]);
+
   // Internal links state
   const [internalLinks, setInternalLinks] = useState<InternalLink[]>([]);
   
