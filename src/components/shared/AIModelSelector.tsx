@@ -2,6 +2,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Circle, CheckCircle2 } from 'lucide-react';
 
 export type AIProvider = 'openai' | 'gemini';
 
@@ -13,6 +14,51 @@ export interface AIModel {
   technical: string;
   provider: AIProvider;
 }
+
+// Credit tier models - matching Sifet structure
+export interface CreditTierModel {
+  tier: 'padrao' | 'premium' | 'avancado' | 'profissional';
+  label: string;
+  description: string;
+  credits: number;
+  models: string;
+  value: string;
+}
+
+export const creditTierModels: CreditTierModel[] = [
+  {
+    tier: 'padrao',
+    label: 'Padrão',
+    description: 'Qualidade boa para uso geral',
+    credits: 1,
+    models: 'Mix automático de modelos',
+    value: 'standard',
+  },
+  {
+    tier: 'premium',
+    label: 'Premium',
+    description: 'Máxima qualidade e precisão',
+    credits: 2,
+    models: 'gpt-5 + gpt-5-nano',
+    value: 'premium',
+  },
+  {
+    tier: 'avancado',
+    label: 'Avançado',
+    description: 'Qualidade superior com GPT-4.1',
+    credits: 3,
+    models: 'gpt-4.1 + gpt-4.1-mini',
+    value: 'advanced',
+  },
+  {
+    tier: 'profissional',
+    label: 'Profissional',
+    description: 'Qualidade máxima com GPT-4o',
+    credits: 4,
+    models: 'gpt-4o + gpt-4o-mini',
+    value: 'professional',
+  },
+];
 
 // OpenAI Models
 export const openaiModels: AIModel[] = [
@@ -80,6 +126,7 @@ interface AIModelSelectorProps {
   onProviderChange?: (provider: AIProvider) => void;
   accentColor?: string;
   showProviderTabs?: boolean;
+  variant?: 'default' | 'credit-tiers';
 }
 
 export function AIModelSelector({ 
@@ -89,14 +136,69 @@ export function AIModelSelector({
   onProviderChange,
   accentColor = '#4169E1',
   showProviderTabs = true,
+  variant = 'credit-tiers',
 }: AIModelSelectorProps) {
-  const models = provider === 'openai' ? openaiModels : geminiModels;
-  
-  // If current value doesn't match provider, select first model of that provider
-  const currentModel = aiModels.find(m => m.value === value);
-  if (currentModel && currentModel.provider !== provider && models.length > 0) {
-    // Don't auto-change, let parent handle this
+  // Credit tiers variant - matches Sifet PDF exactly
+  if (variant === 'credit-tiers') {
+    return (
+      <div className="space-y-3">
+        {/* Credit tier cards */}
+        <div className="space-y-2">
+          {creditTierModels.map((tier) => {
+            const isSelected = value === tier.value;
+            
+            return (
+              <div
+                key={tier.value}
+                onClick={() => onChange(tier.value)}
+                className={cn(
+                  'flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all duration-200',
+                  'hover:shadow-md hover:border-primary/50',
+                  isSelected 
+                    ? 'border-primary bg-primary/5 shadow-sm' 
+                    : 'border-border bg-background'
+                )}
+              >
+                {/* Radio indicator */}
+                <div className="flex-shrink-0">
+                  {isSelected ? (
+                    <CheckCircle2 className="w-5 h-5 text-primary" />
+                  ) : (
+                    <Circle className="w-5 h-5 text-muted-foreground/50" />
+                  )}
+                </div>
+                
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-foreground">{tier.label}</div>
+                  <div className="text-sm text-muted-foreground">{tier.description}</div>
+                </div>
+                
+                {/* Credits badge */}
+                <div className="flex-shrink-0 text-right">
+                  <div className="font-bold text-foreground">
+                    {tier.credits} {tier.credits === 1 ? 'crédito' : 'créditos'}
+                  </div>
+                  <div className="text-xs text-muted-foreground">por artigo</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Model descriptions footer */}
+        <div className="p-4 bg-muted/50 rounded-lg text-xs text-muted-foreground space-y-1">
+          <p><strong className="text-foreground">Padrão:</strong> Qualidade ótima com um mix de modelos de IA escolhidos automaticamente (1 crédito)</p>
+          <p><strong className="text-foreground">Premium:</strong> Máxima qualidade com gpt-5 + gpt-5-nano (2 créditos)</p>
+          <p><strong className="text-foreground">Avançado:</strong> Qualidade superior com gpt-4.1 + gpt-4.1-mini (3 créditos)</p>
+          <p><strong className="text-foreground">Profissional:</strong> Qualidade máxima com gpt-4o + gpt-4o-mini (4 créditos)</p>
+        </div>
+      </div>
+    );
   }
+
+  // Default variant with provider tabs
+  const models = provider === 'openai' ? openaiModels : geminiModels;
   
   return (
     <div className="space-y-3">
@@ -186,6 +288,10 @@ export function AIModelSelector({
 
 export function getModelByValue(value: string): AIModel | undefined {
   return aiModels.find(m => m.value === value);
+}
+
+export function getCreditTierByValue(value: string): CreditTierModel | undefined {
+  return creditTierModels.find(t => t.value === value);
 }
 
 export function getProviderByModel(value: string): AIProvider {

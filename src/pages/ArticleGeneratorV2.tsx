@@ -59,6 +59,8 @@ import {
   aiModels,
   getModelByValue,
   getProviderByModel,
+  getCreditTierByValue,
+  creditTierModels,
   ContentStructureConfig,
   AdvancedSettings,
   PublishingOptions,
@@ -155,7 +157,7 @@ const defaultConfig: ArticleConfig = {
   pointOfView: 'segunda',
   size: 'medium',
   language: 'pt-BR',
-  aiModel: 'gpt-4o',  // OpenAI GPT-4o as default
+  aiModel: 'standard',  // Credit tier: standard, premium, advanced, professional
   // SEO defaults
   segment: 'general',
   contentType: 'how-to',
@@ -239,14 +241,13 @@ export default function ArticleGeneratorV2() {
   };
 
   // Calculate total credits based on selected options
-  const selectedModel = getModelByValue(config.aiModel) || aiModels[0];
+  const selectedCreditTier = getCreditTierByValue(config.aiModel) || creditTierModels[0];
   const calculateTotalCredits = useCallback(() => {
-    let total = selectedModel.credits;
-    if (config.usePlatformCredits) total += 1;
+    let total = selectedCreditTier.credits;
     if (config.realtimeData) total += 1;
     if (config.humanizeContent) total += 1;
     return total;
-  }, [selectedModel.credits, config.usePlatformCredits, config.realtimeData, config.humanizeContent]);
+  }, [selectedCreditTier.credits, config.realtimeData, config.humanizeContent]);
   
   const totalCredits = calculateTotalCredits();
   
@@ -514,47 +515,79 @@ export default function ArticleGeneratorV2() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: colors.backgroundSecondary }}>
-      {/* Header */}
+      {/* Header - Split Panel Style matching PDF */}
       <header 
-        className="border-b px-4 md:px-6 py-3 md:py-4 flex items-center justify-between"
+        className="border-b flex"
         style={{ backgroundColor: colors.background, borderColor: colors.border }}
       >
-        <div className="flex items-center gap-2 md:gap-3">
-          <div 
-            className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: `${colors.primary}15` }}
-          >
-            <Zap className="w-4 h-4 md:w-5 md:h-5" style={{ color: colors.primary }} />
-          </div>
-          <div>
-            <h1 className="text-lg md:text-xl font-semibold" style={{ color: colors.textPrimary }}>
-              Gerador de Artigos IA
-            </h1>
-            <p className="text-xs md:text-sm hidden sm:block" style={{ color: colors.textSecondary }}>
-              Crie conteúdo de alta qualidade com inteligência artificial
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {isMobile && appState === 'form' && (
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setShowPreview(true)}
-              className="flex items-center gap-1"
-            >
-              <Eye className="w-4 h-4" />
-              <span className="hidden xs:inline">Prévia</span>
-            </Button>
+        {/* Left Header - Generator Title */}
+        <div 
+          className={cn(
+            "flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-r",
+            isMobile ? "w-full" : "w-1/2"
           )}
+          style={{ borderColor: colors.border }}
+        >
+          <div className="flex items-center gap-2 md:gap-3">
+            <div 
+              className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center"
+              style={{ backgroundColor: `${colors.primary}15` }}
+            >
+              <Zap className="w-4 h-4 md:w-5 md:h-5" style={{ color: colors.primary }} />
+            </div>
+            <div>
+              <h1 className="text-lg md:text-xl font-semibold" style={{ color: colors.textPrimary }}>
+                Gerador de Artigos IA
+              </h1>
+              <p className="text-xs md:text-sm hidden sm:block" style={{ color: colors.textSecondary }}>
+                Crie conteúdo de alta qualidade com inteligência artificial
+              </p>
+            </div>
+          </div>
           <Badge 
-            variant="outline" 
-            className="text-xs md:text-sm px-2 md:px-3 py-1 md:py-1.5"
-            style={{ borderColor: colors.primary, color: colors.primary }}
+            className="text-xs md:text-sm px-3 py-1.5 bg-primary text-primary-foreground"
           >
-            {userCredits} {userCredits === 1 ? 'Crédito' : 'Créditos'}
+            Total: {totalCredits} {totalCredits === 1 ? 'Crédito' : 'Créditos'}
           </Badge>
         </div>
+        
+        {/* Right Header - Preview Status */}
+        {!isMobile && (
+          <div 
+            className="w-1/2 flex items-center justify-between px-4 md:px-6 py-3 md:py-4"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                <Eye className="w-4 h-4 text-green-600" />
+              </div>
+              <div>
+                <h2 className="font-semibold" style={{ color: colors.textPrimary }}>
+                  Prévia em Tempo Real
+                </h2>
+                <p className="text-xs" style={{ color: colors.textSecondary }}>
+                  Prévia do artigo em tempo real
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              Pronto Para Gerar
+            </div>
+          </div>
+        )}
+        
+        {/* Mobile Preview Button */}
+        {isMobile && appState === 'form' && (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setShowPreview(true)}
+            className="flex items-center gap-1 ml-2 my-auto mr-4"
+          >
+            <Eye className="w-4 h-4" />
+            <span className="hidden xs:inline">Prévia</span>
+          </Button>
+        )}
       </header>
 
       {/* Main Content */}
@@ -728,42 +761,37 @@ export default function ArticleGeneratorV2() {
               </div>
 
               {/* Accordion Sections using Shared Components */}
-              <Accordion type="single" collapsible defaultValue="ai-model">
+              <Accordion type="multiple" defaultValue={['ai-model']}>
                 {/* AI Model Section */}
                 <AccordionItem value="ai-model" className="border rounded-lg px-4" style={{ borderColor: colors.border }}>
                   <AccordionTrigger className="py-4">
                     <div className="flex items-center gap-2">
                       <Bot className="w-5 h-5" style={{ color: colors.primary }} />
-                      <span className="font-semibold">Provedor & Modelo de IA</span>
-                      <Badge 
-                        variant="secondary" 
-                        className="ml-2 text-xs"
-                        style={{ 
-                          backgroundColor: aiProvider === 'openai' ? '#10a37f20' : '#4285f420',
-                          color: aiProvider === 'openai' ? '#10a37f' : '#4285f4'
-                        }}
-                      >
-                        {aiProvider === 'openai' ? 'OpenAI' : 'Gemini'}
-                      </Badge>
+                      <span className="font-semibold">Modelo de IA</span>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pb-4">
                     <AIModelSelector
                       value={config.aiModel}
                       onChange={(v) => updateConfig('aiModel', v)}
-                      provider={aiProvider}
-                      onProviderChange={setAiProvider}
-                      accentColor={colors.primary}
-                      showProviderTabs={true}
+                      variant="credit-tiers"
                     />
-                    <div 
-                      className="mt-4 p-3 rounded-lg text-xs"
-                      style={{ backgroundColor: colors.lightBlue, color: colors.textSecondary }}
-                    >
-                      <strong style={{ color: colors.textPrimary }}>Provedor atual:</strong>{' '}
-                      {aiProvider === 'openai' ? 'OpenAI (GPT-4o)' : 'Google Gemini'} | {' '}
-                      <strong style={{ color: colors.textPrimary }}>Modelo:</strong>{' '}
-                      {selectedModel.technical}
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Article Templates Section */}
+                <AccordionItem value="templates" className="border rounded-lg px-4 mt-4" style={{ borderColor: colors.border }}>
+                  <AccordionTrigger className="py-4">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-5 h-5" style={{ color: '#8B5CF6' }} />
+                      <span className="font-semibold">Modelos de Artigo</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-4">
+                    <div className="p-4 bg-muted/50 rounded-lg border border-dashed border-border">
+                      <p className="text-sm text-muted-foreground text-center">
+                        Seus modelos salvos aparecerão aqui. Use modelos para reutilizar configurações de SEO, tamanho, tom de voz e muito mais.
+                      </p>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -1224,7 +1252,7 @@ export default function ArticleGeneratorV2() {
                         style={{ backgroundColor: colors.backgroundSecondary }}
                       >
                         <strong style={{ color: colors.textPrimary }}>Modelo:</strong>{' '}
-                        <span style={{ color: colors.textSecondary }}>{selectedModel.label} - {selectedModel.technical}</span>
+                        <span style={{ color: colors.textSecondary }}>{selectedCreditTier.label} ({selectedCreditTier.credits} {selectedCreditTier.credits === 1 ? 'crédito' : 'créditos'})</span>
                       </div>
                     </article>
                   ) : (
