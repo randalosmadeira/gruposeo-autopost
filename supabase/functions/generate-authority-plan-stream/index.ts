@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
-import { callGemini, generateGeminiImage, extractJSON } from "../_shared/gemini.ts";
+import { callAI, generateGeminiImage, extractJSON } from "../_shared/gemini.ts";
 
 const FUNCTION_NAME = "generate-authority-plan-stream";
 
@@ -135,13 +135,13 @@ serve(async (req) => {
       // Step 1: Research
       await updateProgress("Pesquisando tema e palavras-chave...", 0);
       const researchPrompt = `Analyze topic "${centralTheme}" in ${language}. Return JSON: { mainKeyword, secondaryKeywords: [], searchIntent, contentGaps: [] }`;
-      const research = await callGemini([{ role: "user", content: researchPrompt }], { model: "flash" });
+      const research = await callAI([{ role: "user", content: researchPrompt }], { maxTokens: 2000 });
       await updateProgress("Pesquisa concluída", 1);
 
       // Step 2: Pillar Plan
       await updateProgress("Planejando artigo pilar...", 1);
       const pillarPrompt = `Create pillar article plan for "${centralTheme}" in ${language}. Return JSON: { title, keyword, outline: [] } (8-12 H2 sections)`;
-      const pillarResult = await callGemini([{ role: "user", content: pillarPrompt }], { model: "flash" });
+      const pillarResult = await callAI([{ role: "user", content: pillarPrompt }], { maxTokens: 2000 });
       let pillarPlan: ArticlePlan;
       try {
         const parsed = extractJSON<{ title: string; keyword: string; outline: string[] }>(pillarResult);
@@ -155,7 +155,7 @@ serve(async (req) => {
       // Step 3: Pillar Content
       await updateProgress("Gerando conteúdo do pilar...", 2);
       const pillarContentPrompt = `Write comprehensive article in ${language} as HTML. Title: ${pillarPlan.title}, Keyword: ${pillarPlan.keyword}, Outline: ${pillarPlan.outline.join(", ")}. Return JSON: { content_html, excerpt, slug }`;
-      const pillarContentResult = await callGemini([{ role: "user", content: pillarContentPrompt }], { model: "flash" });
+      const pillarContentResult = await callAI([{ role: "user", content: pillarContentPrompt }], { maxTokens: 8000 });
       let pillarContent: { content: string; excerpt: string; slug: string };
       try {
         const parsed = extractJSON<{ content_html?: string; content?: string; excerpt: string; slug: string }>(pillarContentResult);
@@ -201,7 +201,7 @@ serve(async (req) => {
       // Generate satellite plans
       await updateProgress("Definindo artigos satélites...", 4);
       const satellitePrompt = `Generate ${satelliteCount} satellite article ideas for pillar "${pillarPlan.title}" in ${language}. Return JSON: { satellites: [{ title, keyword, outline: [] }] }`;
-      const satelliteResult = await callGemini([{ role: "user", content: satellitePrompt }], { model: "flash" });
+      const satelliteResult = await callAI([{ role: "user", content: satellitePrompt }], { maxTokens: 3000 });
       let satellitePlans: ArticlePlan[];
       try {
         const parsed = extractJSON<{ satellites: { title: string; keyword: string; outline: string[] }[] }>(satelliteResult);
@@ -225,7 +225,7 @@ serve(async (req) => {
         // Content
         await updateProgress(`Gerando satélite ${i + 1}/${satellitePlans.length}: ${plan.title.substring(0, 30)}...`, stepBase);
         const contentPrompt = `Write article in ${language} as HTML. Title: ${plan.title}, link to pillar "${pillarPlan.title}". Return JSON: { content_html, excerpt, slug }`;
-        const contentResult = await callGemini([{ role: "user", content: contentPrompt }], { model: "flash" });
+        const contentResult = await callAI([{ role: "user", content: contentPrompt }], { maxTokens: 6000 });
         let content: { content: string; excerpt: string; slug: string };
         try {
           const parsed = extractJSON<{ content_html?: string; content?: string; excerpt: string; slug: string }>(contentResult);

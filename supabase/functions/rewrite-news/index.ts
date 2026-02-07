@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
-import { callGemini, generateGeminiImage, extractJSON } from "../_shared/gemini.ts";
+import { callAI, generateGeminiImage, extractJSON } from "../_shared/gemini.ts";
 
 const FUNCTION_NAME = "rewrite-news";
 
@@ -151,13 +151,13 @@ Se originalidade < 90%, reescreva novamente até atingir 90%+.
 
 Retorne o resultado em formato JSON conforme especificado.`;
 
-    // Call Gemini AI
-    const aiResponse = await callGemini(
+    // Call AI (OpenAI primary, Gemini fallback)
+    const aiResponse = await callAI(
       [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userPrompt },
       ],
-      { model: "flash" }
+      { maxTokens: 4000 }
     );
 
     const parsed = extractJSON<{
