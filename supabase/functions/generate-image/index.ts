@@ -166,7 +166,7 @@ serve(async (req) => {
         alt: altText,
         title: imageTitle,
         prompt: imagePrompt,
-        model: "imagen-3.0-generate-002",
+        model: "gemini-2.0-flash-exp",
         request_id: requestId,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
