@@ -261,37 +261,125 @@ export async function callGeminiStream(
 }
 
 /**
- * Generate image using Gemini 2.0 Flash with native image generation
- * This model supports both text and image output in a single request
+ * Generate image using Lovable AI Gateway with Gemini image model
+ * Uses google/gemini-2.5-flash-image for image generation
  */
 export async function generateGeminiImage(
   prompt: string,
   options: GeminiImageOptions = {}
 ): Promise<{ imageData: string; mimeType: string } | null> {
-  const apiKey = getGeminiApiKey();
-  // Use gemini-2.0-flash-exp with image generation capability
-  const model = "gemini-2.0-flash-exp";
+  // Use Lovable AI Gateway for image generation
+  const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
   
-  // Enhance prompt for better image generation
+  if (!lovableApiKey) {
+    console.error("LOVABLE_API_KEY not configured for image generation");
+    // Fallback to direct Gemini API
+    return await generateGeminiImageDirect(prompt, options);
+  }
+  
+  const url = "https://ai.gateway.lovable.dev/v1/chat/completions";
+  
+  const aspectRatioText = options.aspectRatio || "16:9";
   const enhancedPrompt = `Generate a high-quality professional image based on this description:
 
 ${prompt}
 
 Requirements:
-- Aspect ratio: ${options.aspectRatio || "16:9"}
+- Aspect ratio: ${aspectRatioText}
 - Style: Professional, clean, suitable for business/blog use
 - No text or watermarks in the image
 - High resolution and sharp details`;
   
-  const url = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${lovableApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-image",
+        messages: [
+          {
+            role: "user",
+            content: enhancedPrompt,
+          },
+        ],
+        modalities: ["image", "text"],
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Lovable AI Gateway image error:", response.status, errorText);
+      
+      if (response.status === 429) {
+        console.log("Rate limit exceeded, trying direct Gemini API fallback");
+        return await generateGeminiImageDirect(prompt, options);
+      }
+      if (response.status === 402) {
+        console.log("Credits insufficient, trying direct Gemini API fallback");
+        return await generateGeminiImageDirect(prompt, options);
+      }
+      
+      // For other errors, try direct API as fallback
+      console.log("Gateway error, trying direct Gemini API fallback");
+      return await generateGeminiImageDirect(prompt, options);
+    }
+    
+    const data = await response.json();
+    
+    // Extract image from Lovable AI Gateway response
+    const images = data.choices?.[0]?.message?.images;
+    if (images && images.length > 0) {
+      const imageUrl = images[0]?.image_url?.url;
+      if (imageUrl) {
+        // Extract mime type from data URL
+        const mimeMatch = imageUrl.match(/^data:([^;]+);/);
+        const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
+        
+        return {
+          imageData: imageUrl,
+          mimeType,
+        };
+      }
+    }
+    
+    console.error("No image data in Lovable AI Gateway response");
+    return null;
+  } catch (error) {
+    console.error("Image generation error:", error);
+    return null;
+  }
+}
+
+/**
+ * Fallback: Generate image using direct Gemini Imagen API
+ * Uses the imagen-3.0-generate-001 model which is available in the v1beta API
+ */
+async function generateGeminiImageDirect(
+  prompt: string,
+  options: GeminiImageOptions = {}
+): Promise<{ imageData: string; mimeType: string } | null> {
+  const apiKey = getGeminiApiKey();
+  
+  // Try Imagen 3 first (the correct image generation model)
+  const model = "imagen-3.0-generate-001";
+  const url = `${GEMINI_API_BASE}/models/${model}:predict?key=${apiKey}`;
+  
+  const aspectRatioText = options.aspectRatio || "16:9";
+  const enhancedPrompt = `A professional, high-quality photograph for a blog article. ${prompt}. 
+Style: Modern, clean, professional photography with natural lighting. 
+Aspect ratio: ${aspectRatioText} landscape format.
+No text, watermarks, or logos in the image.
+High resolution, sharp details, suitable for web publication.`;
   
   const requestBody = {
-    contents: [{
-      parts: [{ text: enhancedPrompt }]
-    }],
-    generationConfig: {
-      responseModalities: ["TEXT", "IMAGE"],
-      temperature: 0.8,
+    instances: [{ prompt: enhancedPrompt }],
+    parameters: {
+      sampleCount: 1,
+      aspectRatio: aspectRatioText,
+      personGeneration: options.personGeneration || "allow_adult",
     },
   };
   
@@ -304,36 +392,30 @@ Requirements:
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini image generation error:", response.status, errorText);
+      console.error("Imagen 3 API error:", response.status, errorText);
       
-      if (response.status === 429) {
-        throw new Error("Rate limit de imagens excedido.");
-      }
-      
-      // Try fallback to text-only model for placeholder
-      console.log("Image generation not available, returning null");
+      // If Imagen 3 fails, model might not be available
+      // Return null and let the caller handle it gracefully
+      console.log("Imagen 3 not available, image generation skipped");
       return null;
     }
     
     const data = await response.json();
     
-    // Look for image data in the response
-    const parts = data.candidates?.[0]?.content?.parts || [];
+    // Imagen 3 returns predictions with bytesBase64Encoded
+    const imageBytes = data.predictions?.[0]?.bytesBase64Encoded;
     
-    for (const part of parts) {
-      if (part.inlineData?.data) {
-        const mimeType = part.inlineData.mimeType || "image/png";
-        return {
-          imageData: `data:${mimeType};base64,${part.inlineData.data}`,
-          mimeType,
-        };
-      }
+    if (imageBytes) {
+      return {
+        imageData: `data:image/png;base64,${imageBytes}`,
+        mimeType: "image/png",
+      };
     }
     
-    console.error("No image data in Gemini response");
+    console.log("No image data in Imagen 3 response");
     return null;
   } catch (error) {
-    console.error("Image generation error:", error);
+    console.error("Direct Gemini image generation error:", error);
     return null;
   }
 }

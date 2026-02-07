@@ -124,8 +124,17 @@ No text or watermarks.`;
       });
 
       if (!imageResult) {
-        log.error("image_generation_failed", { type });
-        throw new Error("Image generation failed");
+        log.warn("image_generation_unavailable", { type });
+        // Return a friendly error message instead of throwing
+        log.requestEnd(503, Date.now() - startTime);
+        return new Response(JSON.stringify({ 
+          error: "Geração de imagem indisponível no momento. Adicione créditos ao workspace ou tente novamente mais tarde.",
+          code: "IMAGE_GENERATION_UNAVAILABLE",
+          type: "image"
+        }), {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       log.info("regenerate_complete", { type, success: true });
