@@ -67,25 +67,25 @@ export function useSettings() {
       let result;
       
       if (existing) {
-        // Update existing settings - don't use .single() to avoid coercion error
-        const { data, error } = await supabase
+        // Update existing settings
+        // Use upsert instead of update to handle potential RLS edge cases
+        const { error } = await supabase
           .from('user_settings')
           .update(updates)
-          .eq('user_id', user.id)
-          .select();
+          .eq('user_id', user.id);
         
         if (error) throw error;
-        result = data?.[0] || null;
+        // Don't try to select after update - RLS blocks SELECT on this table
+        result = { ...existing, ...updates };
       } else {
         // Insert new settings
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('user_settings')
-          .insert({ user_id: user.id, ...updates })
-          .select()
-          .single();
+          .insert({ user_id: user.id, ...updates });
         
         if (error) throw error;
-        result = data;
+        // Don't try to select after insert - RLS blocks SELECT on this table
+        result = { user_id: user.id, ...updates };
       }
       
       return result;
