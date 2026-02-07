@@ -17,6 +17,10 @@ import {
   CheckCircle,
   Code,
   Loader2,
+  History,
+  Sparkles,
+  Bug,
+  Wrench,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -64,6 +68,100 @@ const installSteps = [
   { step: 5, title: 'Copie a API Key', description: 'Acesse ContentFactory no menu lateral e copie sua API Key.' },
   { step: 6, title: 'Configure o Projeto', description: 'No ContentFactory, vá em Configurações do projeto e cole a API Key.' },
 ];
+
+const changelog = [
+  {
+    version: '2.5.0',
+    date: '2026-02-06',
+    type: 'major' as const,
+    changes: [
+      { type: 'feature', text: 'Novo sistema de fila de conteúdo com retry exponencial e backoff' },
+      { type: 'feature', text: 'Social Auto-Poster com criptografia AES-256-CBC para credenciais' },
+      { type: 'feature', text: 'Motor de mídia com conversão automática para WebP e deduplicação MD5' },
+      { type: 'feature', text: 'Sistema de diagnóstico proativo com proteção contra conflitos de Page Builders' },
+      { type: 'improvement', text: 'Utilitário de reparo de tabelas para restauração de estruturas de banco' },
+    ],
+  },
+  {
+    version: '2.4.0',
+    date: '2026-01-28',
+    type: 'minor' as const,
+    changes: [
+      { type: 'feature', text: 'Suporte a SEO via IA: geração automática de slug, meta description e tags' },
+      { type: 'feature', text: 'Integração com Cron Scheduler interno com diagnóstico e histórico' },
+      { type: 'improvement', text: 'Melhorias no sistema de logs estruturados' },
+      { type: 'fix', text: 'Correção de compatibilidade com PHP 8.2+' },
+    ],
+  },
+  {
+    version: '2.3.0',
+    date: '2026-01-15',
+    type: 'minor' as const,
+    changes: [
+      { type: 'feature', text: 'Suporte a schemas HowTo, Review e FAQ no editor de artigos' },
+      { type: 'feature', text: 'Sistema de internal linking automático' },
+      { type: 'improvement', text: 'Otimização de imagens com compressão inteligente' },
+      { type: 'fix', text: 'Correção de timeout em uploads de imagens grandes' },
+    ],
+  },
+  {
+    version: '2.2.0',
+    date: '2026-01-02',
+    type: 'minor' as const,
+    changes: [
+      { type: 'feature', text: 'Validador de Schema JSON-LD integrado' },
+      { type: 'feature', text: 'Sincronização bidirecional com ContentFactory' },
+      { type: 'improvement', text: 'Interface administrativa redesenhada' },
+    ],
+  },
+  {
+    version: '2.1.0',
+    date: '2025-12-18',
+    type: 'minor' as const,
+    changes: [
+      { type: 'feature', text: 'Sistema de webhooks para eventos de publicação' },
+      { type: 'improvement', text: 'Melhorias de performance no carregamento de artigos' },
+      { type: 'fix', text: 'Correção de encoding UTF-8 em títulos especiais' },
+    ],
+  },
+  {
+    version: '2.0.0',
+    date: '2025-12-01',
+    type: 'major' as const,
+    changes: [
+      { type: 'feature', text: 'Nova arquitetura modular com classes separadas' },
+      { type: 'feature', text: 'API REST completa para integração' },
+      { type: 'feature', text: 'Sistema de autenticação via API Key' },
+      { type: 'improvement', text: 'Reescrita completa do plugin para melhor manutenibilidade' },
+    ],
+  },
+];
+
+const getChangeTypeIcon = (type: string) => {
+  switch (type) {
+    case 'feature':
+      return <Sparkles className="w-3.5 h-3.5 text-primary" />;
+    case 'improvement':
+      return <Wrench className="w-3.5 h-3.5 text-secondary-foreground" />;
+    case 'fix':
+      return <Bug className="w-3.5 h-3.5 text-destructive" />;
+    default:
+      return <CheckCircle className="w-3.5 h-3.5 text-muted-foreground" />;
+  }
+};
+
+const getChangeTypeLabel = (type: string) => {
+  switch (type) {
+    case 'feature':
+      return 'Novo';
+    case 'improvement':
+      return 'Melhoria';
+    case 'fix':
+      return 'Correção';
+    default:
+      return type;
+  }
+};
 
 export default function WordPressPluginPage() {
   const [copied, setCopied] = useState<string | null>(null);
@@ -218,10 +316,14 @@ export default function WordPressPluginPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="install" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="install">
             <Download className="w-4 h-4 mr-2" />
             Instalação
+          </TabsTrigger>
+          <TabsTrigger value="changelog">
+            <History className="w-4 h-4 mr-2" />
+            Changelog
           </TabsTrigger>
           <TabsTrigger value="api">
             <Code className="w-4 h-4 mr-2" />
@@ -258,6 +360,71 @@ export default function WordPressPluginPage() {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="changelog" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="w-5 h-5" />
+                Histórico de Versões
+              </CardTitle>
+              <CardDescription>
+                Acompanhe as atualizações e melhorias do plugin
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[500px] pr-4">
+                <div className="space-y-6">
+                  {changelog.map((release, idx) => (
+                    <div key={release.version} className="relative">
+                      {idx < changelog.length - 1 && (
+                        <div className="absolute left-[11px] top-10 bottom-0 w-px bg-border" />
+                      )}
+                      <div className="flex items-start gap-4">
+                        <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
+                          release.type === 'major' 
+                            ? 'bg-primary text-primary-foreground' 
+                            : 'bg-muted text-muted-foreground'
+                        }`}>
+                          <span className="text-xs font-bold">
+                            {release.version.split('.')[0]}
+                          </span>
+                        </div>
+                        <div className="flex-1 space-y-3">
+                          <div className="flex items-center gap-3">
+                            <Badge variant={release.type === 'major' ? 'default' : 'secondary'}>
+                              v{release.version}
+                            </Badge>
+                            <span className="text-sm text-muted-foreground">
+                              {new Date(release.date).toLocaleDateString('pt-BR', {
+                                day: '2-digit',
+                                month: 'long',
+                                year: 'numeric',
+                              })}
+                            </span>
+                            {release.type === 'major' && (
+                              <Badge variant="outline" className="text-xs">
+                                Major Release
+                              </Badge>
+                            )}
+                          </div>
+                          <ul className="space-y-2">
+                            {release.changes.map((change, changeIdx) => (
+                              <li key={changeIdx} className="flex items-start gap-2 text-sm">
+                                {getChangeTypeIcon(change.type)}
+                                <span className="flex-1">{change.text}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
             </CardContent>
           </Card>
         </TabsContent>
