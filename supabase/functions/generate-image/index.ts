@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
 import { generateGeminiImage } from "../_shared/gemini.ts";
+import { createTokenLogger } from "../_shared/token-logger.ts";
 
 const FUNCTION_NAME = "generate-image";
 
@@ -21,6 +22,8 @@ interface ImageRequest {
   // Optional provider/model override
   provider?: 'openai' | 'gemini' | 'auto';
   model?: string;
+  // Optional article ID for linking usage logs
+  articleId?: string;
 }
 
 // Mapping segment to visual context
@@ -171,6 +174,35 @@ serve(async (req) => {
       hasImage: true,
       mimeType: imageResult.mimeType,
     });
+
+    // Log token usage
+    try {
+      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (supabaseServiceKey) {
+        const tokenLogger = createTokenLogger(user.id, supabaseUrl, supabaseServiceKey);
+        const actualModel = provider === 'openai' 
+          ? (openaiQuality === 'standard' ? 'dall-e-3-standard' : 'dall-e-3')
+          : 'imagen-3.0-generate-002';
+        const actualProvider = provider === 'auto' 
+          ? (imageResult.mimeType === 'image/png' ? 'openai' : 'gemini')
+          : provider as 'openai' | 'gemini';
+        
+        await tokenLogger.logImage(
+          actualProvider,
+          actualModel,
+          body.articleId,
+          openaiQuality,
+          { 
+            aspectRatio: body.aspectRatio || '16:9',
+            segment: body.segment || 'general',
+            style: body.style || 'photorealistic',
+          }
+        );
+      }
+    } catch (logError) {
+      // Don't fail the request if logging fails
+      console.error("Failed to log token usage:", logError);
+    }
 
     // Generate alt text and metadata
     const altText = `Imagem ilustrativa: ${body.title}`;

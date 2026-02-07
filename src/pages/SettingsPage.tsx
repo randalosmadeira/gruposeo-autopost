@@ -1,7 +1,7 @@
-import { Settings } from 'lucide-react';
 import { AIConfigCard } from '@/components/settings/AIConfigCard';
 import { WordPressSitesCard } from '@/components/settings/WordPressSitesCard';
 import { PromptTemplatesCard } from '@/components/settings/PromptTemplatesCard';
+import { TokenUsageCard } from '@/components/settings/TokenUsageCard';
 import { useSettings } from '@/hooks/useSettings';
 
 export default function SettingsPage() {
@@ -27,6 +27,9 @@ export default function SettingsPage() {
           onSave={handleSaveSettings}
           isSaving={updateSettings.isPending}
         />
+
+        {/* Token Usage Monitoring */}
+        <TokenUsageCard />
 
         {/* WordPress Sites */}
         <WordPressSitesCard />
