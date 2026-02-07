@@ -1,4 +1,13 @@
-export { AIModelSelector, aiModels, getModelByValue, type AIModel } from './AIModelSelector';
+export { 
+  AIModelSelector, 
+  aiModels, 
+  openaiModels,
+  geminiModels,
+  getModelByValue, 
+  getProviderByModel,
+  type AIModel,
+  type AIProvider,
+} from './AIModelSelector';
 export { ContentStructureConfig, type ContentStructureProps } from './ContentStructureConfig';
 export { AdvancedSettings } from './AdvancedSettings';
 export { PublishingOptions } from './PublishingOptions';

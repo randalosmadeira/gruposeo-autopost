@@ -69,12 +69,60 @@ class CFRDM_Diagnostics_Page {
             'Gerado em' => $report['generated_at'] ?? '-',
         ));
 
-        // Tables
+        // Tables with repair option
         echo '<h2>Tabelas</h2>';
+        $logs_ok = !empty($report['tables']['logs_table']);
+        $news_ok = !empty($report['tables']['news_table']);
+        
         self::render_kv_table(array(
-            'cfrdm_logs' => !empty($report['tables']['logs_table']) ? 'OK' : 'NÃO ENCONTRADA',
-            'cfrdm_news' => !empty($report['tables']['news_table']) ? 'OK' : 'NÃO ENCONTRADA',
+            'cfrdm_logs' => $logs_ok ? 'OK' : 'NÃO ENCONTRADA',
+            'cfrdm_news' => $news_ok ? 'OK' : 'NÃO ENCONTRADA',
         ));
+        
+        // Show repair button if tables are missing
+        if (!$logs_ok || !$news_ok) {
+            echo '<div style="margin: 15px 0;">';
+            echo '<button type="button" id="cfrdm-repair-tables" class="button button-primary" onclick="cfrdmRepairTables()">';
+            echo '<span class="dashicons dashicons-admin-tools" style="vertical-align:middle;margin-right:5px;"></span>';
+            echo 'Reparar Tabelas</button>';
+            echo '<span id="cfrdm-repair-status" style="margin-left:10px;"></span>';
+            echo '</div>';
+            
+            echo '<script>
+            function cfrdmRepairTables() {
+                var btn = document.getElementById("cfrdm-repair-tables");
+                var status = document.getElementById("cfrdm-repair-status");
+                btn.disabled = true;
+                btn.textContent = "Reparando...";
+                status.textContent = "";
+                
+                fetch("' . esc_url(rest_url('cfrdm/v1/repair-tables')) . '", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-WP-Nonce": "' . wp_create_nonce('wp_rest') . '"
+                    },
+                    credentials: "same-origin"
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        status.innerHTML = "<span style=\"color:#2e7d32;\">✓ " + data.message + "</span>";
+                        setTimeout(function() { location.reload(); }, 1500);
+                    } else {
+                        status.innerHTML = "<span style=\"color:#c62828;\">✗ " + (data.message || "Erro desconhecido") + "</span>";
+                        btn.disabled = false;
+                        btn.textContent = "Tentar Novamente";
+                    }
+                })
+                .catch(function(e) {
+                    status.innerHTML = "<span style=\"color:#c62828;\">✗ Erro: " + e.message + "</span>";
+                    btn.disabled = false;
+                    btn.textContent = "Tentar Novamente";
+                });
+            }
+            </script>';
+        }
 
         // Builders
         echo '<h2>Page Builders</h2>';
