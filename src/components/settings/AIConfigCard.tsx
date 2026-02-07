@@ -45,9 +45,14 @@ const OPENAI_MODELS = [
   { value: 'gpt-5-nano', label: 'gpt-5-nano' },
 ];
 
-const IMAGE_MODELS = [
-  { value: 'gemini-3-pro-image-preview', label: 'pré-visualização de imagem gemini-3' },
-  { value: 'gemini-2.5-flash-image', label: 'gemini-2.5-flash-image' },
+const GEMINI_IMAGE_MODELS = [
+  { value: 'gemini-3-pro-image-preview', label: 'Gemini 3 Pro Image' },
+  { value: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image' },
+];
+
+const OPENAI_IMAGE_MODELS = [
+  { value: 'dall-e-3', label: 'DALL-E 3 (HD)' },
+  { value: 'dall-e-3-standard', label: 'DALL-E 3 (Standard)' },
 ];
 
 const TIMEZONES = [
@@ -75,6 +80,7 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
   const [isTesting, setIsTesting] = useState(false);
 
   const models = aiProvider === 'gemini' ? GEMINI_MODELS : OPENAI_MODELS;
+  const imageModels = aiProvider === 'gemini' ? GEMINI_IMAGE_MODELS : OPENAI_IMAGE_MODELS;
   
   // Check if the current provider has a key configured
   const hasCurrentProviderKey = aiProvider === 'gemini' 
@@ -88,9 +94,11 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
     if (provider === 'gemini') {
       setTitleModel('gemini-3-pro-preview');
       setContentModel('gemini-3-pro-preview');
+      setImageModel('gemini-3-pro-image-preview');
     } else {
       setTitleModel('gpt-5');
       setContentModel('gpt-5');
+      setImageModel('dall-e-3');
     }
   };
 
@@ -106,22 +114,61 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
 
     setIsTesting(true);
     try {
-      const isValidFormat = aiProvider === 'gemini' 
-        ? newApiKey.startsWith('AI') || newApiKey.length > 20
-        : newApiKey.startsWith('sk-');
-
-      if (isValidFormat) {
-        toast({
-          title: 'Formato válido!',
-          description: 'A chave API parece estar no formato correto.',
+      // Real validation - call the provider's API to verify the key
+      if (aiProvider === 'openai') {
+        const response = await fetch('https://api.openai.com/v1/models', {
+          headers: { 'Authorization': `Bearer ${newApiKey}` }
         });
+        
+        if (response.ok) {
+          toast({
+            title: '✓ Chave OpenAI válida!',
+            description: 'Conexão estabelecida com sucesso.',
+          });
+        } else if (response.status === 401) {
+          toast({
+            title: 'Chave inválida',
+            description: 'A chave API OpenAI não é válida ou expirou.',
+            variant: 'destructive',
+          });
+        } else {
+          toast({
+            title: 'Erro ao validar',
+            description: `Status: ${response.status}`,
+            variant: 'destructive',
+          });
+        }
       } else {
-        toast({
-          title: 'Formato inválido',
-          description: 'A chave API não parece estar no formato correto.',
-          variant: 'destructive',
-        });
+        // Gemini validation
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models?key=${newApiKey}`
+        );
+        
+        if (response.ok) {
+          toast({
+            title: '✓ Chave Gemini válida!',
+            description: 'Conexão estabelecida com sucesso.',
+          });
+        } else if (response.status === 400 || response.status === 403) {
+          toast({
+            title: 'Chave inválida',
+            description: 'A chave API Gemini não é válida ou está desativada.',
+            variant: 'destructive',
+          });
+        } else {
+          toast({
+            title: 'Erro ao validar',
+            description: `Status: ${response.status}`,
+            variant: 'destructive',
+          });
+        }
       }
+    } catch (error) {
+      toast({
+        title: 'Erro de conexão',
+        description: 'Não foi possível conectar ao provedor. Verifique sua conexão.',
+        variant: 'destructive',
+      });
     } finally {
       setIsTesting(false);
     }
@@ -348,7 +395,7 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {IMAGE_MODELS.map((model) => (
+                    {imageModels.map((model) => (
                       <SelectItem key={model.value} value={model.value}>
                         {model.label}
                       </SelectItem>
