@@ -34,6 +34,7 @@ const BulkKeywordGenerator = lazy(() => import("./pages/BulkKeywordGenerator"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const QueueMonitor = lazy(() => import("./pages/QueueMonitor"));
 const Academy = lazy(() => import("./pages/Academy"));
+const InternalLinking = lazy(() => import("./pages/InternalLinking"));
 
 const queryClient = new QueryClient();
 
@@ -77,7 +78,8 @@ const App = () => (
                 <Route path="/news-agents" element={<NewsAgents />} />
                 <Route path="/news-agents/new" element={<CreateNewsAgent />} />
                 <Route path="/projects" element={<ProjectsList />} />
-                <Route path="/internal-links" element={<Dashboard />} />
+                <Route path="/internal-linking" element={<InternalLinking />} />
+                <Route path="/internal-links" element={<InternalLinking />} />
                 <Route path="/topical-maps" element={<Dashboard />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/wordpress-plugin" element={<WordPressPlugin />} />

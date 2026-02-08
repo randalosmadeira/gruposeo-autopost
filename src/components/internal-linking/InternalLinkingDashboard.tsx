@@ -47,17 +47,24 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import { useInternalLinking, type KeywordRule, type IndexedArticle, type TopicCluster } from '@/hooks/useInternalLinking';
+import { useProjects } from '@/hooks/useProjects';
 import { InternalLinkingMetrics } from './InternalLinkingMetrics';
 import { InternalLinkingReports } from './InternalLinkingReports';
 import { SyncProgressPanel } from './SyncProgressPanel';
 import { cn } from '@/lib/utils';
 
 interface InternalLinkingDashboardProps {
-  projectId: string | null;
+  projectId?: string | null;
   projectName?: string;
 }
 
-export function InternalLinkingDashboard({ projectId, projectName }: InternalLinkingDashboardProps) {
+export function InternalLinkingDashboard({ projectId: externalProjectId, projectName: externalProjectName }: InternalLinkingDashboardProps) {
+  const { projects } = useProjects();
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(externalProjectId || null);
+  
+  // Use external projectId if provided, otherwise use selected
+  const projectId = externalProjectId || selectedProjectId;
+  const projectName = externalProjectName || projects.find(p => p.id === projectId)?.name;
   const {
     isLoading,
     isSyncing,
@@ -113,17 +120,58 @@ export function InternalLinkingDashboard({ projectId, projectName }: InternalLin
 
   if (!projectId) {
     return (
-      <Card>
-        <CardContent className="py-10 text-center text-muted-foreground">
-          <Link2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p>Selecione um projeto WordPress para gerenciar a linkagem interna.</p>
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold">Linkagem Interna Inteligente</h2>
+          <p className="text-muted-foreground">
+            Selecione um projeto para gerenciar a linkagem interna
+          </p>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Selecionar Projeto</CardTitle>
+            <CardDescription>
+              Escolha um projeto WordPress conectado para gerenciar links internos
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {projects.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground">
+                <Link2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>Nenhum projeto WordPress configurado.</p>
+                <p className="text-sm">Configure um projeto em "Projetos" primeiro.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {projects.filter(p => p.is_connected).map((project) => (
+                  <Card 
+                    key={project.id} 
+                    className="cursor-pointer hover:border-primary transition-colors"
+                    onClick={() => setSelectedProjectId(project.id)}
+                  >
+                    <CardContent className="pt-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <Link2 className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{project.name}</p>
+                          <p className="text-xs text-muted-foreground">{project.domain}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6">{/* Header */}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
