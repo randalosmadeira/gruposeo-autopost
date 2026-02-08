@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Newspaper, 
   Sparkles, 
@@ -28,13 +28,14 @@ import {
   TrendingUp,
   Globe,
   FileCheck,
-  Zap,
   BarChart3,
-  ExternalLink,
+  Rss,
+  PenTool,
 } from 'lucide-react';
 import { useNewsRewriter, type RewriteResult, type ComplianceCheck } from '@/hooks/useNewsRewriter';
 import { useProjects } from '@/hooks/useProjects';
 import { cn } from '@/lib/utils';
+import { RSSNewsImporter, type RSSItem, AutoAuditPanel } from '@/components/news-rewriter';
 
 // Niche options with icons
 const NICHE_OPTIONS = [
@@ -63,93 +64,6 @@ const ANALYSIS_ANGLES = [
   { id: 'custom', label: 'Personalizado', description: 'Defina seu próprio ângulo' },
 ];
 
-// Compliance result component
-function ComplianceResult({ result, compliance }: { result: RewriteResult; compliance: ComplianceCheck }) {
-  return (
-    <Card className="border-success/50 bg-success/5">
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="w-5 h-5 text-success" />
-          <CardTitle className="text-base">Artigo Gerado com Sucesso!</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div>
-          <p className="font-medium text-sm mb-1">{result.title}</p>
-          <p className="text-xs text-muted-foreground">{result.reading_time} de leitura • {result.word_count} palavras</p>
-        </div>
-
-        {/* Quality Metrics */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span>Originalidade</span>
-              <span className={cn(
-                "font-medium",
-                compliance.originalityScore >= 95 ? "text-success" : 
-                compliance.originalityScore >= 90 ? "text-warning" : "text-destructive"
-              )}>
-                {compliance.originalityScore}%
-              </span>
-            </div>
-            <Progress 
-              value={compliance.originalityScore} 
-              className="h-1.5" 
-            />
-          </div>
-          
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span>Qualidade</span>
-              <span className="font-medium text-primary">{result.quality_score}%</span>
-            </div>
-            <Progress value={result.quality_score} className="h-1.5" />
-          </div>
-
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span>Legibilidade</span>
-              <span className="font-medium">{compliance.readabilityScore}%</span>
-            </div>
-            <Progress value={compliance.readabilityScore} className="h-1.5" />
-          </div>
-
-          <div className="flex items-center gap-2">
-            {compliance.seoOptimized && (
-              <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
-                <Zap className="w-3 h-3 mr-1" />
-                SEO OK
-              </Badge>
-            )}
-            {compliance.citationCompliance && (
-              <Badge variant="secondary" className="text-xs bg-success/10 text-success">
-                <Scale className="w-3 h-3 mr-1" />
-                Lei 9.610
-              </Badge>
-            )}
-          </div>
-        </div>
-
-        {/* Tags & Keywords */}
-        {result.tags && result.tags.length > 0 && (
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Tags:</p>
-            <div className="flex flex-wrap gap-1">
-              {result.tags.slice(0, 5).map((tag, i) => (
-                <Badge key={i} variant="outline" className="text-xs">
-                  {tag}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <p className="text-xs text-muted-foreground">{result.credits}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function NewsRewriter() {
   const navigate = useNavigate();
   const { rewriteNews, isRewriting, progress, lastResult, lastCompliance } = useNewsRewriter();
@@ -165,6 +79,7 @@ export default function NewsRewriter() {
   const [projectId, setProjectId] = useState<string>('');
   const [niche, setNiche] = useState('geral');
   const [articleLength, setArticleLength] = useState<'short' | 'medium' | 'long'>('medium');
+  const [inputTab, setInputTab] = useState<'manual' | 'rss'>('manual');
 
   // Validation
   const contentLength = sourceContent.length;
@@ -199,12 +114,29 @@ export default function NewsRewriter() {
     }
   };
 
+  const handleRSSSelect = (news: RSSItem) => {
+    setSourceUrl(news.link);
+    setSourceName(news.source);
+    // Clean HTML from description/content
+    const cleanContent = (news.content || news.description || '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .trim();
+    
+    setSourceContent(`${news.title}\n\n${cleanContent}`);
+    setInputTab('manual');
+  };
+
   const selectedNiche = NICHE_OPTIONS.find(n => n.id === niche);
   const NicheIcon = selectedNiche?.icon || Globe;
 
   return (
     <>
-      <div className="container max-w-5xl py-6 space-y-6">
+      <div className="container max-w-6xl py-6 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -231,71 +163,88 @@ export default function NewsRewriter() {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Main Form */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Source Content Card */}
+            {/* Input Source Tabs */}
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  Conteúdo Original
-                </CardTitle>
-                <CardDescription>
-                  Cole o texto da notícia que você deseja reescrever
-                </CardDescription>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    Fonte do Conteúdo
+                  </CardTitle>
+                  <Tabs value={inputTab} onValueChange={(v) => setInputTab(v as 'manual' | 'rss')}>
+                    <TabsList className="h-8">
+                      <TabsTrigger value="manual" className="text-xs gap-1 px-3">
+                        <PenTool className="w-3 h-3" />
+                        Manual
+                      </TabsTrigger>
+                      <TabsTrigger value="rss" className="text-xs gap-1 px-3">
+                        <Rss className="w-3 h-3" />
+                        Feed RSS
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Source Name */}
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="sourceName" className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4" />
-                      Veículo / Fonte *
-                    </Label>
-                    <Input
-                      id="sourceName"
-                      placeholder="Ex: Folha de São Paulo, G1, Estadão..."
-                      value={sourceName}
-                      onChange={(e) => setSourceName(e.target.value)}
-                      className="border-border bg-background"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="sourceUrl" className="flex items-center gap-2">
-                      <LinkIcon className="w-4 h-4" />
-                      URL da Notícia (opcional)
-                    </Label>
-                    <Input
-                      id="sourceUrl"
-                      type="url"
-                      placeholder="https://..."
-                      value={sourceUrl}
-                      onChange={(e) => setSourceUrl(e.target.value)}
-                      className="border-border bg-background"
-                    />
-                  </div>
-                </div>
+              <CardContent>
+                {inputTab === 'rss' ? (
+                  <RSSNewsImporter onSelectNews={handleRSSSelect} />
+                ) : (
+                  <div className="space-y-4">
+                    {/* Source Name */}
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="sourceName" className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4" />
+                          Veículo / Fonte *
+                        </Label>
+                        <Input
+                          id="sourceName"
+                          placeholder="Ex: Folha de São Paulo, G1, Estadão..."
+                          value={sourceName}
+                          onChange={(e) => setSourceName(e.target.value)}
+                          className="border-border bg-background"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="sourceUrl" className="flex items-center gap-2">
+                          <LinkIcon className="w-4 h-4" />
+                          URL da Notícia (opcional)
+                        </Label>
+                        <Input
+                          id="sourceUrl"
+                          type="url"
+                          placeholder="https://..."
+                          value={sourceUrl}
+                          onChange={(e) => setSourceUrl(e.target.value)}
+                          className="border-border bg-background"
+                        />
+                      </div>
+                    </div>
 
-                {/* Content */}
-                <div className="space-y-2">
-                  <Label htmlFor="sourceContent">Texto da Notícia *</Label>
-                  <Textarea
-                    id="sourceContent"
-                    placeholder="Cole aqui o texto completo da notícia que deseja reescrever..."
-                    className="min-h-[250px] font-mono text-sm border-border bg-background"
-                    value={sourceContent}
-                    onChange={(e) => setSourceContent(e.target.value)}
-                  />
-                  <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <span>{wordCount} palavras</span>
-                    <span className={!isContentValid && contentLength > 0 ? 'text-destructive' : ''}>
-                      {contentLength}/10.000 caracteres
-                    </span>
+                    {/* Content */}
+                    <div className="space-y-2">
+                      <Label htmlFor="sourceContent">Texto da Notícia *</Label>
+                      <Textarea
+                        id="sourceContent"
+                        placeholder="Cole aqui o texto completo da notícia que deseja reescrever..."
+                        className="min-h-[220px] font-mono text-sm border-border bg-background"
+                        value={sourceContent}
+                        onChange={(e) => setSourceContent(e.target.value)}
+                      />
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <span>{wordCount} palavras</span>
+                        <span className={!isContentValid && contentLength > 0 ? 'text-destructive' : ''}>
+                          {contentLength}/10.000 caracteres
+                        </span>
+                      </div>
+                      {contentLength > 0 && contentLength < 200 && (
+                        <p className="text-sm text-destructive">
+                          Mínimo de 200 caracteres para uma repostagem de qualidade
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  {contentLength > 0 && contentLength < 200 && (
-                    <p className="text-sm text-destructive">
-                      Mínimo de 200 caracteres para uma repostagem de qualidade
-                    </p>
-                  )}
-                </div>
+                )}
               </CardContent>
             </Card>
 
@@ -481,15 +430,14 @@ export default function NewsRewriter() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-[180px]">
-                  <div className="space-y-3">
+                <ScrollArea className="h-[150px]">
+                  <div className="space-y-2">
                     {[
                       { check: !!sourceName, label: 'Fonte identificada' },
                       { check: isContentValid, label: 'Conteúdo com 200+ caracteres' },
                       { check: selectedAngle !== 'custom' || !!customAngle, label: 'Ângulo de análise definido' },
-                      { check: true, label: 'Créditos automáticos no rodapé' },
+                      { check: true, label: 'Créditos automáticos (Lei 9.610)' },
                       { check: true, label: 'Reescrita 100% original (≥95%)' },
-                      { check: true, label: 'Citações limitadas (2-3 frases)' },
                       { check: true, label: 'SEO otimizado (título ≤60, meta ≤160)' },
                     ].map((item, index) => (
                       <div key={index} className="flex items-center gap-2">
@@ -499,7 +447,7 @@ export default function NewsRewriter() {
                           <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
                         )}
                         <span className={cn(
-                          "text-sm",
+                          "text-xs",
                           item.check ? 'text-foreground' : 'text-muted-foreground'
                         )}>
                           {item.label}
@@ -531,9 +479,12 @@ export default function NewsRewriter() {
               )}
             </Button>
 
-            {/* Result Preview */}
-            {lastResult && lastCompliance && (
-              <ComplianceResult result={lastResult} compliance={lastCompliance} />
+            {/* Auto Audit Panel */}
+            {lastCompliance && (
+              <AutoAuditPanel 
+                compliance={lastCompliance} 
+                qualityScore={lastResult?.quality_score}
+              />
             )}
 
             {/* What happens */}
@@ -542,12 +493,11 @@ export default function NewsRewriter() {
                 <h4 className="font-medium text-sm mb-2">O que acontece:</h4>
                 <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
                   <li>IA analisa nicho e tom adequado</li>
-                  <li>Identifica pontos principais</li>
                   <li>Reescreve com estrutura nova (95%+ original)</li>
                   <li>Adiciona análise e contexto (40%+)</li>
                   <li>Otimiza SEO (título ≤60, meta ≤160)</li>
                   <li>Gera imagem destacada por nicho</li>
-                  <li>Insere créditos conforme Lei 9.610/98</li>
+                  <li>Auditoria automática de qualidade</li>
                   <li>Artigo salvo como rascunho</li>
                 </ol>
               </CardContent>
