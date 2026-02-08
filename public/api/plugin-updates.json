@@ -1,0 +1,22 @@
+{
+  "latest_version": "3.0.0",
+  "version": "3.0.0",
+  "update_available": false,
+  "minimum_version": "3.0.0",
+  "requires_php": "7.4",
+  "requires_wp": "5.8",
+  "tested": "6.5",
+  "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
+  "changelog": "## v3.0.0 (2026-02-08)\n\n### Novas Funcionalidades\n- Integração nativa com Google Search Console via OAuth 2.0\n- Sistema de correção automática de erros 404 via IA\n- Sincronização com Ubersuggest para dados de SEO\n- HTTPS Enforcer para forçar URLs seguras\n- AI Content Enhancer para otimização automática\n- Página de diagnóstico avançada\n\n### Melhorias\n- Intervalos de cron customizados\n- Painel de configurações expandido\n\n### Correções\n- Correção de intervalos de cron inválidos",
+  "versions": {
+    "3.0.0": {
+      "released": "2026-02-08",
+      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
+      "features": ["gsc_integration", "ai_auto_fix", "ubersuggest_sync", "https_enforcer", "content_enhancer"]
+    },
+    "2.6.2": {
+      "released": "2026-02-08",
+      "features": ["pagination_complete", "basic_analysis_fallback"]
+    }
+  }
+}

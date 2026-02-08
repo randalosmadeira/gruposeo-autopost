@@ -324,6 +324,36 @@ class CFRDM_API {
             'callback' => array(__CLASS__, 'process_fix_queue'),
             'permission_callback' => array(__CLASS__, 'verify_admin'),
         ));
+        
+        // ===== Auto-Update Endpoints =====
+        
+        // Check for updates
+        register_rest_route('cfrdm/v1', '/updates/check', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'check_for_updates'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Get update status
+        register_rest_route('cfrdm/v1', '/updates/status', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'get_update_status'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Apply update
+        register_rest_route('cfrdm/v1', '/updates/apply', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'apply_update'),
+            'permission_callback' => array(__CLASS__, 'verify_admin'),
+        ));
+        
+        // Rollback update
+        register_rest_route('cfrdm/v1', '/updates/rollback', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'rollback_update'),
+            'permission_callback' => array(__CLASS__, 'verify_admin'),
+        ));
     }
     
     public static function verify_api_key($request) {
@@ -1863,5 +1893,113 @@ class CFRDM_API {
             'success' => true,
             'message' => __('Processamento da fila iniciado', 'contentfactory-rdm'),
         ), 200);
+    }
+    
+    // ===== Auto-Update Endpoints =====
+    
+    /**
+     * Check for plugin updates
+     */
+    public static function check_for_updates($request) {
+        if (!class_exists('CFRDM_Auto_Update')) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => __('Módulo de auto-update não disponível', 'contentfactory-rdm'),
+            ), 400);
+        }
+        
+        $updater = CFRDM_Auto_Update::get_instance();
+        $update_info = $updater->check_for_updates();
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'current_version' => CFRDM_VERSION,
+            'update_available' => !empty($update_info),
+            'update_info' => $update_info ?: null,
+        ), 200);
+    }
+    
+    /**
+     * Get update status
+     */
+    public static function get_update_status($request) {
+        if (!class_exists('CFRDM_Auto_Update')) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => __('Módulo de auto-update não disponível', 'contentfactory-rdm'),
+            ), 400);
+        }
+        
+        $stats = CFRDM_Auto_Update::get_stats();
+        $backups = CFRDM_Auto_Update::get_backups();
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'stats' => $stats,
+            'backups' => array_map(function($backup) {
+                return array(
+                    'version' => $backup['version'],
+                    'created_at' => $backup['created_at'],
+                    'exists' => file_exists($backup['path']),
+                );
+            }, $backups),
+        ), 200);
+    }
+    
+    /**
+     * Apply pending update
+     */
+    public static function apply_update($request) {
+        if (!class_exists('CFRDM_Auto_Update')) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => __('Módulo de auto-update não disponível', 'contentfactory-rdm'),
+            ), 400);
+        }
+        
+        $updater = CFRDM_Auto_Update::get_instance();
+        $result = $updater->apply_update_patch();
+        
+        if ($result['success']) {
+            return new WP_REST_Response(array(
+                'success' => true,
+                'message' => __('Atualização aplicada com sucesso', 'contentfactory-rdm'),
+                'from_version' => $result['from_version'] ?? CFRDM_VERSION,
+                'to_version' => $result['to_version'] ?? 'unknown',
+            ), 200);
+        } else {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => $result['error'] ?? __('Erro ao aplicar atualização', 'contentfactory-rdm'),
+                'rollback' => $result['rollback'] ?? false,
+            ), 500);
+        }
+    }
+    
+    /**
+     * Rollback to previous version
+     */
+    public static function rollback_update($request) {
+        if (!class_exists('CFRDM_Auto_Update')) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => __('Módulo de auto-update não disponível', 'contentfactory-rdm'),
+            ), 400);
+        }
+        
+        $updater = CFRDM_Auto_Update::get_instance();
+        $result = $updater->rollback_update();
+        
+        if ($result['success']) {
+            return new WP_REST_Response(array(
+                'success' => true,
+                'message' => __('Rollback executado com sucesso', 'contentfactory-rdm'),
+            ), 200);
+        } else {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => $result['error'] ?? __('Erro ao executar rollback', 'contentfactory-rdm'),
+            ), 500);
+        }
     }
 }

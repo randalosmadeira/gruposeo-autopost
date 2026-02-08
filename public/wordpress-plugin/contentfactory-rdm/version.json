@@ -1,0 +1,16 @@
+{
+  "version": "3.0.0",
+  "requires_php": "7.4",
+  "requires_wp": "5.8",
+  "tested": "6.5",
+  "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
+  "changelog": "v3.0.0 - Integração com Google Search Console, AI Auto-Fix para erros 404, sincronização Ubersuggest, HTTPS Enforcer e AI Content Enhancer",
+  "released": "2026-02-08",
+  "features": [
+    "gsc_integration",
+    "ai_auto_fix",
+    "ubersuggest_sync",
+    "https_enforcer",
+    "content_enhancer"
+  ]
+}
