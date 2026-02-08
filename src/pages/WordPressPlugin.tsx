@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '3.0.0';
+const PLUGIN_VERSION = '3.0.1';
 const PLUGIN_LAST_UPDATE = '2026-02-08';
 
 const features = [
@@ -70,6 +70,18 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '3.0.1',
+    date: '2026-02-08',
+    type: 'patch' as const,
+    changes: [
+      { type: 'fix', text: 'Correção do botão "Reparar Tabelas" que retornava erro HTML' },
+      { type: 'feature', text: 'Fallback AJAX para reparo de tabelas quando REST API falha' },
+      { type: 'improvement', text: 'Melhor tratamento de erros com mensagens detalhadas' },
+      { type: 'improvement', text: 'Feedback visual com animação de loading durante reparo' },
+      { type: 'improvement', text: 'Botão de verificação/reparo sempre visível na página de diagnóstico' },
+    ],
+  },
   {
     version: '3.0.0',
     date: '2026-02-08',
