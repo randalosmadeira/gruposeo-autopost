@@ -203,6 +203,35 @@ export function useBulkGeneration() {
 
     onProgress('', 0, 'Iniciando geração...');
 
+    // Fetch internal links if project is connected and internal linking is enabled
+    let internalLinks: Array<{ anchor: string; url: string }> = [];
+    
+    if (projectId && bulkConfig?.internalLinking) {
+      try {
+        onProgress('', 2, 'Buscando links internos...');
+        
+        const linkResponse = await supabase.functions.invoke('analyze-wp-articles', {
+          body: {
+            action: 'get_link_suggestions',
+            project_id: projectId,
+            keyword: job.keyword.keyword,
+            max_links: 10,
+          },
+        });
+
+        if (linkResponse.data?.success && linkResponse.data?.suggestions) {
+          internalLinks = linkResponse.data.suggestions.map((s: any) => ({
+            anchor: s.anchor_text,
+            url: s.url,
+          }));
+          console.log(`Found ${internalLinks.length} internal links for ${job.keyword.keyword}`);
+        }
+      } catch (linkError) {
+        console.warn('Failed to fetch internal links:', linkError);
+        // Continue without internal links
+      }
+    }
+
     // Build config from bulk settings + keyword analysis
     const config = {
       keyword: job.keyword.keyword,
@@ -242,6 +271,8 @@ export function useBulkGeneration() {
       additionalInfo: bulkConfig?.additionalInfo || '',
       // AI Model
       aiModel: bulkConfig?.aiModel || 'standard',
+      // Internal links (automatically fetched)
+      internalLinks: internalLinks.length > 0 ? internalLinks : undefined,
     };
 
     // Try to generate article with retries

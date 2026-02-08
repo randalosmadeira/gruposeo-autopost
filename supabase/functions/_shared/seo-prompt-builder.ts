@@ -4,7 +4,7 @@
 export interface InternalLink {
   url: string;
   anchor: string;
-  type: 'pillar' | 'cluster' | 'recent' | 'deepdive' | 'conversion' | 'resource';
+  type?: 'pillar' | 'cluster' | 'recent' | 'deepdive' | 'conversion' | 'resource';
   subdomain?: string;
 }
 

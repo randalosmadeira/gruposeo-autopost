@@ -249,6 +249,147 @@ export type Database = {
         }
         Relationships: []
       }
+      internal_link_suggestions: {
+        Row: {
+          anchor_context: string | null
+          anchor_text: string
+          applied_at: string | null
+          created_at: string
+          id: string
+          position_suggestion: string | null
+          project_id: string
+          rejected_reason: string | null
+          relevance_score: number | null
+          source_article_id: string | null
+          source_wp_post_id: number | null
+          status: string | null
+          target_article_id: string | null
+          target_url: string
+          target_wp_post_id: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          anchor_context?: string | null
+          anchor_text: string
+          applied_at?: string | null
+          created_at?: string
+          id?: string
+          position_suggestion?: string | null
+          project_id: string
+          rejected_reason?: string | null
+          relevance_score?: number | null
+          source_article_id?: string | null
+          source_wp_post_id?: number | null
+          status?: string | null
+          target_article_id?: string | null
+          target_url: string
+          target_wp_post_id?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          anchor_context?: string | null
+          anchor_text?: string
+          applied_at?: string | null
+          created_at?: string
+          id?: string
+          position_suggestion?: string | null
+          project_id?: string
+          rejected_reason?: string | null
+          relevance_score?: number | null
+          source_article_id?: string | null
+          source_wp_post_id?: number | null
+          status?: string | null
+          target_article_id?: string | null
+          target_url?: string
+          target_wp_post_id?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "internal_link_suggestions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "internal_link_suggestions_source_article_id_fkey"
+            columns: ["source_article_id"]
+            isOneToOne: false
+            referencedRelation: "wordpress_article_index"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "internal_link_suggestions_target_article_id_fkey"
+            columns: ["target_article_id"]
+            isOneToOne: false
+            referencedRelation: "wordpress_article_index"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      keyword_link_rules: {
+        Row: {
+          case_sensitive: boolean | null
+          created_at: string
+          id: string
+          is_active: boolean | null
+          keyword: string
+          match_type: string | null
+          max_links_per_article: number | null
+          priority: number | null
+          project_id: string
+          target_title: string | null
+          target_url: string
+          times_applied: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          case_sensitive?: boolean | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          keyword: string
+          match_type?: string | null
+          max_links_per_article?: number | null
+          priority?: number | null
+          project_id: string
+          target_title?: string | null
+          target_url: string
+          times_applied?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          case_sensitive?: boolean | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          keyword?: string
+          match_type?: string | null
+          max_links_per_article?: number | null
+          priority?: number | null
+          project_id?: string
+          target_title?: string | null
+          target_url?: string
+          times_applied?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "keyword_link_rules_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       news_agents: {
         Row: {
           active_days: string[] | null
@@ -514,6 +655,75 @@ export type Database = {
           },
         ]
       }
+      topic_clusters: {
+        Row: {
+          article_count: number | null
+          average_seo_score: number | null
+          cluster_strength: number | null
+          created_at: string
+          description: string | null
+          id: string
+          is_auto_generated: boolean | null
+          name: string
+          pillar_article_id: string | null
+          primary_keywords: string[] | null
+          project_id: string
+          related_keywords: string[] | null
+          slug: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          article_count?: number | null
+          average_seo_score?: number | null
+          cluster_strength?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_auto_generated?: boolean | null
+          name: string
+          pillar_article_id?: string | null
+          primary_keywords?: string[] | null
+          project_id: string
+          related_keywords?: string[] | null
+          slug: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          article_count?: number | null
+          average_seo_score?: number | null
+          cluster_strength?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_auto_generated?: boolean | null
+          name?: string
+          pillar_article_id?: string | null
+          primary_keywords?: string[] | null
+          project_id?: string
+          related_keywords?: string[] | null
+          slug?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "topic_clusters_pillar_article_id_fkey"
+            columns: ["pillar_article_id"]
+            isOneToOne: false
+            referencedRelation: "wordpress_article_index"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "topic_clusters_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_settings: {
         Row: {
           ai_provider: string | null
@@ -579,6 +789,107 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      wordpress_article_index: {
+        Row: {
+          analysis_version: number | null
+          content_hash: string | null
+          created_at: string
+          external_links_count: number | null
+          id: string
+          internal_links_count: number | null
+          last_analyzed_at: string | null
+          last_wp_modified_at: string | null
+          linkability_score: number | null
+          primary_keyword: string | null
+          project_id: string
+          secondary_keywords: string[] | null
+          semantic_summary: string | null
+          seo_score: number | null
+          sync_error: string | null
+          sync_status: string | null
+          topic_cluster: string | null
+          updated_at: string
+          user_id: string
+          word_count: number | null
+          wp_categories: string[] | null
+          wp_post_id: number
+          wp_post_slug: string | null
+          wp_post_status: string | null
+          wp_post_title: string
+          wp_post_type: string | null
+          wp_post_url: string
+          wp_tags: string[] | null
+        }
+        Insert: {
+          analysis_version?: number | null
+          content_hash?: string | null
+          created_at?: string
+          external_links_count?: number | null
+          id?: string
+          internal_links_count?: number | null
+          last_analyzed_at?: string | null
+          last_wp_modified_at?: string | null
+          linkability_score?: number | null
+          primary_keyword?: string | null
+          project_id: string
+          secondary_keywords?: string[] | null
+          semantic_summary?: string | null
+          seo_score?: number | null
+          sync_error?: string | null
+          sync_status?: string | null
+          topic_cluster?: string | null
+          updated_at?: string
+          user_id: string
+          word_count?: number | null
+          wp_categories?: string[] | null
+          wp_post_id: number
+          wp_post_slug?: string | null
+          wp_post_status?: string | null
+          wp_post_title: string
+          wp_post_type?: string | null
+          wp_post_url: string
+          wp_tags?: string[] | null
+        }
+        Update: {
+          analysis_version?: number | null
+          content_hash?: string | null
+          created_at?: string
+          external_links_count?: number | null
+          id?: string
+          internal_links_count?: number | null
+          last_analyzed_at?: string | null
+          last_wp_modified_at?: string | null
+          linkability_score?: number | null
+          primary_keyword?: string | null
+          project_id?: string
+          secondary_keywords?: string[] | null
+          semantic_summary?: string | null
+          seo_score?: number | null
+          sync_error?: string | null
+          sync_status?: string | null
+          topic_cluster?: string | null
+          updated_at?: string
+          user_id?: string
+          word_count?: number | null
+          wp_categories?: string[] | null
+          wp_post_id?: number
+          wp_post_slug?: string | null
+          wp_post_status?: string | null
+          wp_post_title?: string
+          wp_post_type?: string | null
+          wp_post_url?: string
+          wp_tags?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wordpress_article_index_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       wordpress_stats: {
         Row: {

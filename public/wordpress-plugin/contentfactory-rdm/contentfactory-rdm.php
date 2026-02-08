@@ -3,7 +3,7 @@
  * Plugin Name: ContentFactory RDM
  * Plugin URI: https://gruposeo.marketing/contentfactory
  * Description: Integração avançada com ContentFactory para publicação automática de artigos, sincronização, otimização de imagens, links internos, geração de SEO via IA, indexação automática, social posting e queue system.
- * Version: 2.5.0
+ * Version: 2.6.0
  * Author: GRUPO SEO MARKETING
  * Author URI: https://gruposeo.marketing
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '2.5.0');
+define('CFRDM_VERSION', '2.6.0');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -84,6 +84,7 @@ function cfrdm_load_admin_dependencies() {
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-image-optimizer.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-sync.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-internal-links.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-article-indexer.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-indexing.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-schema-validator.php';
 }
