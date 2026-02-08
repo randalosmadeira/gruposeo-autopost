@@ -66,6 +66,7 @@ import {
   PublishingOptions,
   SEOAdvancedConfig,
   InternalLinksManager,
+  ResizablePanelLayout,
   type InternalLink,
   type AIProvider,
 } from '@/components/shared';
