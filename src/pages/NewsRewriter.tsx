@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,9 +34,12 @@ import {
   PenTool,
   History,
   Calendar,
+  Wand2,
+  Lightbulb,
 } from 'lucide-react';
 import { useNewsRewriter, type RewriteResult, type ComplianceCheck } from '@/hooks/useNewsRewriter';
 import { useProjects } from '@/hooks/useProjects';
+import { useUrlAnalysis } from '@/hooks/useUrlAnalysis';
 import { cn } from '@/lib/utils';
 import { RSSNewsImporter, type RSSItem, AutoAuditPanel, RepostHistory, RSSScheduler } from '@/components/news-rewriter';
 import { FeedMonitorDashboard, ContentPerformanceAnalytics } from '@/components/feed-monitor';
@@ -86,6 +89,59 @@ export default function NewsRewriter() {
   const [inputTab, setInputTab] = useState<'manual' | 'rss'>('manual');
   const [mainTab, setMainTab] = useState<'new' | 'history' | 'schedule' | 'monitor' | 'analytics'>('new');
   const [autoPublish, setAutoPublish] = useState(false);
+  const [showAISuggestions, setShowAISuggestions] = useState(false);
+
+  // Get current project info for AI analysis
+  const currentProject = projects?.find(p => p.id === projectId);
+  
+  // URL Analysis hook
+  const { analyzeUrl, isAnalyzing, analysisResult, clearAnalysis } = useUrlAnalysis({
+    projectNiche: currentProject?.description || niche,
+    projectName: currentProject?.name,
+  });
+
+  // Handle URL analysis
+  const handleAnalyzeUrl = async () => {
+    if (!sourceUrl.trim()) return;
+    
+    const result = await analyzeUrl(sourceUrl);
+    if (result) {
+      // Auto-fill form with AI suggestions
+      if (result.content) setSourceContent(result.content);
+      if (result.source) setSourceName(result.source);
+      if (result.suggestedNiche) {
+        const matchingNiche = NICHE_OPTIONS.find(n => 
+          n.id.toLowerCase() === result.suggestedNiche.toLowerCase()
+        );
+        if (matchingNiche) setNiche(matchingNiche.id);
+      }
+      if (result.suggestedKeyword) setKeyword(result.suggestedKeyword);
+      if (result.suggestedAngle) {
+        setSelectedAngle('custom');
+        setCustomAngle(result.suggestedAngle);
+      }
+      setShowAISuggestions(true);
+    }
+  };
+
+  // Apply AI suggestion
+  const applySuggestion = (field: string, value: string) => {
+    switch (field) {
+      case 'niche':
+        const matchingNiche = NICHE_OPTIONS.find(n => 
+          n.id.toLowerCase() === value.toLowerCase()
+        );
+        if (matchingNiche) setNiche(matchingNiche.id);
+        break;
+      case 'angle':
+        setSelectedAngle('custom');
+        setCustomAngle(value);
+        break;
+      case 'keyword':
+        setKeyword(value);
+        break;
+    }
+  };
 
   // Validation
   const contentLength = sourceContent.length;
@@ -266,16 +322,45 @@ export default function NewsRewriter() {
                           <div className="space-y-2">
                             <Label htmlFor="sourceUrl" className="flex items-center gap-2">
                               <LinkIcon className="w-4 h-4" />
-                              URL da Notícia (opcional)
+                              URL da Notícia
+                              <Badge variant="secondary" className="text-xs ml-1">
+                                <Wand2 className="w-3 h-3 mr-1" />
+                                Auto-análise
+                              </Badge>
                             </Label>
-                            <Input
-                              id="sourceUrl"
-                              type="url"
-                              placeholder="https://..."
-                              value={sourceUrl}
-                              onChange={(e) => setSourceUrl(e.target.value)}
-                              className="border-border bg-background"
-                            />
+                            <div className="flex gap-2">
+                              <Input
+                                id="sourceUrl"
+                                type="url"
+                                placeholder="https://... (cole a URL e clique em Analisar)"
+                                value={sourceUrl}
+                                onChange={(e) => {
+                                  setSourceUrl(e.target.value);
+                                  clearAnalysis();
+                                  setShowAISuggestions(false);
+                                }}
+                                className="border-border bg-background flex-1"
+                              />
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={handleAnalyzeUrl}
+                                disabled={!sourceUrl.trim() || isAnalyzing}
+                                className="shrink-0"
+                              >
+                                {isAnalyzing ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Sparkles className="w-4 h-4 mr-1" />
+                                    Analisar
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Cole a URL e clique em "Analisar" para extrair conteúdo e sugestões via IA
+                            </p>
                           </div>
                         </div>
 
@@ -306,7 +391,99 @@ export default function NewsRewriter() {
                   </CardContent>
                 </Card>
 
-                {/* Niche Selection */}
+                {/* AI Suggestions Panel */}
+                {showAISuggestions && analysisResult && (
+                  <Card className="border-primary/30 bg-primary/5">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Lightbulb className="w-5 h-5 text-primary" />
+                        Sugestões da IA
+                        <Badge variant="secondary" className="ml-auto">
+                          Baseado no projeto WordPress
+                        </Badge>
+                      </CardTitle>
+                      <CardDescription>
+                        {analysisResult.summary}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Main suggestions grid */}
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        {/* Suggested Niche */}
+                        <div className="p-3 rounded-lg border bg-background">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-medium text-muted-foreground">Nicho Sugerido</span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => applySuggestion('niche', analysisResult.suggestedNiche)}
+                            >
+                              Aplicar
+                            </Button>
+                          </div>
+                          <p className="text-sm font-medium">{analysisResult.suggestedNiche}</p>
+                        </div>
+
+                        {/* Suggested Keyword */}
+                        <div className="p-3 rounded-lg border bg-background">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-medium text-muted-foreground">Palavra-chave SEO</span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => applySuggestion('keyword', analysisResult.suggestedKeyword)}
+                            >
+                              Aplicar
+                            </Button>
+                          </div>
+                          <p className="text-sm font-medium">{analysisResult.suggestedKeyword}</p>
+                        </div>
+                      </div>
+
+                      {/* Suggested Angle */}
+                      <div className="p-3 rounded-lg border bg-background">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium text-muted-foreground">Ângulo de Análise Sugerido</span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-xs"
+                            onClick={() => applySuggestion('angle', analysisResult.suggestedAngle)}
+                          >
+                            Aplicar
+                          </Button>
+                        </div>
+                        <p className="text-sm">{analysisResult.suggestedAngle}</p>
+                      </div>
+
+                      {/* Topics and Audience */}
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <div className="p-3 rounded-lg border bg-background">
+                          <span className="text-xs font-medium text-muted-foreground block mb-2">Tópicos Principais</span>
+                          <div className="flex flex-wrap gap-1">
+                            {analysisResult.mainTopics.map((topic, i) => (
+                              <Badge key={i} variant="outline" className="text-xs">
+                                {topic}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-lg border bg-background">
+                          <span className="text-xs font-medium text-muted-foreground block mb-2">Público-Alvo</span>
+                          <p className="text-xs">{analysisResult.targetAudience}</p>
+                        </div>
+                      </div>
+
+                      {/* Publishing Strategy */}
+                      <div className="p-3 rounded-lg border border-primary/30 bg-primary/5">
+                        <span className="text-xs font-medium text-primary block mb-1">💡 Estratégia de Publicação</span>
+                        <p className="text-xs text-muted-foreground">{analysisResult.publishingStrategy}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
