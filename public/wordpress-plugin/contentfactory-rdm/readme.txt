@@ -4,7 +4,7 @@ Tags: content, seo, articles, automation, ai, image-optimization, indexing
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.5.0
+Stable tag: 2.5.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,6 +65,12 @@ Sim! Na versão 2.1, o plugin notifica automaticamente o Google e o Bing quando 
 Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject schema) e FAQs automaticamente.
 
 == Changelog ==
+
+= 2.5.1 =
+* **NOVO**: Sistema de linkagem interna inteligente com IA para sincronização automática
+* **NOVO**: Indexador de artigos com análise semântica e detecção de clusters temáticos
+* **NOVO**: Regras de linkagem automática por palavras-chave com priorização
+* **MELHORADO**: Integração de links internos em todos os geradores de conteúdo
 
 = 2.2.1 =
 * **CRÍTICO**: Corrigido conflito com Elementor e page builders que causava tela branca
