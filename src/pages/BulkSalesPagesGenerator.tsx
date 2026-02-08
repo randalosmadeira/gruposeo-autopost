@@ -62,6 +62,7 @@ import {
   HelpCircle,
   FileCheck,
   Bot,
+  Clock,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
@@ -90,10 +91,10 @@ interface SalesPageRow {
 }
 
 const pageSizes = [
-  { value: 'very-short', label: 'Muito Pequeno (600-1200 palavras)' },
-  { value: 'short', label: 'Pequeno (1200-2400 palavras)' },
-  { value: 'medium', label: 'Médio (2400-3600 palavras)' },
-  { value: 'long', label: 'Grande (2600-5200 palavras)' },
+  { value: 'muito_pequeno', label: 'Muito Pequeno (600-1200 palavras)' },
+  { value: 'pequeno', label: 'Pequeno (1200-2400 palavras)' },
+  { value: 'medio', label: 'Médio (2400-3600 palavras)' },
+  { value: 'grande', label: 'Grande (2600-5200 palavras)' },
 ];
 
 const offerTypes = [
@@ -422,22 +423,37 @@ export default function BulkSalesPagesGenerator() {
             </div>
 
             <div className="flex items-center gap-3">
-              <Card className="border shadow-sm">
-                <CardContent className="px-4 py-3 text-center">
-                  <p className="text-xs text-muted-foreground mb-0.5">Total de artigos</p>
-                  <p className="text-2xl font-bold text-foreground">{totalCount}</p>
+              <Card className="border-2 border-orange-200 shadow-sm">
+                <CardContent className="px-4 py-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-orange-100 flex items-center justify-center">
+                    <FileText className="w-4 h-4 text-orange-600" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground mb-0.5">Total de páginas</p>
+                    <p className="text-2xl font-bold text-foreground">{totalCount}</p>
+                  </div>
                 </CardContent>
               </Card>
-              <Card className="border shadow-sm">
-                <CardContent className="px-4 py-3 text-center">
-                  <p className="text-xs text-muted-foreground mb-0.5">Créditos estimados</p>
-                  <p className="text-2xl font-bold text-foreground">{estimatedCredits}</p>
+              <Card className="border-2 border-orange-200 shadow-sm">
+                <CardContent className="px-4 py-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-orange-100 flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 text-orange-600" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground mb-0.5">Créditos estimados</p>
+                    <p className="text-2xl font-bold text-foreground">{estimatedCredits}</p>
+                  </div>
                 </CardContent>
               </Card>
-              <Card className="border shadow-sm">
-                <CardContent className="px-4 py-3 text-center">
-                  <p className="text-xs text-muted-foreground mb-0.5">Tempo estimado</p>
-                  <p className="text-2xl font-bold text-foreground">{estimatedTime}</p>
+              <Card className="border-2 border-orange-200 shadow-sm">
+                <CardContent className="px-4 py-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-orange-100 flex items-center justify-center">
+                    <Clock className="w-4 h-4 text-orange-600" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground mb-0.5">Tempo estimado</p>
+                    <p className="text-2xl font-bold text-foreground">{estimatedTime}</p>
+                  </div>
                 </CardContent>
               </Card>
             </div>

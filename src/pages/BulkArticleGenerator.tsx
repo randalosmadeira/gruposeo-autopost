@@ -391,22 +391,37 @@ export default function BulkArticleGenerator() {
 
             {/* Stats Cards */}
             <div className="flex items-center gap-3">
-              <Card className="border shadow-sm">
-                <CardContent className="px-4 py-3 text-center">
-                  <p className="text-xs text-muted-foreground mb-0.5">Total de artigos</p>
-                  <p className="text-2xl font-bold text-foreground">{totalCount}</p>
+              <Card className="border-2 border-primary/20 shadow-sm">
+                <CardContent className="px-4 py-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <FileText className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground mb-0.5">Total de artigos</p>
+                    <p className="text-2xl font-bold text-foreground">{totalCount}</p>
+                  </div>
                 </CardContent>
               </Card>
-              <Card className="border shadow-sm">
-                <CardContent className="px-4 py-3 text-center">
-                  <p className="text-xs text-muted-foreground mb-0.5">Créditos estimados</p>
-                  <p className="text-2xl font-bold text-foreground">{estimatedCredits}</p>
+              <Card className="border-2 border-primary/20 shadow-sm">
+                <CardContent className="px-4 py-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground mb-0.5">Créditos estimados</p>
+                    <p className="text-2xl font-bold text-foreground">{estimatedCredits}</p>
+                  </div>
                 </CardContent>
               </Card>
-              <Card className="border shadow-sm">
-                <CardContent className="px-4 py-3 text-center">
-                  <p className="text-xs text-muted-foreground mb-0.5">Tempo estimado</p>
-                  <p className="text-2xl font-bold text-foreground">{estimatedTime}</p>
+              <Card className="border-2 border-primary/20 shadow-sm">
+                <CardContent className="px-4 py-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Clock className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground mb-0.5">Tempo estimado</p>
+                    <p className="text-2xl font-bold text-foreground">{estimatedTime}</p>
+                  </div>
                 </CardContent>
               </Card>
             </div>
