@@ -3,7 +3,7 @@
  * Plugin Name: ContentFactory RDM
  * Plugin URI: https://gruposeo.marketing/contentfactory
  * Description: Integração avançada com ContentFactory para publicação automática de artigos, sincronização, otimização de imagens, links internos, geração de SEO via IA, indexação automática, social posting e queue system.
- * Version: 3.0.1
+ * Version: 3.0.2
  * Author: GRUPO SEO MARKETING
  * Author URI: https://gruposeo.marketing
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '3.0.1');
+define('CFRDM_VERSION', '3.0.2');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -613,7 +613,13 @@ private function init_admin_hooks() {
     }
     
     public function activate() {
-        // Create database tables FIRST
+        // CRITICAL: Register cron intervals FIRST before any module init
+        // This prevents fatal errors when modules try to use custom intervals
+        if (class_exists('CFRDM_Cron_Scheduler')) {
+            add_filter('cron_schedules', array('CFRDM_Cron_Scheduler', 'register_intervals'));
+        }
+        
+        // Create database tables
         $this->create_tables();
         
         // Create advanced module tables
@@ -627,13 +633,18 @@ private function init_admin_hooks() {
         CFRDM_AI_Auto_Fix::create_table();
         CFRDM_Ubersuggest_Sync::create_table();
         
-        // Initialize v3.0.0 modules
-        CFRDM_GSC_Integration::get_instance()->init();
-        CFRDM_AI_Auto_Fix::get_instance()->init();
-        CFRDM_Ubersuggest_Sync::get_instance()->init();
-        CFRDM_HTTPS_Enforcer::get_instance()->init();
-        CFRDM_Auto_Update::get_instance()->init();
-        CFRDM_AI_Content_Enhancer::get_instance()->init();
+        // Initialize v3.0.0 modules AFTER cron intervals are registered
+        // Use try-catch to prevent fatal errors during activation
+        try {
+            CFRDM_GSC_Integration::get_instance()->init();
+            CFRDM_AI_Auto_Fix::get_instance()->init();
+            CFRDM_Ubersuggest_Sync::get_instance()->init();
+            CFRDM_HTTPS_Enforcer::get_instance()->init();
+            CFRDM_Auto_Update::get_instance()->init();
+            CFRDM_AI_Content_Enhancer::get_instance()->init();
+        } catch (Exception $e) {
+            error_log('ContentFactory RDM activation error: ' . $e->getMessage());
+        }
         
         // Register default cron jobs
         CFRDM_Cron_Scheduler::register_default_jobs();
