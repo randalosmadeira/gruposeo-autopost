@@ -193,6 +193,7 @@ export type Database = {
           project_id: string | null
           published_at: string | null
           published_url: string | null
+          scheduled_at: string | null
           secondary_keywords: string[] | null
           seo_score: number | null
           slug: string | null
@@ -215,6 +216,7 @@ export type Database = {
           project_id?: string | null
           published_at?: string | null
           published_url?: string | null
+          scheduled_at?: string | null
           secondary_keywords?: string[] | null
           seo_score?: number | null
           slug?: string | null
@@ -237,6 +239,7 @@ export type Database = {
           project_id?: string | null
           published_at?: string | null
           published_url?: string | null
+          scheduled_at?: string | null
           secondary_keywords?: string[] | null
           seo_score?: number | null
           slug?: string | null

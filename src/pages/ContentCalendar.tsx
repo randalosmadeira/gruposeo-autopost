@@ -76,18 +76,32 @@ export default function ContentCalendar() {
   const contentItems = useMemo((): ContentItem[] => {
     if (!articles) return [];
     
-    return articles.map(article => ({
-      id: article.id,
-      title: article.title || article.keyword,
-      type: article.type === 'blog' ? 'article' : 'landing',
-      status: article.status as ContentItem['status'],
-      date: new Date(article.created_at),
-      imageUrl: article.featured_image_url,
-      projectId: article.project_id,
-      projectName: projects?.find(p => p.id === article.project_id)?.name,
-      keyword: article.keyword,
-      excerpt: article.excerpt,
-    }));
+    return articles.map(article => {
+      // Use scheduled_at if available, otherwise fall back to created_at
+      const articleDate = article.scheduled_at 
+        ? new Date(article.scheduled_at) 
+        : new Date(article.created_at);
+      
+      // Determine display status - if scheduled_at is set and in the future, show as scheduled
+      let displayStatus = article.status as ContentItem['status'];
+      if (article.scheduled_at && new Date(article.scheduled_at) > new Date() && article.status !== 'published') {
+        displayStatus = 'scheduled';
+      }
+      
+      return {
+        id: article.id,
+        title: article.title || article.keyword,
+        type: article.type === 'blog' ? 'article' : 'landing',
+        status: displayStatus,
+        date: articleDate,
+        scheduledAt: article.scheduled_at ? new Date(article.scheduled_at) : null,
+        imageUrl: article.featured_image_url,
+        projectId: article.project_id,
+        projectName: projects?.find(p => p.id === article.project_id)?.name,
+        keyword: article.keyword,
+        excerpt: article.excerpt,
+      };
+    });
   }, [articles, projects]);
 
   // Filter content by project and status

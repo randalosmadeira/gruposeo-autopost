@@ -160,6 +160,12 @@ export function DayDetailsModal({ open, onOpenChange, date, content }: DayDetail
                               </p>
                             )}
                             <div className="flex items-center gap-3 mt-2">
+                              {item.scheduledAt && (
+                                <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {format(item.scheduledAt, 'HH:mm')}
+                                </span>
+                              )}
                               {item.projectName && (
                                 <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
                                   {item.projectName}

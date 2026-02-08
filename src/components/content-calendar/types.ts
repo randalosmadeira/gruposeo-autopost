@@ -6,6 +6,7 @@ export interface ContentItem {
   type: 'article' | 'news' | 'landing';
   status: ContentStatus;
   date: Date;
+  scheduledAt?: Date | null;
   imageUrl?: string | null;
   projectId?: string | null;
   projectName?: string;
