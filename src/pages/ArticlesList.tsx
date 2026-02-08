@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -50,7 +52,11 @@ import {
   ExternalLink,
   Link as LinkIcon,
   FileCheck,
-  Inbox
+  Inbox,
+  ArrowUpDown,
+  ArrowDown,
+  ArrowUp,
+  CalendarDays
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useArticles } from '@/hooks/useArticles';
@@ -228,6 +234,11 @@ export default function ArticlesList() {
   
   // Recently published articles for highlight animation
   const [recentlyPublished, setRecentlyPublished] = useState<Set<string>>(new Set());
+  
+  // Sorting and date filter states
+  const [sortBy, setSortBy] = useState<'created_at' | 'scheduled_at'>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
 
   // Status tabs configuration
   const statusTabs = useMemo(() => {
@@ -247,17 +258,37 @@ export default function ArticlesList() {
     ];
   }, [articles]);
 
-  // Filter articles
+  // Filter and sort articles
   const filteredArticles = useMemo(() => {
-    return articles.filter((a) => {
+    let filtered = articles.filter((a) => {
       const matchesSearch = 
         a.title?.toLowerCase().includes(search.toLowerCase()) || 
         a.keyword.toLowerCase().includes(search.toLowerCase());
       const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
       const matchesProject = projectFilter === 'all' || a.project_id === projectFilter;
-      return matchesSearch && matchesStatus && matchesProject;
+      
+      // Date filter
+      let matchesDate = true;
+      if (dateFilter) {
+        const articleDate = new Date(a.created_at);
+        matchesDate = 
+          articleDate.getFullYear() === dateFilter.getFullYear() &&
+          articleDate.getMonth() === dateFilter.getMonth() &&
+          articleDate.getDate() === dateFilter.getDate();
+      }
+      
+      return matchesSearch && matchesStatus && matchesProject && matchesDate;
     });
-  }, [articles, search, statusFilter, projectFilter]);
+    
+    // Sort articles
+    filtered.sort((a, b) => {
+      const dateA = new Date(sortBy === 'scheduled_at' && a.scheduled_at ? a.scheduled_at : a.created_at).getTime();
+      const dateB = new Date(sortBy === 'scheduled_at' && b.scheduled_at ? b.scheduled_at : b.created_at).getTime();
+      return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+    });
+    
+    return filtered;
+  }, [articles, search, statusFilter, projectFilter, dateFilter, sortBy, sortOrder]);
 
   // Pagination
   const totalPages = Math.ceil(filteredArticles.length / itemsPerPage) || 1;
@@ -413,7 +444,7 @@ export default function ArticlesList() {
           
           {/* Project Filter */}
           <Select value={projectFilter} onValueChange={handleFilterChange(setProjectFilter)}>
-            <SelectTrigger className="w-full lg:w-64 bg-background">
+            <SelectTrigger className="w-full lg:w-56 bg-background">
               <div className="flex items-center gap-2">
                 <Folder className="w-4 h-4 text-amber-500" />
                 <span className="text-sm truncate">
@@ -442,32 +473,115 @@ export default function ArticlesList() {
             </SelectContent>
           </Select>
           
-          <div className="flex-1 hidden lg:block" />
+          {/* Date Filter */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                className={cn(
+                  "w-full lg:w-48 justify-start text-left font-normal bg-background",
+                  dateFilter && "text-foreground"
+                )}
+              >
+                <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
+                {dateFilter ? format(dateFilter, "dd/MM/yyyy", { locale: ptBR }) : "Filtrar por data"}
+                {dateFilter && (
+                  <X 
+                    className="ml-auto h-4 w-4 hover:text-destructive cursor-pointer" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDateFilter(undefined);
+                      setCurrentPage(1);
+                    }}
+                  />
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <CalendarComponent
+                mode="single"
+                selected={dateFilter}
+                onSelect={(date) => {
+                  setDateFilter(date);
+                  setCurrentPage(1);
+                }}
+                initialFocus
+                className="pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
           
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 w-full lg:w-auto">
-            <Button
-              variant="default"
-              size="sm"
-              disabled={selectedArticles.size === 0}
-              onClick={() => setShowPublishModal(true)}
-              className="bg-primary hover:bg-primary/90 flex-1 lg:flex-none"
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Publicar em massa
-            </Button>
-            
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={selectedArticles.size === 0}
-              onClick={() => setShowDeleteDialog(true)}
-              className="flex-1 lg:flex-none"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Excluir selecionados ({selectedArticles.size})
-            </Button>
-          </div>
+          {/* Sort Options */}
+          <Select 
+            value={`${sortBy}-${sortOrder}`} 
+            onValueChange={(val) => {
+              const [newSortBy, newSortOrder] = val.split('-') as ['created_at' | 'scheduled_at', 'asc' | 'desc'];
+              setSortBy(newSortBy);
+              setSortOrder(newSortOrder);
+            }}
+          >
+            <SelectTrigger className="w-full lg:w-52 bg-background">
+              <div className="flex items-center gap-2">
+                <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm">
+                  {sortBy === 'created_at' 
+                    ? (sortOrder === 'desc' ? 'Mais recentes' : 'Mais antigos')
+                    : (sortOrder === 'desc' ? 'Agendados (próx.)' : 'Agendados (dist.)')}
+                </span>
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="created_at-desc">
+                <div className="flex items-center gap-2">
+                  <ArrowDown className="w-4 h-4" />
+                  <span>Mais recentes primeiro</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="created_at-asc">
+                <div className="flex items-center gap-2">
+                  <ArrowUp className="w-4 h-4" />
+                  <span>Mais antigos primeiro</span>
+                </div>
+              </SelectItem>
+              <DropdownMenuSeparator />
+              <SelectItem value="scheduled_at-desc">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  <span>Agendados (próximos)</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="scheduled_at-asc">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  <span>Agendados (distantes)</span>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 w-full lg:w-auto flex-wrap">
+          <Button
+            variant="default"
+            size="sm"
+            disabled={selectedArticles.size === 0}
+            onClick={() => setShowPublishModal(true)}
+            className="bg-primary hover:bg-primary/90"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Publicar em massa
+          </Button>
+          
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={selectedArticles.size === 0}
+            onClick={() => setShowDeleteDialog(true)}
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Excluir selecionados ({selectedArticles.size})
+          </Button>
         </div>
       </div>
 
@@ -551,7 +665,13 @@ export default function ArticlesList() {
                       Título
                     </TableHead>
                     <TableHead className="px-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Projeto Final
+                    </TableHead>
+                    <TableHead className="px-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       Status
+                    </TableHead>
+                    <TableHead className="px-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Data/Hora
                     </TableHead>
                     <TableHead className="w-16 px-4 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       Ações
@@ -615,6 +735,20 @@ export default function ArticlesList() {
                           </div>
                         </TableCell>
                         
+                        {/* Project Column */}
+                        <TableCell className="px-4 py-4">
+                          {article.project_id ? (
+                            <div className="flex items-center gap-2">
+                              <Folder className="w-4 h-4 text-amber-500" />
+                              <span className="text-sm text-foreground font-medium truncate max-w-[140px]">
+                                {getProjectName(article.project_id) || 'Projeto'}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        
                         {/* Status Badge */}
                         <TableCell className="px-4 py-4">
                           <Badge 
@@ -634,6 +768,25 @@ export default function ArticlesList() {
                             )}
                             {isRecentlyPublished ? 'Publicado!' : status.label}
                           </Badge>
+                        </TableCell>
+                        
+                        {/* Date/Time Column */}
+                        <TableCell className="px-4 py-4">
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5 text-sm text-foreground">
+                              <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                              {format(new Date(article.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <Clock className="w-3 h-3" />
+                              {format(new Date(article.created_at), "HH:mm", { locale: ptBR })}
+                              {article.scheduled_at && (
+                                <span className="ml-1.5 text-blue-600 font-medium">
+                                  (Agendado: {format(new Date(article.scheduled_at), "dd/MM HH:mm", { locale: ptBR })})
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </TableCell>
                         
                         {/* Actions Menu */}
