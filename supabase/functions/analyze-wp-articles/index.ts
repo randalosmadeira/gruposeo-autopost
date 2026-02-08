@@ -602,7 +602,7 @@ serve(async (req) => {
             }
 
             // Small delay to avoid rate limiting (shorter for basic analysis)
-            await new Promise(r => setTimeout(r, useAI ? 150 : 50));
+            await new Promise(r => setTimeout(r, analysisResult.usedAI ? 150 : 50));
           } catch (e) {
             console.error("Article processing error:", e);
             results.errors++;
