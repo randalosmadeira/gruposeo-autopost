@@ -43,8 +43,12 @@ import {
   Target,
   Sparkles,
   ExternalLink,
+  BarChart3,
+  ClipboardList,
 } from 'lucide-react';
 import { useInternalLinking, type KeywordRule, type IndexedArticle, type TopicCluster } from '@/hooks/useInternalLinking';
+import { InternalLinkingMetrics } from './InternalLinkingMetrics';
+import { InternalLinkingReports } from './InternalLinkingReports';
 import { cn } from '@/lib/utils';
 
 interface InternalLinkingDashboardProps {
@@ -207,12 +211,38 @@ export function InternalLinkingDashboard({ projectId, projectName }: InternalLin
       </div>
 
       {/* Main Content Tabs */}
-      <Tabs defaultValue="articles" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="articles">Artigos Indexados</TabsTrigger>
-          <TabsTrigger value="clusters">Clusters Temáticos</TabsTrigger>
-          <TabsTrigger value="rules">Regras de Linkagem</TabsTrigger>
+      <Tabs defaultValue="metrics" className="space-y-4">
+        <TabsList className="grid grid-cols-5 w-full max-w-2xl">
+          <TabsTrigger value="metrics">
+            <BarChart3 className="w-4 h-4 mr-2" />
+            Métricas
+          </TabsTrigger>
+          <TabsTrigger value="reports">
+            <ClipboardList className="w-4 h-4 mr-2" />
+            Relatórios
+          </TabsTrigger>
+          <TabsTrigger value="articles">Artigos</TabsTrigger>
+          <TabsTrigger value="clusters">Clusters</TabsTrigger>
+          <TabsTrigger value="rules">Regras</TabsTrigger>
         </TabsList>
+
+        {/* Metrics Tab */}
+        <TabsContent value="metrics">
+          <InternalLinkingMetrics
+            indexedArticles={indexedArticles}
+            topicClusters={topicClusters}
+            keywordRules={keywordRules}
+          />
+        </TabsContent>
+
+        {/* Reports Tab */}
+        <TabsContent value="reports">
+          <InternalLinkingReports
+            indexedArticles={indexedArticles}
+            topicClusters={topicClusters}
+            keywordRules={keywordRules}
+          />
+        </TabsContent>
 
         {/* Indexed Articles Tab */}
         <TabsContent value="articles">
