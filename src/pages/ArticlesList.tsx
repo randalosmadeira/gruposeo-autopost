@@ -62,6 +62,7 @@ import { cn } from '@/lib/utils';
 import { useArticles } from '@/hooks/useArticles';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BulkPublishModal } from '@/components/articles/BulkPublishModal';
@@ -75,53 +76,46 @@ const statusConfig: Record<string, {
   borderColor: string;
 }> = {
   draft: { 
-    label: 'Rascunho', 
-    icon: <FileText className="w-3 h-3" />,
-    bgColor: 'bg-gray-100',
-    textColor: 'text-gray-800',
-    borderColor: 'border-gray-200'
+    label: 'Na Fila', 
+    icon: <Inbox className="w-3 h-3" />,
+    bgColor: 'bg-muted',
+    textColor: 'text-muted-foreground',
+    borderColor: 'border-muted'
   },
   generating: { 
     label: 'Em criação', 
     icon: <Loader2 className="w-3 h-3 animate-spin" />,
-    bgColor: 'bg-yellow-100',
-    textColor: 'text-yellow-800',
-    borderColor: 'border-yellow-200'
+    bgColor: 'bg-warning/20',
+    textColor: 'text-warning-foreground',
+    borderColor: 'border-warning/30'
   },
   ready: { 
     label: 'Finalizado', 
     icon: <FileCheck className="w-3 h-3" />,
-    bgColor: 'bg-blue-100',
-    textColor: 'text-blue-800',
-    borderColor: 'border-blue-200'
+    bgColor: 'bg-primary/10',
+    textColor: 'text-primary',
+    borderColor: 'border-primary/20'
   },
   published: { 
     label: 'Publicado', 
     icon: <CheckCircle2 className="w-3 h-3" />,
-    bgColor: 'bg-green-100',
-    textColor: 'text-green-800',
-    borderColor: 'border-green-200'
+    bgColor: 'bg-success/10',
+    textColor: 'text-success',
+    borderColor: 'border-success/20'
   },
   error: { 
     label: 'Erro', 
     icon: <AlertCircle className="w-3 h-3" />,
-    bgColor: 'bg-red-100',
-    textColor: 'text-red-800',
-    borderColor: 'border-red-200'
-  },
-  queued: { 
-    label: 'Na Fila', 
-    icon: <Inbox className="w-3 h-3" />,
-    bgColor: 'bg-gray-100',
-    textColor: 'text-gray-800',
-    borderColor: 'border-gray-200'
+    bgColor: 'bg-destructive/10',
+    textColor: 'text-destructive',
+    borderColor: 'border-destructive/20'
   },
   scheduled: { 
     label: 'Agendado', 
     icon: <Clock className="w-3 h-3" />,
-    bgColor: 'bg-blue-100',
-    textColor: 'text-blue-800',
-    borderColor: 'border-blue-200'
+    bgColor: 'bg-accent/50',
+    textColor: 'text-accent-foreground',
+    borderColor: 'border-accent'
   },
 };
 
@@ -214,6 +208,7 @@ function SuccessModal({
 
 export default function ArticlesList() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { articles, isLoading, deleteArticle } = useArticles();
   const { projects } = useProjects();
   const { toast } = useToast();
@@ -240,31 +235,71 @@ export default function ArticlesList() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
 
-  // Status tabs configuration
+  // Status tabs configuration - proper counting based on DB status + scheduled_at field
   const statusTabs = useMemo(() => {
-    const counts: Record<string, number> = { all: articles.length };
+    // Count articles by actual database status
+    const counts: Record<string, number> = { 
+      all: articles.length,
+      published: 0,
+      scheduled: 0, // This is virtual - based on scheduled_at field
+      ready: 0,
+      generating: 0,
+      draft: 0,
+      error: 0,
+    };
+    
     articles.forEach(a => {
-      counts[a.status] = (counts[a.status] || 0) + 1;
+      // Count by actual status
+      if (a.status === 'published') {
+        counts.published++;
+      } else if (a.status === 'ready') {
+        // Check if it's scheduled (has scheduled_at but not published yet)
+        if (a.scheduled_at && new Date(a.scheduled_at) > new Date()) {
+          counts.scheduled++;
+        } else {
+          counts.ready++;
+        }
+      } else if (a.status === 'generating') {
+        counts.generating++;
+      } else if (a.status === 'draft') {
+        counts.draft++;
+      } else if (a.status === 'error') {
+        counts.error++;
+      }
     });
     
     return [
-      { value: 'all', label: 'Todos', count: counts.all || 0 },
-      { value: 'published', label: 'Publicado', count: counts.published || 0 },
-      { value: 'scheduled', label: 'Agendado', count: counts.scheduled || 0 },
-      { value: 'ready', label: 'Finalizado', count: counts.ready || 0 },
-      { value: 'generating', label: 'Em criação', count: counts.generating || 0 },
-      { value: 'queued', label: 'Na Fila', count: counts.queued || 0 },
-      { value: 'error', label: 'Erro', count: counts.error || 0 },
+      { value: 'all', label: 'Todos', count: counts.all },
+      { value: 'published', label: 'Publicado', count: counts.published },
+      { value: 'scheduled', label: 'Agendado', count: counts.scheduled },
+      { value: 'ready', label: 'Finalizado', count: counts.ready },
+      { value: 'generating', label: 'Em criação', count: counts.generating },
+      { value: 'draft', label: 'Na Fila', count: counts.draft },
+      { value: 'error', label: 'Erro', count: counts.error },
     ];
   }, [articles]);
 
-  // Filter and sort articles
+  // Filter and sort articles - proper status matching
   const filteredArticles = useMemo(() => {
     let filtered = articles.filter((a) => {
       const matchesSearch = 
         a.title?.toLowerCase().includes(search.toLowerCase()) || 
         a.keyword.toLowerCase().includes(search.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || a.status === statusFilter;
+      
+      // Status matching with special handling for 'scheduled' virtual status
+      let matchesStatus = false;
+      if (statusFilter === 'all') {
+        matchesStatus = true;
+      } else if (statusFilter === 'scheduled') {
+        // Scheduled = has scheduled_at in future and status is ready
+        matchesStatus = a.status === 'ready' && a.scheduled_at && new Date(a.scheduled_at) > new Date();
+      } else if (statusFilter === 'ready') {
+        // Ready = status is ready but NOT scheduled for future
+        matchesStatus = a.status === 'ready' && (!a.scheduled_at || new Date(a.scheduled_at) <= new Date());
+      } else {
+        matchesStatus = a.status === statusFilter;
+      }
+      
       const matchesProject = projectFilter === 'all' || a.project_id === projectFilter;
       
       // Date filter
@@ -387,9 +422,9 @@ export default function ArticlesList() {
     return projects.find(p => p.id === projectId)?.name;
   };
 
-  // Refresh handler
+  // Refresh handler - invalidate cache for instant update
   const handleRefresh = () => {
-    window.location.reload();
+    queryClient.invalidateQueries({ queryKey: ['articles'] });
   };
 
   if (isLoading) {

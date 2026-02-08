@@ -368,34 +368,10 @@ export function useBulkGeneration() {
 
     onProgress(content, 95, imageUrl ? 'Imagem gerada!' : 'Continuando sem imagem...');
 
-    // Save article to database
-    let articleId: string | null = null;
-    const wordCount = content.split(/\s+/).filter(Boolean).length;
-    const title = extractedTitle.slice(0, 60); // Enforce 60 char limit
+    // Return content and image - article is now created/updated by the caller
+    onProgress(content, 100, 'Concluído!');
 
-    const { data: article, error } = await supabase
-      .from('articles')
-      .insert({
-        keyword: job.keyword.keyword,
-        title,
-        content,
-        word_count: wordCount,
-        status: 'ready' as const,
-        user_id: session.user.id,
-        project_id: projectId || null,
-        type: job.keyword.tipoConteudo === 'landing_page' ? 'sales' : 'blog',
-        featured_image_url: imageUrl,
-      })
-      .select('id')
-      .single();
-
-    if (!error && article) {
-      articleId = article.id;
-    }
-
-    onProgress(content, 100, 'Salvo!');
-
-    return { content, articleId, imageUrl };
+    return { content, articleId: job.articleId || null, imageUrl };
   };
 
   const startGeneration = useCallback(async (
@@ -412,16 +388,69 @@ export function useBulkGeneration() {
     
     // Initialize abort controller for this generation session
     abortControllerRef.current = new AbortController();
+
+    // Get session first
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
+      toast({
+        title: 'Erro de autenticação',
+        description: 'Faça login novamente',
+        variant: 'destructive'
+      });
+      setState(prev => ({ ...prev, isRunning: false }));
+      return;
+    }
+
+    // STEP 1: Create all articles in database as 'draft' (queue)
+    // This makes them visible in the articles list immediately
+    const articleIdMap = new Map<string, string>(); // job.id -> article.id
     
+    for (const job of pendingJobs) {
+      try {
+        const { data: article, error } = await supabase
+          .from('articles')
+          .insert({
+            user_id: session.user.id,
+            keyword: job.keyword.keyword,
+            title: `${job.keyword.keyword}: Guia Completo ${new Date().getFullYear()}`,
+            status: 'draft', // Start as draft (Na Fila)
+            type: job.keyword.tipoConteudo === 'landing_page' ? 'sales' : 'blog',
+            project_id: projectId && projectId !== 'none' ? projectId : null,
+            config: { bulkGenerated: true, ...bulkConfig },
+          })
+          .select('id')
+          .single();
+
+        if (!error && article) {
+          articleIdMap.set(job.id, article.id);
+          // Update job with article ID
+          const updatedJob = { ...job, articleId: article.id };
+          jobsRef.current = jobsRef.current.map(j => j.id === job.id ? updatedJob : j);
+        }
+      } catch (e) {
+        console.error('Failed to create article placeholder:', e);
+      }
+    }
+    
+    // STEP 2: Process each job sequentially
     for (let i = 0; i < pendingJobs.length; i++) {
       const job = pendingJobs[i];
+      const articleId = articleIdMap.get(job.id);
       
       // Check if generation was stopped
       if (abortControllerRef.current?.signal.aborted) {
         break;
       }
       
-      // Update job status to generating - also update ref
+      // Update article status to 'generating' in database
+      if (articleId) {
+        await supabase
+          .from('articles')
+          .update({ status: 'generating' })
+          .eq('id', articleId);
+      }
+      
+      // Update job status to generating
       const updatedJobGenerating = { 
         ...job, 
         status: 'generating' as const, 
@@ -429,6 +458,7 @@ export function useBulkGeneration() {
         progress: 0, 
         currentStep: 'Iniciando...',
         retryCount: 0,
+        articleId,
       };
       jobsRef.current = jobsRef.current.map(j => j.id === job.id ? updatedJobGenerating : j);
       setState(prev => ({
@@ -440,8 +470,8 @@ export function useBulkGeneration() {
       }));
 
       try {
-        const { content, articleId, imageUrl } = await generateArticleWithStreaming(
-          job,
+        const { content, articleId: generatedArticleId, imageUrl } = await generateArticleWithStreaming(
+          { ...job, articleId },
           projectId && projectId !== 'none' ? projectId : undefined,
           bulkConfig,
           (streamContent, progress, step) => {
@@ -462,11 +492,30 @@ export function useBulkGeneration() {
           }
         );
         
+        // Update article in database with content and set to 'ready'
+        const finalArticleId = articleId || generatedArticleId;
+        if (finalArticleId) {
+          const titleMatch = content.match(/^#\s*(.+)$/m) || content.match(/TITLE_SEO:\s*(.+?)-->/);
+          const extractedTitle = titleMatch?.[1]?.trim().slice(0, 60) || job.keyword.keyword;
+          const wordCount = content.split(/\s+/).filter(Boolean).length;
+          
+          await supabase
+            .from('articles')
+            .update({ 
+              status: 'ready',
+              content,
+              title: extractedTitle,
+              word_count: wordCount,
+              featured_image_url: imageUrl,
+            })
+            .eq('id', finalArticleId);
+        }
+        
         completedCount++;
         const completedJob = { 
           ...job, 
           status: 'completed' as const, 
-          articleId: articleId || undefined, 
+          articleId: finalArticleId || undefined, 
           completedAt: new Date(),
           progress: 100,
           currentStep: imageUrl ? 'Completo com imagem!' : 'Completo!',
@@ -484,6 +533,13 @@ export function useBulkGeneration() {
         
         // Check if it was an abort
         if (error instanceof Error && error.name === 'AbortError') {
+          // Reset article to draft
+          if (articleId) {
+            await supabase
+              .from('articles')
+              .update({ status: 'draft' })
+              .eq('id', articleId);
+          }
           setState(prev => ({
             ...prev,
             jobs: prev.jobs.map(j => 
@@ -495,13 +551,25 @@ export function useBulkGeneration() {
           break;
         }
         
+        // Update article status to 'error' in database
+        if (articleId) {
+          await supabase
+            .from('articles')
+            .update({ 
+              status: 'error',
+              error_message: errorMessage,
+            })
+            .eq('id', articleId);
+        }
+        
         errorCount++;
         const errorJob = { 
           ...job, 
           status: 'error' as const, 
           error: errorMessage, 
           completedAt: new Date(), 
-          progress: 0 
+          progress: 0,
+          articleId,
         };
         jobsRef.current = jobsRef.current.map(j => j.id === job.id ? errorJob : j);
         setState(prev => ({
