@@ -91,14 +91,14 @@ export function GeneratorMainConfig({
       {/* Keyword Field */}
       <div className="space-y-2">
         <Label className="text-[13px] font-medium">
-          Palavra-chave Principal <span className="text-red-500">*</span>
+          Palavra-chave Principal <span className="text-destructive">*</span>
         </Label>
         <Input
           placeholder="ex: inteligência artificial, marketing digital"
           value={keyword}
           onChange={(e) => onKeywordChange(e.target.value)}
           maxLength={200}
-          className="h-11"
+          className="h-11 border-border bg-background"
         />
         <p className="text-xs text-muted-foreground">
           O tópico principal que seu artigo focará para otimização SEO
@@ -108,7 +108,7 @@ export function GeneratorMainConfig({
       {/* Title Field */}
       <div className="space-y-2">
         <Label className="text-[13px] font-medium">
-          Título do Artigo <span className="text-red-500">*</span>
+          Título do Artigo <span className="text-destructive">*</span>
         </Label>
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -117,11 +117,11 @@ export function GeneratorMainConfig({
               value={title}
               onChange={(e) => onTitleChange(e.target.value)}
               maxLength={80}
-              className="h-11 pr-16"
+              className="h-11 pr-16 border-border bg-background"
             />
             <span 
               className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${
-                title.length > 60 ? 'text-orange-500' : 'text-muted-foreground'
+                title.length > 60 ? 'text-accent' : 'text-muted-foreground'
               }`}
             >
               {title.length}/80
@@ -141,7 +141,7 @@ export function GeneratorMainConfig({
           </Button>
         </div>
         {title.length > 60 && (
-          <p className="text-xs text-orange-500">
+          <p className="text-xs text-accent">
             ⚠️ Título muito longo. Recomendamos menos de 60 caracteres para melhor SEO.
           </p>
         )}
@@ -152,7 +152,7 @@ export function GeneratorMainConfig({
         <div className="space-y-2">
           <Label className="text-[13px] font-medium">Tom de Voz</Label>
           <Select value={tone} onValueChange={onToneChange}>
-            <SelectTrigger className="h-11">
+            <SelectTrigger className="h-11 border-border bg-background">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -168,7 +168,7 @@ export function GeneratorMainConfig({
         <div className="space-y-2">
           <Label className="text-[13px] font-medium">Ponto de Vista</Label>
           <Select value={pointOfView} onValueChange={onPointOfViewChange}>
-            <SelectTrigger className="h-11">
+            <SelectTrigger className="h-11 border-border bg-background">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -184,7 +184,7 @@ export function GeneratorMainConfig({
         <div className="space-y-2">
           <Label className="text-[13px] font-medium">Tamanho do Artigo</Label>
           <Select value={size} onValueChange={onSizeChange}>
-            <SelectTrigger className="h-11">
+            <SelectTrigger className="h-11 border-border bg-background">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -200,7 +200,7 @@ export function GeneratorMainConfig({
         <div className="space-y-2">
           <Label className="text-[13px] font-medium">Idioma</Label>
           <Select value={language} onValueChange={onLanguageChange}>
-            <SelectTrigger className="h-11">
+            <SelectTrigger className="h-11 border-border bg-background">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
