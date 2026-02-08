@@ -3,7 +3,7 @@
  * Plugin Name: ContentFactory RDM
  * Plugin URI: https://gruposeo.marketing/contentfactory
  * Description: Integração avançada com ContentFactory para publicação automática de artigos, sincronização, otimização de imagens, links internos, geração de SEO via IA, indexação automática, social posting e queue system.
- * Version: 2.6.0
+ * Version: 2.6.1
  * Author: GRUPO SEO MARKETING
  * Author URI: https://gruposeo.marketing
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '2.6.0');
+define('CFRDM_VERSION', '2.6.1');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -58,6 +58,9 @@ function cfrdm_load_dependencies() {
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-seo.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-image-filter.php';
     
+    // Article Indexer - needed for REST API endpoints (must be loaded always, not just in admin)
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-article-indexer.php';
+    
     // Advanced modules
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-social-poster.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-social-admin.php';
@@ -84,7 +87,7 @@ function cfrdm_load_admin_dependencies() {
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-image-optimizer.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-sync.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-internal-links.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-article-indexer.php';
+    // Note: class-cfrdm-article-indexer.php is now loaded in cfrdm_load_dependencies() for REST API access
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-indexing.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-schema-validator.php';
 }
@@ -131,7 +134,15 @@ class ContentFactory_RDM {
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
         
-        // Only load in admin or REST API contexts to avoid conflicts
+        // Load core dependencies for REST API
+        cfrdm_load_dependencies();
+        
+        // Initialize Article Indexer for REST API endpoints (must work for external API calls)
+        if (class_exists('CFRDM_Article_Indexer')) {
+            new CFRDM_Article_Indexer();
+        }
+        
+        // Only load admin-specific hooks in admin context
         if (is_admin()) {
             $this->init_admin_hooks();
         }

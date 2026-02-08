@@ -4,7 +4,7 @@ Tags: content, seo, articles, automation, ai, image-optimization, indexing
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.6.0
+Stable tag: 2.6.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,6 +65,11 @@ Sim! Na versão 2.1, o plugin notifica automaticamente o Google e o Bing quando 
 Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject schema) e FAQs automaticamente.
 
 == Changelog ==
+
+= 2.6.1 =
+* **CRÍTICO**: Corrigido registro de endpoints REST do Article Indexer para funcionar fora do contexto admin
+* **CORRIGIDO**: Endpoints /articles-for-indexing e /export-articles-batch agora respondem corretamente via API externa
+* **MELHORADO**: Article Indexer é carregado nas dependências principais para suporte completo à REST API
 
 = 2.6.0 =
 * **NOVO**: Verificação automática de saúde do plugin ao selecionar projeto
