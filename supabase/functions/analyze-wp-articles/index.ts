@@ -169,7 +169,8 @@ serve(async (req) => {
       );
     }
 
-    const { action, project_id, articles, site_url } = await req.json();
+    const body = await req.json();
+    const { action, project_id, articles, site_url, keyword, content, max_links = 10 } = body;
 
     // Verify project ownership
     const { data: project, error: projectError } = await supabase
@@ -357,7 +358,7 @@ serve(async (req) => {
 
       case "get_link_suggestions": {
         // Get smart link suggestions for new content
-        const { keyword, content, max_links = 10 } = await req.json();
+        // keyword, content, max_links already extracted from body at the top
 
         // Fetch indexed articles
         const { data: indexedArticles, error: fetchError } = await supabase
