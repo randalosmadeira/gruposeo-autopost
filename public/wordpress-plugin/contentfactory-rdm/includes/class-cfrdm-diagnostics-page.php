@@ -146,41 +146,114 @@ class CFRDM_Diagnostics_Page {
             echo 'Reparar Tabelas e Gerar API Key</button>';
             echo '<span id="cfrdm-repair-status" style="margin-left:10px;"></span>';
             echo '</div>';
+        }
+        
+        // Always show the repair script regardless of missing tables
+        echo '<script>
+        function cfrdmRepairTables() {
+            var btn = document.getElementById("cfrdm-repair-tables");
+            var status = document.getElementById("cfrdm-repair-status");
+            if (!btn || !status) return;
             
-            echo '<script>
-            function cfrdmRepairTables() {
-                var btn = document.getElementById("cfrdm-repair-tables");
-                var status = document.getElementById("cfrdm-repair-status");
-                btn.disabled = true;
-                btn.textContent = "Reparando...";
-                status.textContent = "";
-                
-                fetch("' . esc_url(rest_url('cfrdm/v1/repair-tables')) . '", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-WP-Nonce": "' . wp_create_nonce('wp_rest') . '"
-                    },
-                    credentials: "same-origin"
-                })
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    if (data.success) {
-                        status.innerHTML = "<span style=\"color:#2e7d32;\">✓ " + data.message + "</span>";
-                        setTimeout(function() { location.reload(); }, 1500);
-                    } else {
-                        status.innerHTML = "<span style=\"color:#c62828;\">✗ " + (data.message || "Erro desconhecido") + "</span>";
-                        btn.disabled = false;
-                        btn.textContent = "Tentar Novamente";
+            btn.disabled = true;
+            btn.innerHTML = "<span class=\"dashicons dashicons-update\" style=\"vertical-align:middle;margin-right:5px;animation:rotation 1s infinite linear;\"></span>Reparando...";
+            status.textContent = "";
+            
+            // Add rotation animation
+            var style = document.createElement("style");
+            style.textContent = "@keyframes rotation { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }";
+            document.head.appendChild(style);
+            
+            fetch("' . esc_url(rest_url('cfrdm/v1/repair-tables')) . '", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-WP-Nonce": "' . wp_create_nonce('wp_rest') . '"
+                },
+                credentials: "same-origin"
+            })
+            .then(function(response) {
+                // Check if response is JSON
+                var contentType = response.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    return response.json();
+                } else {
+                    // Response is not JSON (probably HTML error page)
+                    return response.text().then(function(text) {
+                        throw new Error("O servidor retornou uma resposta inválida. Isso pode acontecer se sua sessão expirou ou há conflito de cache. Tente recarregar a página e fazer login novamente.");
+                    });
+                }
+            })
+            .then(function(data) {
+                if (data.success) {
+                    status.innerHTML = "<span style=\"color:#2e7d32;\">✓ " + data.message + "</span>";
+                    if (data.created && data.created.length > 0) {
+                        status.innerHTML += "<br><small>Criadas: " + data.created.join(", ") + "</small>";
                     }
-                })
-                .catch(function(e) {
-                    status.innerHTML = "<span style=\"color:#c62828;\">✗ Erro: " + e.message + "</span>";
+                    setTimeout(function() { location.reload(); }, 2000);
+                } else {
+                    var errorMsg = data.message || "Erro desconhecido";
+                    if (data.errors && data.errors.length > 0) {
+                        errorMsg += " - " + data.errors.join("; ");
+                    }
+                    status.innerHTML = "<span style=\"color:#c62828;\">✗ " + errorMsg + "</span>";
                     btn.disabled = false;
-                    btn.textContent = "Tentar Novamente";
-                });
-            }
-            </script>';
+                    btn.innerHTML = "<span class=\"dashicons dashicons-admin-tools\" style=\"vertical-align:middle;margin-right:5px;\"></span>Tentar Novamente";
+                }
+            })
+            .catch(function(e) {
+                status.innerHTML = "<span style=\"color:#c62828;\">✗ " + e.message + "</span>";
+                status.innerHTML += "<br><small style=\"color:#666;\">Alternativa: Desative e reative o plugin na página de Plugins.</small>";
+                btn.disabled = false;
+                btn.innerHTML = "<span class=\"dashicons dashicons-admin-tools\" style=\"vertical-align:middle;margin-right:5px;\"></span>Tentar Novamente";
+            });
+        }
+        
+        // Alternative: Direct AJAX repair using admin-ajax.php as fallback
+        function cfrdmRepairTablesAjax() {
+            var btn = document.getElementById("cfrdm-repair-tables");
+            var status = document.getElementById("cfrdm-repair-status");
+            if (!btn || !status) return;
+            
+            btn.disabled = true;
+            btn.innerHTML = "<span class=\"dashicons dashicons-update\" style=\"vertical-align:middle;margin-right:5px;animation:rotation 1s infinite linear;\"></span>Reparando (AJAX)...";
+            
+            var formData = new FormData();
+            formData.append("action", "cfrdm_repair_tables");
+            formData.append("_ajax_nonce", "' . wp_create_nonce('cfrdm_repair_tables') . '");
+            
+            fetch("' . admin_url('admin-ajax.php') . '", {
+                method: "POST",
+                body: formData,
+                credentials: "same-origin"
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    status.innerHTML = "<span style=\"color:#2e7d32;\">✓ " + data.data.message + "</span>";
+                    setTimeout(function() { location.reload(); }, 2000);
+                } else {
+                    status.innerHTML = "<span style=\"color:#c62828;\">✗ " + (data.data || "Erro") + "</span>";
+                    btn.disabled = false;
+                    btn.innerHTML = "<span class=\"dashicons dashicons-admin-tools\" style=\"vertical-align:middle;margin-right:5px;\"></span>Tentar Novamente";
+                }
+            })
+            .catch(function(e) {
+                status.innerHTML = "<span style=\"color:#c62828;\">✗ " + e.message + "</span>";
+                btn.disabled = false;
+                btn.innerHTML = "<span class=\"dashicons dashicons-admin-tools\" style=\"vertical-align:middle;margin-right:5px;\"></span>Tentar Novamente";
+            });
+        }
+        </script>';
+        
+        // Add manual repair button outside the conditional
+        if (empty($missing_tables)) {
+            echo '<div style="margin: 15px 0;">';
+            echo '<button type="button" id="cfrdm-repair-tables" class="button" onclick="cfrdmRepairTables()">';
+            echo '<span class="dashicons dashicons-admin-tools" style="vertical-align:middle;margin-right:5px;"></span>';
+            echo 'Verificar e Reparar Tabelas</button>';
+            echo '<span id="cfrdm-repair-status" style="margin-left:10px;"></span>';
+            echo '</div>';
         }
     }
 

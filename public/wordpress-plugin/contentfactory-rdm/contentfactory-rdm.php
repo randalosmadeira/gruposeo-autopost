@@ -3,7 +3,7 @@
  * Plugin Name: ContentFactory RDM
  * Plugin URI: https://gruposeo.marketing/contentfactory
  * Description: Integração avançada com ContentFactory para publicação automática de artigos, sincronização, otimização de imagens, links internos, geração de SEO via IA, indexação automática, social posting e queue system.
- * Version: 3.0.0
+ * Version: 3.0.1
  * Author: GRUPO SEO MARKETING
  * Author URI: https://gruposeo.marketing
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '3.0.0');
+define('CFRDM_VERSION', '3.0.1');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -211,6 +211,7 @@ private function init_admin_hooks() {
         add_action('wp_ajax_cfrdm_analyze_links', array($this, 'handle_ajax_analyze_links'));
         add_action('wp_ajax_cfrdm_generate_links', array($this, 'handle_ajax_generate_links'));
         add_action('wp_ajax_cfrdm_validate_schema', array($this, 'handle_ajax_validate_schema'));
+        add_action('wp_ajax_cfrdm_repair_tables', array($this, 'handle_ajax_repair_tables'));
 
         // Operational hooks (disabled in safe mode)
         if ($this->operational_hooks_enabled) {
@@ -307,6 +308,186 @@ private function init_admin_hooks() {
     public function handle_ajax_validate_schema() {
         cfrdm_load_admin_dependencies();
         CFRDM_Admin::ajax_validate_schema();
+    }
+    
+    /**
+     * AJAX handler for table repair (fallback when REST API fails)
+     */
+    public function handle_ajax_repair_tables() {
+        check_ajax_referer('cfrdm_repair_tables');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Permissão negada');
+            return;
+        }
+        
+        cfrdm_load_dependencies();
+        
+        global $wpdb;
+        $charset_collate = $wpdb->get_charset_collate();
+        $created = array();
+        $errors = array();
+        
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        
+        // Create all tables
+        $tables_sql = array(
+            'cfrdm_logs' => "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}cfrdm_logs (
+                id bigint(20) NOT NULL AUTO_INCREMENT,
+                log_type varchar(50) NOT NULL DEFAULT 'info',
+                category varchar(50) NOT NULL DEFAULT 'general',
+                message text NOT NULL,
+                context longtext,
+                post_id bigint(20) DEFAULT NULL,
+                user_id bigint(20) DEFAULT NULL,
+                ip_address varchar(45) DEFAULT NULL,
+                created_at datetime DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY log_type (log_type),
+                KEY category (category),
+                KEY post_id (post_id),
+                KEY created_at (created_at)
+            ) $charset_collate;",
+            
+            'cfrdm_news' => "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}cfrdm_news (
+                id bigint(20) NOT NULL AUTO_INCREMENT,
+                news_id varchar(100) NOT NULL,
+                title varchar(255) NOT NULL,
+                content text,
+                news_type varchar(50) DEFAULT 'update',
+                priority int(11) DEFAULT 0,
+                link varchar(500) DEFAULT NULL,
+                is_read tinyint(1) DEFAULT 0,
+                is_dismissed tinyint(1) DEFAULT 0,
+                published_at datetime DEFAULT NULL,
+                created_at datetime DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY news_id (news_id),
+                KEY news_type (news_type),
+                KEY is_dismissed (is_dismissed)
+            ) $charset_collate;",
+            
+            'cfrdm_structured_logs' => "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}cfrdm_structured_logs (
+                id bigint(20) NOT NULL AUTO_INCREMENT,
+                article_id varchar(50) DEFAULT NULL,
+                post_id bigint(20) DEFAULT NULL,
+                source_url varchar(500) DEFAULT NULL,
+                source_title varchar(500) DEFAULT NULL,
+                status varchar(50) DEFAULT 'processing',
+                step varchar(50) DEFAULT 'init',
+                message text,
+                error_details text,
+                metadata longtext,
+                duration_ms int DEFAULT NULL,
+                created_at datetime DEFAULT CURRENT_TIMESTAMP,
+                updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY article_id (article_id),
+                KEY post_id (post_id),
+                KEY status (status),
+                KEY step (step),
+                KEY created_at (created_at)
+            ) $charset_collate;",
+            
+            'cfrdm_fix_queue' => "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}cfrdm_fix_queue (
+                id bigint(20) NOT NULL AUTO_INCREMENT,
+                url varchar(500) NOT NULL,
+                issue_type varchar(50) NOT NULL,
+                status varchar(50) DEFAULT 'pending',
+                fix_action varchar(100) DEFAULT NULL,
+                redirect_target varchar(500) DEFAULT NULL,
+                confidence float DEFAULT 0,
+                attempts int DEFAULT 0,
+                last_attempt_at datetime DEFAULT NULL,
+                error_message text,
+                metadata longtext,
+                created_at datetime DEFAULT CURRENT_TIMESTAMP,
+                updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY status (status),
+                KEY issue_type (issue_type),
+                KEY created_at (created_at)
+            ) $charset_collate;",
+            
+            'cfrdm_ubersuggest_data' => "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}cfrdm_ubersuggest_data (
+                id bigint(20) NOT NULL AUTO_INCREMENT,
+                keyword varchar(255) NOT NULL,
+                search_volume int DEFAULT 0,
+                cpc float DEFAULT 0,
+                competition float DEFAULT 0,
+                domain_authority int DEFAULT 0,
+                trend_data longtext,
+                priority_score float DEFAULT 0,
+                synced_at datetime DEFAULT NULL,
+                created_at datetime DEFAULT CURRENT_TIMESTAMP,
+                updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY keyword (keyword),
+                KEY priority_score (priority_score),
+                KEY synced_at (synced_at)
+            ) $charset_collate;",
+        );
+        
+        foreach ($tables_sql as $name => $sql) {
+            dbDelta($sql);
+            $table_name = $wpdb->prefix . $name;
+            if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_name))) {
+                $created[] = $name;
+            } else {
+                $errors[] = $name . ': ' . $wpdb->last_error;
+            }
+        }
+        
+        // Create tables from modules
+        if (class_exists('CFRDM_Social_Poster')) {
+            CFRDM_Social_Poster::create_tables();
+            if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $wpdb->prefix . 'cfrdm_social_queue'))) {
+                $created[] = 'cfrdm_social_queue';
+            }
+            if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $wpdb->prefix . 'cfrdm_social_accounts'))) {
+                $created[] = 'cfrdm_social_accounts';
+            }
+        }
+        
+        if (class_exists('CFRDM_Cron_Scheduler')) {
+            CFRDM_Cron_Scheduler::create_tables();
+            if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $wpdb->prefix . 'cfrdm_cron_jobs'))) {
+                $created[] = 'cfrdm_cron_jobs';
+            }
+            if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $wpdb->prefix . 'cfrdm_cron_history'))) {
+                $created[] = 'cfrdm_cron_history';
+            }
+        }
+        
+        if (class_exists('CFRDM_Content_Queue')) {
+            CFRDM_Content_Queue::create_table();
+            if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $wpdb->prefix . 'cfrdm_content_queue'))) {
+                $created[] = 'cfrdm_content_queue';
+            }
+        }
+        
+        // Generate API key if missing
+        $api_key_generated = false;
+        if (empty(get_option('cfrdm_api_key'))) {
+            update_option('cfrdm_api_key', wp_generate_uuid4());
+            $api_key_generated = true;
+        }
+        
+        // Remove duplicates
+        $created = array_unique($created);
+        
+        if (!empty($errors)) {
+            wp_send_json_error(array(
+                'message' => 'Algumas tabelas não puderam ser criadas: ' . implode(', ', $errors),
+                'created' => $created,
+            ));
+        } else {
+            wp_send_json_success(array(
+                'message' => 'Tabelas reparadas com sucesso! (' . count($created) . ' tabelas)',
+                'created' => $created,
+                'api_key_generated' => $api_key_generated,
+            ));
+        }
     }
     
     /**
