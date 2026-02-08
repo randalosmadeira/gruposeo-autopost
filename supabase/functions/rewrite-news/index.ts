@@ -89,6 +89,31 @@ serve(async (req) => {
       contentLength: sourceContent.length 
     });
 
+    // Fetch user's custom prompt template for news_rewriter
+    let systemPromptToUse = JOURNALISTIC_SYSTEM_PROMPT;
+    let agentName: string | null = null;
+    
+    const { data: customTemplate } = await supabaseAdmin
+      .from("prompt_templates")
+      .select("prompt, agent_name")
+      .eq("user_id", user.id)
+      .eq("target_function", "news_rewriter")
+      .eq("is_default", false)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (customTemplate?.prompt) {
+      systemPromptToUse = customTemplate.prompt;
+      agentName = customTemplate.agent_name || null;
+      log.info("using_custom_prompt", { 
+        agentName,
+        promptLength: customTemplate.prompt.length 
+      });
+    } else {
+      log.info("using_default_prompt");
+    }
+
     // Build user prompt with all configurations
     const userPrompt = buildUserPrompt({
       sourceUrl,
@@ -102,10 +127,10 @@ serve(async (req) => {
       internalLinks,
     });
 
-    // Call AI with the comprehensive journalistic prompt
+    // Call AI with the system prompt (custom or default)
     const aiResponse = await callAI(
       [
-        { role: "system", content: JOURNALISTIC_SYSTEM_PROMPT },
+        { role: "system", content: systemPromptToUse },
         { role: "user", content: userPrompt },
       ],
       { maxTokens: 8000 }
