@@ -70,7 +70,16 @@ interface BulkGenerationGroup {
   }>;
 }
 
-const ITEMS_PER_PAGE = 5;
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100, 200, 500];
+
+const STATUS_FILTERS = [
+  { value: 'all', label: 'Todos' },
+  { value: 'published', label: 'Publicado' },
+  { value: 'ready', label: 'Finalizado' },
+  { value: 'draft', label: 'Rascunho' },
+  { value: 'generating', label: 'Em criação' },
+  { value: 'error', label: 'Erro' },
+];
 
 export function BulkGenerationHistory() {
   const { toast } = useToast();
@@ -87,7 +96,11 @@ export function BulkGenerationHistory() {
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
   const [totalArticles, setTotalArticles] = useState(0);
+  
+  // Filter state
+  const [statusFilter, setStatusFilter] = useState('all');
   
   // Fetch articles and group them by date/hour
   const fetchHistory = useCallback(async () => {
@@ -179,6 +192,33 @@ export function BulkGenerationHistory() {
   useEffect(() => {
     fetchHistory();
   }, [fetchHistory]);
+
+  // Filter groups by status
+  const filteredGroups = groups.map(group => {
+    if (statusFilter === 'all') return group;
+    
+    const filteredArticles = group.articles.filter(a => a.status === statusFilter);
+    if (filteredArticles.length === 0) return null;
+    
+    return {
+      ...group,
+      articles: filteredArticles,
+      totalCount: filteredArticles.length,
+      completedCount: filteredArticles.filter(a => a.status === 'ready').length,
+      errorCount: filteredArticles.filter(a => a.status === 'error').length,
+      generatingCount: filteredArticles.filter(a => a.status === 'generating').length,
+      draftCount: filteredArticles.filter(a => a.status === 'draft').length,
+      publishedCount: filteredArticles.filter(a => a.status === 'published').length,
+      scheduledCount: filteredArticles.filter(a => a.scheduled_at).length,
+    };
+  }).filter(Boolean) as BulkGenerationGroup[];
+
+  const filteredArticlesCount = filteredGroups.reduce((acc, g) => acc + g.totalCount, 0);
+  const totalPages = Math.ceil(filteredGroups.length / itemsPerPage);
+  const paginatedGroups = filteredGroups.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   // Toggle article selection
   const toggleArticle = (articleId: string) => {
@@ -391,30 +431,57 @@ export function BulkGenerationHistory() {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Stats summary */}
-            <div className="flex items-center justify-between text-sm text-muted-foreground border-b pb-3">
-              <span>
-                Mostrando {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, groups.length)} - {Math.min(currentPage * ITEMS_PER_PAGE, groups.length)} de {groups.length} grupos ({totalArticles} artigos total)
-              </span>
-              <Select 
-                value={String(ITEMS_PER_PAGE)} 
-                onValueChange={(v) => setCurrentPage(1)}
-              >
-                <SelectTrigger className="w-[140px] h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">5 por página</SelectItem>
-                  <SelectItem value="10">10 por página</SelectItem>
-                  <SelectItem value="20">20 por página</SelectItem>
-                </SelectContent>
-              </Select>
+            {/* Filters and stats */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b pb-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm text-muted-foreground">Status:</span>
+                {STATUS_FILTERS.map((filter) => (
+                  <Button
+                    key={filter.value}
+                    variant={statusFilter === filter.value ? "default" : "outline"}
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setStatusFilter(filter.value);
+                      setCurrentPage(1);
+                    }}
+                  >
+                    {filter.label}
+                  </Button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground whitespace-nowrap">
+                  {filteredGroups.length} grupos ({filteredArticlesCount} artigos)
+                </span>
+                <Select 
+                  value={String(itemsPerPage)} 
+                  onValueChange={(v) => {
+                    setItemsPerPage(Number(v));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[130px] h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAGE_SIZE_OPTIONS.map((size) => (
+                      <SelectItem key={size} value={String(size)}>
+                        {size} por página
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* Paginated groups */}
-            {groups
-              .slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
-              .map((group) => {
+            {paginatedGroups.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <History className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                <p>Nenhum artigo encontrado com o filtro selecionado</p>
+              </div>
+            ) : paginatedGroups.map((group) => {
               const groupKey = `${group.date}-${group.hour}`;
               const isExpanded = expandedGroups.has(groupKey);
               const readyArticles = group.articles.filter(a => a.status === 'ready' || a.status === 'draft');
@@ -539,10 +606,10 @@ export function BulkGenerationHistory() {
             })}
 
             {/* Pagination Controls */}
-            {groups.length > ITEMS_PER_PAGE && (
+            {filteredGroups.length > itemsPerPage && (
               <div className="flex items-center justify-between pt-4 border-t">
                 <div className="text-sm text-muted-foreground">
-                  Página {currentPage} de {Math.ceil(groups.length / ITEMS_PER_PAGE)}
+                  Página {currentPage} de {totalPages}
                 </div>
                 <div className="flex items-center gap-1">
                   <Button
@@ -566,8 +633,7 @@ export function BulkGenerationHistory() {
                   
                   {/* Page numbers */}
                   <div className="flex items-center gap-1 mx-2">
-                    {Array.from({ length: Math.min(5, Math.ceil(groups.length / ITEMS_PER_PAGE)) }, (_, i) => {
-                      const totalPages = Math.ceil(groups.length / ITEMS_PER_PAGE);
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                       let pageNum: number;
                       
                       if (totalPages <= 5) {
@@ -598,8 +664,8 @@ export function BulkGenerationHistory() {
                     variant="outline"
                     size="icon"
                     className="h-8 w-8"
-                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(groups.length / ITEMS_PER_PAGE), p + 1))}
-                    disabled={currentPage === Math.ceil(groups.length / ITEMS_PER_PAGE)}
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
@@ -607,8 +673,8 @@ export function BulkGenerationHistory() {
                     variant="outline"
                     size="icon"
                     className="h-8 w-8"
-                    onClick={() => setCurrentPage(Math.ceil(groups.length / ITEMS_PER_PAGE))}
-                    disabled={currentPage === Math.ceil(groups.length / ITEMS_PER_PAGE)}
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
                   >
                     <ChevronsRight className="h-4 w-4" />
                   </Button>
