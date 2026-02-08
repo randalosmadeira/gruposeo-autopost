@@ -1,8 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -11,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import {
   Layers,
   Upload,
@@ -27,7 +26,8 @@ import {
   FileText,
   BarChart3,
   Filter,
-  Trash2
+  Trash2,
+  Settings2,
 } from 'lucide-react';
 import { 
   KeywordData, 
@@ -38,17 +38,21 @@ import {
 } from '@/lib/keyword-analyzer';
 import { useBulkGeneration } from '@/hooks/useBulkGeneration';
 import { useProjects } from '@/hooks/useProjects';
+import { BulkAdvancedConfig, defaultBulkConfig, BulkGenerationConfig } from '@/components/bulk-generator';
 
 export default function BulkKeywordGenerator() {
-  const [activeTab, setActiveTab] = useState<'input' | 'analysis' | 'generation'>('input');
+  const [activeTab, setActiveTab] = useState<'input' | 'config' | 'analysis' | 'generation'>('input');
   const [rawKeywords, setRawKeywords] = useState('');
   const [analyzedKeywords, setAnalyzedKeywords] = useState<AnalyzedKeyword[]>([]);
   const [selectedKeywords, setSelectedKeywords] = useState<Set<string>>(new Set());
   const [projectId, setProjectId] = useState<string>('');
   const [filterType, setFilterType] = useState<string>('all');
+  const [bulkConfig, setBulkConfig] = useState<BulkGenerationConfig>(defaultBulkConfig);
   
   const { projects } = useProjects();
   const bulkGen = useBulkGeneration();
+  
+  const connectedProjects = projects?.filter(p => p.is_connected) || [];
 
   // Parse keywords from textarea (one per line or CSV format)
   const parseKeywords = useCallback((text: string): KeywordData[] => {
@@ -79,6 +83,10 @@ export default function BulkKeywordGenerator() {
     const analyzed = analyzeKeywords(keywords);
     setAnalyzedKeywords(analyzed);
     setSelectedKeywords(new Set(analyzed.map(k => k.keyword)));
+    setActiveTab('config');
+  };
+
+  const handleProceedToAnalysis = () => {
     setActiveTab('analysis');
   };
 
@@ -112,7 +120,11 @@ export default function BulkKeywordGenerator() {
     const selected = analyzedKeywords.filter(k => selectedKeywords.has(k.keyword));
     bulkGen.initializeJobs(selected);
     setActiveTab('generation');
-    bulkGen.startGeneration(projectId && projectId !== 'none' ? projectId : undefined);
+    const finalProjectId = bulkConfig.projectId || projectId;
+    bulkGen.startGeneration(
+      finalProjectId && finalProjectId !== 'none' ? finalProjectId : undefined,
+      bulkConfig
+    );
   };
 
   const summary = analyzedKeywords.length > 0 ? generateSummary(analyzedKeywords) : null;
@@ -172,10 +184,14 @@ export default function BulkKeywordGenerator() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="input" className="gap-2">
             <Upload className="w-4 h-4" />
             Importar
+          </TabsTrigger>
+          <TabsTrigger value="config" disabled={analyzedKeywords.length === 0} className="gap-2">
+            <Settings2 className="w-4 h-4" />
+            Configurar
           </TabsTrigger>
           <TabsTrigger value="analysis" disabled={analyzedKeywords.length === 0} className="gap-2">
             <BarChart3 className="w-4 h-4" />
@@ -273,6 +289,73 @@ agência advogados, Serviços, Médio, Baixa, MÉDIA`}
                   </ul>
                 </CardContent>
               </Card>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* Config Tab */}
+        <TabsContent value="config" className="space-y-6">
+          <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <ScrollArea className="h-[calc(100vh-280px)]">
+                <BulkAdvancedConfig
+                  config={bulkConfig}
+                  onChange={setBulkConfig}
+                  connectedProjects={connectedProjects}
+                />
+              </ScrollArea>
+            </div>
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Resumo da Configuração</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Keywords</span>
+                    <Badge variant="secondary">{analyzedKeywords.length}</Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Tamanho</span>
+                    <Badge>{bulkConfig.contentLength}</Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">SEO Avançado</span>
+                    <Badge variant={bulkConfig.seoOptimization ? 'default' : 'outline'}>
+                      {bulkConfig.seoOptimization ? 'Sim' : 'Não'}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Humanizar</span>
+                    <Badge variant={bulkConfig.humanizeContent ? 'default' : 'outline'}>
+                      {bulkConfig.humanizeContent ? 'Sim' : 'Não'}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Imagens</span>
+                    <Badge variant={bulkConfig.generateImages ? 'default' : 'outline'}>
+                      {bulkConfig.generateImages ? `${bulkConfig.imageCount}x` : 'Não'}
+                    </Badge>
+                  </div>
+                  {bulkConfig.companyName && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Empresa</span>
+                      <Badge variant="outline" className="truncate max-w-[120px]">
+                        {bulkConfig.companyName}
+                      </Badge>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Button 
+                className="w-full gap-2" 
+                size="lg"
+                onClick={handleProceedToAnalysis}
+              >
+                <BarChart3 className="w-4 h-4" />
+                Ver Análise de Keywords
+              </Button>
             </div>
           </div>
         </TabsContent>
