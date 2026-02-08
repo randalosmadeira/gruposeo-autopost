@@ -15,7 +15,7 @@ interface LandingPageConfig {
   title: string;
   offerType: string;
   location: string;
-  size: 'short' | 'medium' | 'long' | 'very-long';
+  size: 'short' | 'medium' | 'long' | 'very-long' | 'muito_pequeno' | 'pequeno' | 'medio' | 'grande';
   language: string;
   targetAudience: string;
   painPoint: string;
@@ -108,11 +108,17 @@ DIRETRIZES EDUCAÇÃO:
   },
 };
 
-const wordCountRanges = {
+const wordCountRanges: Record<string, { min: number; max: number }> = {
+  // Legacy values
   short: { min: 600, max: 1000 },
   medium: { min: 1200, max: 1800 },
   long: { min: 2200, max: 2800 },
   'very-long': { min: 3500, max: 4500 },
+  // New standardized values
+  muito_pequeno: { min: 600, max: 1200 },
+  pequeno: { min: 1200, max: 2400 },
+  medio: { min: 2400, max: 3600 },
+  grande: { min: 2600, max: 5200 },
 };
 
 // Niche-specific templates with optimized structures
