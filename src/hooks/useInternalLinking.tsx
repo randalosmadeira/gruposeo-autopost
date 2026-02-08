@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
 import type { SyncProgress, SyncLogEntry } from '@/components/internal-linking/SyncProgressPanel';
 
@@ -215,16 +216,41 @@ export function useInternalLinking(projectId: string | null) {
         },
       });
 
+      // Check for error in the response (both SDK error and response body error)
+      let errorMsg = '';
+      
       if (syncResponse.error) {
-        // Extract meaningful error message
-        const errorMsg = syncResponse.error.message || 'Erro desconhecido';
+        // Try to extract error message from FunctionsHttpError context
+        if (syncResponse.error instanceof FunctionsHttpError) {
+          try {
+            const errorBody = await syncResponse.error.context.json();
+            errorMsg = errorBody?.error || syncResponse.error.message;
+          } catch {
+            errorMsg = syncResponse.error.message;
+          }
+        } else {
+          errorMsg = syncResponse.error.message || 'Erro desconhecido';
+        }
+      } else if (syncResponse.data?.error) {
+        errorMsg = syncResponse.data.error;
+      }
+      
+      if (errorMsg) {
+        // Check for common connection/plugin issues
+        const isPluginNotFound = errorMsg.includes('rest_no_route') || 
+                                  errorMsg.includes('Nenhuma rota') ||
+                                  (errorMsg.includes('404') && errorMsg.includes('plugin'));
+        const isPluginError = errorMsg.includes('Falha ao buscar') || 
+                               errorMsg.includes('Falha ao exportar');
         const isConnectionError = errorMsg.includes('fetch') || 
                                    errorMsg.includes('network') || 
                                    errorMsg.includes('CORS') ||
-                                   errorMsg.includes('Failed to fetch') ||
-                                   errorMsg.includes('Falha ao buscar');
+                                   errorMsg.includes('Failed to fetch');
         
-        if (isConnectionError) {
+        if (isPluginNotFound) {
+          throw new Error('Plugin não encontrado: O endpoint da API do plugin ContentFactory não está disponível. Verifique se o plugin está instalado e ativado no WordPress.');
+        }
+        if (isPluginError || isConnectionError) {
           throw new Error('Erro de conexão: Verifique se o plugin ContentFactory está instalado e ativado no WordPress, e se a API Key está configurada corretamente.');
         }
         throw new Error(errorMsg);
