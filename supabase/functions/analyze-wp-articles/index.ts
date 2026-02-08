@@ -138,6 +138,111 @@ function countLinks(content: string, siteUrl: string): { internal: number; exter
   return { internal, external };
 }
 
+function stripTrailingSlashes(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+async function fetchWordPressArticlesForIndexing(args: {
+  wordpressUrl: string;
+  wordpressUsername: string | null;
+  wordpressAppPassword: string | null;
+}): Promise<ArticleData[]> {
+  const baseUrl = stripTrailingSlashes(args.wordpressUrl);
+  if (!baseUrl) return [];
+
+  const isPluginAuth = args.wordpressUsername === '__CFRDM_PLUGIN__';
+
+  // Plugin mode (recommended): use CFRDM endpoints.
+  if (isPluginAuth) {
+    const apiKey = args.wordpressAppPassword || '';
+
+    const listUrl = `${baseUrl}/wp-json/cfrdm/v1/articles-for-indexing?per_page=100`;
+    const listResp = await fetch(listUrl, {
+      headers: {
+        'X-CFRDM-API-Key': apiKey,
+      },
+    });
+
+    if (!listResp.ok) {
+      const t = await listResp.text().catch(() => '');
+      throw new Error(`Falha ao buscar lista de artigos no plugin (${listResp.status}): ${t}`);
+    }
+
+    const listJson = await listResp.json().catch(() => null) as any;
+    const ids: number[] = Array.isArray(listJson?.articles)
+      ? listJson.articles.map((a: any) => Number(a.wp_post_id)).filter((n: number) => Number.isFinite(n))
+      : [];
+
+    if (ids.length === 0) return [];
+
+    const batchUrl = `${baseUrl}/wp-json/cfrdm/v1/export-articles-batch`;
+    const batchResp = await fetch(batchUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CFRDM-API-Key': apiKey,
+      },
+      body: JSON.stringify({ post_ids: ids }),
+    });
+
+    if (!batchResp.ok) {
+      const t = await batchResp.text().catch(() => '');
+      throw new Error(`Falha ao exportar artigos no plugin (${batchResp.status}): ${t}`);
+    }
+
+    const batchJson = await batchResp.json().catch(() => null) as any;
+    const articles: any[] = Array.isArray(batchJson?.articles) ? batchJson.articles : [];
+
+    return articles
+      .filter((a: any) => a && typeof a.content === 'string')
+      .map((a: any) => ({
+        wp_post_id: Number(a.wp_post_id),
+        wp_post_url: String(a.wp_post_url || ''),
+        wp_post_slug: a.wp_post_slug ? String(a.wp_post_slug) : undefined,
+        wp_post_title: String(a.wp_post_title || ''),
+        wp_post_type: a.wp_post_type ? String(a.wp_post_type) : undefined,
+        wp_post_status: a.wp_post_status ? String(a.wp_post_status) : undefined,
+        wp_categories: Array.isArray(a.wp_categories) ? a.wp_categories.map(String) : [],
+        wp_tags: Array.isArray(a.wp_tags) ? a.wp_tags.map(String) : [],
+        content: String(a.content || ''),
+        word_count: typeof a.word_count === 'number' ? a.word_count : undefined,
+        last_wp_modified_at: a.last_wp_modified_at ? String(a.last_wp_modified_at) : undefined,
+      }))
+      .filter((a: ArticleData) => Number.isFinite(a.wp_post_id) && !!a.wp_post_url);
+  }
+
+  // Standard WP REST API mode (may be restricted by server settings, but works in backend).
+  const username = args.wordpressUsername || '';
+  const appPassword = args.wordpressAppPassword || '';
+  const authHeader = `Basic ${btoa(`${username}:${appPassword}`)}`;
+
+  const postsUrl = `${baseUrl}/wp-json/wp/v2/posts?per_page=100&_fields=id,title,link,slug,categories,tags,content,modified_gmt,status,type`;
+  const postsResp = await fetch(postsUrl, {
+    headers: { Authorization: authHeader },
+  });
+
+  if (!postsResp.ok) {
+    const t = await postsResp.text().catch(() => '');
+    throw new Error(`Falha ao buscar posts no WordPress (${postsResp.status}): ${t}`);
+  }
+
+  const posts = await postsResp.json().catch(() => []) as any[];
+
+  return (posts || []).map((post: any) => ({
+    wp_post_id: Number(post.id),
+    wp_post_url: String(post.link || ''),
+    wp_post_slug: post.slug ? String(post.slug) : undefined,
+    wp_post_title: String(post.title?.rendered || ''),
+    wp_post_type: post.type ? String(post.type) : undefined,
+    wp_post_status: post.status ? String(post.status) : undefined,
+    wp_categories: Array.isArray(post.categories) ? post.categories.map((id: number) => `cat-${id}`) : [],
+    wp_tags: Array.isArray(post.tags) ? post.tags.map((id: number) => `tag-${id}`) : [],
+    content: String(post.content?.rendered || ''),
+    word_count: String(post.content?.rendered || '').split(/\s+/).filter(Boolean).length,
+    last_wp_modified_at: post.modified_gmt ? String(post.modified_gmt) : undefined,
+  })).filter((a: ArticleData) => Number.isFinite(a.wp_post_id) && !!a.wp_post_url);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -170,12 +275,13 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { action, project_id, articles, site_url, keyword, content, max_links = 10 } = body;
+    const { action, project_id, articles, site_url, keyword, content, max_links = 10, full_sync } = body;
+    const fullSync = !!full_sync;
 
     // Verify project ownership
     const { data: project, error: projectError } = await supabase
       .from("projects")
-      .select("id, wordpress_url")
+      .select("id, wordpress_url, wordpress_username, wordpress_app_password")
       .eq("id", project_id)
       .eq("user_id", user.id)
       .single();
@@ -187,15 +293,36 @@ serve(async (req) => {
       );
     }
 
-    const effectiveSiteUrl = site_url || project.wordpress_url || "";
+    const effectiveSiteUrl = stripTrailingSlashes(site_url || project.wordpress_url || "");
 
     switch (action) {
       case "sync": {
         // Sync articles from WordPress
-        if (!articles || !Array.isArray(articles)) {
+        let inputArticles: ArticleData[] = [];
+
+        if (Array.isArray(articles)) {
+          inputArticles = articles as ArticleData[];
+        } else {
+          // No articles provided: fetch directly from WordPress (backend-side, avoids browser CORS)
+          const wpUrl = project.wordpress_url || "";
+          if (!wpUrl) {
+            return new Response(
+              JSON.stringify({ error: "wordpress_url não configurada no projeto" }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          inputArticles = await fetchWordPressArticlesForIndexing({
+            wordpressUrl: wpUrl,
+            wordpressUsername: (project as any).wordpress_username ?? null,
+            wordpressAppPassword: (project as any).wordpress_app_password ?? null,
+          });
+        }
+
+        if (!inputArticles.length) {
           return new Response(
-            JSON.stringify({ error: "Articles array required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            JSON.stringify({ success: true, results: { synced: 0, analyzed: 0, errors: 0, skipped: 0 }, message: "Nenhum artigo encontrado para indexação" }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
 
@@ -206,7 +333,7 @@ serve(async (req) => {
           skipped: 0,
         };
 
-        for (const article of articles as ArticleData[]) {
+        for (const article of inputArticles as ArticleData[]) {
           try {
             const contentHash = generateContentHash(article.content);
             const links = countLinks(article.content, effectiveSiteUrl);
@@ -219,7 +346,7 @@ serve(async (req) => {
               .eq("wp_post_id", article.wp_post_id)
               .single();
 
-            if (existing && existing.content_hash === contentHash) {
+            if (!fullSync && existing && existing.content_hash === contentHash) {
               results.skipped++;
               continue;
             }

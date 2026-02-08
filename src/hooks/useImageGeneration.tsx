@@ -42,7 +42,8 @@ export function useImageGeneration() {
   const generateSingleImage = useCallback(async (
     request: ImageRequest, 
     accessToken: string,
-    imageIndex?: number
+    imageIndex?: number,
+    attempt: number = 0
   ): Promise<GeneratedImage | null> => {
     try {
       // Modify title for additional images to get variety
@@ -63,11 +64,17 @@ export function useImageGeneration() {
         body: JSON.stringify(modifiedRequest),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
-        console.error(`Image ${(imageIndex || 0) + 1} generation error:`, errorData);
-        return null;
-      }
+       if (!response.ok) {
+         // Retry once on rate limiting
+         if (response.status === 429 && attempt < 1) {
+           await new Promise(resolve => setTimeout(resolve, 3000));
+           return await generateSingleImage(request, accessToken, imageIndex, attempt + 1);
+         }
+
+         const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
+         console.error(`Image ${(imageIndex || 0) + 1} generation error:`, errorData);
+         return null;
+       }
 
       const data = await response.json();
       
@@ -197,10 +204,10 @@ export function useImageGeneration() {
           }
         }
 
-        // Small delay between requests to avoid rate limiting (except for last)
-        if (i < count - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+         // Small delay between requests to avoid rate limiting (except for last)
+         if (i < count - 1) {
+           await new Promise(resolve => setTimeout(resolve, 2500));
+         }
       }
 
       setProgress({ current: count, total: count });
