@@ -30,39 +30,86 @@ serve(async (req) => {
   log.requestStart(req.method);
 
   try {
-    // Authentication
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      log.authFailure("missing_header");
-      return new Response(
-        JSON.stringify({ error: "Authorization required", request_id: requestId }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-      log.authFailure(authError?.message || "user_not_found");
-      return new Response(
-        JSON.stringify({ error: "User not authenticated", request_id: requestId }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    log.authSuccess(user.id);
-
+    
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Parse request
-    const body: JournalisticRewriteRequest = await req.json();
+    // Parse request body first to check for internal call
+    let body: JournalisticRewriteRequest & { userId?: string };
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      log.error("body_parse_error", { error: parseError instanceof Error ? parseError.message : 'unknown' });
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body", request_id: requestId }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    log.info("request_body_received", { 
+      hasUserId: !!body.userId,
+      hasSourceContent: !!body.sourceContent,
+      userId: body.userId || 'none'
+    });
+    
+    let userId: string;
+    
+    // Check for internal call (from monitor-portals, auto-process-rss, etc.)
+    // Internal calls pass userId directly in body and use service role key
+    if (body.userId) {
+      // Validate that userId exists in database
+      const { data: userCheck, error: userCheckError } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('id', body.userId)
+        .maybeSingle();
+      
+      // Also check auth.users if profiles doesn't exist
+      if (!userCheck && !userCheckError) {
+        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(body.userId);
+        if (!authUser?.user) {
+          log.authFailure("invalid_internal_user_id: " + body.userId);
+          return new Response(
+            JSON.stringify({ error: "Invalid userId for internal call", request_id: requestId }),
+            { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+      
+      userId = body.userId;
+      log.info("internal_call_authenticated", { userId });
+    } else {
+      // Standard user authentication via Bearer token
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        log.authFailure("missing_header");
+        return new Response(
+          JSON.stringify({ error: "Authorization required", request_id: requestId }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+
+      const token = authHeader.replace("Bearer ", "");
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) {
+        log.authFailure(authError?.message || "user_not_found");
+        return new Response(
+          JSON.stringify({ error: "User not authenticated", request_id: requestId }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      userId = user.id;
+      log.authSuccess(userId);
+    }
+
+    // Extract request fields (body already parsed above)
     const { 
       sourceUrl, 
       sourceContent, 
@@ -202,7 +249,7 @@ serve(async (req) => {
     const { data: article, error: dbError } = await supabaseAdmin
       .from("articles")
       .insert({
-        user_id: user.id,
+        user_id: userId,
         project_id: projectId || null,
         keyword: keyword || parsed.seo?.focusKeyword || sourceName,
         title: metaTitle,
