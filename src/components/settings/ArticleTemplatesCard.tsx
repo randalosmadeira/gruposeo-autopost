@@ -27,6 +27,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
+import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   Folder,
   Plus,
@@ -40,6 +43,14 @@ import {
   CheckCircle2,
   Download,
   Upload,
+  Eye,
+  HelpCircle,
+  Image,
+  Wand2,
+  List,
+  Table,
+  MessageSquare,
+  X,
 } from 'lucide-react';
 
 export interface ArticleTemplate {
@@ -162,6 +173,8 @@ export function ArticleTemplatesCard() {
   const [templates, setTemplates] = useState<ArticleTemplate[]>([]);
   const [editingTemplate, setEditingTemplate] = useState<ArticleTemplate | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState<ArticleTemplate | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -170,6 +183,17 @@ export function ArticleTemplatesCard() {
     size: 'medium',
     language: 'pt-BR',
     aiModel: 'standard',
+    // Advanced options
+    faq: true,
+    lists: true,
+    tables: false,
+    conclusion: true,
+    metaDescription: true,
+    seoOptimization: true,
+    humanizeContent: false,
+    generateImages: true,
+    imageCount: 1,
+    imageStyle: 'fotorrealístico',
   });
 
   // Load templates from localStorage
@@ -204,8 +228,23 @@ export function ArticleTemplatesCard() {
       size: 'medium',
       language: 'pt-BR',
       aiModel: 'standard',
+      faq: true,
+      lists: true,
+      tables: false,
+      conclusion: true,
+      metaDescription: true,
+      seoOptimization: true,
+      humanizeContent: false,
+      generateImages: true,
+      imageCount: 1,
+      imageStyle: 'fotorrealístico',
     });
     setIsDialogOpen(true);
+  };
+
+  const handlePreviewTemplate = (template: ArticleTemplate) => {
+    setPreviewTemplate(template);
+    setIsPreviewOpen(true);
   };
 
   const handleEditTemplate = (template: ArticleTemplate) => {
@@ -220,6 +259,16 @@ export function ArticleTemplatesCard() {
         size: template.size,
         language: template.language,
         aiModel: template.aiModel,
+        faq: template.faq,
+        lists: template.lists,
+        tables: template.tables,
+        conclusion: template.conclusion,
+        metaDescription: template.metaDescription,
+        seoOptimization: template.seoOptimization,
+        humanizeContent: template.humanizeContent,
+        generateImages: template.generateImages,
+        imageCount: template.imageCount,
+        imageStyle: template.imageStyle,
       });
     } else {
       setEditingTemplate(template);
@@ -231,6 +280,16 @@ export function ArticleTemplatesCard() {
         size: template.size,
         language: template.language,
         aiModel: template.aiModel,
+        faq: template.faq,
+        lists: template.lists,
+        tables: template.tables,
+        conclusion: template.conclusion,
+        metaDescription: template.metaDescription,
+        seoOptimization: template.seoOptimization,
+        humanizeContent: template.humanizeContent,
+        generateImages: template.generateImages,
+        imageCount: template.imageCount,
+        imageStyle: template.imageStyle,
       });
     }
     setIsDialogOpen(true);
@@ -259,16 +318,16 @@ export function ArticleTemplatesCard() {
       contentType: 'how-to',
       goal: 'inform',
       intentType: 'informational',
-      metaDescription: true,
-      lists: true,
-      tables: false,
-      conclusion: true,
-      faq: true,
-      seoOptimization: true,
-      humanizeContent: false,
-      generateImages: true,
-      imageCount: 1,
-      imageStyle: 'fotorrealístico',
+      metaDescription: formData.metaDescription,
+      lists: formData.lists,
+      tables: formData.tables,
+      conclusion: formData.conclusion,
+      faq: formData.faq,
+      seoOptimization: formData.seoOptimization,
+      humanizeContent: formData.humanizeContent,
+      generateImages: formData.generateImages,
+      imageCount: formData.imageCount,
+      imageStyle: formData.imageStyle,
       createdAt: editingTemplate?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       isDefault: false,
@@ -475,6 +534,10 @@ export function ArticleTemplatesCard() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handlePreviewTemplate(template)}>
+                        <Eye className="w-4 h-4 mr-2" />
+                        Visualizar
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleEditTemplate(template)}>
                         {template.isDefault ? (
                           <>
@@ -519,7 +582,7 @@ export function ArticleTemplatesCard() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>
               {editingTemplate ? 'Editar Modelo' : 'Novo Modelo de Artigo'}
@@ -529,107 +592,406 @@ export function ArticleTemplatesCard() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Nome do Modelo *</Label>
-              <Input
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="ex: Artigos para E-commerce"
-              />
-            </div>
+          <Tabs defaultValue="basic" className="flex-1 overflow-hidden flex flex-col">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="basic">Básico</TabsTrigger>
+              <TabsTrigger value="content">Conteúdo</TabsTrigger>
+              <TabsTrigger value="advanced">Avançado</TabsTrigger>
+            </TabsList>
 
-            <div className="space-y-2">
-              <Label>Descrição</Label>
-              <Input
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="ex: Otimizado para lojas virtuais"
-              />
-            </div>
+            <ScrollArea className="flex-1 pr-4">
+              {/* Basic Tab */}
+              <TabsContent value="basic" className="space-y-4 py-4 mt-0">
+                <div className="space-y-2">
+                  <Label>Nome do Modelo *</Label>
+                  <Input
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="ex: Artigos para E-commerce"
+                  />
+                </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Tom de Voz</Label>
-                <Select 
-                  value={formData.tone} 
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, tone: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="profissional">Profissional</SelectItem>
-                    <SelectItem value="casual">Casual</SelectItem>
-                    <SelectItem value="acadêmico">Acadêmico</SelectItem>
-                    <SelectItem value="persuasivo">Persuasivo</SelectItem>
-                    <SelectItem value="educativo">Educativo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="space-y-2">
+                  <Label>Descrição</Label>
+                  <Input
+                    value={formData.description}
+                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="ex: Otimizado para lojas virtuais"
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label>Tamanho</Label>
-                <Select 
-                  value={formData.size} 
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, size: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="short">Curto (~750)</SelectItem>
-                    <SelectItem value="medium">Médio (~1.500)</SelectItem>
-                    <SelectItem value="long">Longo (~2.500)</SelectItem>
-                    <SelectItem value="very-long">Muito Longo (~4.000)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Tom de Voz</Label>
+                    <Select 
+                      value={formData.tone} 
+                      onValueChange={(v) => setFormData(prev => ({ ...prev, tone: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="profissional">Profissional</SelectItem>
+                        <SelectItem value="casual">Casual</SelectItem>
+                        <SelectItem value="acadêmico">Acadêmico</SelectItem>
+                        <SelectItem value="persuasivo">Persuasivo</SelectItem>
+                        <SelectItem value="educativo">Educativo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div className="space-y-2">
-                <Label>Modelo de IA</Label>
-                <Select 
-                  value={formData.aiModel} 
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, aiModel: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="standard">Padrão (1 cr)</SelectItem>
-                    <SelectItem value="premium">Premium (2 cr)</SelectItem>
-                    <SelectItem value="advanced">Avançado (3 cr)</SelectItem>
-                    <SelectItem value="professional">Profissional (4 cr)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                  <div className="space-y-2">
+                    <Label>Tamanho</Label>
+                    <Select 
+                      value={formData.size} 
+                      onValueChange={(v) => setFormData(prev => ({ ...prev, size: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="short">Curto (~750)</SelectItem>
+                        <SelectItem value="medium">Médio (~1.500)</SelectItem>
+                        <SelectItem value="long">Longo (~2.500)</SelectItem>
+                        <SelectItem value="very-long">Muito Longo (~4.000)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div className="space-y-2">
-                <Label>Idioma</Label>
-                <Select 
-                  value={formData.language} 
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, language: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pt-BR">🇧🇷 Português (Brasil)</SelectItem>
-                    <SelectItem value="en-US">🇺🇸 English (US)</SelectItem>
-                    <SelectItem value="es">🇪🇸 Español</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
+                  <div className="space-y-2">
+                    <Label>Modelo de IA</Label>
+                    <Select 
+                      value={formData.aiModel} 
+                      onValueChange={(v) => setFormData(prev => ({ ...prev, aiModel: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="standard">Padrão (1 cr)</SelectItem>
+                        <SelectItem value="premium">Premium (2 cr)</SelectItem>
+                        <SelectItem value="advanced">Avançado (3 cr)</SelectItem>
+                        <SelectItem value="professional">Profissional (4 cr)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-          <DialogFooter>
+                  <div className="space-y-2">
+                    <Label>Idioma</Label>
+                    <Select 
+                      value={formData.language} 
+                      onValueChange={(v) => setFormData(prev => ({ ...prev, language: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pt-BR">🇧🇷 Português (Brasil)</SelectItem>
+                        <SelectItem value="en-US">🇺🇸 English (US)</SelectItem>
+                        <SelectItem value="es">🇪🇸 Español</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Content Tab */}
+              <TabsContent value="content" className="space-y-4 py-4 mt-0">
+                <div className="space-y-4">
+                  <h4 className="font-medium text-sm text-muted-foreground">Elementos do Artigo</h4>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                      <div className="flex items-center gap-3">
+                        <HelpCircle className="w-4 h-4 text-primary" />
+                        <div>
+                          <Label className="text-sm font-medium">Seção FAQ</Label>
+                          <p className="text-xs text-muted-foreground">Perguntas frequentes ao final</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={formData.faq}
+                        onCheckedChange={(v) => setFormData(prev => ({ ...prev, faq: v }))}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                      <div className="flex items-center gap-3">
+                        <List className="w-4 h-4 text-chart-2" />
+                        <div>
+                          <Label className="text-sm font-medium">Listas</Label>
+                          <p className="text-xs text-muted-foreground">Incluir listas e bullet points</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={formData.lists}
+                        onCheckedChange={(v) => setFormData(prev => ({ ...prev, lists: v }))}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                      <div className="flex items-center gap-3">
+                        <Table className="w-4 h-4 text-chart-3" />
+                        <div>
+                          <Label className="text-sm font-medium">Tabelas</Label>
+                          <p className="text-xs text-muted-foreground">Incluir tabelas comparativas</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={formData.tables}
+                        onCheckedChange={(v) => setFormData(prev => ({ ...prev, tables: v }))}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                      <div className="flex items-center gap-3">
+                        <MessageSquare className="w-4 h-4 text-chart-4" />
+                        <div>
+                          <Label className="text-sm font-medium">Conclusão</Label>
+                          <p className="text-xs text-muted-foreground">Seção de conclusão no final</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={formData.conclusion}
+                        onCheckedChange={(v) => setFormData(prev => ({ ...prev, conclusion: v }))}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                      <div className="flex items-center gap-3">
+                        <FileText className="w-4 h-4 text-chart-5" />
+                        <div>
+                          <Label className="text-sm font-medium">Meta Descrição</Label>
+                          <p className="text-xs text-muted-foreground">Gerar meta description SEO</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={formData.metaDescription}
+                        onCheckedChange={(v) => setFormData(prev => ({ ...prev, metaDescription: v }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Advanced Tab */}
+              <TabsContent value="advanced" className="space-y-4 py-4 mt-0">
+                <div className="space-y-4">
+                  <h4 className="font-medium text-sm text-muted-foreground">Otimizações</h4>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                      <div className="flex items-center gap-3">
+                        <Sparkles className="w-4 h-4 text-primary" />
+                        <div>
+                          <Label className="text-sm font-medium">Otimização SEO</Label>
+                          <p className="text-xs text-muted-foreground">Aplicar técnicas avançadas de SEO</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={formData.seoOptimization}
+                        onCheckedChange={(v) => setFormData(prev => ({ ...prev, seoOptimization: v }))}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                      <div className="flex items-center gap-3">
+                        <Wand2 className="w-4 h-4 text-purple-500" />
+                        <div>
+                          <Label className="text-sm font-medium">Humanização</Label>
+                          <p className="text-xs text-muted-foreground">Tornar texto mais natural e humano</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={formData.humanizeContent}
+                        onCheckedChange={(v) => setFormData(prev => ({ ...prev, humanizeContent: v }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t">
+                    <h4 className="font-medium text-sm text-muted-foreground mb-3">Imagens</h4>
+                    
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 mb-3">
+                      <div className="flex items-center gap-3">
+                        <Image className="w-4 h-4 text-chart-2" />
+                        <div>
+                          <Label className="text-sm font-medium">Gerar Imagens</Label>
+                          <p className="text-xs text-muted-foreground">Criar imagens com IA</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={formData.generateImages}
+                        onCheckedChange={(v) => setFormData(prev => ({ ...prev, generateImages: v }))}
+                      />
+                    </div>
+
+                    {formData.generateImages && (
+                      <div className="grid grid-cols-2 gap-4 pl-4">
+                        <div className="space-y-2">
+                          <Label className="text-xs">Quantidade</Label>
+                          <Select 
+                            value={String(formData.imageCount)} 
+                            onValueChange={(v) => setFormData(prev => ({ ...prev, imageCount: parseInt(v) }))}
+                          >
+                            <SelectTrigger className="h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">1 imagem</SelectItem>
+                              <SelectItem value="2">2 imagens</SelectItem>
+                              <SelectItem value="3">3 imagens</SelectItem>
+                              <SelectItem value="5">5 imagens</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label className="text-xs">Estilo</Label>
+                          <Select 
+                            value={formData.imageStyle} 
+                            onValueChange={(v) => setFormData(prev => ({ ...prev, imageStyle: v }))}
+                          >
+                            <SelectTrigger className="h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="fotorrealístico">Fotorrealístico</SelectItem>
+                              <SelectItem value="ilustração">Ilustração</SelectItem>
+                              <SelectItem value="minimalista">Minimalista</SelectItem>
+                              <SelectItem value="artístico">Artístico</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+            </ScrollArea>
+          </Tabs>
+
+          <DialogFooter className="pt-4 border-t">
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Cancelar
             </Button>
             <Button onClick={handleSaveTemplate}>
               <CheckCircle2 className="w-4 h-4 mr-2" />
               {editingTemplate ? 'Salvar' : 'Criar Modelo'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Preview Dialog */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="w-5 h-5" />
+              Preview: {previewTemplate?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Visualização das configurações deste modelo
+            </DialogDescription>
+          </DialogHeader>
+
+          {previewTemplate && (
+            <div className="space-y-6 py-4">
+              {/* Header Info */}
+              <div className="flex items-center gap-4 p-4 rounded-lg bg-muted/50 border">
+                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <FileText className="w-6 h-6 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-lg">{previewTemplate.name}</h3>
+                  <p className="text-sm text-muted-foreground">{previewTemplate.description}</p>
+                </div>
+                {previewTemplate.isDefault && (
+                  <Badge variant="secondary">Padrão</Badge>
+                )}
+              </div>
+
+              {/* Settings Grid */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 rounded-lg border">
+                  <p className="text-xs text-muted-foreground mb-1">Tom de Voz</p>
+                  <p className="font-medium">{toneLabels[previewTemplate.tone] || previewTemplate.tone}</p>
+                </div>
+                <div className="p-3 rounded-lg border">
+                  <p className="text-xs text-muted-foreground mb-1">Tamanho</p>
+                  <p className="font-medium">{sizeLabels[previewTemplate.size] || previewTemplate.size}</p>
+                </div>
+                <div className="p-3 rounded-lg border">
+                  <p className="text-xs text-muted-foreground mb-1">Modelo IA</p>
+                  <p className="font-medium">{tierLabels[previewTemplate.aiModel]?.label} ({tierLabels[previewTemplate.aiModel]?.credits} cr)</p>
+                </div>
+                <div className="p-3 rounded-lg border">
+                  <p className="text-xs text-muted-foreground mb-1">Idioma</p>
+                  <p className="font-medium">{previewTemplate.language === 'pt-BR' ? '🇧🇷 Português' : previewTemplate.language === 'en-US' ? '🇺🇸 English' : '🇪🇸 Español'}</p>
+                </div>
+              </div>
+
+              {/* Features */}
+              <div className="space-y-3">
+                <h4 className="font-medium text-sm">Recursos Incluídos</h4>
+                <div className="flex flex-wrap gap-2">
+                  {previewTemplate.faq && (
+                    <Badge variant="outline" className="gap-1">
+                      <HelpCircle className="w-3 h-3" /> FAQ
+                    </Badge>
+                  )}
+                  {previewTemplate.lists && (
+                    <Badge variant="outline" className="gap-1">
+                      <List className="w-3 h-3" /> Listas
+                    </Badge>
+                  )}
+                  {previewTemplate.tables && (
+                    <Badge variant="outline" className="gap-1">
+                      <Table className="w-3 h-3" /> Tabelas
+                    </Badge>
+                  )}
+                  {previewTemplate.conclusion && (
+                    <Badge variant="outline" className="gap-1">
+                      <MessageSquare className="w-3 h-3" /> Conclusão
+                    </Badge>
+                  )}
+                  {previewTemplate.metaDescription && (
+                    <Badge variant="outline" className="gap-1">
+                      <FileText className="w-3 h-3" /> Meta Desc.
+                    </Badge>
+                  )}
+                  {previewTemplate.seoOptimization && (
+                    <Badge variant="outline" className="gap-1 bg-primary/10 text-primary border-primary/30">
+                      <Sparkles className="w-3 h-3" /> SEO
+                    </Badge>
+                  )}
+                  {previewTemplate.humanizeContent && (
+                    <Badge variant="outline" className="gap-1 bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-950 dark:text-purple-300">
+                      <Wand2 className="w-3 h-3" /> Humanização
+                    </Badge>
+                  )}
+                  {previewTemplate.generateImages && (
+                    <Badge variant="outline" className="gap-1 bg-chart-2/10 text-chart-2 border-chart-2/30">
+                      <Image className="w-3 h-3" /> {previewTemplate.imageCount}x Imagem ({previewTemplate.imageStyle})
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>
+              Fechar
+            </Button>
+            <Button onClick={() => {
+              if (previewTemplate) {
+                handleUseTemplate(previewTemplate);
+              }
+            }}>
+              <Zap className="w-4 h-4 mr-2" />
+              Usar Modelo
             </Button>
           </DialogFooter>
         </DialogContent>
