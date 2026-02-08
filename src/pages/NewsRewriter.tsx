@@ -39,6 +39,7 @@ import { useNewsRewriter, type RewriteResult, type ComplianceCheck } from '@/hoo
 import { useProjects } from '@/hooks/useProjects';
 import { cn } from '@/lib/utils';
 import { RSSNewsImporter, type RSSItem, AutoAuditPanel, RepostHistory, RSSScheduler } from '@/components/news-rewriter';
+import { FeedMonitorDashboard, ContentPerformanceAnalytics } from '@/components/feed-monitor';
 
 // Niche options with icons
 const NICHE_OPTIONS = [
@@ -83,7 +84,7 @@ export default function NewsRewriter() {
   const [niche, setNiche] = useState('geral');
   const [articleLength, setArticleLength] = useState<'short' | 'medium' | 'long'>('medium');
   const [inputTab, setInputTab] = useState<'manual' | 'rss'>('manual');
-  const [mainTab, setMainTab] = useState<'new' | 'history' | 'schedule'>('new');
+  const [mainTab, setMainTab] = useState<'new' | 'history' | 'schedule' | 'monitor' | 'analytics'>('new');
   const [autoPublish, setAutoPublish] = useState(false);
 
   // Validation
@@ -158,19 +159,27 @@ export default function NewsRewriter() {
           </div>
           
           {/* Main Tabs */}
-          <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'new' | 'history' | 'schedule')}>
-            <TabsList>
+          <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'new' | 'history' | 'schedule' | 'monitor' | 'analytics')}>
+            <TabsList className="grid grid-cols-5 w-auto">
               <TabsTrigger value="new" className="gap-2">
                 <PenTool className="w-4 h-4" />
-                Nova Repostagem
+                <span className="hidden sm:inline">Nova</span>
               </TabsTrigger>
               <TabsTrigger value="history" className="gap-2">
                 <History className="w-4 h-4" />
-                Histórico
+                <span className="hidden sm:inline">Histórico</span>
               </TabsTrigger>
               <TabsTrigger value="schedule" className="gap-2">
                 <Calendar className="w-4 h-4" />
-                Agendamento
+                <span className="hidden sm:inline">Agenda</span>
+              </TabsTrigger>
+              <TabsTrigger value="monitor" className="gap-2">
+                <Rss className="w-4 h-4" />
+                <span className="hidden sm:inline">Monitor</span>
+              </TabsTrigger>
+              <TabsTrigger value="analytics" className="gap-2">
+                <TrendingUp className="w-4 h-4" />
+                <span className="hidden sm:inline">Analytics</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -184,6 +193,16 @@ export default function NewsRewriter() {
         {/* Schedule Tab */}
         {mainTab === 'schedule' && (
           <RSSScheduler projectId={projectId && projectId !== 'none' ? projectId : undefined} />
+        )}
+
+        {/* Monitor Tab */}
+        {mainTab === 'monitor' && (
+          <FeedMonitorDashboard />
+        )}
+
+        {/* Analytics Tab */}
+        {mainTab === 'analytics' && (
+          <ContentPerformanceAnalytics />
         )}
 
         {/* New Repost Tab */}
