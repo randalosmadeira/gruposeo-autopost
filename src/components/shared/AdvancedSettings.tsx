@@ -72,7 +72,7 @@ function SettingsToggle({
     <div 
       className={cn(
         'p-4 rounded-lg border transition-all',
-        checked ? 'border-2' : 'border-gray-200'
+        checked ? 'border-2' : 'border-border'
       )}
       style={{ 
         borderColor: checked ? accentColor : undefined,
@@ -82,12 +82,12 @@ function SettingsToggle({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div 
-            className="w-10 h-10 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: checked ? `${accentColor}20` : bgColor }}
+            className={cn('w-10 h-10 rounded-lg flex items-center justify-center', !checked && 'bg-muted')}
+            style={{ backgroundColor: checked ? `${accentColor}20` : undefined }}
           >
             <Icon 
-              className="w-5 h-5" 
-              style={{ color: checked ? accentColor : '#6b7280' }} 
+              className={cn('w-5 h-5', !checked && 'text-muted-foreground')}
+              style={{ color: checked ? accentColor : undefined }} 
             />
           </div>
           <div>
@@ -188,22 +188,19 @@ export function AdvancedSettings({
       <div 
         className={cn(
           'p-4 rounded-lg border transition-all',
-          generateImages ? 'border-2' : 'border-gray-200'
+          generateImages ? 'border-2 border-accent bg-accent/5' : 'border-border'
         )}
-        style={{ 
-          borderColor: generateImages ? '#EC4899' : undefined,
-          backgroundColor: generateImages ? 'rgba(236, 72, 153, 0.08)' : undefined
-        }}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div 
-              className="w-10 h-10 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: generateImages ? 'rgba(236, 72, 153, 0.2)' : '#FCE7F3' }}
+              className={cn(
+                'w-10 h-10 rounded-lg flex items-center justify-center',
+                generateImages ? 'bg-accent/20' : 'bg-muted'
+              )}
             >
               <Image 
-                className="w-5 h-5" 
-                style={{ color: generateImages ? '#EC4899' : '#6b7280' }} 
+                className={cn('w-5 h-5', generateImages ? 'text-accent' : 'text-muted-foreground')}
               />
             </div>
             <div>
@@ -216,7 +213,7 @@ export function AdvancedSettings({
           <Switch 
             checked={generateImages} 
             onCheckedChange={onGenerateImagesChange}
-            className="data-[state=checked]:bg-pink-500"
+            className="data-[state=checked]:bg-accent"
           />
         </div>
         
@@ -225,7 +222,7 @@ export function AdvancedSettings({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-sm">Quantidade de imagens</Label>
-                <span className="text-sm font-medium text-pink-600">{imageCount}</span>
+                <span className="text-sm font-medium text-accent">{imageCount}</span>
               </div>
               <Slider
                 value={[imageCount]}
@@ -240,7 +237,7 @@ export function AdvancedSettings({
             <div className="space-y-2">
               <Label className="text-sm">Estilo das imagens</Label>
               <Select value={imageStyle} onValueChange={onImageStyleChange}>
-                <SelectTrigger>
+                <SelectTrigger className="border-border bg-background">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
