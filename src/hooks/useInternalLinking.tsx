@@ -52,10 +52,13 @@ const initialSyncProgress: SyncProgress = {
   total: 0,
   fetched: 0,
   analyzed: 0,
+  analyzedWithAI: 0,
+  analyzedBasic: 0,
   indexed: 0,
   skipped: 0,
   errors: 0,
   logs: [],
+  aiStatus: 'ok',
 };
 
 export interface SyncState {
@@ -304,9 +307,11 @@ export function useInternalLinking(projectId: string | null) {
         throw new Error(errorMsg);
       }
 
-      const results = syncResponse.data?.results || { synced: 0, analyzed: 0, errors: 0, skipped: 0, total: 0 };
+      const results = syncResponse.data?.results || { synced: 0, analyzed: 0, errors: 0, skipped: 0, total: 0, analyzedWithAI: 0, analyzedBasic: 0 };
       const usedFallback = syncResponse.data?.usedFallback || false;
       const fallbackReason = syncResponse.data?.fallbackReason;
+      const aiStatus = syncResponse.data?.aiStatus;
+      const serverMessage = syncResponse.data?.message;
       
       // Update sync state
       setSyncState(prev => ({
@@ -329,15 +334,46 @@ export function useInternalLinking(projectId: string | null) {
       }));
 
       const fallbackInfo = usedFallback ? ' (via REST API)' : '';
-      addLog('success', `Sincronização concluída${fallbackInfo}: ${results.synced} indexados, ${results.analyzed} analisados por IA`);
+      const aiInfo = results.analyzedWithAI > 0 && results.analyzedBasic > 0 
+        ? ` (${results.analyzedWithAI} com IA, ${results.analyzedBasic} análise básica)`
+        : results.analyzedBasic > 0 
+          ? ' (análise básica)'
+          : '';
+      
+      addLog('success', `Sincronização concluída${fallbackInfo}: ${results.synced} indexados${aiInfo}`);
+      
+      if (aiStatus === 'credits_exhausted') {
+        addLog('warning', 'Créditos de IA esgotados - alguns artigos foram analisados com método básico');
+      }
 
       // Refresh local data
       await fetchIndexedArticles();
+      
+      // Auto-generate clusters after successful sync if we have enough articles
+      if (results.synced > 0) {
+        addLog('info', 'Gerando clusters temáticos automaticamente...');
+        try {
+          const clusterResponse = await supabase.functions.invoke('analyze-wp-articles', {
+            body: {
+              action: 'generate_clusters',
+              project_id: projectId,
+            },
+          });
+          
+          if (!clusterResponse.error && clusterResponse.data?.clusters?.length > 0) {
+            addLog('success', `${clusterResponse.data.clusters.length} clusters temáticos gerados`);
+          }
+        } catch (clusterError) {
+          console.error('Error auto-generating clusters:', clusterError);
+          addLog('warning', 'Não foi possível gerar clusters automaticamente');
+        }
+      }
+      
       await fetchTopicClusters();
 
       toast({
         title: 'Sincronização concluída!',
-        description: `${results.synced} artigos sincronizados, ${results.analyzed} analisados com IA.${fallbackInfo}`,
+        description: serverMessage || `${results.synced} artigos sincronizados, ${results.analyzed} analisados.${fallbackInfo}`,
       });
     } catch (error) {
       console.error('Error triggering sync:', error);

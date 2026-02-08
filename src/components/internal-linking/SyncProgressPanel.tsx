@@ -22,15 +22,18 @@ export interface SyncLogEntry {
 }
 
 export interface SyncProgress {
-  phase: 'idle' | 'fetching' | 'analyzing' | 'indexing' | 'complete' | 'error';
+  phase: 'idle' | 'fetching' | 'analyzing' | 'indexing' | 'generating_clusters' | 'complete' | 'error';
   total: number;
   fetched: number;
   analyzed: number;
+  analyzedWithAI?: number;
+  analyzedBasic?: number;
   indexed: number;
   skipped: number;
   errors: number;
   currentArticle?: string;
   logs: SyncLogEntry[];
+  aiStatus?: 'ok' | 'credits_exhausted';
 }
 
 interface SyncProgressPanelProps {
@@ -52,6 +55,7 @@ export function SyncProgressPanel({
       case 'fetching': return 'Buscando artigos...';
       case 'analyzing': return 'Analisando com IA...';
       case 'indexing': return 'Indexando...';
+      case 'generating_clusters': return 'Gerando clusters temáticos...';
       case 'complete': return 'Concluído';
       case 'error': return 'Erro';
       default: return 'Desconhecido';
@@ -136,7 +140,7 @@ export function SyncProgressPanel({
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-center">
             <p className="text-2xl font-bold text-blue-600">{progress.total}</p>
             <p className="text-xs text-muted-foreground">Total</p>
@@ -149,6 +153,10 @@ export function SyncProgressPanel({
             <p className="text-2xl font-bold text-green-600">{progress.analyzed}</p>
             <p className="text-xs text-muted-foreground">Analisados</p>
           </div>
+          <div className="p-3 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-center">
+            <p className="text-2xl font-bold text-indigo-600">{progress.indexed}</p>
+            <p className="text-xs text-muted-foreground">Indexados</p>
+          </div>
           <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-center">
             <p className="text-2xl font-bold text-amber-600">{progress.skipped}</p>
             <p className="text-xs text-muted-foreground">Ignorados</p>
@@ -158,6 +166,16 @@ export function SyncProgressPanel({
             <p className="text-xs text-muted-foreground">Erros</p>
           </div>
         </div>
+        
+        {/* AI Status Info */}
+        {progress.aiStatus === 'credits_exhausted' && progress.phase === 'complete' && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+            <AlertCircle className="w-4 h-4 text-amber-600" />
+            <span className="text-sm text-amber-700 dark:text-amber-300">
+              Créditos de IA esgotados. Alguns artigos foram analisados com o método básico (extração de keywords sem IA).
+            </span>
+          </div>
+        )}
 
         {/* Logs */}
         {progress.logs.length > 0 && (
