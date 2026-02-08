@@ -230,41 +230,83 @@
   }
 }
 
-/* Article Prose Styles */
+/* =========================================
+   Article Prose Styles - Padrão de Qualidade SEO
+   Baseado em: RDM Advogados - Layout Profissional
+   =========================================
+   
+   REGRAS DE FORMATAÇÃO:
+   - Títulos em NEGRITO com tamanho MAIOR para destaque
+   - Parágrafos com SEPARAÇÃO CLARA e espaçamento generoso
+   - Conteúdo dividido por BLOCOS visuais
+   - Links DESTACADOS com cor diferente para chamar atenção
+   - Tamanho de fonte padrão legível (1rem base)
+   ========================================= */
+
 .article-prose {
   @apply text-foreground leading-relaxed;
-  font-size: 1rem;
-  line-height: 1.75;
+  font-size: 1.0625rem; /* 17px - ligeiramente maior para melhor legibilidade */
+  line-height: 1.85;
+  letter-spacing: -0.01em;
 }
 
+/* ===== TÍTULOS - Negrito com Destaque Máximo ===== */
 .article-prose h1 {
-  @apply text-2xl md:text-3xl font-bold text-foreground mt-8 mb-4 first:mt-0;
+  @apply text-3xl md:text-4xl lg:text-5xl font-extrabold text-foreground;
+  @apply mt-10 mb-6 first:mt-0;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
 .article-prose h2 {
-  @apply text-xl md:text-2xl font-bold text-foreground mt-8 mb-4 pb-2 border-b border-border;
+  @apply text-2xl md:text-3xl font-bold text-foreground;
+  @apply mt-12 mb-6 pt-8;
+  @apply border-t-2 border-border;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
 }
 
 .article-prose h3 {
-  @apply text-lg md:text-xl font-semibold text-foreground mt-6 mb-3;
+  @apply text-xl md:text-2xl font-bold text-foreground;
+  @apply mt-10 mb-5;
+  line-height: 1.35;
 }
 
 .article-prose h4 {
-  @apply text-base md:text-lg font-semibold text-foreground mt-4 mb-2;
+  @apply text-lg md:text-xl font-semibold text-foreground;
+  @apply mt-8 mb-4;
+  line-height: 1.4;
 }
 
-.article-prose h5,
+.article-prose h5 {
+  @apply text-base md:text-lg font-semibold text-foreground;
+  @apply mt-6 mb-3;
+}
+
 .article-prose h6 {
-  @apply text-sm md:text-base font-medium text-foreground mt-4 mb-2;
+  @apply text-sm md:text-base font-semibold text-muted-foreground uppercase tracking-wide;
+  @apply mt-6 mb-3;
 }
 
+/* ===== PARÁGRAFOS - Separação e Blocos Claros ===== */
 .article-prose p {
-  @apply mb-4 last:mb-0;
+  @apply mb-6 last:mb-0;
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: auto;
 }
 
+/* Primeiro parágrafo após título - destaque especial */
+.article-prose h2 + p,
+.article-prose h3 + p {
+  @apply text-lg text-foreground/90;
+  font-weight: 450;
+}
+
+/* ===== TEXTO EM DESTAQUE ===== */
 .article-prose strong,
 .article-prose b {
-  @apply font-semibold text-foreground;
+  @apply font-bold text-foreground;
 }
 
 .article-prose em,
@@ -272,90 +314,186 @@
   @apply italic;
 }
 
+/* ===== LINKS - Cor Destacada para Chamar Atenção ===== */
 .article-prose a {
-  @apply text-primary underline underline-offset-2 hover:text-primary/80 transition-colors;
+  @apply font-medium no-underline;
+  @apply text-primary;
+  @apply border-b-2 border-primary/40;
+  @apply transition-all duration-200;
+  padding-bottom: 1px;
 }
 
+.article-prose a:hover {
+  @apply text-accent border-accent;
+  @apply border-b-2;
+}
+
+.article-prose a:visited {
+  @apply text-primary/80;
+}
+
+/* Links externos - indicador visual */
+.article-prose a[href^="http"]:not([href*="rdmadvogados"]):not([href*="localhost"]):after {
+  content: " ↗";
+  @apply text-xs opacity-60;
+}
+
+/* ===== LISTAS - Espaçamento entre Itens ===== */
 .article-prose ul {
-  @apply list-disc list-outside ml-6 mb-4 space-y-2;
+  @apply list-disc list-outside ml-6 mb-6 mt-4 space-y-3;
 }
 
 .article-prose ol {
-  @apply list-decimal list-outside ml-6 mb-4 space-y-2;
+  @apply list-decimal list-outside ml-6 mb-6 mt-4 space-y-3;
 }
 
 .article-prose li {
-  @apply pl-1;
+  @apply pl-2 leading-relaxed;
+}
+
+.article-prose li::marker {
+  @apply text-primary font-semibold;
 }
 
 .article-prose li > ul,
 .article-prose li > ol {
-  @apply mt-2 mb-0;
+  @apply mt-3 mb-0;
 }
 
+/* ===== CITAÇÕES - Bloco Destacado ===== */
 .article-prose blockquote {
-  @apply border-l-4 border-primary bg-primary/5 pl-4 py-3 my-4 italic text-muted-foreground rounded-r-lg;
+  @apply relative my-8 py-6 px-8;
+  @apply border-l-4 border-primary;
+  @apply bg-primary/5 rounded-r-xl;
+  @apply text-lg italic text-foreground/90;
 }
 
+.article-prose blockquote::before {
+  content: "\201C";
+  @apply absolute -top-2 left-4 text-6xl text-primary/20 font-serif;
+}
+
+.article-prose blockquote p {
+  @apply mb-0;
+}
+
+/* ===== CÓDIGO ===== */
 .article-prose code {
-  @apply bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-foreground;
+  @apply bg-muted px-2 py-1 rounded text-sm font-mono text-foreground;
 }
 
 .article-prose pre {
-  @apply bg-muted p-4 rounded-lg overflow-x-auto my-4;
+  @apply bg-muted p-6 rounded-xl overflow-x-auto my-8;
 }
 
 .article-prose pre code {
   @apply bg-transparent p-0;
 }
 
+/* ===== TABELAS - Layout Profissional ===== */
 .article-prose table {
-  @apply w-full border-collapse my-6 text-sm;
+  @apply w-full border-collapse my-8 text-sm;
+  @apply shadow-sm rounded-lg overflow-hidden;
 }
 
 .article-prose thead {
-  @apply bg-muted;
+  @apply bg-primary text-primary-foreground;
 }
 
 .article-prose th {
-  @apply border border-border px-4 py-3 text-left font-semibold text-foreground;
+  @apply px-5 py-4 text-left font-bold;
 }
 
 .article-prose td {
-  @apply border border-border px-4 py-3 text-foreground;
+  @apply border-b border-border px-5 py-4 text-foreground;
 }
 
-.article-prose tr:nth-child(even) {
+.article-prose tbody tr:hover {
   @apply bg-muted/50;
 }
 
+.article-prose tr:nth-child(even) {
+  @apply bg-muted/30;
+}
+
+/* ===== IMAGENS ===== */
 .article-prose img {
-  @apply max-w-full h-auto rounded-lg my-4 shadow-md;
+  @apply max-w-full h-auto rounded-xl my-8;
+  @apply shadow-lg;
 }
 
 .article-prose figure {
-  @apply my-6;
+  @apply my-10;
 }
 
 .article-prose figcaption {
-  @apply text-center text-sm text-muted-foreground mt-2 italic;
+  @apply text-center text-sm text-muted-foreground mt-4 italic;
 }
 
+/* ===== SEPARADORES ===== */
 .article-prose hr {
-  @apply border-t border-border my-8;
+  @apply border-t-2 border-border my-12;
 }
 
-/* FAQ Section Specific Styles */
+/* ===== FAQ - Seção Especial ===== */
 .article-prose .faq-item {
-  @apply mb-4 pb-4 border-b border-border last:border-b-0;
+  @apply mb-6 pb-6 border-b border-border;
+}
+
+.article-prose .faq-item:last-child {
+  @apply border-b-0;
 }
 
 .article-prose .faq-question {
-  @apply font-semibold text-foreground mb-2;
+  @apply font-bold text-lg text-foreground mb-3;
 }
 
 .article-prose .faq-answer {
-  @apply text-muted-foreground;
+  @apply text-foreground/85;
+}
+
+/* ===== CALLOUTS / DESTAQUE ===== */
+.article-prose .callout,
+.article-prose .highlight-box {
+  @apply my-8 p-6 rounded-xl border-l-4;
+  @apply bg-info-light/50 border-info;
+}
+
+.article-prose .callout-warning {
+  @apply bg-warning-light border-warning;
+}
+
+.article-prose .callout-success {
+  @apply bg-success-light border-success;
+}
+
+/* ===== RESPONSIVO ===== */
+@media (max-width: 640px) {
+  .article-prose {
+    font-size: 1rem;
+    line-height: 1.75;
+  }
+  
+  .article-prose h1 {
+    @apply text-2xl;
+  }
+  
+  .article-prose h2 {
+    @apply text-xl pt-6 mt-8;
+  }
+  
+  .article-prose h3 {
+    @apply text-lg mt-6;
+  }
+  
+  .article-prose p {
+    @apply mb-5;
+    text-align: left;
+  }
+  
+  .article-prose blockquote {
+    @apply px-4 py-4 text-base;
+  }
 }
 
 /* Animations */

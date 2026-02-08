@@ -174,15 +174,17 @@ function ArticleSectionRenderer({ section, isFirst }: ArticleSectionRendererProp
   const getSectionStyles = () => {
     switch (section.type) {
       case 'faq':
-        return 'bg-primary/5 border-primary/20';
+        return 'bg-primary/5 border-l-4 border-l-primary border-y-0 border-r-0';
       case 'conclusion':
-        return 'bg-success-light border-success/20';
+        return 'bg-success-light border-l-4 border-l-success border-y-0 border-r-0';
       case 'intro':
-        return 'bg-info-light/50 border-info/10';
+        return 'bg-info-light/50 border-l-4 border-l-info border-y-0 border-r-0';
       case 'h1':
-        return 'bg-gradient-to-r from-primary/10 to-transparent border-primary/30';
+        return 'bg-gradient-to-r from-primary/10 to-transparent border-l-4 border-l-primary';
+      case 'h2':
+        return 'bg-card border border-border/50 shadow-sm hover:shadow-md transition-shadow';
       default:
-        return 'bg-card border';
+        return 'bg-card border border-border/30';
     }
   };
 
@@ -217,26 +219,26 @@ function ArticleSectionRenderer({ section, isFirst }: ArticleSectionRendererProp
       id={section.id}
     >
       <CardContent className="p-6 md:p-8">
-        {/* Section Header */}
+        {/* Section Header - Títulos em NEGRITO com tamanho MAIOR */}
         {section.title && (
-          <div className="flex items-start gap-3 mb-4">
+          <div className="flex items-start gap-4 mb-6">
             {getSectionIcon()}
             <div className="flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-3 flex-wrap">
                 {section.type === 'h1' ? (
-                  <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+                  <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-foreground leading-tight tracking-tight">
                     {section.title}
                   </h1>
                 ) : section.type === 'h2' || section.type === 'faq' || section.type === 'conclusion' ? (
-                  <h2 className="text-xl md:text-2xl font-bold text-foreground">
+                  <h2 className="text-2xl md:text-3xl font-bold text-foreground leading-snug">
                     {section.title}
                   </h2>
                 ) : section.type === 'h3' ? (
-                  <h3 className="text-lg md:text-xl font-semibold text-foreground">
+                  <h3 className="text-xl md:text-2xl font-bold text-foreground leading-snug">
                     {section.title}
                   </h3>
                 ) : (
-                  <h4 className="text-base md:text-lg font-medium text-foreground">
+                  <h4 className="text-lg md:text-xl font-semibold text-foreground leading-snug">
                     {section.title}
                   </h4>
                 )}
