@@ -23,8 +23,11 @@ import {
   CheckCircle,
   Image,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useImageGeneration } from '@/hooks/useImageGeneration';
+import { useToast } from '@/hooks/use-toast';
 
 interface LandingPageSection {
   id: string;
@@ -41,6 +44,7 @@ interface LandingPageEditorProps {
   onTitleChange: (title: string) => void;
   onHeadlineChange: (headline: string) => void;
   onSectionChange: (id: string, field: 'title' | 'content', value: string) => void;
+  onFeaturedImageChange?: (imageUrl: string) => void;
   onPublish: (projectId: string) => Promise<void>;
   onSave: () => void;
   isPublishing: boolean;
@@ -49,6 +53,9 @@ interface LandingPageEditorProps {
   projects: Array<{ id: string; name: string; is_connected: boolean }>;
   selectedProjectId?: string;
   publishedUrl?: string;
+  // Context for image generation
+  keyword?: string;
+  segment?: string;
 }
 
 const colors = {
@@ -70,6 +77,7 @@ export function LandingPageEditor({
   onTitleChange,
   onHeadlineChange,
   onSectionChange,
+  onFeaturedImageChange,
   onPublish,
   onSave,
   isPublishing,
@@ -78,9 +86,14 @@ export function LandingPageEditor({
   projects,
   selectedProjectId,
   publishedUrl,
+  keyword,
+  segment,
 }: LandingPageEditorProps) {
   const [selectedProject, setSelectedProject] = useState(selectedProjectId || '');
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [localFeaturedImage, setLocalFeaturedImage] = useState(featuredImage);
+  const { toast } = useToast();
+  const { generateImage, isGenerating } = useImageGeneration();
 
   const connectedProjects = projects.filter((p) => p.is_connected);
 
@@ -97,6 +110,38 @@ export function LandingPageEditor({
       await onPublish(selectedProject);
     }
   };
+
+  const handleGenerateImage = async () => {
+    if (!title && !keyword) {
+      toast({
+        title: 'Título necessário',
+        description: 'Preencha o título antes de gerar uma imagem.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const result = await generateImage({
+      title: title || keyword || 'Landing Page',
+      keywords: keyword,
+      context: `Imagem para artigo de vendas/landing page sobre: ${headline || title}`,
+      segment: (segment as any) || 'general',
+      style: 'photorealistic',
+      aspectRatio: '16:9',
+      quality: 'high',
+    });
+
+    if (result?.image) {
+      setLocalFeaturedImage(result.image);
+      onFeaturedImageChange?.(result.image);
+      toast({
+        title: 'Imagem gerada!',
+        description: 'A imagem foi criada com sucesso usando IA.',
+      });
+    }
+  };
+
+  const displayedImage = localFeaturedImage || featuredImage;
 
   return (
     <div className="h-full flex flex-col" style={{ backgroundColor: colors.background }}>
@@ -200,23 +245,39 @@ export function LandingPageEditor({
           </div>
 
           {/* Featured Image */}
-          {featuredImage ? (
+          {displayedImage ? (
             <div className="space-y-2">
               <Label className="text-sm font-medium">Imagem Destacada</Label>
               <div className="relative rounded-lg overflow-hidden border" style={{ borderColor: colors.border }}>
                 <img 
-                  src={featuredImage} 
+                  src={displayedImage} 
                   alt="Featured" 
                   className="w-full h-48 object-cover"
                 />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="absolute bottom-2 right-2"
-                >
-                  <RefreshCw className="w-4 h-4 mr-1" />
-                  Trocar Imagem
-                </Button>
+                <div className="absolute bottom-2 right-2 flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleGenerateImage}
+                    disabled={isGenerating}
+                  >
+                    {isGenerating ? (
+                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 mr-1" />
+                    )}
+                    {isGenerating ? 'Gerando...' : 'Gerar Nova'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleGenerateImage}
+                    disabled={isGenerating}
+                  >
+                    <RefreshCw className="w-4 h-4 mr-1" />
+                    Trocar
+                  </Button>
+                </div>
               </div>
             </div>
           ) : (
@@ -228,8 +289,23 @@ export function LandingPageEditor({
               <p className="text-sm" style={{ color: colors.textSecondary }}>
                 Nenhuma imagem destacada
               </p>
-              <Button variant="outline" size="sm">
-                Adicionar Imagem
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleGenerateImage}
+                disabled={isGenerating}
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Gerando com IA...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Gerar Imagem com IA
+                  </>
+                )}
               </Button>
             </div>
           )}
