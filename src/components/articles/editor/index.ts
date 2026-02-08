@@ -9,3 +9,4 @@ export { VideoInsertPopover } from './VideoInsertPopover';
 export { ImageResizeModal } from './ImageResizeModal';
 export { RecreateArticleButton } from './RecreateArticleButton';
 export { VersionHistoryPanel } from './VersionHistoryPanel';
+export { SchedulingPanel } from './SchedulingPanel';

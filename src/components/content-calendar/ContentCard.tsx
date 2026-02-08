@@ -1,8 +1,9 @@
-import { Eye, ImageIcon, GripVertical } from 'lucide-react';
+import { Eye, ImageIcon, GripVertical, Clock } from 'lucide-react';
 import { ContentItem, statusConfig } from './types';
 import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { format } from 'date-fns';
 
 interface ContentCardProps {
   item: ContentItem;
@@ -59,12 +60,20 @@ export function ContentCard({ item, onClick, compact = false, draggable = true }
             <ImageIcon className="w-3 h-3 text-muted-foreground" />
           </div>
         )}
-        <span className={cn(
-          'text-xs font-medium truncate flex-1',
-          config.color
-        )}>
-          {item.title}
-        </span>
+        <div className="flex flex-col flex-1 min-w-0">
+          <span className={cn(
+            'text-xs font-medium truncate',
+            config.color
+          )}>
+            {item.title}
+          </span>
+          {item.scheduledAt && (
+            <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+              <Clock className="w-2.5 h-2.5" />
+              {format(item.scheduledAt, 'HH:mm')}
+            </span>
+          )}
+        </div>
         <Eye className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
     );
@@ -107,13 +116,21 @@ export function ContentCard({ item, onClick, compact = false, draggable = true }
               {item.projectName}
             </p>
           )}
-          <span className={cn(
-            'inline-block text-xs px-2 py-0.5 rounded-full mt-1',
-            config.bgColor,
-            config.color
-          )}>
-            {config.label}
-          </span>
+          <div className="flex items-center gap-2 mt-1">
+            <span className={cn(
+              'inline-block text-xs px-2 py-0.5 rounded-full',
+              config.bgColor,
+              config.color
+            )}>
+              {config.label}
+            </span>
+            {item.scheduledAt && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {format(item.scheduledAt, 'HH:mm')}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>
