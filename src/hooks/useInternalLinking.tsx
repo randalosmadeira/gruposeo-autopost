@@ -223,10 +223,22 @@ export function useInternalLinking(projectId: string | null) {
         // Try to extract error message from FunctionsHttpError context
         if (syncResponse.error instanceof FunctionsHttpError) {
           try {
+            // FunctionsHttpError has context.json() that contains the actual error body
             const errorBody = await syncResponse.error.context.json();
-            errorMsg = errorBody?.error || syncResponse.error.message;
-          } catch {
-            errorMsg = syncResponse.error.message;
+            console.log('Edge function error body:', errorBody);
+            errorMsg = errorBody?.error || errorBody?.message || syncResponse.error.message;
+          } catch (parseErr) {
+            console.log('Failed to parse error body:', parseErr);
+            // Try to get text if JSON parsing fails
+            try {
+              const errorText = await syncResponse.error.context.text();
+              console.log('Edge function error text:', errorText);
+              // Try to parse the text as JSON
+              const parsed = JSON.parse(errorText);
+              errorMsg = parsed?.error || parsed?.message || errorText;
+            } catch {
+              errorMsg = syncResponse.error.message;
+            }
           }
         } else {
           errorMsg = syncResponse.error.message || 'Erro desconhecido';
@@ -235,11 +247,19 @@ export function useInternalLinking(projectId: string | null) {
         errorMsg = syncResponse.data.error;
       }
       
+      // Debug log
+      console.log('Sync response:', { 
+        hasError: !!syncResponse.error, 
+        errorMsg, 
+        data: syncResponse.data 
+      });
+      
       if (errorMsg) {
         // Check for common connection/plugin issues
         const isPluginNotFound = errorMsg.includes('rest_no_route') || 
                                   errorMsg.includes('Nenhuma rota') ||
-                                  (errorMsg.includes('404') && errorMsg.includes('plugin'));
+                                  errorMsg.includes('Falha ao buscar lista de artigos no plugin') ||
+                                  (errorMsg.includes('404') && (errorMsg.includes('plugin') || errorMsg.includes('cfrdm')));
         const isPluginError = errorMsg.includes('Falha ao buscar') || 
                                errorMsg.includes('Falha ao exportar');
         const isConnectionError = errorMsg.includes('fetch') || 
