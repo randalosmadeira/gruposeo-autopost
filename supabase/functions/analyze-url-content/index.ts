@@ -111,6 +111,7 @@ function extractSourceName(url: string): string {
       'valor.globo.com': 'Valor Econômico',
       'tecmundo.com.br': 'TecMundo',
       'tecnoblog.net': 'Tecnoblog',
+      'migalhas.com.br': 'Migalhas',
     };
 
     return domainNames[hostname] || hostname.charAt(0).toUpperCase() + hostname.slice(1).replace(/\.[^.]+$/, '');
@@ -124,15 +125,23 @@ async function analyzeWithAI(
   title: string,
   source: string,
   projectNiche: string | undefined,
-  projectName: string | undefined,
-  apiKey: string
+  projectName: string | undefined
 ): Promise<AnalysisResult> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY não configurada");
+  }
+
   const nicheContext = projectNiche 
     ? `O projeto WordPress de destino é do nicho "${projectNiche}"${projectName ? ` (${projectName})` : ''}.` 
     : '';
 
-  const prompt = `Você é um especialista em análise de conteúdo jornalístico e SEO.
-Analise a seguinte notícia e forneça recomendações para repostagem.
+  const systemPrompt = `Você é um especialista em análise de conteúdo jornalístico e SEO.
+Analise notícias e forneça recomendações estruturadas para repostagem.
+Retorne APENAS JSON válido, sem markdown ou explicações.`;
+
+  const userPrompt = `Analise a seguinte notícia e forneça recomendações para repostagem.
 
 ${nicheContext}
 
@@ -144,8 +153,7 @@ ${content.substring(0, 5000)}
 
 ---
 
-Analise o conteúdo e retorne um JSON com:
-
+Retorne um JSON com esta estrutura exata:
 {
   "title": "título original extraído",
   "content": "texto completo extraído e limpo da notícia (máximo 3000 caracteres)",
@@ -160,41 +168,62 @@ Analise o conteúdo e retorne um JSON com:
 }
 
 IMPORTANTE: 
-- Retorne APENAS o JSON válido, sem markdown ou explicações
+- Retorne APENAS o JSON válido
 - O suggestedAngle deve ser específico e único, não genérico
 - Considere o nicho do projeto WordPress se informado`;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.4,
-          maxOutputTokens: 4000,
-          responseMimeType: "application/json",
-        },
-      }),
-    }
-  );
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.4,
+      max_tokens: 4000,
+    }),
+  });
 
   if (!response.ok) {
-    const error = await response.text();
-    console.error("Gemini error:", error);
+    const errorText = await response.text();
+    console.error("Lovable AI error:", response.status, errorText);
+    
+    if (response.status === 429) {
+      throw new Error("Rate limit excedido. Tente novamente em alguns segundos.");
+    }
+    if (response.status === 402) {
+      throw new Error("Créditos insuficientes. Adicione créditos na sua conta Lovable.");
+    }
+    
     throw new Error(`Erro na API de IA: ${response.status}`);
   }
 
   const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  const text = data.choices?.[0]?.message?.content;
 
   if (!text) {
     throw new Error("Resposta vazia da IA");
   }
 
   try {
-    return JSON.parse(text);
+    // Clean up potential markdown wrapper
+    let jsonText = text.trim();
+    if (jsonText.startsWith("```json")) {
+      jsonText = jsonText.slice(7);
+    }
+    if (jsonText.startsWith("```")) {
+      jsonText = jsonText.slice(3);
+    }
+    if (jsonText.endsWith("```")) {
+      jsonText = jsonText.slice(0, -3);
+    }
+    
+    return JSON.parse(jsonText.trim());
   } catch {
     // Try to extract JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -245,22 +274,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get user's API key
-    const { data: settings } = await supabase
-      .from("user_settings")
-      .select("gemini_api_key, openai_api_key")
-      .eq("user_id", user.id)
-      .single();
-
-    const geminiKey = settings?.gemini_api_key || Deno.env.get("GEMINI_API_KEY");
-
-    if (!geminiKey) {
-      return new Response(
-        JSON.stringify({ error: "Chave de API de IA não configurada" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     // Fetch and extract content from URL
     console.log("Fetching URL:", url);
     const { html, title } = await fetchUrlContent(url);
@@ -274,15 +287,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Analyze with AI
-    console.log("Analyzing content with AI...");
+    // Analyze with Lovable AI
+    console.log("Analyzing content with Lovable AI...");
     const analysis = await analyzeWithAI(
       content,
       title,
       source,
       projectNiche,
-      projectName,
-      geminiKey
+      projectName
     );
 
     return new Response(
