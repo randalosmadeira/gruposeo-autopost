@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '2.6.2');
+define('CFRDM_VERSION', '3.0.0');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -32,6 +32,8 @@ define('CFRDM_SOCIAL_ACCOUNTS_TABLE', 'cfrdm_social_accounts');
 define('CFRDM_CRON_JOBS_TABLE', 'cfrdm_cron_jobs');
 define('CFRDM_CRON_HISTORY_TABLE', 'cfrdm_cron_history');
 define('CFRDM_CONTENT_QUEUE_TABLE', 'cfrdm_content_queue');
+define('CFRDM_FIX_QUEUE_TABLE', 'cfrdm_fix_queue');
+define('CFRDM_UBERSUGGEST_TABLE', 'cfrdm_ubersuggest_data');
 
 /**
  * CRITICAL: Lazy load includes to prevent conflicts with page builders
@@ -66,6 +68,14 @@ function cfrdm_load_dependencies() {
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-social-admin.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-cron-scheduler.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-content-queue.php';
+    
+    // v3.0.0 - AI Auto-Fix modules
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-gsc-integration.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-auto-fix.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ubersuggest-sync.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-https-enforcer.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-auto-update.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-content-enhancer.php';
 }
 
 /**
@@ -431,6 +441,18 @@ private function init_admin_hooks() {
         CFRDM_Social_Poster::create_tables();
         CFRDM_Cron_Scheduler::create_tables();
         CFRDM_Content_Queue::create_table();
+        
+        // v3.0.0 - Create AI Auto-Fix tables
+        CFRDM_AI_Auto_Fix::create_table();
+        CFRDM_Ubersuggest_Sync::create_table();
+        
+        // Initialize v3.0.0 modules
+        CFRDM_GSC_Integration::get_instance()->init();
+        CFRDM_AI_Auto_Fix::get_instance()->init();
+        CFRDM_Ubersuggest_Sync::get_instance()->init();
+        CFRDM_HTTPS_Enforcer::get_instance()->init();
+        CFRDM_Auto_Update::get_instance()->init();
+        CFRDM_AI_Content_Enhancer::get_instance()->init();
         
         // Register default cron jobs
         CFRDM_Cron_Scheduler::register_default_jobs();
