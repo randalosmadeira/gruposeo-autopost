@@ -76,26 +76,38 @@ export function ArticleEditorToolbar({
 
   return (
     <div className="flex items-center gap-1 px-4 py-2 bg-card border-b overflow-x-auto">
-      {/* Heading Dropdown */}
+      {/* Heading Dropdown - Hierarquia Google SEO */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="sm" className="gap-1 h-8 px-2 text-sm">
-            Título 1 (H1)
+            Formatação
             <ChevronDown className="w-3 h-3" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           <DropdownMenuItem onClick={() => handleFormatHeading('h1')}>
             <Heading1 className="w-4 h-4 mr-2" />
-            Título 1 (H1)
+            <span className="font-bold">H1 - Título Principal</span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => handleFormatHeading('h2')}>
             <Heading2 className="w-4 h-4 mr-2" />
-            Título 2 (H2)
+            <span className="font-semibold">H2 - Seção Principal</span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => handleFormatHeading('h3')}>
             <Heading3 className="w-4 h-4 mr-2" />
-            Título 3 (H3)
+            <span className="font-medium">H3 - Subseção</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleFormatHeading('h4')}>
+            <span className="w-4 h-4 mr-2 text-xs font-bold flex items-center justify-center">H4</span>
+            <span>H4 - Detalhe</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleFormatHeading('h5')}>
+            <span className="w-4 h-4 mr-2 text-xs font-bold flex items-center justify-center">H5</span>
+            <span className="text-sm">H5 - Subdetalhe</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleFormatHeading('h6')}>
+            <span className="w-4 h-4 mr-2 text-xs font-bold flex items-center justify-center">H6</span>
+            <span className="text-xs">H6 - Menor Título</span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => handleFormatHeading('p')}>
             <AlignLeft className="w-4 h-4 mr-2" />

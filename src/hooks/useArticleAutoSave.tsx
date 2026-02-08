@@ -126,6 +126,26 @@ export function useArticleAutoSave(options: UseArticleAutoSaveOptions = {}) {
       setIsSaving(true);
       const wordCount = content.split(/\s+/).filter(Boolean).length;
 
+      // Generate meta-description automatically using AI
+      let generatedExcerpt: string | null = null;
+      try {
+        const { data, error } = await supabase.functions.invoke('regenerate-content', {
+          body: {
+            type: 'excerpt',
+            keyword: title,
+            currentTitle: title,
+            language: 'pt-BR',
+          },
+        });
+        
+        if (!error && data?.result) {
+          generatedExcerpt = data.result;
+        }
+      } catch (excerptError) {
+        console.warn('Meta-description generation failed:', excerptError);
+        // Continue without excerpt - it's optional
+      }
+
       const updateData: {
         content: string;
         title: string;
@@ -133,6 +153,7 @@ export function useArticleAutoSave(options: UseArticleAutoSaveOptions = {}) {
         status: 'ready';
         updated_at: string;
         featured_image_url?: string | null;
+        excerpt?: string | null;
       } = {
         content,
         title,
@@ -146,6 +167,11 @@ export function useArticleAutoSave(options: UseArticleAutoSaveOptions = {}) {
         updateData.featured_image_url = featuredImageUrl;
       }
 
+      // Include auto-generated excerpt
+      if (generatedExcerpt) {
+        updateData.excerpt = generatedExcerpt;
+      }
+
       const { error } = await supabase
         .from('articles')
         .update(updateData)
@@ -156,7 +182,9 @@ export function useArticleAutoSave(options: UseArticleAutoSaveOptions = {}) {
       
       toast({
         title: 'Artigo salvo!',
-        description: 'Seu artigo foi salvo automaticamente.',
+        description: generatedExcerpt 
+          ? 'Artigo e meta-descrição gerados automaticamente.' 
+          : 'Seu artigo foi salvo automaticamente.',
       });
       
       return true;
