@@ -45,41 +45,74 @@ export function RecreateArticleButton({
         description: 'A IA está gerando um novo conteúdo completo. Isso pode levar alguns minutos.',
       });
 
-      // Call the generate-article function to recreate
+      // Call the generate-article function with proper config structure
       const { data, error } = await supabase.functions.invoke('generate-article', {
         body: {
-          keyword,
-          articleId,
-          regenerate: true, // Flag to indicate full regeneration
-          language: 'pt-BR',
+          config: {
+            keyword,
+            wordCount: 'medium',
+            tone: 'profissional',
+            pointOfView: 'voce',
+            language: 'pt-BR',
+            type: 'blog',
+            includeFaq: true,
+            faqCount: 5,
+            includeTable: true,
+            includeList: true,
+            includeConclusion: true,
+            includeMetaDescription: true,
+            seoOptimization: true,
+            humanizeContent: true,
+            contentType: 'how-to',
+            segment: 'general',
+            goal: 'inform',
+            intentType: 'informational',
+          },
         },
       });
 
       if (error) throw error;
 
-      if (data?.content) {
-        onRecreateComplete(
-          data.content,
-          data.title || keyword,
-          data.excerpt || ''
-        );
+      // Handle streaming response - collect all chunks
+      if (data) {
+        let fullContent = '';
+        
+        // Check if response is text/stream
+        if (typeof data === 'string') {
+          fullContent = data;
+        } else if (data.content) {
+          fullContent = data.content;
+        }
 
-        // Update the article in database
-        await supabase
-          .from('articles')
-          .update({
-            content: data.content,
-            title: data.title,
-            excerpt: data.excerpt,
-            status: 'ready',
-            error_message: null,
-          })
-          .eq('id', articleId);
+        if (fullContent) {
+          // Extract title from content (first H1)
+          const titleMatch = fullContent.match(/<h1[^>]*>([^<]+)<\/h1>/i) || 
+                             fullContent.match(/^#\s+(.+)$/m);
+          const extractedTitle = titleMatch ? titleMatch[1].trim() : keyword;
+          
+          // Generate excerpt from content
+          const textContent = fullContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          const excerpt = textContent.substring(0, 155) + '...';
 
-        toast({
-          title: 'Artigo recriado com sucesso!',
-          description: 'O novo conteúdo foi gerado e salvo.',
-        });
+          onRecreateComplete(fullContent, extractedTitle, excerpt);
+
+          // Update the article in database
+          await supabase
+            .from('articles')
+            .update({
+              content: fullContent,
+              title: extractedTitle,
+              excerpt: excerpt,
+              status: 'ready',
+              error_message: null,
+            })
+            .eq('id', articleId);
+
+          toast({
+            title: 'Artigo recriado com sucesso!',
+            description: 'O novo conteúdo foi gerado e salvo.',
+          });
+        }
       }
     } catch (error) {
       console.error('Recreate error:', error);
