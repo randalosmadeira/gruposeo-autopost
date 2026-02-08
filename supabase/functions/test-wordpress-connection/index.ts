@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
 
 const FUNCTION_NAME = "test-wordpress-connection";
+const MINIMUM_PLUGIN_VERSION = "3.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,6 +15,22 @@ interface TestConnectionRequest {
   wordpress_app_password?: string;
   use_plugin?: boolean;
   api_key?: string;
+}
+
+/**
+ * Compare semantic versions: returns -1 if a < b, 0 if equal, 1 if a > b
+ */
+function compareVersions(a: string, b: string): number {
+  const partsA = a.split('.').map(Number);
+  const partsB = b.split('.').map(Number);
+  
+  for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+    const numA = partsA[i] || 0;
+    const numB = partsB[i] || 0;
+    if (numA < numB) return -1;
+    if (numA > numB) return 1;
+  }
+  return 0;
 }
 
 // Common WordPress subpaths to try when root fails
@@ -172,7 +189,15 @@ serve(async (req) => {
         const pluginData = JSON.parse(responseText);
 
         if (pluginResponse.ok && pluginData.success) {
-          log.info("plugin_connection_success", { site: pluginData.site });
+          // Check plugin version
+          const pluginVersion = pluginData.version || pluginData.site?.version || "1.0.0";
+          const isOutdated = compareVersions(pluginVersion, MINIMUM_PLUGIN_VERSION) < 0;
+          
+          log.info("plugin_connection_success", { 
+            site: pluginData.site, 
+            version: pluginVersion,
+            isOutdated 
+          });
           log.requestEnd(200, Date.now() - startTime);
           return new Response(
             JSON.stringify({ 
@@ -182,6 +207,13 @@ serve(async (req) => {
               canPublish: true,
               discoveredPath: discovery.path || null,
               correctedUrl: discovery.path ? `${wordpress_url.replace(/\/$/, "")}${discovery.path}` : null,
+              pluginVersion,
+              minimumVersion: MINIMUM_PLUGIN_VERSION,
+              isOutdated,
+              updateRequired: isOutdated,
+              updateMessage: isOutdated 
+                ? `⚠️ Atualização obrigatória: seu plugin está na v${pluginVersion}, mas a v${MINIMUM_PLUGIN_VERSION}+ é necessária para GSC, AI Auto-Fix e novas funcionalidades.`
+                : null,
             }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
