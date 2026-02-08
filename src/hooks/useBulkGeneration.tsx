@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { AnalyzedKeyword } from '@/lib/keyword-analyzer';
+import { BulkGenerationConfig } from '@/components/bulk-generator';
 
 export interface GenerationJob {
   id: string;
@@ -33,7 +34,7 @@ async function parseSSEStream(
   let buffer = '';
   let fullContent = '';
   let estimatedWords = 0;
-  const targetWords = 1500; // Average target
+  const targetWords = 2000; // Average target for long content
 
   while (true) {
     const { done, value } = await reader.read();
@@ -126,6 +127,7 @@ export function useBulkGeneration() {
   const generateArticleWithStreaming = async (
     job: GenerationJob, 
     projectId: string | undefined,
+    bulkConfig: BulkGenerationConfig | undefined,
     onProgress: (content: string, progress: number) => void
   ): Promise<{ content: string; articleId: string | null }> => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -133,20 +135,37 @@ export function useBulkGeneration() {
       throw new Error('Não autenticado');
     }
 
+    // Build config from bulk settings + keyword analysis
     const config = {
       keyword: job.keyword.keyword,
       type: job.keyword.tipoConteudo === 'landing_page' ? 'sales' : 'blog',
-      language: 'pt-BR',
-      tone: 'professional',
-      wordCount: job.keyword.comprimentoSugerido || 'medium',
-      pointOfView: 'terceira',
+      language: bulkConfig?.language || 'pt-BR',
+      tone: bulkConfig?.tone || 'profissional',
+      wordCount: bulkConfig?.contentLength || job.keyword.comprimentoSugerido || 'long',
+      pointOfView: bulkConfig?.pointOfView || 'terceira-singular',
       secondaryKeywords: '',
-      includeFaq: true,
-      faqCount: 5,
-      includeTable: false,
-      includeList: true,
-      includeConclusion: true,
-      seoOptimization: true,
+      // Content structure
+      includeFaq: bulkConfig?.faq ?? true,
+      faqCount: bulkConfig?.faqCount || 5,
+      includeTable: bulkConfig?.tables ?? false,
+      includeList: bulkConfig?.lists ?? true,
+      includeConclusion: bulkConfig?.conclusion ?? true,
+      includeMetaDescription: bulkConfig?.metaDescription ?? true,
+      // SEO & Advanced
+      seoOptimization: bulkConfig?.seoOptimization ?? true,
+      humanizeContent: bulkConfig?.humanizeContent ?? false,
+      realtimeData: bulkConfig?.realtimeData ?? false,
+      // Company data
+      companyName: bulkConfig?.companyName || '',
+      companyPhone: bulkConfig?.companyPhone || '',
+      companyAddress: bulkConfig?.companyAddress || '',
+      // Target audience
+      targetAudience: bulkConfig?.targetAudience || '',
+      painPoints: bulkConfig?.painPoints || '',
+      ctaObjective: bulkConfig?.ctaObjective || '',
+      additionalInfo: bulkConfig?.additionalInfo || '',
+      // AI Model
+      aiModel: bulkConfig?.aiModel || 'standard',
     };
 
     abortControllerRef.current = new AbortController();
@@ -212,7 +231,11 @@ export function useBulkGeneration() {
     return { content, articleId };
   };
 
-  const startGeneration = useCallback(async (projectId?: string, delayMs = 3000) => {
+  const startGeneration = useCallback(async (
+    projectId?: string, 
+    bulkConfig?: BulkGenerationConfig,
+    delayMs = 3000
+  ) => {
     setState(prev => ({ ...prev, isRunning: true }));
 
     const pendingJobs = state.jobs.filter(j => j.status === 'pending');
@@ -242,8 +265,9 @@ export function useBulkGeneration() {
 
       try {
         const { content, articleId } = await generateArticleWithStreaming(
-          job, 
+          job,
           projectId && projectId !== 'none' ? projectId : undefined,
+          bulkConfig,
           (streamContent, progress) => {
             // Update job progress in real-time
             setState(prev => ({
