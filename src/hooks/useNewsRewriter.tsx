@@ -8,8 +8,18 @@ export interface RewriteRequest {
   sourceName: string;
   analysisAngle: string;
   keyword?: string;
+  niche?: string;
+  articleLength?: 'short' | 'medium' | 'long';
   language?: string;
   projectId?: string;
+  internalLinks?: Array<{ anchor: string; url: string }>;
+}
+
+export interface ComplianceCheck {
+  originalityScore: number;
+  citationCompliance: boolean;
+  seoOptimized: boolean;
+  readabilityScore: number;
 }
 
 export interface RewriteResult {
@@ -19,18 +29,28 @@ export interface RewriteResult {
   word_count: number;
   featured_image_url: string | null;
   originality_score: number;
-  added_value: string;
+  quality_score: number;
+  readability_score: number;
+  seo_optimized: boolean;
+  reading_time: string;
   credits: string;
+  niche: string;
+  tags: string[];
+  keywords: string[];
 }
 
 export function useNewsRewriter() {
   const [isRewriting, setIsRewriting] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<RewriteResult | null>(null);
+  const [lastCompliance, setLastCompliance] = useState<ComplianceCheck | null>(null);
   const { toast } = useToast();
 
   const rewriteNews = async (request: RewriteRequest): Promise<RewriteResult | null> => {
     setIsRewriting(true);
     setProgress('Preparando repostagem...');
+    setLastResult(null);
+    setLastCompliance(null);
 
     try {
       // Get auth token
@@ -54,7 +74,11 @@ export function useNewsRewriter() {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify(request),
+          body: JSON.stringify({
+            ...request,
+            niche: request.niche || 'geral',
+            articleLength: request.articleLength || 'medium',
+          }),
         }
       );
 
@@ -91,12 +115,18 @@ export function useNewsRewriter() {
 
       setProgress('Artigo criado com sucesso!');
       
+      const result = data.article as RewriteResult;
+      const compliance = data.compliance as ComplianceCheck;
+      
+      setLastResult(result);
+      setLastCompliance(compliance);
+      
       toast({
         title: 'Repostagem concluída!',
-        description: `Artigo "${data.article.title}" criado com ${data.article.originality_score}% de originalidade`,
+        description: `Artigo "${result.title}" criado com ${result.originality_score}% de originalidade e score de qualidade ${result.quality_score}`,
       });
 
-      return data.article as RewriteResult;
+      return result;
     } catch (error) {
       console.error('Rewrite error:', error);
       toast({
@@ -115,5 +145,7 @@ export function useNewsRewriter() {
     rewriteNews,
     isRewriting,
     progress,
+    lastResult,
+    lastCompliance,
   };
 }
