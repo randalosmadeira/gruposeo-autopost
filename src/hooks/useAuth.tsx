@@ -58,24 +58,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
 
   useEffect(() => {
+    let mounted = true;
+    
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
+        if (mounted) {
+          setSession(session);
+          setUser(session?.user ?? null);
+          setLoading(false);
+        }
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    // THEN check for existing session with timeout fallback
+    const sessionTimeout = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn('Auth session check timeout - proceeding without session');
+        setLoading(false);
+      }
+    }, 10000); // 10 second timeout
 
-    return () => subscription.unsubscribe();
-  }, []);
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (mounted) {
+          clearTimeout(sessionTimeout);
+          setSession(session);
+          setUser(session?.user ?? null);
+          setLoading(false);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to get session:', error);
+        if (mounted) {
+          clearTimeout(sessionTimeout);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+      clearTimeout(sessionTimeout);
+      subscription.unsubscribe();
+    };
+  }, [loading]);
 
   const signUp = useCallback(async (email: string, password: string, fullName?: string) => {
     const result = await withRetry(async () => {
