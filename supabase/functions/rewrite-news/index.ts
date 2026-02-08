@@ -144,7 +144,7 @@ serve(async (req) => {
     const { data: customTemplate } = await supabaseAdmin
       .from("prompt_templates")
       .select("prompt, agent_name")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .eq("target_function", "news_rewriter")
       .eq("is_default", false)
       .order("updated_at", { ascending: false })
