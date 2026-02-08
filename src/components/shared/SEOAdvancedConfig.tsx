@@ -80,7 +80,7 @@ export function SEOAdvancedConfig({
           <Label className="text-sm font-medium">Segmento do Negócio</Label>
         </div>
         <Select value={segment} onValueChange={onSegmentChange}>
-          <SelectTrigger className="h-11">
+          <SelectTrigger className="h-11 border-border bg-background">
             <SelectValue placeholder="Selecione o segmento" />
           </SelectTrigger>
           <SelectContent>
@@ -111,7 +111,7 @@ export function SEOAdvancedConfig({
           <Label className="text-sm font-medium">Tipo de Conteúdo</Label>
         </div>
         <Select value={contentType} onValueChange={onContentTypeChange}>
-          <SelectTrigger className="h-11">
+          <SelectTrigger className="h-11 border-border bg-background">
             <SelectValue placeholder="Selecione o tipo" />
           </SelectTrigger>
           <SelectContent>
@@ -138,7 +138,7 @@ export function SEOAdvancedConfig({
             <Label className="text-sm font-medium">Objetivo</Label>
           </div>
           <Select value={goal} onValueChange={onGoalChange}>
-            <SelectTrigger className="h-11">
+            <SelectTrigger className="h-11 border-border bg-background">
               <SelectValue placeholder="Objetivo" />
             </SelectTrigger>
             <SelectContent>
@@ -161,7 +161,7 @@ export function SEOAdvancedConfig({
             <Label className="text-sm font-medium">Intenção de Busca</Label>
           </div>
           <Select value={intentType} onValueChange={onIntentTypeChange}>
-            <SelectTrigger className="h-11">
+            <SelectTrigger className="h-11 border-border bg-background">
               <SelectValue placeholder="Intenção" />
             </SelectTrigger>
             <SelectContent>

@@ -63,7 +63,7 @@ function ToggleCard({
     <div 
       className={cn(
         'flex items-center justify-between p-4 rounded-lg border transition-all cursor-pointer',
-        checked ? '' : 'border-gray-200 bg-white hover:border-gray-300'
+        checked ? '' : 'border-border bg-background hover:border-muted-foreground/30'
       )}
       style={activeStyles}
       onClick={() => onCheckedChange(!checked)}
@@ -72,19 +72,20 @@ function ToggleCard({
         <div 
           className={cn(
             'w-8 h-8 rounded-lg flex items-center justify-center',
-            checked ? '' : 'bg-gray-100'
+            checked ? '' : 'bg-muted'
           )}
           style={checked ? { backgroundColor: `${accentColor}15` } : {}}
         >
           <Icon 
             className="w-4 h-4" 
-            style={{ color: checked ? accentColor : '#6b7280' }} 
+            style={{ color: checked ? accentColor : undefined }} 
           />
+          {!checked && <Icon className="w-4 h-4 text-muted-foreground hidden" />}
         </div>
         <div>
           <p className={cn(
             'text-sm font-medium',
-            checked ? '' : 'text-gray-700'
+            checked ? '' : 'text-foreground'
           )} style={checked ? { color: accentColor } : {}}>
             {title}
           </p>
@@ -171,18 +172,18 @@ export function ContentStructureConfig({
       <div 
         className={cn(
           'p-4 rounded-lg border transition-all',
-          internalLinking ? 'border-green-300 bg-green-50' : 'border-gray-200'
+          internalLinking ? 'border-accent/50 bg-accent/5' : 'border-border'
         )}
       >
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <div className={cn(
               'w-10 h-10 rounded-lg flex items-center justify-center',
-              internalLinking ? 'bg-green-100' : 'bg-gray-100'
+              internalLinking ? 'bg-accent/20' : 'bg-muted'
             )}>
               <Link2 className={cn(
                 'w-5 h-5',
-                internalLinking ? 'text-green-600' : 'text-gray-500'
+                internalLinking ? 'text-accent' : 'text-muted-foreground'
               )} />
             </div>
             <div>
@@ -195,7 +196,7 @@ export function ContentStructureConfig({
           <Switch 
             checked={internalLinking}
             onCheckedChange={onInternalLinkingChange}
-            className="data-[state=checked]:bg-green-500"
+            className="data-[state=checked]:bg-accent"
           />
         </div>
 
@@ -203,7 +204,7 @@ export function ContentStructureConfig({
           <div className="space-y-2">
             <Label className="text-sm text-muted-foreground">Selecione o projeto WordPress</Label>
             <Select value={projectId} onValueChange={onProjectIdChange}>
-              <SelectTrigger>
+              <SelectTrigger className="border-border bg-background">
                 <SelectValue placeholder="Selecione um projeto..." />
               </SelectTrigger>
               <SelectContent>
