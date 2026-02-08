@@ -1,10 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -24,11 +33,17 @@ import {
   Plug,
   Key,
   ExternalLink,
+  XCircle,
+  RefreshCw,
+  Wifi,
+  WifiOff,
+  Activity,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 
 const SEO_PLUGINS = [
   { value: 'none', label: 'Nenhum' },
@@ -36,6 +51,15 @@ const SEO_PLUGINS = [
   { value: 'rankmath', label: 'Rank Math' },
   { value: 'aioseo', label: 'All in One SEO' },
 ];
+
+interface ConnectionHealth {
+  status: 'unknown' | 'testing' | 'healthy' | 'degraded' | 'offline';
+  responseTime?: number;
+  lastChecked?: Date;
+  canPublish?: boolean;
+  pluginActive?: boolean;
+  message?: string;
+}
 
 export function WordPressSitesCard() {
   const { toast } = useToast();
@@ -55,6 +79,164 @@ export function WordPressSitesCard() {
   const [isCreating, setIsCreating] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [connectionMethod, setConnectionMethod] = useState<'standard' | 'plugin'>('standard');
+  
+  // Connection health tracking
+  const [connectionHealth, setConnectionHealth] = useState<Record<string, ConnectionHealth>>({});
+  
+  // Edit mode
+  const [editingProject, setEditingProject] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    wordpress_url: '',
+    wordpress_username: '',
+    wordpress_app_password: '',
+  });
+
+  // Auto-test connection health on mount
+  const checkConnectionHealth = useCallback(async (projectId: string, silent = false) => {
+    const project = projects.find(p => p.id === projectId);
+    if (!project?.wordpress_url || !project?.wordpress_app_password) return;
+
+    const startTime = Date.now();
+    setConnectionHealth(prev => ({
+      ...prev,
+      [projectId]: { ...prev[projectId], status: 'testing' }
+    }));
+
+    const isPluginAuth = project.wordpress_username === '__CFRDM_PLUGIN__';
+
+    try {
+      const { data, error } = await supabase.functions.invoke('test-wordpress-connection', {
+        body: isPluginAuth ? {
+          wordpress_url: project.wordpress_url,
+          use_plugin: true,
+          api_key: project.wordpress_app_password,
+        } : {
+          wordpress_url: project.wordpress_url,
+          wordpress_username: project.wordpress_username,
+          wordpress_app_password: project.wordpress_app_password,
+        },
+      });
+
+      const responseTime = Date.now() - startTime;
+
+      if (error) throw new Error(error.message);
+
+      if (data?.success) {
+        setConnectionHealth(prev => ({
+          ...prev,
+          [projectId]: {
+            status: responseTime > 3000 ? 'degraded' : 'healthy',
+            responseTime,
+            lastChecked: new Date(),
+            canPublish: data.canPublish !== false,
+            pluginActive: isPluginAuth ? true : undefined,
+            message: responseTime > 3000 ? 'Conexão lenta' : 'Conexão OK',
+          }
+        }));
+      } else {
+        setConnectionHealth(prev => ({
+          ...prev,
+          [projectId]: {
+            status: 'offline',
+            responseTime,
+            lastChecked: new Date(),
+            message: data?.error || 'Falha na conexão',
+          }
+        }));
+      }
+    } catch (error) {
+      setConnectionHealth(prev => ({
+        ...prev,
+        [projectId]: {
+          status: 'offline',
+          lastChecked: new Date(),
+          message: error instanceof Error ? error.message : 'Erro desconhecido',
+        }
+      }));
+    }
+  }, [projects]);
+
+  // Check all connections on mount
+  useEffect(() => {
+    projects.forEach(project => {
+      if (project.is_connected && !connectionHealth[project.id]) {
+        checkConnectionHealth(project.id, true);
+      }
+    });
+  }, [projects, checkConnectionHealth, connectionHealth]);
+
+  const openEditDialog = (project: any) => {
+    setEditingProject(project);
+    setEditForm({
+      name: project.name,
+      wordpress_url: project.wordpress_url || '',
+      wordpress_username: project.wordpress_username || '',
+      wordpress_app_password: '', // Don't show existing password
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingProject) return;
+    
+    try {
+      const updates: any = {
+        id: editingProject.id,
+        name: editForm.name,
+        wordpress_url: editForm.wordpress_url,
+      };
+      
+      // Only update credentials if provided
+      if (editForm.wordpress_username && editingProject.wordpress_username !== '__CFRDM_PLUGIN__') {
+        updates.wordpress_username = editForm.wordpress_username;
+      }
+      if (editForm.wordpress_app_password) {
+        updates.wordpress_app_password = editForm.wordpress_app_password;
+      }
+      
+      await updateProject.mutateAsync(updates);
+      
+      toast({
+        title: 'Site atualizado!',
+        description: 'As configurações foram salvas.',
+      });
+      
+      setEditingProject(null);
+      
+      // Retest connection
+      checkConnectionHealth(editingProject.id);
+    } catch (error) {
+      toast({
+        title: 'Erro ao salvar',
+        description: error instanceof Error ? error.message : 'Erro desconhecido',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const getHealthColor = (health?: ConnectionHealth) => {
+    if (!health || health.status === 'unknown') return 'bg-muted';
+    if (health.status === 'testing') return 'bg-muted animate-pulse';
+    if (health.status === 'healthy') return 'bg-emerald-500';
+    if (health.status === 'degraded') return 'bg-amber-500';
+    return 'bg-destructive';
+  };
+
+  const getHealthIcon = (health?: ConnectionHealth) => {
+    if (!health || health.status === 'unknown') return <Wifi className="w-4 h-4 text-muted-foreground" />;
+    if (health.status === 'testing') return <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />;
+    if (health.status === 'healthy') return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
+    if (health.status === 'degraded') return <Activity className="w-4 h-4 text-amber-500" />;
+    return <WifiOff className="w-4 h-4 text-destructive" />;
+  };
+
+  const getHealthProgress = (health?: ConnectionHealth) => {
+    if (!health || health.status === 'unknown') return 0;
+    if (health.status === 'testing') return 50;
+    if (health.status === 'healthy') return 100;
+    if (health.status === 'degraded') return 60;
+    return 15;
+  };
 
   const handleAddSite = async () => {
     if (!newSiteName || !newSiteUrl || !newSiteUsername || !newSitePassword) {
@@ -311,80 +493,140 @@ export function WordPressSitesCard() {
       <CardContent className="space-y-6">
         {/* Sites List */}
         <div className="space-y-4">
-          {projects.map((project) => (
-            <div 
-              key={project.id}
-              className="p-4 border rounded-lg bg-background"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 space-y-2">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-medium">{project.name}</h4>
-                      {isPluginConnection(project) && (
-                        <Badge variant="secondary" className="text-xs">
-                          <Plug className="w-3 h-3 mr-1" />
-                          Plugin
+          {projects.map((project) => {
+            const health = connectionHealth[project.id];
+            
+            return (
+              <div 
+                key={project.id}
+                className="p-4 border rounded-lg bg-background space-y-3"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 space-y-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium">{project.name}</h4>
+                        {isPluginConnection(project) && (
+                          <Badge variant="secondary" className="text-xs">
+                            <Plug className="w-3 h-3 mr-1" />
+                            Plugin
+                          </Badge>
+                        )}
+                        {project.is_connected && getHealthIcon(health)}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{project.domain}</p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs text-muted-foreground">Plugin SEO:</Label>
+                        <Select 
+                          value={(project as any).seo_plugin || 'none'} 
+                          onValueChange={(value) => handleSeoPluginChange(project.id, value)}
+                        >
+                          <SelectTrigger className="h-7 w-28 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SEO_PLUGINS.map((plugin) => (
+                              <SelectItem key={plugin.value} value={plugin.value}>
+                                {plugin.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {(project as any).seo_plugin && (project as any).seo_plugin !== 'none' && (
+                        <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-900/30 dark:border-emerald-800">
+                          <CheckCircle2 className="w-3 h-3 mr-1" />
+                          Meta SEO será preenchido
                         </Badge>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground">{project.domain}</p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs text-muted-foreground">Plugin SEO:</Label>
-                      <Select 
-                        value={(project as any).seo_plugin || 'none'} 
-                        onValueChange={(value) => handleSeoPluginChange(project.id, value)}
-                      >
-                        <SelectTrigger className="h-7 w-28 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SEO_PLUGINS.map((plugin) => (
-                            <SelectItem key={plugin.value} value={plugin.value}>
-                              {plugin.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleTestConnection(project.id)}
+                      disabled={testingId === project.id}
+                    >
+                      {testingId === project.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        'Testar'
+                      )}
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8"
+                      onClick={() => openEditDialog(project)}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => handleDeleteSite(project.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+                
+                {/* Connection Quality Bar */}
+                {project.is_connected && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Qualidade da Conexão</span>
+                      <div className="flex items-center gap-2">
+                        {health?.responseTime && (
+                          <span className={cn(
+                            "font-mono",
+                            health.responseTime < 1000 ? "text-emerald-600" :
+                            health.responseTime < 3000 ? "text-amber-600" : "text-destructive"
+                          )}>
+                            {health.responseTime}ms
+                          </span>
+                        )}
+                        {health?.status === 'healthy' && (
+                          <span className="text-emerald-600">Saudável</span>
+                        )}
+                        {health?.status === 'degraded' && (
+                          <span className="text-amber-600">Degradada</span>
+                        )}
+                        {health?.status === 'offline' && (
+                          <span className="text-destructive">Offline</span>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          onClick={() => checkConnectionHealth(project.id)}
+                          disabled={health?.status === 'testing'}
+                        >
+                          <RefreshCw className={cn(
+                            "w-3 h-3",
+                            health?.status === 'testing' && "animate-spin"
+                          )} />
+                        </Button>
+                      </div>
                     </div>
-                    {(project as any).seo_plugin && (project as any).seo_plugin !== 'none' && (
-                      <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-200 bg-emerald-50">
-                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                        Meta SEO será preenchido
-                      </Badge>
-                    )}
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div 
+                        className={cn(
+                          "h-full rounded-full transition-all duration-500",
+                          getHealthColor(health)
+                        )}
+                        style={{ width: `${getHealthProgress(health)}%` }}
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleTestConnection(project.id)}
-                    disabled={testingId === project.id}
-                  >
-                    {testingId === project.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      'Testar'
-                    )}
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => handleDeleteSite(project.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Add New Site Form with Tabs */}
@@ -560,6 +802,74 @@ export function WordPressSitesCard() {
           </div>
         </div>
       </CardContent>
+      
+      {/* Edit Dialog */}
+      <Dialog open={!!editingProject} onOpenChange={(open) => !open && setEditingProject(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Site WordPress</DialogTitle>
+            <DialogDescription>
+              Atualize as configurações de conexão do site.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Nome do Site</Label>
+              <Input
+                id="edit-name"
+                value={editForm.name}
+                onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="edit-url">URL do WordPress</Label>
+              <Input
+                id="edit-url"
+                value={editForm.wordpress_url}
+                onChange={(e) => setEditForm(prev => ({ ...prev, wordpress_url: e.target.value }))}
+              />
+            </div>
+            
+            {editingProject && !isPluginConnection(editingProject) && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-username">Usuário</Label>
+                <Input
+                  id="edit-username"
+                  value={editForm.wordpress_username}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, wordpress_username: e.target.value }))}
+                />
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="edit-password">
+                {editingProject && isPluginConnection(editingProject) ? 'Nova API Key' : 'Nova Senha de Aplicação'}
+              </Label>
+              <Input
+                id="edit-password"
+                type="password"
+                placeholder="Deixe em branco para manter a atual"
+                value={editForm.wordpress_app_password}
+                onChange={(e) => setEditForm(prev => ({ ...prev, wordpress_app_password: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Deixe em branco para manter a credencial atual.
+              </p>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingProject(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveEdit}>
+              Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
