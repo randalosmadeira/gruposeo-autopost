@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '3.0.1';
+const PLUGIN_VERSION = '3.0.2';
 const PLUGIN_LAST_UPDATE = '2026-02-08';
 
 const features = [
@@ -70,6 +70,17 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '3.0.2',
+    date: '2026-02-08',
+    type: 'patch' as const,
+    changes: [
+      { type: 'fix', text: 'CRÍTICO: Correção da ordem de registro de intervalos de cron durante ativação' },
+      { type: 'fix', text: 'Prevenção de fatal errors em módulos v3.0 durante init' },
+      { type: 'improvement', text: 'Fallback automático para intervalos nativos (every_6_hours → twicedaily)' },
+      { type: 'improvement', text: 'Try-catch em inicialização de módulos para maior resiliência' },
+    ],
+  },
   {
     version: '3.0.1',
     date: '2026-02-08',
