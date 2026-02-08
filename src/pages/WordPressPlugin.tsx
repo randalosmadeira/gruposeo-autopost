@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '2.5.1';
-const PLUGIN_LAST_UPDATE = '2026-02-07';
+const PLUGIN_VERSION = '2.6.0';
+const PLUGIN_LAST_UPDATE = '2026-02-08';
 
 const features = [
   {
@@ -70,6 +70,21 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '2.6.0',
+    date: '2026-02-08',
+    type: 'major' as const,
+    changes: [
+      { type: 'feature', text: 'Verificação automática de saúde do plugin ao selecionar projeto' },
+      { type: 'feature', text: 'Barra de status de qualidade de conexão com latência em tempo real' },
+      { type: 'feature', text: 'Testes de conectividade integrados no painel de integrações' },
+      { type: 'feature', text: 'Guia visual de instalação do plugin quando não detectado' },
+      { type: 'feature', text: 'Fallback automático para REST API padrão quando plugin não instalado' },
+      { type: 'improvement', text: 'Sistema de indexação automática com crawling periódico (2x/dia)' },
+      { type: 'improvement', text: 'Endpoints REST para sincronização em batch de artigos' },
+      { type: 'fix', text: 'Erros específicos do WordPress agora exibem mensagens claras' },
+    ],
+  },
   {
     version: '2.5.1',
     date: '2026-02-07',
