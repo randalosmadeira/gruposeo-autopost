@@ -887,6 +887,20 @@ class CFRDM_Admin {
             update_option('cfrdm_auto_correct_links', isset($_POST['cfrdm_auto_correct_links']));
             update_option('cfrdm_log_retention_days', intval($_POST['cfrdm_log_retention_days']));
             
+            // v3.0.0 - GSC settings
+            update_option('cfrdm_gsc_client_id', sanitize_text_field($_POST['cfrdm_gsc_client_id'] ?? ''));
+            update_option('cfrdm_gsc_client_secret', sanitize_text_field($_POST['cfrdm_gsc_client_secret'] ?? ''));
+            
+            // v3.0.0 - AI Auto-Fix settings
+            update_option('cfrdm_ai_auto_fix_enabled', isset($_POST['cfrdm_ai_auto_fix_enabled']));
+            update_option('cfrdm_ai_auto_fix_min_confidence', intval($_POST['cfrdm_ai_auto_fix_min_confidence'] ?? 80));
+            update_option('cfrdm_content_enhancer_enabled', isset($_POST['cfrdm_content_enhancer_enabled']));
+            update_option('cfrdm_https_enforcer_enabled', isset($_POST['cfrdm_https_enforcer_enabled']));
+            
+            // v3.0.0 - Auto-update settings
+            update_option('cfrdm_auto_update_enabled', isset($_POST['cfrdm_auto_update_enabled']));
+            update_option('cfrdm_update_notification_email', sanitize_email($_POST['cfrdm_update_notification_email'] ?? get_option('admin_email')));
+            
             echo '<div class="notice notice-success"><p>' . __('Configurações salvas com sucesso!', 'contentfactory-rdm') . '</p></div>';
         }
         
@@ -1250,6 +1264,11 @@ class CFRDM_Admin {
                 </div>
                 
                 <!-- v3.0.0 - Auto-Update Settings -->
+                <?php 
+                $update_stats = class_exists('CFRDM_Auto_Update') ? CFRDM_Auto_Update::get_stats() : null;
+                $update_info = class_exists('CFRDM_Auto_Update') ? CFRDM_Auto_Update::get_update_info() : null;
+                $backups = class_exists('CFRDM_Auto_Update') ? CFRDM_Auto_Update::get_backups() : array();
+                ?>
                 <div class="cfrdm-card">
                     <div class="cfrdm-card-header">
                         <h2>
@@ -1258,6 +1277,64 @@ class CFRDM_Admin {
                         </h2>
                     </div>
                     <div class="cfrdm-card-body">
+                        <!-- Current Version Info -->
+                        <div class="cfrdm-update-status" style="background:#f8f9fa;padding:15px;border-radius:6px;margin-bottom:20px;">
+                            <div style="display:flex;align-items:center;gap:15px;flex-wrap:wrap;">
+                                <div>
+                                    <strong><?php _e('Versão Instalada:', 'contentfactory-rdm'); ?></strong>
+                                    <span class="cfrdm-version-badge" style="background:#0073aa;color:#fff;padding:3px 10px;border-radius:3px;margin-left:8px;">
+                                        v<?php echo CFRDM_VERSION; ?>
+                                    </span>
+                                </div>
+                                <?php if ($update_stats && $update_stats['last_check']): ?>
+                                <div style="color:#666;font-size:12px;">
+                                    <?php _e('Última verificação:', 'contentfactory-rdm'); ?> 
+                                    <?php echo human_time_diff($update_stats['last_check'], time()) . ' ' . __('atrás', 'contentfactory-rdm'); ?>
+                                </div>
+                                <?php endif; ?>
+                                <button type="button" class="button" id="cfrdm-check-updates" style="margin-left:auto;">
+                                    <span class="dashicons dashicons-update"></span>
+                                    <?php _e('Verificar Atualizações', 'contentfactory-rdm'); ?>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Update Available Alert -->
+                        <?php if ($update_info): ?>
+                        <div class="cfrdm-update-alert" style="background:#fff3cd;border:1px solid #ffc107;padding:15px;border-radius:6px;margin-bottom:20px;">
+                            <div style="display:flex;align-items:flex-start;gap:15px;">
+                                <span class="dashicons dashicons-megaphone" style="color:#856404;font-size:24px;"></span>
+                                <div style="flex:1;">
+                                    <h4 style="margin:0 0 8px 0;color:#856404;">
+                                        <?php printf(__('Nova versão disponível: v%s', 'contentfactory-rdm'), esc_html($update_info['version'])); ?>
+                                    </h4>
+                                    <?php if (!empty($update_info['changelog'])): ?>
+                                    <p style="margin:0 0 10px 0;color:#666;font-size:13px;">
+                                        <?php echo esc_html($update_info['changelog']); ?>
+                                    </p>
+                                    <?php endif; ?>
+                                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                                        <button type="button" class="button button-primary" id="cfrdm-apply-update">
+                                            <span class="dashicons dashicons-download"></span>
+                                            <?php _e('Atualizar Agora', 'contentfactory-rdm'); ?>
+                                        </button>
+                                        <span style="color:#666;font-size:12px;align-self:center;">
+                                            <?php printf(__('Requer PHP %s+ e WP %s+', 'contentfactory-rdm'), 
+                                                esc_html($update_info['requires_php']), 
+                                                esc_html($update_info['requires_wp'])); ?>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <?php else: ?>
+                        <div style="background:#d4edda;border:1px solid #28a745;padding:12px 15px;border-radius:6px;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
+                            <span class="dashicons dashicons-yes-alt" style="color:#28a745;"></span>
+                            <span style="color:#155724;"><?php _e('Você está usando a versão mais recente do plugin.', 'contentfactory-rdm'); ?></span>
+                        </div>
+                        <?php endif; ?>
+                        
+                        <!-- Settings -->
                         <table class="form-table">
                             <tr>
                                 <th><label for="cfrdm_auto_update_enabled"><?php _e('Atualização Automática', 'contentfactory-rdm'); ?></label></th>
@@ -1267,10 +1344,60 @@ class CFRDM_Admin {
                                             <?php checked(get_option('cfrdm_auto_update_enabled', false)); ?> />
                                         <?php _e('Atualizar plugin automaticamente quando houver nova versão', 'contentfactory-rdm'); ?>
                                     </label>
-                                    <p class="description"><?php _e('Backups são criados automaticamente antes de cada atualização.', 'contentfactory-rdm'); ?></p>
+                                    <p class="description"><?php _e('⚠️ Backups são criados automaticamente antes de cada atualização. A verificação ocorre diariamente.', 'contentfactory-rdm'); ?></p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="cfrdm_update_notification_email"><?php _e('Email de Notificação', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <input type="email" name="cfrdm_update_notification_email" id="cfrdm_update_notification_email" 
+                                        value="<?php echo esc_attr(get_option('cfrdm_update_notification_email', get_option('admin_email'))); ?>" 
+                                        class="regular-text" />
+                                    <p class="description"><?php _e('Receba notificações quando atualizações forem aplicadas.', 'contentfactory-rdm'); ?></p>
                                 </td>
                             </tr>
                         </table>
+                        
+                        <!-- Backups Section -->
+                        <?php if (!empty($backups)): ?>
+                        <div style="margin-top:25px;padding-top:20px;border-top:1px solid #ddd;">
+                            <h4 style="margin:0 0 15px 0;">
+                                <span class="dashicons dashicons-backup"></span>
+                                <?php _e('Backups Disponíveis', 'contentfactory-rdm'); ?>
+                                <span style="font-weight:normal;color:#666;font-size:12px;margin-left:10px;">
+                                    (<?php echo count($backups); ?>/5)
+                                </span>
+                            </h4>
+                            <table class="widefat striped" style="max-width:600px;">
+                                <thead>
+                                    <tr>
+                                        <th><?php _e('Versão', 'contentfactory-rdm'); ?></th>
+                                        <th><?php _e('Data', 'contentfactory-rdm'); ?></th>
+                                        <th><?php _e('Ação', 'contentfactory-rdm'); ?></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach (array_reverse($backups) as $backup): ?>
+                                    <tr>
+                                        <td><code>v<?php echo esc_html($backup['version']); ?></code></td>
+                                        <td><?php echo esc_html($backup['created_at']); ?></td>
+                                        <td>
+                                            <?php if (file_exists($backup['path'])): ?>
+                                            <button type="button" class="button button-small cfrdm-rollback-btn" 
+                                                data-version="<?php echo esc_attr($backup['version']); ?>">
+                                                <span class="dashicons dashicons-undo"></span>
+                                                <?php _e('Restaurar', 'contentfactory-rdm'); ?>
+                                            </button>
+                                            <?php else: ?>
+                                            <span style="color:#999;"><?php _e('Arquivo não encontrado', 'contentfactory-rdm'); ?></span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <?php endif; ?>
                     </div>
                 </div>
                 
@@ -1321,6 +1448,106 @@ class CFRDM_Admin {
                         location.reload();
                     });
                 }
+                
+                // Auto-Update Functions
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Check for updates button
+                    var checkBtn = document.getElementById('cfrdm-check-updates');
+                    if (checkBtn) {
+                        checkBtn.addEventListener('click', function() {
+                            this.disabled = true;
+                            this.innerHTML = '<span class="dashicons dashicons-update spin"></span> Verificando...';
+                            
+                            fetch('<?php echo esc_url(rest_url('cfrdm/v1/updates/check')); ?>', {
+                                method: 'GET',
+                                headers: {
+                                    'X-CFRDM-API-Key': '<?php echo esc_attr(get_option('cfrdm_api_key')); ?>',
+                                    'Accept': 'application/json'
+                                }
+                            })
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.update_available) {
+                                    alert('Nova versão encontrada: v' + data.update_info.version);
+                                } else {
+                                    alert('Você já está na versão mais recente!');
+                                }
+                                location.reload();
+                            })
+                            .catch(e => {
+                                alert('Erro ao verificar: ' + e.message);
+                                checkBtn.disabled = false;
+                                checkBtn.innerHTML = '<span class="dashicons dashicons-update"></span> Verificar Atualizações';
+                            });
+                        });
+                    }
+                    
+                    // Apply update button
+                    var applyBtn = document.getElementById('cfrdm-apply-update');
+                    if (applyBtn) {
+                        applyBtn.addEventListener('click', function() {
+                            if (!confirm('Deseja aplicar a atualização agora? Um backup será criado automaticamente.')) return;
+                            
+                            this.disabled = true;
+                            this.innerHTML = '<span class="dashicons dashicons-update spin"></span> Atualizando...';
+                            
+                            fetch('<?php echo esc_url(rest_url('cfrdm/v1/updates/apply')); ?>', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-WP-Nonce': '<?php echo wp_create_nonce('wp_rest'); ?>'
+                                },
+                                credentials: 'same-origin'
+                            })
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.success) {
+                                    alert('Atualização aplicada com sucesso! De v' + data.from_version + ' para v' + data.to_version);
+                                } else {
+                                    alert('Erro: ' + data.message + (data.rollback ? ' (Rollback executado)' : ''));
+                                }
+                                location.reload();
+                            })
+                            .catch(e => {
+                                alert('Erro: ' + e.message);
+                                location.reload();
+                            });
+                        });
+                    }
+                    
+                    // Rollback buttons
+                    document.querySelectorAll('.cfrdm-rollback-btn').forEach(function(btn) {
+                        btn.addEventListener('click', function() {
+                            var version = this.dataset.version;
+                            if (!confirm('Restaurar para a versão v' + version + '? Esta ação irá substituir a versão atual.')) return;
+                            
+                            this.disabled = true;
+                            this.innerHTML = '<span class="dashicons dashicons-update spin"></span>';
+                            
+                            fetch('<?php echo esc_url(rest_url('cfrdm/v1/updates/rollback')); ?>', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-WP-Nonce': '<?php echo wp_create_nonce('wp_rest'); ?>'
+                                },
+                                credentials: 'same-origin'
+                            })
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.success) {
+                                    alert('Rollback executado com sucesso!');
+                                } else {
+                                    alert('Erro: ' + data.message);
+                                }
+                                location.reload();
+                            })
+                            .catch(e => {
+                                alert('Erro: ' + e.message);
+                                location.reload();
+                            });
+                        });
+                    });
+                });
                 </script>
             </form>
         </div>
