@@ -10,3 +10,4 @@ export { ImageResizeModal } from './ImageResizeModal';
 export { RecreateArticleButton } from './RecreateArticleButton';
 export { VersionHistoryPanel } from './VersionHistoryPanel';
 export { SchedulingPanel } from './SchedulingPanel';
+export { ImageGalleryPanel } from './ImageGalleryPanel';

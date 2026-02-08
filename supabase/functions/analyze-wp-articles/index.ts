@@ -327,6 +327,7 @@ serve(async (req) => {
         }
 
         const results = {
+          total: inputArticles.length,
           synced: 0,
           analyzed: 0,
           errors: 0,

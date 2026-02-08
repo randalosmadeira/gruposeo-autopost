@@ -49,6 +49,7 @@ import {
 import { useInternalLinking, type KeywordRule, type IndexedArticle, type TopicCluster } from '@/hooks/useInternalLinking';
 import { InternalLinkingMetrics } from './InternalLinkingMetrics';
 import { InternalLinkingReports } from './InternalLinkingReports';
+import { SyncProgressPanel } from './SyncProgressPanel';
 import { cn } from '@/lib/utils';
 
 interface InternalLinkingDashboardProps {
@@ -63,6 +64,7 @@ export function InternalLinkingDashboard({ projectId, projectName }: InternalLin
     indexedArticles,
     topicClusters,
     keywordRules,
+    syncProgress,
     fetchIndexedArticles,
     fetchTopicClusters,
     fetchKeywordRules,
@@ -139,15 +141,15 @@ export function InternalLinkingDashboard({ projectId, projectName }: InternalLin
             <Sparkles className="w-4 h-4 mr-2" />
             Gerar Clusters
           </Button>
-          <Button
-            onClick={() => triggerSync(true)}
-            disabled={isSyncing}
-          >
-            <RefreshCw className={cn("w-4 h-4 mr-2", isSyncing && "animate-spin")} />
-            {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
-          </Button>
         </div>
       </div>
+
+      {/* Sync Progress Panel */}
+      <SyncProgressPanel
+        progress={syncProgress}
+        onStartSync={triggerSync}
+        isSyncing={isSyncing}
+      />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

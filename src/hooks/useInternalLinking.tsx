@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import type { SyncProgress, SyncLogEntry } from '@/components/internal-linking/SyncProgressPanel';
 
 export interface IndexedArticle {
   id: string;
@@ -45,6 +46,17 @@ export interface KeywordRule {
   times_applied: number;
 }
 
+const initialSyncProgress: SyncProgress = {
+  phase: 'idle',
+  total: 0,
+  fetched: 0,
+  analyzed: 0,
+  indexed: 0,
+  skipped: 0,
+  errors: 0,
+  logs: [],
+};
+
 export function useInternalLinking(projectId: string | null) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -52,6 +64,14 @@ export function useInternalLinking(projectId: string | null) {
   const [indexedArticles, setIndexedArticles] = useState<IndexedArticle[]>([]);
   const [topicClusters, setTopicClusters] = useState<TopicCluster[]>([]);
   const [keywordRules, setKeywordRules] = useState<KeywordRule[]>([]);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress>(initialSyncProgress);
+
+  const addLog = useCallback((type: SyncLogEntry['type'], message: string, articleTitle?: string) => {
+    setSyncProgress(prev => ({
+      ...prev,
+      logs: [...prev.logs, { timestamp: new Date(), type, message, articleTitle }],
+    }));
+  }, []);
 
   // Fetch indexed articles for a project
   const fetchIndexedArticles = useCallback(async () => {
@@ -159,6 +179,17 @@ export function useInternalLinking(projectId: string | null) {
     if (!projectId) return;
 
     setIsSyncing(true);
+    setSyncProgress({
+      phase: 'fetching',
+      total: 0,
+      fetched: 0,
+      analyzed: 0,
+      indexed: 0,
+      skipped: 0,
+      errors: 0,
+      logs: [],
+    });
+    
     try {
       // Get project details to find WordPress URL and credentials
       const { data: project, error: projectError } = await supabase
@@ -171,16 +202,10 @@ export function useInternalLinking(projectId: string | null) {
         throw new Error('Projeto WordPress não configurado');
       }
 
-      toast({
-        title: 'Sincronização iniciada',
-        description: 'Buscando artigos do WordPress para indexação...',
-      });
+      addLog('info', `Iniciando sincronização ${fullSync ? 'completa' : 'incremental'}...`);
+      addLog('info', `Conectando a ${project.wordpress_url}...`);
 
-      // Peça para o backend buscar + indexar direto do WordPress (evita CORS do navegador)
-      toast({
-        title: 'Sincronização iniciada',
-        description: 'Buscando e indexando artigos do WordPress...',
-      });
+      setSyncProgress(prev => ({ ...prev, phase: 'fetching' }));
 
       const syncResponse = await supabase.functions.invoke('analyze-wp-articles', {
         body: {
@@ -194,7 +219,21 @@ export function useInternalLinking(projectId: string | null) {
         throw syncResponse.error;
       }
 
-      const results = syncResponse.data?.results || { synced: 0, analyzed: 0, errors: 0, skipped: 0 };
+      const results = syncResponse.data?.results || { synced: 0, analyzed: 0, errors: 0, skipped: 0, total: 0 };
+      
+      // Update progress with results
+      setSyncProgress(prev => ({
+        ...prev,
+        phase: 'complete',
+        total: results.total || results.synced + results.skipped,
+        fetched: results.total || results.synced + results.skipped,
+        analyzed: results.analyzed || 0,
+        indexed: results.synced || 0,
+        skipped: results.skipped || 0,
+        errors: results.errors || 0,
+      }));
+
+      addLog('success', `Sincronização concluída: ${results.synced} indexados, ${results.analyzed} analisados por IA`);
 
       // Refresh local data
       await fetchIndexedArticles();
@@ -206,6 +245,8 @@ export function useInternalLinking(projectId: string | null) {
       });
     } catch (error) {
       console.error('Error triggering sync:', error);
+      addLog('error', error instanceof Error ? error.message : 'Erro desconhecido');
+      setSyncProgress(prev => ({ ...prev, phase: 'error' }));
       toast({
         title: 'Erro na sincronização',
         description: error instanceof Error ? error.message : 'Erro desconhecido',
@@ -214,7 +255,7 @@ export function useInternalLinking(projectId: string | null) {
     } finally {
       setIsSyncing(false);
     }
-  }, [projectId, fetchIndexedArticles, fetchTopicClusters, toast]);
+  }, [projectId, fetchIndexedArticles, fetchTopicClusters, toast, addLog]);
 
   // Generate topic clusters from indexed articles
   const generateClusters = useCallback(async () => {
@@ -368,6 +409,7 @@ export function useInternalLinking(projectId: string | null) {
     indexedArticles,
     topicClusters,
     keywordRules,
+    syncProgress,
     
     // Actions
     fetchIndexedArticles,
