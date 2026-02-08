@@ -5,6 +5,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { 
   Sparkles,
   RefreshCw,
@@ -16,11 +19,17 @@ import {
   Code,
   FolderOpen,
   Save,
-  Braces
+  Braces,
+  CalendarIcon,
+  Clock,
+  Upload
 } from 'lucide-react';
 import { SEOOptimizationPanel } from './SEOOptimizationPanel';
 import { SchemaPreview } from './SchemaPreview';
 import { WordPressCategorySelector } from '../WordPressCategorySelector';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 interface Article {
   id: string;
@@ -31,6 +40,7 @@ interface Article {
   featured_image_url: string | null;
   project_id?: string | null;
   wordpress_categories?: number[];
+  scheduled_at?: Date | null;
 }
 
 interface ArticleEditorSidebarProps {
@@ -41,6 +51,17 @@ interface ArticleEditorSidebarProps {
   onRegenerate: (type: 'title' | 'excerpt' | 'image' | 'content') => void;
   isRegenerating: 'title' | 'excerpt' | 'image' | 'content' | null;
   onSave?: () => void;
+}
+
+interface ArticleEditorSidebarProps {
+  article: Article;
+  activeTab: 'visual' | 'html';
+  onActiveTabChange: (tab: 'visual' | 'html') => void;
+  onFieldUpdate: <K extends keyof Article>(field: K, value: Article[K]) => void;
+  onRegenerate: (type: 'title' | 'excerpt' | 'image' | 'content') => void;
+  isRegenerating: 'title' | 'excerpt' | 'image' | 'content' | null;
+  onSave?: () => void;
+  onSchedule?: (date: Date) => void;
   isSaving?: boolean;
   hasChanges?: boolean;
 }
@@ -53,11 +74,49 @@ export function ArticleEditorSidebar({
   onRegenerate,
   isRegenerating,
   onSave,
+  onSchedule,
   isSaving,
   hasChanges,
 }: ArticleEditorSidebarProps) {
   const [configTab, setConfigTab] = useState<'config' | 'seo' | 'schema'>('config');
+  const [isScheduleEnabled, setIsScheduleEnabled] = useState(!!article.scheduled_at);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
+    article.scheduled_at ? new Date(article.scheduled_at) : undefined
+  );
+  const [selectedTime, setSelectedTime] = useState<string>(
+    article.scheduled_at 
+      ? format(new Date(article.scheduled_at), 'HH:mm') 
+      : '09:00'
+  );
   const excerptLength = article.excerpt?.length || 0;
+
+  const handleScheduleToggle = (enabled: boolean) => {
+    setIsScheduleEnabled(enabled);
+    if (!enabled) {
+      setSelectedDate(undefined);
+      onFieldUpdate('scheduled_at', null);
+    }
+  };
+
+  const handleScheduleChange = (date: Date | undefined) => {
+    setSelectedDate(date);
+    if (date && selectedTime) {
+      const [hours, minutes] = selectedTime.split(':').map(Number);
+      const scheduledDate = new Date(date);
+      scheduledDate.setHours(hours, minutes, 0, 0);
+      onFieldUpdate('scheduled_at', scheduledDate);
+    }
+  };
+
+  const handleTimeChange = (time: string) => {
+    setSelectedTime(time);
+    if (selectedDate && time) {
+      const [hours, minutes] = time.split(':').map(Number);
+      const scheduledDate = new Date(selectedDate);
+      scheduledDate.setHours(hours, minutes, 0, 0);
+      onFieldUpdate('scheduled_at', scheduledDate);
+    }
+  };
 
   return (
     <div className="w-80 flex flex-col border-l bg-card h-full">
@@ -198,6 +257,77 @@ export function ArticleEditorSidebar({
                   onCategoriesChange={(categories) => onFieldUpdate('wordpress_categories', categories)}
                 />
               </div>
+
+              {/* Scheduling Options */}
+              <div className="space-y-3 pt-2 border-t">
+                <div className="flex items-center gap-2">
+                  <CalendarIcon className="w-4 h-4 text-primary" />
+                  <Label className="text-sm font-medium">Agendamento</Label>
+                </div>
+                
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm">Agendar Publicação</span>
+                  </div>
+                  <Switch
+                    checked={isScheduleEnabled}
+                    onCheckedChange={handleScheduleToggle}
+                  />
+                </div>
+
+                {isScheduleEnabled && (
+                  <div className="space-y-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Data</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !selectedDate && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {selectedDate ? (
+                              format(selectedDate, "PPP", { locale: ptBR })
+                            ) : (
+                              <span>Selecione a data</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={selectedDate}
+                            onSelect={handleScheduleChange}
+                            initialFocus
+                            disabled={(date) => date < new Date()}
+                            className="pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Hora</Label>
+                      <Input
+                        type="time"
+                        value={selectedTime}
+                        onChange={(e) => handleTimeChange(e.target.value)}
+                        className="text-sm"
+                      />
+                    </div>
+
+                    {selectedDate && (
+                      <p className="text-xs text-primary">
+                        📅 Agendado para {format(selectedDate, "dd 'de' MMMM 'às' ", { locale: ptBR })}{selectedTime}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </ScrollArea>
         </TabsContent>
@@ -205,7 +335,7 @@ export function ArticleEditorSidebar({
         <TabsContent value="seo" className="flex-1 m-0 min-h-0 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="p-4">
-              <SEOOptimizationPanel 
+              <SEOOptimizationPanel
                 content={article.content} 
                 keyword={article.keyword}
                 title={article.title}

@@ -785,6 +785,14 @@ ${config.title ? `Título sugerido: "${config.title}" (ajuste para máximo 60 ca
 - Título (H1): MÁXIMO 60 caracteres (tolerável até 70)
 - Meta Description: MÁXIMO 160 caracteres (tolerável até 170)
 
+**CRÍTICO - FORMATAÇÃO DO CONTEÚDO:**
+- NUNCA use marcadores de código como \`\`\`html ou \`\`\`
+- Escreva HTML puro diretamente, SEM cercado por backticks
+- Cada seção H2 deve ter parágrafos curtos (2-4 linhas cada)
+- Use subtítulos H3 para organizar melhor seções longas
+- Separe ideias diferentes em parágrafos distintos
+- Mantenha espaçamento visual adequado entre seções
+
 **Estrutura esperada:**
 1. Comentário HTML com META_DESCRIPTION e TITLE_SEO no início
 2. Introdução engajadora com hook + resposta direta nos primeiros 2 parágrafos
@@ -796,13 +804,19 @@ ${config.includeList ? '7. Listas organizadas (numeradas ou bullets) quando apro
 ${config.includeFaq ? `8. Seção FAQ com ${config.faqCount} perguntas otimizadas para featured snippets` : ''}
 ${config.includeConclusion ? '9. Conclusão com resumo dos pontos principais e CTA claro' : ''}
 
-**Formato do início do artigo:**
-\`\`\`html
+**Formato do início do artigo (SEM backticks, HTML puro):**
 <!-- META_DESCRIPTION: [máx 160 chars] -->
 <!-- TITLE_SEO: [máx 60 chars] -->
 
+<h1>Título do Artigo</h1>
+
 <p>Introdução aqui...</p>
-\`\`\`
+
+<h2>Primeira Seção</h2>
+
+<p>Parágrafo curto e objetivo.</p>
+
+<p>Outro parágrafo com informação complementar.</p>
 
 **Lembre-se:**
 - Segmento: ${config.segment} (aplique diretrizes específicas e disclaimers)
@@ -811,10 +825,12 @@ ${config.includeConclusion ? '9. Conclusão com resumo dos pontos principais e C
 - Extensão: ${wordRange.min}-${wordRange.max} palavras
 
 **VERIFIQUE ANTES DE FINALIZAR:**
+- NÃO inclua \`\`\`html ou \`\`\` no início ou final
 - Contagem de caracteres do título: MÁXIMO 60
 - Contagem de caracteres da meta description: MÁXIMO 160
+- Parágrafos curtos e bem espaçados
 
-Comece agora:`;
+Comece agora (HTML direto, sem marcadores de código):`;
 
   return { system: systemPrompt, user: userPrompt };
 }

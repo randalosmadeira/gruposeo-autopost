@@ -28,6 +28,7 @@ interface Article {
   word_count: number | null;
   project_id?: string | null;
   wordpress_categories?: number[];
+  scheduled_at?: Date | null;
 }
 
 interface ArticleEditorProps {

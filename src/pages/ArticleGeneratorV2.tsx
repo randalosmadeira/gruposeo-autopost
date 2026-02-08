@@ -505,13 +505,44 @@ export default function ArticleGeneratorV2() {
         featuredImage: finalImageUrl || undefined,
       });
       
-      setAppState('editing-article');
-      toast({
-        title: 'Artigo gerado!',
-        description: config.generateImages && imageResult?.image 
-          ? 'Artigo e imagem destacada gerados com sucesso.' 
-          : 'Seu artigo está pronto para edição e publicação.',
-      });
+      // Navigate directly to the full editor page for maximum functionality
+      const finalArticleId = articleId || (await (async () => {
+        // If we don't have an article ID yet, get it from the most recently created article
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const { data } = await supabase
+            .from('articles')
+            .select('id')
+            .eq('user_id', session.user.id)
+            .eq('keyword', config.keyword)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+          return data?.id || null;
+        }
+        return null;
+      })());
+      
+      if (finalArticleId) {
+        // Redirect to the full article editor with all features including scheduling
+        toast({
+          title: 'Artigo gerado com sucesso!',
+          description: 'Redirecionando para o editor completo...',
+        });
+        
+        // Small delay to show toast before navigation
+        setTimeout(() => {
+          navigate(`/articles/${finalArticleId}/edit`);
+        }, 500);
+      } else {
+        setAppState('editing-article');
+        toast({
+          title: 'Artigo gerado!',
+          description: config.generateImages && imageResult?.image 
+            ? 'Artigo e imagem destacada gerados com sucesso.' 
+            : 'Seu artigo está pronto para edição e publicação.',
+        });
+      }
     } else {
       // Update article status to error if generation failed
       if (articleId) {
