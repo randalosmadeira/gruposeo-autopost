@@ -15,13 +15,36 @@ interface WordPressCredentials {
   wordpress_app_password: string;
 }
 
+// Normalize WordPress URL - extract base URL from plugin endpoint URL if needed
+function normalizeWordPressUrl(url: string): string {
+  if (!url) return '';
+  
+  let normalized = url.replace(/\/+$/, '');
+  
+  // If URL contains /wp-json/cfrdm/v1, strip it to get the base WordPress URL
+  // e.g., https://example.com/blog/wp-json/cfrdm/v1 -> https://example.com/blog
+  const cfrdmMatch = normalized.match(/^(.+?)\/wp-json\/cfrdm\/v1/);
+  if (cfrdmMatch) {
+    normalized = cfrdmMatch[1];
+    console.log(`Normalized plugin URL: ${url} -> ${normalized}`);
+  }
+  
+  // Also handle if someone put /wp-json/ at the end
+  const wpJsonMatch = normalized.match(/^(.+?)\/wp-json\/?$/);
+  if (wpJsonMatch) {
+    normalized = wpJsonMatch[1];
+  }
+  
+  return normalized.replace(/\/+$/, '');
+}
+
 async function wpFetch(
   credentials: WordPressCredentials,
   endpoint: string,
   options: RequestInit = {}
 ): Promise<{ data?: unknown; error?: string; status: number }> {
   const { wordpress_url, wordpress_username, wordpress_app_password } = credentials;
-  const baseUrl = wordpress_url.replace(/\/$/, "");
+  const baseUrl = normalizeWordPressUrl(wordpress_url);
   const apiUrl = `${baseUrl}/wp-json/wp/v2${endpoint}`;
   const auth = btoa(`${wordpress_username}:${wordpress_app_password}`);
 
