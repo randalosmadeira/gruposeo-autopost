@@ -705,9 +705,37 @@ ${config.humanizeContent ? buildHumanizationRules() : ''}
 
 ${buildTechnicalRules()}
 
+## 🏷️ LIMITES RIGOROSOS DE SEO (OBRIGATÓRIO)
+
+### Título do Artigo (H1):
+- **MÁXIMO ABSOLUTO**: 60 caracteres (tolerável até 70, mas evite)
+- O Google trunca títulos acima de 60 caracteres nos resultados de busca
+- Inclua a palavra-chave primária no início do título
+- Use números quando possível ("7 Dicas", "Guia 2026")
+- Evite títulos genéricos - seja específico e atraente
+
+**Exemplo:**
+✅ "Advogado Trabalhista SP: Guia Completo 2026" (45 caracteres)
+❌ "Tudo o que você precisa saber sobre como encontrar um advogado trabalhista em São Paulo" (89 caracteres)
+
+### Meta Description:
+- **MÁXIMO ABSOLUTO**: 160 caracteres (tolerável até 170, mas evite)
+- Deve ser persuasiva e conter call-to-action implícito
+- Inclua a palavra-chave primária naturalmente
+- Descreva o benefício claro de ler o artigo
+- Use verbos de ação: "Descubra", "Aprenda", "Confira"
+
+**Formato obrigatório no início do artigo:**
+\`\`\`html
+<!-- META_DESCRIPTION: [Sua meta description aqui, máximo 160 caracteres] -->
+<!-- TITLE_SEO: [Título otimizado aqui, máximo 60 caracteres] -->
+\`\`\`
+
 ## ✅ CHECKLIST FINAL DE QUALIDADE
 
 Antes de finalizar, verifique:
+- [ ] **TÍTULO**: Máximo 60 caracteres (verificar contagem!)
+- [ ] **META DESCRIPTION**: Máximo 160 caracteres (verificar contagem!)
 - [ ] Palavra-chave primária aparece no primeiro parágrafo
 - [ ] Resposta direta à intenção de busca nos primeiros 150 palavras
 - [ ] Todos os H2s têm variações semânticas da keyword
@@ -742,28 +770,49 @@ ${config.nlpTerms.join(', ')}
 
 ---
 
-**IMPORTANTE**: Gere um artigo completo, pronto para publicação, em HTML semântico limpo, seguindo TODAS as diretrizes acima. O conteúdo deve ser indistinguível de um texto escrito por humano especialista, com fluidez natural e valor real para o leitor.`;
+**IMPORTANTE**: Gere um artigo completo, pronto para publicação, em HTML semântico limpo, seguindo TODAS as diretrizes acima. O conteúdo deve ser indistinguível de um texto escrito por humano especialista, com fluidez natural e valor real para o leitor.
+
+**CRÍTICO - LIMITES SEO**: 
+- Título: MÁXIMO 60 caracteres
+- Meta Description: MÁXIMO 160 caracteres
+Esses limites são INEGOCIÁVEIS para ranqueamento no Google.`;
 
   const userPrompt = `Escreva um artigo completo e otimizado para SEO sobre: "${config.keyword}"
 
-${config.title ? `Título do artigo: "${config.title}"` : ''}
+${config.title ? `Título sugerido: "${config.title}" (ajuste para máximo 60 caracteres se necessário)` : ''}
+
+**ATENÇÃO - LIMITES SEO OBRIGATÓRIOS:**
+- Título (H1): MÁXIMO 60 caracteres (tolerável até 70)
+- Meta Description: MÁXIMO 160 caracteres (tolerável até 170)
 
 **Estrutura esperada:**
-1. Introdução engajadora com hook + resposta direta nos primeiros 2 parágrafos
-2. 5-7 seções principais (H2) com subtítulos (H3) quando necessário
-3. Conteúdo detalhado, útil e acionável em cada seção
-4. Links internos distribuídos naturalmente ao longo do texto
-${config.includeTable ? '5. Pelo menos uma tabela comparativa ou informativa' : ''}
-${config.includeList ? '6. Listas organizadas (numeradas ou bullets) quando apropriado' : ''}
-${config.includeFaq ? `7. Seção FAQ com ${config.faqCount} perguntas otimizadas para featured snippets` : ''}
-${config.includeConclusion ? '8. Conclusão com resumo dos pontos principais e CTA claro' : ''}
-${config.includeMetaDescription ? '9. Meta description otimizada (150-160 caracteres) como comentário HTML no início' : ''}
+1. Comentário HTML com META_DESCRIPTION e TITLE_SEO no início
+2. Introdução engajadora com hook + resposta direta nos primeiros 2 parágrafos
+3. 5-7 seções principais (H2) com subtítulos (H3) quando necessário
+4. Conteúdo detalhado, útil e acionável em cada seção
+5. Links internos distribuídos naturalmente ao longo do texto
+${config.includeTable ? '6. Pelo menos uma tabela comparativa ou informativa' : ''}
+${config.includeList ? '7. Listas organizadas (numeradas ou bullets) quando apropriado' : ''}
+${config.includeFaq ? `8. Seção FAQ com ${config.faqCount} perguntas otimizadas para featured snippets` : ''}
+${config.includeConclusion ? '9. Conclusão com resumo dos pontos principais e CTA claro' : ''}
+
+**Formato do início do artigo:**
+\`\`\`html
+<!-- META_DESCRIPTION: [máx 160 chars] -->
+<!-- TITLE_SEO: [máx 60 chars] -->
+
+<p>Introdução aqui...</p>
+\`\`\`
 
 **Lembre-se:**
 - Segmento: ${config.segment} (aplique diretrizes específicas e disclaimers)
 - Tipo: ${config.contentType} (siga estrutura apropriada)
 - Tom: ${config.tone}
 - Extensão: ${wordRange.min}-${wordRange.max} palavras
+
+**VERIFIQUE ANTES DE FINALIZAR:**
+- Contagem de caracteres do título: MÁXIMO 60
+- Contagem de caracteres da meta description: MÁXIMO 160
 
 Comece agora:`;
 

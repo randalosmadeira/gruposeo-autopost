@@ -56,6 +56,41 @@ const contentLengthOptions = [
   { value: 'very-long', label: 'Muito Longo', words: '3.500-4.500', description: 'Pillar pages' },
 ];
 
+const segmentOptions = [
+  { value: 'general', label: 'Geral' },
+  { value: 'legal', label: 'Jurídico' },
+  { value: 'health', label: 'Saúde' },
+  { value: 'fintech', label: 'Fintech/Finanças' },
+  { value: 'ecommerce', label: 'E-commerce' },
+  { value: 'b2b-saas', label: 'B2B SaaS' },
+  { value: 'education', label: 'Educação' },
+];
+
+const contentTypeOptions = [
+  { value: 'how-to', label: 'Tutorial/How-To' },
+  { value: 'listicle', label: 'Listicle' },
+  { value: 'pillar', label: 'Pillar Page' },
+  { value: 'guide', label: 'Guia Completo' },
+  { value: 'comparative', label: 'Comparativo' },
+  { value: 'opinion', label: 'Opinião/Análise' },
+  { value: 'news', label: 'Notícia' },
+];
+
+const goalOptions = [
+  { value: 'inform', label: 'Informar' },
+  { value: 'convert', label: 'Converter' },
+  { value: 'educate', label: 'Educar' },
+  { value: 'engage', label: 'Engajar' },
+  { value: 'establish-authority', label: 'Estabelecer Autoridade' },
+];
+
+const intentTypeOptions = [
+  { value: 'informational', label: 'Informacional' },
+  { value: 'navigational', label: 'Navegacional' },
+  { value: 'transactional', label: 'Transacional' },
+  { value: 'commercial', label: 'Comercial' },
+];
+
 const audienceTypeOptions = [
   { value: 'geral', label: 'Público Geral' },
   { value: 'b2b', label: 'B2B (Empresas)' },
@@ -191,6 +226,79 @@ export function BulkAdvancedConfig({
                 </div>
               );
             })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* SEO Strategy Section - NEW */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Search className="w-4 h-4 text-primary" />
+            Estratégia SEO
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Configurações avançadas para otimização de conteúdo
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Segmento</Label>
+              <Select value={config.segment} onValueChange={(v) => updateConfig({ segment: v as BulkGenerationConfig['segment'] })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {segmentOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Tipo de Conteúdo</Label>
+              <Select value={config.contentType} onValueChange={(v) => updateConfig({ contentType: v as BulkGenerationConfig['contentType'] })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {contentTypeOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Objetivo</Label>
+              <Select value={config.goal} onValueChange={(v) => updateConfig({ goal: v as BulkGenerationConfig['goal'] })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {goalOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Intenção de Busca</Label>
+              <Select value={config.intentType} onValueChange={(v) => updateConfig({ intentType: v as BulkGenerationConfig['intentType'] })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {intentTypeOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+            <strong>Limites SEO automáticos:</strong> Título máx 60 caracteres, Meta Description máx 160 caracteres
           </div>
         </CardContent>
       </Card>

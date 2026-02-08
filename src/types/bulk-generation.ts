@@ -3,6 +3,12 @@ export interface BulkGenerationConfig {
   // Content size
   contentLength: 'short' | 'medium' | 'long' | 'very-long';
   
+  // Advanced SEO fields (new)
+  segment: 'legal' | 'health' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'education' | 'general';
+  contentType: 'how-to' | 'listicle' | 'pillar' | 'comparative' | 'opinion' | 'news' | 'guide';
+  goal: 'inform' | 'convert' | 'educate' | 'engage' | 'establish-authority';
+  intentType: 'informational' | 'navigational' | 'transactional' | 'commercial';
+  
   // Audience & Geographic
   geographicReach: string;
   audienceType: string;
@@ -10,7 +16,7 @@ export interface BulkGenerationConfig {
   painPoints: string;
   ctaObjective: string;
   
-  // Company data (optional)
+  // Company data (optional - cited strategically in all content)
   companyName: string;
   companyPhone: string;
   companyAddress: string;
@@ -47,30 +53,42 @@ export interface BulkGenerationConfig {
 
 export const defaultBulkConfig: BulkGenerationConfig = {
   contentLength: 'long',
+  // Advanced SEO defaults
+  segment: 'general',
+  contentType: 'how-to',
+  goal: 'inform',
+  intentType: 'informational',
+  // Audience & Geographic
   geographicReach: '',
   audienceType: 'geral',
   targetAudience: '',
   painPoints: '',
   ctaObjective: '',
+  // Company data
   companyName: '',
   companyPhone: '',
   companyAddress: '',
   additionalInfo: '',
+  // Content structure
   metaDescription: true,
   lists: true,
-  tables: false,
+  tables: true, // Always include tables for better SEO
   conclusion: true,
   faq: true,
   faqCount: 5,
+  // Internal linking
   internalLinking: false,
   projectId: '',
+  // AI Model
   aiModel: 'standard',
+  // Advanced settings - optimized defaults
   seoOptimization: true,
   realtimeData: false,
-  humanizeContent: false,
-  generateImages: false,
-  imageCount: 2,
+  humanizeContent: true, // Always humanize by default
+  generateImages: true, // Always generate images
+  imageCount: 1,
   imageStyle: 'fotorrealístico',
+  // Tone & Voice
   tone: 'profissional',
   pointOfView: 'terceira-singular',
   language: 'pt-BR',
