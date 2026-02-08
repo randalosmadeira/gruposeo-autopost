@@ -172,10 +172,10 @@ const offerTypes = [
 ];
 
 const articleSizes = [
-  { value: 'short', label: 'Curto', words: '~750 palavras' },
-  { value: 'medium', label: 'Médio', words: '~1.500 palavras' },
-  { value: 'long', label: 'Longo', words: '~2.500 palavras' },
-  { value: 'very-long', label: 'Muito Longo', words: '~4.000 palavras' },
+  { value: 'muito_pequeno', label: 'Muito Pequeno', words: '600-1.200 palavras' },
+  { value: 'pequeno', label: 'Pequeno', words: '1.200-2.400 palavras' },
+  { value: 'medio', label: 'Médio', words: '2.400-3.600 palavras' },
+  { value: 'grande', label: 'Grande', words: '2.600-5.200 palavras' },
 ];
 
 // Audience type options
@@ -201,7 +201,7 @@ const defaultConfig: LandingPageConfig = {
   title: '',
   offerType: 'Serviço',
   location: '',
-  size: 'medium',
+  size: 'medio',
   language: 'pt-BR',
   targetAudience: '',
   painPoint: '',

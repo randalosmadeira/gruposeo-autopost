@@ -9,7 +9,7 @@ export interface LandingPageConfig {
   title: string;
   offerType: string;
   location: string;
-  size: 'short' | 'medium' | 'long' | 'very-long';
+  size: 'muito_pequeno' | 'pequeno' | 'medio' | 'grande';
   language: string;
   targetAudience: string;
   painPoint: string;
