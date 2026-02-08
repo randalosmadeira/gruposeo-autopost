@@ -366,29 +366,6 @@ export function OutlineEditor({
         </button>
       </div>
 
-      {/* Action Buttons */}
-      <div 
-        className="p-4 border-t space-y-2"
-        style={{ borderColor: colors.border, backgroundColor: colors.background }}
-      >
-        <Button
-          onClick={onGenerate}
-          disabled={isGenerating || sections.length === 0}
-          className="w-full h-12 text-base transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
-          style={{ backgroundColor: colors.primary }}
-        >
-          <Sparkles className="w-5 h-5 mr-2" />
-          Gerar Artigo Completo ({totalCredits} {totalCredits === 1 ? 'crédito' : 'créditos'})
-        </Button>
-        <Button
-          onClick={onReset}
-          variant="outline"
-          className="w-full h-10 transition-all duration-200 hover:bg-gray-50"
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Reiniciar & Começar de Novo
-        </Button>
-      </div>
     </div>
   );
 }

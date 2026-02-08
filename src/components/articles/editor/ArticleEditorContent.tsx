@@ -143,6 +143,17 @@ export function ArticleEditorContent({
               const newContent = (e.target as HTMLDivElement).innerHTML;
               onContentChange(newContent);
             }}
+            onClick={(e) => {
+              // Interceptar cliques em links para abrir em nova aba
+              const target = e.target as HTMLElement;
+              if (target.tagName === 'A' && target.getAttribute('href')) {
+                e.preventDefault();
+                const url = target.getAttribute('href');
+                if (url) {
+                  window.open(url, '_blank', 'noopener,noreferrer');
+                }
+              }
+            }}
             className="prose prose-lg max-w-none outline-none min-h-[400px]
               focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 rounded-lg p-4 -m-2
               
@@ -176,6 +187,22 @@ export function ArticleEditorContent({
               [&_h4]:before:font-semibold [&_h4]:before:bg-muted [&_h4]:before:text-muted-foreground 
               [&_h4]:before:rounded [&_h4]:before:top-1
               
+              /* === H5 - Subtítulos quaternários === */
+              [&_h5]:relative [&_h5]:pl-12 [&_h5]:text-base [&_h5]:md:text-lg [&_h5]:font-medium 
+              [&_h5]:mt-6 [&_h5]:mb-3 [&_h5]:leading-snug
+              [&_h5]:before:content-['H5'] [&_h5]:before:absolute [&_h5]:before:left-0 
+              [&_h5]:before:px-1.5 [&_h5]:before:py-0.5 [&_h5]:before:text-[9px] 
+              [&_h5]:before:font-medium [&_h5]:before:bg-muted/60 [&_h5]:before:text-muted-foreground 
+              [&_h5]:before:rounded [&_h5]:before:top-0.5
+              
+              /* === H6 - Menor hierarquia === */
+              [&_h6]:relative [&_h6]:pl-12 [&_h6]:text-sm [&_h6]:md:text-base [&_h6]:font-medium 
+              [&_h6]:mt-5 [&_h6]:mb-2 [&_h6]:leading-snug [&_h6]:text-muted-foreground
+              [&_h6]:before:content-['H6'] [&_h6]:before:absolute [&_h6]:before:left-0 
+              [&_h6]:before:px-1.5 [&_h6]:before:py-0.5 [&_h6]:before:text-[8px] 
+              [&_h6]:before:font-medium [&_h6]:before:bg-muted/40 [&_h6]:before:text-muted-foreground 
+              [&_h6]:before:rounded [&_h6]:before:top-0.5
+              
               /* === PARÁGRAFOS - Separação Clara por Blocos === */
               [&_p]:leading-[1.85] [&_p]:mb-6 [&_p]:text-foreground [&_p]:text-[1.0625rem]
               [&_p]:tracking-[-0.01em]
@@ -192,11 +219,12 @@ export function ArticleEditorContent({
               [&_strong]:font-bold [&_strong]:text-foreground
               [&_em]:italic
               
-              /* === LINKS - COR DESTACADA para chamar atenção === */
+              /* === LINKS - COR DESTACADA e abre em nova aba === */
               [&_a]:text-primary [&_a]:font-medium [&_a]:no-underline
               [&_a]:border-b-2 [&_a]:border-primary/40
               [&_a]:transition-all [&_a]:duration-200
               [&_a:hover]:text-accent [&_a:hover]:border-accent
+              [&_a]:cursor-pointer
               
               /* === CITAÇÕES - Bloco Visual Destacado === */
               [&_blockquote]:relative [&_blockquote]:border-l-4 [&_blockquote]:border-primary 
