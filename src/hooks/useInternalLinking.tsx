@@ -267,7 +267,20 @@ export function useInternalLinking(projectId: string | null) {
       });
       
       if (errorMsg) {
-        // Check for common connection/plugin issues
+        // Try to parse structured error from edge function
+        let structuredError: { code?: string; message?: string; canUseFallback?: boolean; instructions?: string } | null = null;
+        try {
+          structuredError = JSON.parse(errorMsg);
+        } catch {
+          // Not a JSON error, continue with string matching
+        }
+        
+        if (structuredError?.code === 'PLUGIN_NOT_FOUND') {
+          setSyncState(prev => ({ ...prev, pluginNotFound: true }));
+          throw new Error(structuredError.instructions || structuredError.message || 'Plugin não encontrado');
+        }
+        
+        // Check for common connection/plugin issues (legacy string matching)
         const isPluginNotFound = errorMsg.includes('rest_no_route') || 
                                   errorMsg.includes('Nenhuma rota') ||
                                   errorMsg.includes('Falha ao buscar lista de artigos no plugin') ||
@@ -283,7 +296,7 @@ export function useInternalLinking(projectId: string | null) {
         if (isPluginNotFound) {
           // Mark that plugin was not found so UI can show installation guide
           setSyncState(prev => ({ ...prev, pluginNotFound: true }));
-          throw new Error('Plugin não encontrado: O plugin ContentFactory não está instalado ou ativo. Instale o plugin ou use a REST API padrão como alternativa.');
+          throw new Error('Plugin não encontrado: O plugin ContentFactory não está instalado ou ativo. Instale o plugin ou reconfigure o projeto com credenciais de Application Password.');
         }
         if (isPluginError || isConnectionError) {
           throw new Error('Erro de conexão: Verifique se o plugin ContentFactory está instalado e ativado no WordPress, e se a API Key está configurada corretamente.');
