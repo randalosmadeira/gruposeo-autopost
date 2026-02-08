@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '2.5.0';
-const PLUGIN_LAST_UPDATE = '2026-02-06';
+const PLUGIN_VERSION = '2.5.1';
+const PLUGIN_LAST_UPDATE = '2026-02-07';
 
 const features = [
   {
@@ -70,6 +70,17 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '2.5.1',
+    date: '2026-02-07',
+    type: 'minor' as const,
+    changes: [
+      { type: 'feature', text: 'Sistema de linkagem interna inteligente com IA para sincronização automática de artigos WordPress' },
+      { type: 'feature', text: 'Novo indexador de artigos com análise semântica e detecção de clusters temáticos' },
+      { type: 'feature', text: 'Regras de linkagem automática por palavras-chave com priorização' },
+      { type: 'improvement', text: 'Integração de links internos em todos os geradores de conteúdo (massa, notícias, landing pages)' },
+    ],
+  },
   {
     version: '2.5.0',
     date: '2026-02-06',
@@ -204,6 +215,7 @@ export default function WordPressPluginPage() {
         { path: 'includes/class-cfrdm-social-admin.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-social-admin.php' },
         { path: 'includes/class-cfrdm-cron-scheduler.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-cron-scheduler.php' },
         { path: 'includes/class-cfrdm-content-queue.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-content-queue.php' },
+        { path: 'includes/class-cfrdm-article-indexer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-article-indexer.php' },
         { path: 'assets/css/admin.css', url: '/wordpress-plugin/contentfactory-rdm/assets/css/admin.css' },
         { path: 'assets/js/admin.js', url: '/wordpress-plugin/contentfactory-rdm/assets/js/admin.js' },
       ];
