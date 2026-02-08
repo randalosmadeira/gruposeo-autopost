@@ -203,10 +203,12 @@ export default function ArticleViewPage() {
       <div className="max-w-6xl mx-auto p-6">
         <ArticleContentRenderer
           content={article.content || ''}
+          rawMarkdown={article.content || ''} // For FAQ Schema detection
           title={article.title || article.keyword}
           excerpt={article.excerpt || undefined}
           featuredImageUrl={article.featured_image_url || undefined}
           showTOC={true}
+          enableFAQSchema={true}
         />
       </div>
     </div>

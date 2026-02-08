@@ -16,21 +16,26 @@ import {
   ChevronRight,
   List
 } from 'lucide-react';
+import { FAQSchemaScript } from './FAQSchemaScript';
 
 interface ArticleContentRendererProps {
   content: string;
+  rawMarkdown?: string; // Original markdown for FAQ detection
   title?: string;
   excerpt?: string;
   featuredImageUrl?: string;
   showTOC?: boolean;
+  enableFAQSchema?: boolean;
 }
 
 export function ArticleContentRenderer({
   content,
+  rawMarkdown,
   title,
   excerpt,
   featuredImageUrl,
   showTOC = true,
+  enableFAQSchema = true,
 }: ArticleContentRendererProps) {
   const { html, sections, toc } = useMemo(() => {
     const processedHtml = markdownToHTML(content);
@@ -51,8 +56,15 @@ export function ArticleContentRenderer({
     }
   };
 
+  // Content source for FAQ schema (prefer raw markdown, fallback to content)
+  const faqSource = rawMarkdown || content;
+
   return (
-    <div className="article-content-wrapper">
+    <>
+      {/* FAQ Schema JSON-LD (automatic detection) */}
+      {enableFAQSchema && <FAQSchemaScript content={faqSource} />}
+      
+      <div className="article-content-wrapper">
       {/* Hero Section with Featured Image */}
       {featuredImageUrl && (
         <section className="article-hero relative mb-8">
@@ -149,6 +161,7 @@ export function ArticleContentRenderer({
         </article>
       </div>
     </div>
+    </>
   );
 }
 
