@@ -20,8 +20,11 @@ class CFRDM_Auto_Update {
     const OPTION_UPDATE_INFO = 'cfrdm_update_info';
     const BACKUP_DIR = 'cfrdm-backups';
     
+    // ContentFactory update server URLs
+    const UPDATE_API_URL = 'https://gruposeo-autopost.lovable.app/api/plugin-updates';
+    const PLUGIN_DOWNLOAD_URL = 'https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/';
+    
     private static $instance = null;
-    private $update_server = null;
     
     public static function get_instance() {
         if (null === self::$instance) {
@@ -31,8 +34,7 @@ class CFRDM_Auto_Update {
     }
     
     public function __construct() {
-        // Get update server from platform
-        $this->update_server = get_option('cfrdm_api_url');
+        // Constructor
     }
     
     /**
@@ -85,54 +87,22 @@ class CFRDM_Auto_Update {
      * @return array|false Update info or false if no update
      */
     public function check_for_updates() {
-        if (empty($this->update_server)) {
-            return false;
+        // Try remote API first
+        $update_info = $this->check_remote_api();
+        
+        // If remote fails, try local version check against public manifest
+        if (!$update_info) {
+            $update_info = $this->check_local_manifest();
         }
-        
-        $endpoint = rtrim($this->update_server, '/') . '/functions/v1/webhooks';
-        
-        $response = wp_remote_post($endpoint, array(
-            'headers' => array(
-                'Content-Type' => 'application/json',
-                'X-CFRDM-API-Key' => get_option('cfrdm_api_key'),
-            ),
-            'body' => json_encode(array(
-                'event' => 'check_update',
-                'current_version' => CFRDM_VERSION,
-                'site_url' => get_site_url(),
-                'php_version' => PHP_VERSION,
-                'wp_version' => get_bloginfo('version'),
-            )),
-            'timeout' => 15,
-        ));
         
         update_option(self::OPTION_LAST_CHECK, time());
         
-        if (is_wp_error($response)) {
-            CFRDM_Logger::warning('auto_update', 'Erro ao verificar atualizações', array(
-                'error' => $response->get_error_message(),
-            ));
-            return false;
-        }
-        
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-        
-        if (isset($body['update_available']) && $body['update_available']) {
-            $update_info = array(
-                'version' => $body['version'],
-                'download_url' => $body['download_url'] ?? null,
-                'patch_url' => $body['patch_url'] ?? null,
-                'changelog' => $body['changelog'] ?? '',
-                'requires_php' => $body['requires_php'] ?? '7.4',
-                'requires_wp' => $body['requires_wp'] ?? '5.8',
-                'checked_at' => current_time('mysql'),
-            );
-            
+        if ($update_info) {
             update_option(self::OPTION_UPDATE_INFO, $update_info);
             
             CFRDM_Logger::info('auto_update', 'Atualização disponível', array(
                 'current' => CFRDM_VERSION,
-                'new' => $body['version'],
+                'new' => $update_info['version'],
             ));
             
             // Auto-apply if enabled
@@ -145,6 +115,76 @@ class CFRDM_Auto_Update {
         
         delete_option(self::OPTION_UPDATE_INFO);
         return false;
+    }
+    
+    /**
+     * Check remote API for updates
+     */
+    private function check_remote_api() {
+        $response = wp_remote_get(self::UPDATE_API_URL . '?current_version=' . CFRDM_VERSION, array(
+            'timeout' => 15,
+            'headers' => array(
+                'Accept' => 'application/json',
+            ),
+        ));
+        
+        if (is_wp_error($response)) {
+            CFRDM_Logger::warning('auto_update', 'Erro ao verificar atualizações via API', array(
+                'error' => $response->get_error_message(),
+            ));
+            return null;
+        }
+        
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        
+        if (isset($body['update_available']) && $body['update_available']) {
+            return array(
+                'version' => $body['version'],
+                'download_url' => $body['download_url'] ?? self::PLUGIN_DOWNLOAD_URL,
+                'patch_url' => $body['patch_url'] ?? null,
+                'changelog' => $body['changelog'] ?? '',
+                'requires_php' => $body['requires_php'] ?? '7.4',
+                'requires_wp' => $body['requires_wp'] ?? '5.8',
+                'checked_at' => current_time('mysql'),
+            );
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Check local manifest for updates (fallback)
+     * Compares against version.json in the ContentFactory server
+     */
+    private function check_local_manifest() {
+        $response = wp_remote_get(self::PLUGIN_DOWNLOAD_URL . 'version.json', array(
+            'timeout' => 10,
+            'headers' => array('Accept' => 'application/json'),
+        ));
+        
+        if (is_wp_error($response)) {
+            return null;
+        }
+        
+        $manifest = json_decode(wp_remote_retrieve_body($response), true);
+        
+        if (!isset($manifest['version'])) {
+            return null;
+        }
+        
+        if (version_compare($manifest['version'], CFRDM_VERSION, '>')) {
+            return array(
+                'version' => $manifest['version'],
+                'download_url' => $manifest['download_url'] ?? self::PLUGIN_DOWNLOAD_URL,
+                'patch_url' => null,
+                'changelog' => $manifest['changelog'] ?? '',
+                'requires_php' => $manifest['requires_php'] ?? '7.4',
+                'requires_wp' => $manifest['requires_wp'] ?? '5.8',
+                'checked_at' => current_time('mysql'),
+            );
+        }
+        
+        return null;
     }
     
     /**
