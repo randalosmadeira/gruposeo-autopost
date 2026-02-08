@@ -142,80 +142,14 @@ function stripTrailingSlashes(url: string): string {
   return url.replace(/\/+$/, '');
 }
 
-async function fetchWordPressArticlesForIndexing(args: {
-  wordpressUrl: string;
-  wordpressUsername: string | null;
-  wordpressAppPassword: string | null;
-}): Promise<ArticleData[]> {
-  const baseUrl = stripTrailingSlashes(args.wordpressUrl);
-  if (!baseUrl) return [];
-
-  const isPluginAuth = args.wordpressUsername === '__CFRDM_PLUGIN__';
-
-  // Plugin mode (recommended): use CFRDM endpoints.
-  if (isPluginAuth) {
-    const apiKey = args.wordpressAppPassword || '';
-
-    const listUrl = `${baseUrl}/wp-json/cfrdm/v1/articles-for-indexing?per_page=100`;
-    const listResp = await fetch(listUrl, {
-      headers: {
-        'X-CFRDM-API-Key': apiKey,
-      },
-    });
-
-    if (!listResp.ok) {
-      const t = await listResp.text().catch(() => '');
-      throw new Error(`Falha ao buscar lista de artigos no plugin (${listResp.status}): ${t}`);
-    }
-
-    const listJson = await listResp.json().catch(() => null) as any;
-    const ids: number[] = Array.isArray(listJson?.articles)
-      ? listJson.articles.map((a: any) => Number(a.wp_post_id)).filter((n: number) => Number.isFinite(n))
-      : [];
-
-    if (ids.length === 0) return [];
-
-    const batchUrl = `${baseUrl}/wp-json/cfrdm/v1/export-articles-batch`;
-    const batchResp = await fetch(batchUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CFRDM-API-Key': apiKey,
-      },
-      body: JSON.stringify({ post_ids: ids }),
-    });
-
-    if (!batchResp.ok) {
-      const t = await batchResp.text().catch(() => '');
-      throw new Error(`Falha ao exportar artigos no plugin (${batchResp.status}): ${t}`);
-    }
-
-    const batchJson = await batchResp.json().catch(() => null) as any;
-    const articles: any[] = Array.isArray(batchJson?.articles) ? batchJson.articles : [];
-
-    return articles
-      .filter((a: any) => a && typeof a.content === 'string')
-      .map((a: any) => ({
-        wp_post_id: Number(a.wp_post_id),
-        wp_post_url: String(a.wp_post_url || ''),
-        wp_post_slug: a.wp_post_slug ? String(a.wp_post_slug) : undefined,
-        wp_post_title: String(a.wp_post_title || ''),
-        wp_post_type: a.wp_post_type ? String(a.wp_post_type) : undefined,
-        wp_post_status: a.wp_post_status ? String(a.wp_post_status) : undefined,
-        wp_categories: Array.isArray(a.wp_categories) ? a.wp_categories.map(String) : [],
-        wp_tags: Array.isArray(a.wp_tags) ? a.wp_tags.map(String) : [],
-        content: String(a.content || ''),
-        word_count: typeof a.word_count === 'number' ? a.word_count : undefined,
-        last_wp_modified_at: a.last_wp_modified_at ? String(a.last_wp_modified_at) : undefined,
-      }))
-      .filter((a: ArticleData) => Number.isFinite(a.wp_post_id) && !!a.wp_post_url);
-  }
-
-  // Standard WP REST API mode (may be restricted by server settings, but works in backend).
-  const username = args.wordpressUsername || '';
-  const appPassword = args.wordpressAppPassword || '';
+// Fetch articles using standard WordPress REST API
+async function fetchArticlesViaRestAPI(
+  baseUrl: string,
+  username: string,
+  appPassword: string
+): Promise<ArticleData[]> {
   const authHeader = `Basic ${btoa(`${username}:${appPassword}`)}`;
-
+  
   const postsUrl = `${baseUrl}/wp-json/wp/v2/posts?per_page=100&_fields=id,title,link,slug,categories,tags,content,modified_gmt,status,type`;
   const postsResp = await fetch(postsUrl, {
     headers: { Authorization: authHeader },
@@ -223,7 +157,7 @@ async function fetchWordPressArticlesForIndexing(args: {
 
   if (!postsResp.ok) {
     const t = await postsResp.text().catch(() => '');
-    throw new Error(`Falha ao buscar posts no WordPress (${postsResp.status}): ${t}`);
+    throw new Error(`Falha ao buscar posts via REST API (${postsResp.status}): ${t}`);
   }
 
   const posts = await postsResp.json().catch(() => []) as any[];
@@ -241,6 +175,111 @@ async function fetchWordPressArticlesForIndexing(args: {
     word_count: String(post.content?.rendered || '').split(/\s+/).filter(Boolean).length,
     last_wp_modified_at: post.modified_gmt ? String(post.modified_gmt) : undefined,
   })).filter((a: ArticleData) => Number.isFinite(a.wp_post_id) && !!a.wp_post_url);
+}
+
+// Fetch articles using ContentFactory plugin endpoints
+async function fetchArticlesViaPlugin(
+  baseUrl: string,
+  apiKey: string
+): Promise<ArticleData[]> {
+  const listUrl = `${baseUrl}/wp-json/cfrdm/v1/articles-for-indexing?per_page=100`;
+  const listResp = await fetch(listUrl, {
+    headers: {
+      'X-CFRDM-API-Key': apiKey,
+    },
+  });
+
+  if (!listResp.ok) {
+    const t = await listResp.text().catch(() => '');
+    const errorInfo = `(${listResp.status}): ${t}`;
+    
+    // Check if it's a "route not found" error - plugin not installed
+    if (listResp.status === 404 && t.includes('rest_no_route')) {
+      throw new Error(`PLUGIN_NOT_FOUND:${errorInfo}`);
+    }
+    throw new Error(`Falha ao buscar lista de artigos no plugin ${errorInfo}`);
+  }
+
+  const listJson = await listResp.json().catch(() => null) as any;
+  const ids: number[] = Array.isArray(listJson?.articles)
+    ? listJson.articles.map((a: any) => Number(a.wp_post_id)).filter((n: number) => Number.isFinite(n))
+    : [];
+
+  if (ids.length === 0) return [];
+
+  const batchUrl = `${baseUrl}/wp-json/cfrdm/v1/export-articles-batch`;
+  const batchResp = await fetch(batchUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CFRDM-API-Key': apiKey,
+    },
+    body: JSON.stringify({ post_ids: ids }),
+  });
+
+  if (!batchResp.ok) {
+    const t = await batchResp.text().catch(() => '');
+    throw new Error(`Falha ao exportar artigos no plugin (${batchResp.status}): ${t}`);
+  }
+
+  const batchJson = await batchResp.json().catch(() => null) as any;
+  const articles: any[] = Array.isArray(batchJson?.articles) ? batchJson.articles : [];
+
+  return articles
+    .filter((a: any) => a && typeof a.content === 'string')
+    .map((a: any) => ({
+      wp_post_id: Number(a.wp_post_id),
+      wp_post_url: String(a.wp_post_url || ''),
+      wp_post_slug: a.wp_post_slug ? String(a.wp_post_slug) : undefined,
+      wp_post_title: String(a.wp_post_title || ''),
+      wp_post_type: a.wp_post_type ? String(a.wp_post_type) : undefined,
+      wp_post_status: a.wp_post_status ? String(a.wp_post_status) : undefined,
+      wp_categories: Array.isArray(a.wp_categories) ? a.wp_categories.map(String) : [],
+      wp_tags: Array.isArray(a.wp_tags) ? a.wp_tags.map(String) : [],
+      content: String(a.content || ''),
+      word_count: typeof a.word_count === 'number' ? a.word_count : undefined,
+      last_wp_modified_at: a.last_wp_modified_at ? String(a.last_wp_modified_at) : undefined,
+    }))
+    .filter((a: ArticleData) => Number.isFinite(a.wp_post_id) && !!a.wp_post_url);
+}
+
+async function fetchWordPressArticlesForIndexing(args: {
+  wordpressUrl: string;
+  wordpressUsername: string | null;
+  wordpressAppPassword: string | null;
+  useFallback?: boolean;
+}): Promise<{ articles: ArticleData[]; usedFallback: boolean; fallbackReason?: string }> {
+  const baseUrl = stripTrailingSlashes(args.wordpressUrl);
+  if (!baseUrl) return { articles: [], usedFallback: false };
+
+  const isPluginAuth = args.wordpressUsername === '__CFRDM_PLUGIN__';
+  const username = args.wordpressUsername || '';
+  const appPassword = args.wordpressAppPassword || '';
+
+  // If explicitly requesting fallback or not using plugin auth, use REST API directly
+  if (args.useFallback || !isPluginAuth) {
+    if (!username || !appPassword || isPluginAuth) {
+      throw new Error('Para usar a REST API padrão, configure o WordPress com usuário e Application Password nas configurações do projeto.');
+    }
+    const articles = await fetchArticlesViaRestAPI(baseUrl, username, appPassword);
+    return { articles, usedFallback: true, fallbackReason: 'Solicitado pelo usuário' };
+  }
+
+  // Try plugin first
+  try {
+    const articles = await fetchArticlesViaPlugin(baseUrl, appPassword);
+    return { articles, usedFallback: false };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    
+    // Check if plugin is not found - offer to use fallback
+    if (errorMsg.startsWith('PLUGIN_NOT_FOUND:')) {
+      throw new Error(`O plugin ContentFactory não está instalado ou ativo neste site WordPress. Instale o plugin ou configure credenciais de Application Password no projeto para usar a REST API padrão como alternativa.`);
+    }
+    
+    // For other errors, just throw them
+    throw error;
+  }
 }
 
 serve(async (req) => {
@@ -275,8 +314,9 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { action, project_id, articles, site_url, keyword, content, max_links = 10, full_sync } = body;
+    const { action, project_id, articles, site_url, keyword, content, max_links = 10, full_sync, use_fallback } = body;
     const fullSync = !!full_sync;
+    const useFallback = !!use_fallback;
 
     // Verify project ownership
     const { data: project, error: projectError } = await supabase
@@ -299,6 +339,8 @@ serve(async (req) => {
       case "sync": {
         // Sync articles from WordPress
         let inputArticles: ArticleData[] = [];
+        let usedFallbackMode = false;
+        let fallbackReason: string | undefined;
 
         if (Array.isArray(articles)) {
           inputArticles = articles as ArticleData[];
@@ -312,13 +354,17 @@ serve(async (req) => {
             );
           }
 
-          inputArticles = await fetchWordPressArticlesForIndexing({
+          const fetchResult = await fetchWordPressArticlesForIndexing({
             wordpressUrl: wpUrl,
             wordpressUsername: (project as any).wordpress_username ?? null,
             wordpressAppPassword: (project as any).wordpress_app_password ?? null,
+            useFallback,
           });
+          
+          inputArticles = fetchResult.articles;
+          usedFallbackMode = fetchResult.usedFallback;
+          fallbackReason = fetchResult.fallbackReason;
         }
-
         if (!inputArticles.length) {
           return new Response(
             JSON.stringify({ success: true, results: { synced: 0, analyzed: 0, errors: 0, skipped: 0 }, message: "Nenhum artigo encontrado para indexação" }),
@@ -403,7 +449,12 @@ serve(async (req) => {
         }
 
         return new Response(
-          JSON.stringify({ success: true, results }),
+          JSON.stringify({ 
+            success: true, 
+            results,
+            usedFallback: usedFallbackMode,
+            fallbackReason,
+          }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }

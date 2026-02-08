@@ -47,11 +47,12 @@ import {
   ClipboardList,
   ArrowLeft,
 } from 'lucide-react';
-import { useInternalLinking, type KeywordRule, type IndexedArticle, type TopicCluster } from '@/hooks/useInternalLinking';
+import { useInternalLinking, type KeywordRule, type IndexedArticle, type TopicCluster, type SyncState } from '@/hooks/useInternalLinking';
 import { useProjects } from '@/hooks/useProjects';
 import { InternalLinkingMetrics } from './InternalLinkingMetrics';
 import { InternalLinkingReports } from './InternalLinkingReports';
 import { SyncProgressPanel } from './SyncProgressPanel';
+import { PluginInstallGuide } from './PluginInstallGuide';
 import { cn } from '@/lib/utils';
 
 interface InternalLinkingDashboardProps {
@@ -73,6 +74,7 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
     topicClusters,
     keywordRules,
     syncProgress,
+    syncState,
     fetchIndexedArticles,
     fetchTopicClusters,
     fetchKeywordRules,
@@ -82,6 +84,8 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
     deleteKeywordRule,
     toggleKeywordRule,
   } = useInternalLinking(projectId);
+
+  const [useFallbackMode, setUseFallbackMode] = useState(false);
 
   const [newRule, setNewRule] = useState({
     keyword: '',
@@ -207,11 +211,24 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
         </div>
       </div>
 
+      {/* Plugin Install Guide - Show when plugin not found */}
+      {syncState.pluginNotFound && (
+        <PluginInstallGuide
+          showFallbackOption={true}
+          onUseFallback={() => {
+            setUseFallbackMode(true);
+            triggerSync(false, true);
+          }}
+          isUsingFallback={useFallbackMode}
+        />
+      )}
+
       {/* Sync Progress Panel */}
       <SyncProgressPanel
         progress={syncProgress}
-        onStartSync={triggerSync}
+        onStartSync={(fullSync) => triggerSync(fullSync, useFallbackMode)}
         isSyncing={isSyncing}
+        usedFallback={syncState.usedFallback}
       />
 
       {/* Stats Cards */}
