@@ -321,6 +321,18 @@ interface Article {
   project_id: string | null;
 }
 
+interface WordPressArticle {
+  id: string;
+  wp_post_id: number;
+  wp_post_url: string;
+  wp_post_title: string;
+  primary_keyword: string | null;
+  secondary_keywords: string[];
+  topic_cluster: string | null;
+  linkability_score: number | null;
+  semantic_summary: string | null;
+}
+
 interface InternalLinksManagerProps {
   links: InternalLink[];
   onLinksChange: (links: InternalLink[]) => void;
@@ -343,7 +355,9 @@ export function InternalLinksManager({
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [articles, setArticles] = useState<Article[]>([]);
+  const [wpArticles, setWpArticles] = useState<WordPressArticle[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingWpArticles, setLoadingWpArticles] = useState(false);
   const [newAnchor, setNewAnchor] = useState('');
   const [newUrl, setNewUrl] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -356,6 +370,7 @@ export function InternalLinksManager({
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
   const [editingAnchor, setEditingAnchor] = useState('');
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
+  const [isSearchingAI, setIsSearchingAI] = useState(false);
 
   // DnD sensors
   const sensors = useSensors(
@@ -384,7 +399,7 @@ export function InternalLinksManager({
     }
   };
 
-  // Fetch existing articles for suggestions
+  // Fetch existing local articles for suggestions
   useEffect(() => {
     async function fetchArticles() {
       if (!user) return;
@@ -417,7 +432,58 @@ export function InternalLinksManager({
     fetchArticles();
   }, [user, projectId]);
 
-  // Filter articles based on search and exclude already added
+  // Fetch WordPress indexed articles
+  useEffect(() => {
+    async function fetchWpArticles() {
+      if (!user || !projectId) return;
+      
+      setLoadingWpArticles(true);
+      try {
+        const { data, error } = await supabase
+          .from('wordpress_article_index')
+          .select('id, wp_post_id, wp_post_url, wp_post_title, primary_keyword, secondary_keywords, topic_cluster, linkability_score, semantic_summary')
+          .eq('project_id', projectId)
+          .eq('user_id', user.id)
+          .eq('sync_status', 'synced')
+          .order('linkability_score', { ascending: false })
+          .limit(200);
+        
+        if (error) throw error;
+        setWpArticles(data || []);
+      } catch (error) {
+        console.error('Error fetching WordPress articles:', error);
+      } finally {
+        setLoadingWpArticles(false);
+      }
+    }
+    
+    fetchWpArticles();
+  }, [user, projectId]);
+
+  // Filter WordPress articles based on search and exclude already added
+  const filteredWpArticles = useMemo(() => {
+    const addedUrls = new Set(links.map(l => l.url.toLowerCase()));
+    
+    return wpArticles.filter(article => {
+      // Exclude already added articles
+      if (addedUrls.has(article.wp_post_url.toLowerCase())) return false;
+      
+      // Filter by search query
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return (
+          article.wp_post_title.toLowerCase().includes(query) ||
+          article.primary_keyword?.toLowerCase().includes(query) ||
+          article.topic_cluster?.toLowerCase().includes(query) ||
+          article.secondary_keywords?.some(kw => kw.toLowerCase().includes(query))
+        );
+      }
+      
+      return true;
+    });
+  }, [wpArticles, links, searchQuery]);
+
+  // Filter local articles based on search and exclude already added
   const filteredArticles = useMemo(() => {
     const addedUrls = new Set(links.map(l => l.url.toLowerCase()));
     
@@ -440,8 +506,40 @@ export function InternalLinksManager({
     });
   }, [articles, links, searchQuery]);
 
-  // Suggested articles based on keyword similarity with additional keyword filter
+  // Suggested WordPress articles based on keyword similarity
+  const suggestedWpArticles = useMemo(() => {
+    if (!keyword && !keywordFilter) return [];
+    
+    const searchTerms = (keywordFilter || keyword || '').toLowerCase();
+    const words = searchTerms.split(/\s+/).filter(w => w.length > 2);
+    
+    if (words.length === 0) return [];
+    
+    const addedUrls = new Set(links.map(l => l.url.toLowerCase()));
+    
+    return wpArticles
+      .filter(article => {
+        if (addedUrls.has(article.wp_post_url.toLowerCase())) return false;
+        
+        const title = article.wp_post_title.toLowerCase();
+        const kw = article.primary_keyword?.toLowerCase() || '';
+        const cluster = article.topic_cluster?.toLowerCase() || '';
+        const secondaryKws = article.secondary_keywords?.join(' ').toLowerCase() || '';
+        
+        return words.some(word => 
+          title.includes(word) || 
+          kw.includes(word) || 
+          cluster.includes(word) ||
+          secondaryKws.includes(word)
+        );
+      })
+      .sort((a, b) => (b.linkability_score || 0) - (a.linkability_score || 0))
+      .slice(0, 10);
+  }, [wpArticles, keyword, keywordFilter, links]);
+
+  // Suggested local articles based on keyword similarity (fallback)
   const suggestedArticles = useMemo(() => {
+    if (suggestedWpArticles.length > 0) return []; // Prefer WP articles
     if (!keyword && !keywordFilter) return [];
     
     const searchTerms = (keywordFilter || keyword || '').toLowerCase();
@@ -461,7 +559,7 @@ export function InternalLinksManager({
         return words.some(word => title.includes(word) || kw.includes(word));
       })
       .slice(0, 8);
-  }, [articles, keyword, keywordFilter, links]);
+  }, [articles, keyword, keywordFilter, links, suggestedWpArticles.length]);
 
   const addLink = (link: Omit<InternalLink, 'id'>) => {
     if (links.length >= maxLinks) return;
@@ -538,6 +636,21 @@ export function InternalLinksManager({
     setSearchQuery('');
   };
 
+  const handleAddFromWpArticle = (article: WordPressArticle) => {
+    const anchor = article.wp_post_title;
+    const url = article.wp_post_url;
+    
+    addLink({
+      anchor,
+      url,
+      source: 'suggested',
+      type: 'article',
+    });
+    
+    setSearchOpen(false);
+    setSearchQuery('');
+  };
+
   const handleAddSuggested = (article: Article) => {
     const anchor = article.title || article.keyword;
     const url = article.slug ? `/${article.slug}` : `/artigos/${article.id}`;
@@ -547,6 +660,84 @@ export function InternalLinksManager({
       url,
       source: 'suggested',
     });
+  };
+
+  const handleAddSuggestedWp = (article: WordPressArticle) => {
+    const anchor = article.wp_post_title;
+    const url = article.wp_post_url;
+    
+    addLink({
+      anchor,
+      url,
+      source: 'suggested',
+      type: 'article',
+    });
+  };
+
+  // Search for links using AI via edge function
+  const handleAISearch = async () => {
+    if (!projectId || !keyword) {
+      toast({
+        title: 'Configuração necessária',
+        description: 'Selecione um projeto e forneça uma palavra-chave para usar a busca com IA.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSearchingAI(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.access_token) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const response = await supabase.functions.invoke('analyze-wp-articles', {
+        body: {
+          action: 'get_link_suggestions',
+          project_id: projectId,
+          keyword: keyword,
+          max_links: maxLinks - links.length,
+        },
+      });
+
+      if (response.error) throw response.error;
+
+      const suggestions = response.data?.suggestions || [];
+      
+      if (suggestions.length === 0) {
+        toast({
+          title: 'Nenhuma sugestão encontrada',
+          description: 'A IA não encontrou artigos relevantes. Tente sincronizar os artigos do WordPress primeiro.',
+        });
+        return;
+      }
+
+      // Add suggested links
+      const newLinks: InternalLink[] = suggestions.map((s: any) => ({
+        id: crypto.randomUUID(),
+        anchor: s.anchor_text,
+        url: s.url,
+        source: 'suggested' as const,
+        type: 'article' as LinkType,
+      }));
+
+      onLinksChange([...links, ...newLinks.slice(0, maxLinks - links.length)]);
+      
+      toast({
+        title: 'Links sugeridos pela IA',
+        description: `${Math.min(newLinks.length, maxLinks - links.length)} links adicionados com base na análise semântica.`,
+      });
+    } catch (error) {
+      console.error('AI search error:', error);
+      toast({
+        title: 'Erro na busca com IA',
+        description: error instanceof Error ? error.message : 'Falha ao buscar sugestões',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSearchingAI(false);
+    }
   };
 
   // Parse imported text (URLs or CSV)
@@ -919,7 +1110,7 @@ export function InternalLinksManager({
             </DialogContent>
           </Dialog>
           
-          {/* Search existing articles */}
+          {/* Search existing articles (WordPress + Local) */}
           <Popover open={searchOpen} onOpenChange={setSearchOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -932,51 +1123,108 @@ export function InternalLinksManager({
                 Buscar
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-80 p-0" align="end">
+            <PopoverContent className="w-96 p-0" align="end">
               <Command>
                 <CommandInput
-                  placeholder="Buscar artigos..."
+                  placeholder="Buscar artigos do WordPress..."
                   value={searchQuery}
                   onValueChange={setSearchQuery}
                 />
-                <CommandList>
+                <CommandList className="max-h-80">
                   <CommandEmpty>
-                    {loading ? 'Carregando...' : 'Nenhum artigo encontrado'}
+                    {loadingWpArticles || loading ? 'Carregando...' : 'Nenhum artigo encontrado'}
                   </CommandEmpty>
-                  <CommandGroup heading="Artigos Disponíveis">
-                    {filteredArticles.slice(0, 10).map((article) => (
-                      <CommandItem
-                        key={article.id}
-                        onSelect={() => handleAddFromArticle(article)}
-                        className="cursor-pointer"
-                      >
-                        <FileText className="w-4 h-4 mr-2 text-muted-foreground" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm truncate">
-                            {article.title || article.keyword}
-                          </p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {article.slug || 'Sem slug'}
-                          </p>
-                        </div>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'ml-2 text-xs',
-                            article.status === 'published'
-                              ? 'border-green-300 text-green-700'
-                              : 'border-blue-300 text-blue-700'
-                          )}
+                  
+                  {/* WordPress Articles (Priority) */}
+                  {filteredWpArticles.length > 0 && (
+                    <CommandGroup heading="📰 Artigos do WordPress">
+                      {filteredWpArticles.slice(0, 10).map((article) => (
+                        <CommandItem
+                          key={article.id}
+                          onSelect={() => handleAddFromWpArticle(article)}
+                          className="cursor-pointer"
                         >
-                          {article.status === 'published' ? 'Publicado' : 'Pronto'}
-                        </Badge>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
+                          <Globe className="w-4 h-4 mr-2 text-blue-600" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm truncate font-medium">
+                              {article.wp_post_title}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {article.primary_keyword || article.topic_cluster || 'Sem keyword'}
+                            </p>
+                          </div>
+                          {article.linkability_score && (
+                            <Badge
+                              variant="outline"
+                              className="ml-2 text-xs border-green-300 text-green-700"
+                            >
+                              {article.linkability_score}%
+                            </Badge>
+                          )}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  )}
+                  
+                  {/* Local Articles (Fallback) */}
+                  {filteredArticles.length > 0 && (
+                    <CommandGroup heading="📝 Artigos Locais">
+                      {filteredArticles.slice(0, 5).map((article) => (
+                        <CommandItem
+                          key={article.id}
+                          onSelect={() => handleAddFromArticle(article)}
+                          className="cursor-pointer"
+                        >
+                          <FileText className="w-4 h-4 mr-2 text-muted-foreground" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm truncate">
+                              {article.title || article.keyword}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {article.slug || 'Sem slug'}
+                            </p>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              'ml-2 text-xs',
+                              article.status === 'published'
+                                ? 'border-green-300 text-green-700'
+                                : 'border-blue-300 text-blue-700'
+                            )}
+                          >
+                            {article.status === 'published' ? 'Publicado' : 'Pronto'}
+                          </Badge>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  )}
                 </CommandList>
               </Command>
             </PopoverContent>
           </Popover>
+
+          {/* AI Search Button */}
+          <Button
+            variant="default"
+            size="sm"
+            disabled={links.length >= maxLinks || isSearchingAI || !projectId}
+            className="gap-1"
+            style={{ backgroundColor: accentColor }}
+            onClick={handleAISearch}
+          >
+            {isSearchingAI ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Buscando...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-3.5 h-3.5" />
+                IA Buscar
+              </>
+            )}
+          </Button>
           
           {/* Add manual link */}
           <Button
@@ -1013,18 +1261,53 @@ export function InternalLinksManager({
         )}
       </div>
 
-      {/* Suggested Articles */}
+      {/* Suggested WordPress Articles */}
+      {suggestedWpArticles.length > 0 && (
+        <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
+          <div className="flex items-center gap-2 mb-2">
+            <Globe className="w-4 h-4 text-blue-600" />
+            <p className="text-sm font-medium text-blue-800">Sugestões do WordPress</p>
+            <Badge variant="outline" className="ml-auto text-xs border-blue-300 text-blue-700">
+              {suggestedWpArticles.length} artigos
+            </Badge>
+          </div>
+          <p className="text-xs text-blue-700 mb-3">
+            Artigos indexados relacionados a "{keywordFilter || keyword}"
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {suggestedWpArticles.map((article) => (
+              <Badge
+                key={article.id}
+                variant="outline"
+                className="cursor-pointer hover:bg-blue-100 border-blue-300 text-blue-800 gap-1 max-w-[220px]"
+                onClick={() => handleAddSuggestedWp(article)}
+              >
+                <Plus className="w-3 h-3 flex-shrink-0" />
+                <span className="truncate">
+                  {article.wp_post_title.slice(0, 40)}
+                  {article.wp_post_title.length > 40 && '...'}
+                </span>
+                {article.linkability_score && article.linkability_score >= 70 && (
+                  <span className="text-green-600 text-xs ml-1">★</span>
+                )}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Suggested Local Articles (Fallback) */}
       {suggestedArticles.length > 0 && (
         <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="w-4 h-4 text-amber-600" />
-            <p className="text-sm font-medium text-amber-800">Sugestões Automáticas</p>
+            <p className="text-sm font-medium text-amber-800">Sugestões Locais</p>
             <Badge variant="outline" className="ml-auto text-xs border-amber-300 text-amber-700">
               {suggestedArticles.length} encontrados
             </Badge>
           </div>
           <p className="text-xs text-amber-700 mb-3">
-            Artigos relacionados a "{keywordFilter || keyword}"
+            Artigos locais relacionados a "{keywordFilter || keyword}"
           </p>
           <div className="flex flex-wrap gap-2">
             {suggestedArticles.map((article) => (
@@ -1041,6 +1324,18 @@ export function InternalLinksManager({
                 </span>
               </Badge>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* No Articles Available Message */}
+      {wpArticles.length === 0 && projectId && !loadingWpArticles && (
+        <div className="p-3 rounded-lg bg-orange-50 border border-orange-200">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-orange-600" />
+            <p className="text-sm text-orange-800">
+              Nenhum artigo do WordPress indexado. Sincronize os artigos primeiro pelo painel de Linkagem Interna.
+            </p>
           </div>
         </div>
       )}
