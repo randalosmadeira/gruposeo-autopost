@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
@@ -40,7 +41,37 @@ export function useArticles(projectId?: string) {
       return data;
     },
     enabled: !!user,
+    // Refetch more frequently to catch generating articles
+    refetchInterval: 10000, // Every 10 seconds
+    staleTime: 5000, // Consider data stale after 5 seconds
   });
+
+  // Real-time subscription for instant updates
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('articles-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'articles',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log('Realtime article update:', payload.eventType);
+          // Invalidate queries to refetch data
+          queryClient.invalidateQueries({ queryKey: ['articles'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, queryClient]);
 
   const createArticle = useMutation({
     mutationFn: async (article: Omit<ArticleInsert, 'user_id'>) => {
