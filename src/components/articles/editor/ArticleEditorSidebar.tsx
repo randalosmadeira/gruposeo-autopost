@@ -78,6 +78,7 @@ export function ArticleEditorSidebar({
       : '09:00'
   );
   const excerptLength = article.excerpt?.length || 0;
+  const titleLength = article.title?.length || 0;
 
   const handleScheduleToggle = (enabled: boolean) => {
     setIsScheduleEnabled(enabled);
@@ -149,7 +150,7 @@ export function ArticleEditorSidebar({
               {/* Title */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="text-sm">Título</Label>
+                  <Label className="text-sm">Título SEO</Label>
                   <Button
                     size="sm"
                     onClick={() => onRegenerate('title')}
@@ -168,8 +169,24 @@ export function ArticleEditorSidebar({
                   value={article.title || ''}
                   onChange={(e) => onFieldUpdate('title', e.target.value)}
                   placeholder="Título do artigo"
-                  className="text-sm"
+                  className={cn(
+                    "text-sm",
+                    titleLength > 60 && "border-destructive focus-visible:ring-destructive"
+                  )}
                 />
+                <div className="flex items-center justify-between">
+                  <p className={cn(
+                    "text-xs",
+                    titleLength > 60 ? "text-destructive font-medium" : "text-muted-foreground"
+                  )}>
+                    {titleLength > 60 && "⚠️ "}
+                    {titleLength}/60 caracteres
+                    {titleLength > 60 && " (excede limite SEO)"}
+                  </p>
+                  {titleLength > 0 && titleLength <= 60 && (
+                    <span className="text-xs text-primary font-medium">✓ OK</span>
+                  )}
+                </div>
               </div>
 
               {/* Featured Image */}
@@ -227,11 +244,24 @@ export function ArticleEditorSidebar({
                   onChange={(e) => onFieldUpdate('excerpt', e.target.value)}
                   placeholder="Descrição curta para SEO"
                   rows={4}
-                  className="text-sm resize-none"
+                  className={cn(
+                    "text-sm resize-none",
+                    excerptLength > 160 && "border-destructive focus-visible:ring-destructive"
+                  )}
                 />
-                <p className="text-xs text-muted-foreground text-right">
-                  {excerptLength}/160 caracteres
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className={cn(
+                    "text-xs",
+                    excerptLength > 160 ? "text-destructive font-medium" : "text-muted-foreground"
+                  )}>
+                    {excerptLength > 160 && "⚠️ "}
+                    {excerptLength}/160 caracteres
+                    {excerptLength > 160 && " (excede limite SEO)"}
+                  </p>
+                  {excerptLength > 0 && excerptLength <= 160 && (
+                    <span className="text-xs text-primary font-medium">✓ OK</span>
+                  )}
+                </div>
               </div>
 
               {/* WordPress Categories */}
