@@ -208,6 +208,30 @@ function stripTrailingSlashes(url: string): string {
   return url.replace(/\/+$/, '');
 }
 
+// Normalize WordPress URL - extract base URL from plugin endpoint URL if needed
+function normalizeWordPressUrl(url: string): string {
+  if (!url) return '';
+  
+  let normalized = stripTrailingSlashes(url);
+  
+  // If URL contains /wp-json/cfrdm/v1, strip it to get the base WordPress URL
+  // e.g., https://example.com/blog/wp-json/cfrdm/v1 -> https://example.com/blog
+  const cfrdmMatch = normalized.match(/^(.+?)\/wp-json\/cfrdm\/v1/);
+  if (cfrdmMatch) {
+    normalized = cfrdmMatch[1];
+    console.log(`Normalized plugin URL: ${url} -> ${normalized}`);
+  }
+  
+  // Also handle if someone put /wp-json/ at the end
+  const wpJsonMatch = normalized.match(/^(.+?)\/wp-json\/?$/);
+  if (wpJsonMatch) {
+    normalized = wpJsonMatch[1];
+    console.log(`Normalized wp-json URL: ${url} -> ${normalized}`);
+  }
+  
+  return stripTrailingSlashes(normalized);
+}
+
 // Fetch articles using standard WordPress REST API with full pagination
 async function fetchArticlesViaRestAPI(
   baseUrl: string,
@@ -375,7 +399,8 @@ async function fetchWordPressArticlesForIndexing(args: {
   wordpressAppPassword: string | null;
   useFallback?: boolean;
 }): Promise<{ articles: ArticleData[]; usedFallback: boolean; fallbackReason?: string }> {
-  const baseUrl = stripTrailingSlashes(args.wordpressUrl);
+  // Normalize URL to get base WordPress URL (removes /wp-json/cfrdm/v1 if present)
+  const baseUrl = normalizeWordPressUrl(args.wordpressUrl);
   if (!baseUrl) return { articles: [], usedFallback: false };
 
   const isPluginAuth = args.wordpressUsername === '__CFRDM_PLUGIN__';
