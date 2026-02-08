@@ -4,6 +4,7 @@ import { createLogger, createRequestId } from "../_shared/logger.ts";
 import { callAI, generateGeminiImage, extractJSON } from "../_shared/gemini.ts";
 import { 
   JOURNALISTIC_SYSTEM_PROMPT, 
+  MANDATORY_JSON_OUTPUT_INSTRUCTIONS,
   buildUserPrompt, 
   NICHE_IMAGE_PROMPTS,
   type JournalisticRewriteRequest,
@@ -104,11 +105,27 @@ serve(async (req) => {
       .single();
     
     if (customTemplate?.prompt) {
-      systemPromptToUse = customTemplate.prompt;
+      // Merge custom prompt with mandatory JSON output instructions
+      // This ensures the AI always returns the expected JSON format
+      const customPromptHasJsonInstructions = 
+        customTemplate.prompt.includes('OUTPUT JSON') || 
+        customTemplate.prompt.includes('"content":') ||
+        customTemplate.prompt.includes('"seo":');
+      
+      if (customPromptHasJsonInstructions) {
+        // Custom prompt already has JSON instructions, use as-is
+        systemPromptToUse = customTemplate.prompt;
+      } else {
+        // Append mandatory JSON instructions to custom prompt
+        systemPromptToUse = customTemplate.prompt + MANDATORY_JSON_OUTPUT_INSTRUCTIONS;
+      }
+      
       agentName = customTemplate.agent_name || null;
       log.info("using_custom_prompt", { 
         agentName,
-        promptLength: customTemplate.prompt.length 
+        promptLength: systemPromptToUse.length,
+        originalLength: customTemplate.prompt.length,
+        mergedWithJsonInstructions: !customPromptHasJsonInstructions
       });
     } else {
       log.info("using_default_prompt");

@@ -338,6 +338,69 @@ Ao receber um feed RSS/notícia, execute:
 Pronto para processar feeds e gerar conteúdo autoral de alta qualidade!
 `;
 
+// Mandatory JSON output instructions - MUST be appended to custom prompts
+export const MANDATORY_JSON_OUTPUT_INSTRUCTIONS = `
+
+---
+
+# OUTPUT JSON ESTRUTURADO (OBRIGATÓRIO)
+
+**REGRA CRÍTICA:** Você DEVE retornar a resposta APENAS neste formato JSON. Não adicione texto antes ou depois do JSON.
+
+\`\`\`json
+{
+  "content": {
+    "html": "<h2>Subtítulo continuação...</h2><p>Conteúdo completo em HTML...</p>",
+    "plainText": "Versão texto puro sem HTML para preview",
+    "wordCount": 850,
+    "readingTime": "4 min"
+  },
+  "seo": {
+    "metaTitle": "Título otimizado SEO (50-60 chars)",
+    "metaDescription": "Descrição atraente e objetiva (150-160 chars)",
+    "slug": "url-amigavel-com-palavras-chave",
+    "focusKeyword": "palavra-chave principal",
+    "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+  },
+  "image": {
+    "prompt": "Prompt detalhado para geração de imagem conforme nicho e tema",
+    "altText": "Texto alternativo descritivo e com keyword"
+  },
+  "source": {
+    "originalUrl": "URL da matéria original completa",
+    "sourceName": "Nome do veículo/site original",
+    "credits": "Fonte: [VEÍCULO] - [URL]"
+  },
+  "internal": {
+    "category": "advocacia|saude|beleza|tecnologia|marketing|geral",
+    "tags": ["tag1", "tag2", "tag3"],
+    "qualityScore": 95,
+    "complianceCheck": {
+      "originalityScore": 98,
+      "citationCompliance": true,
+      "seoOptimized": true,
+      "readabilityScore": 85
+    }
+  },
+  "monetization": {
+    "adDensity": "medium",
+    "suggestedAdPlacements": [
+      {"position": "after-h2-1", "type": "display"},
+      {"position": "mid-content", "type": "native"},
+      {"position": "before-conclusion", "type": "display"}
+    ]
+  }
+}
+\`\`\`
+
+**CHECKLIST OBRIGATÓRIO:**
+- [ ] Conteúdo 100% reescrito (não espelhado da fonte)
+- [ ] Fonte original creditada ao final do artigo com link
+- [ ] Originalidade: ≥ 95%
+- [ ] Fidelidade factual: 100% (não invente dados)
+- [ ] JSON estruturado completo e válido
+`;
+
 // Niche-specific image prompt templates
 export const NICHE_IMAGE_PROMPTS: Record<string, string> = {
   advocacia: "Fotografia profissional estilo editorial, close-up de martelo de juiz sobre mesa de madeira nobre, documentos jurídicos desfocados ao fundo, iluminação suave lateral, tons de marrom e dourado, atmosfera de autoridade e confiança, alta resolução, estilo corporativo, 16:9",
