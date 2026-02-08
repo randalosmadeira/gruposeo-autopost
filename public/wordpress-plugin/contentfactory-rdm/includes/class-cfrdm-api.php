@@ -1588,9 +1588,11 @@ class CFRDM_API {
             $created[] = 'cfrdm_content_queue';
         }
         
-        // Generate API key if missing
-        if (!get_option('cfrdm_api_key')) {
-            update_option('cfrdm_api_key', wp_generate_uuid4());
+        // Always regenerate API key if missing or empty
+        $current_key = get_option('cfrdm_api_key');
+        if (empty($current_key)) {
+            $new_key = wp_generate_uuid4();
+            update_option('cfrdm_api_key', $new_key);
         }
         
         // Log the repair

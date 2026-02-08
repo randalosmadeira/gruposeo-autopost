@@ -15,6 +15,13 @@ class CFRDM_Admin {
     public static function render_dashboard() {
         $stats = CFRDM_Articles::get_stats();
         $api_key = get_option('cfrdm_api_key');
+        
+        // Auto-generate API key if missing
+        if (empty($api_key)) {
+            $api_key = wp_generate_uuid4();
+            update_option('cfrdm_api_key', $api_key);
+        }
+        
         $is_connected = !empty(get_option('cfrdm_api_url'));
         $synced_articles = CFRDM_Articles::get_synced_articles(5);
         $attention_articles = CFRDM_Articles::get_attention_articles(5);
@@ -1233,5 +1240,412 @@ class CFRDM_Admin {
         $results = CFRDM_Internal_Links::analyze_all_posts();
         
         wp_send_json_success($results);
+    }
+    
+    /**
+     * Render Article Indexation page - Full sitemap of all published posts
+     * This data is used for AI-powered internal linking and SEO optimization
+     */
+    public static function render_article_indexation() {
+        // Get pagination params
+        $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
+        $per_page = 50;
+        $offset = ($current_page - 1) * $per_page;
+        $orderby = isset($_GET['orderby']) ? sanitize_text_field($_GET['orderby']) : 'date';
+        $order = isset($_GET['order']) ? strtoupper(sanitize_text_field($_GET['order'])) : 'DESC';
+        $search = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
+        $category_filter = isset($_GET['category']) ? intval($_GET['category']) : 0;
+        
+        // Query all published posts
+        $args = array(
+            'post_type' => array('post', 'page'),
+            'post_status' => 'publish',
+            'posts_per_page' => $per_page,
+            'offset' => $offset,
+            'orderby' => $orderby,
+            'order' => $order,
+        );
+        
+        if ($search) {
+            $args['s'] = $search;
+        }
+        
+        if ($category_filter) {
+            $args['cat'] = $category_filter;
+        }
+        
+        $query = new WP_Query($args);
+        $total_posts = $query->found_posts;
+        $total_pages = ceil($total_posts / $per_page);
+        
+        // Get all categories for filter
+        $categories = get_categories(array('hide_empty' => true));
+        
+        // Get sync status
+        $last_sync = get_option('cfrdm_last_article_sync', 'Nunca');
+        $sync_progress = get_option('cfrdm_sync_progress', array('status' => 'idle'));
+        
+        ?>
+        <div class="wrap cfrdm-wrap">
+            <h1>
+                <span class="dashicons dashicons-database"></span>
+                <?php _e('Indexação de Artigos para SEO', 'contentfactory-rdm'); ?>
+            </h1>
+            
+            <p class="description">
+                Esta página exibe todos os artigos publicados do seu site. Esses dados são utilizados pela IA 
+                para criar links internos inteligentes, cruzar referências de conteúdo e otimizar sua estratégia de SEO.
+            </p>
+            
+            <!-- Sync Status Card -->
+            <div class="cfrdm-card" style="margin-bottom: 20px;">
+                <div class="cfrdm-card-header">
+                    <h2>
+                        <span class="dashicons dashicons-update-alt"></span>
+                        <?php _e('Status da Indexação', 'contentfactory-rdm'); ?>
+                    </h2>
+                </div>
+                <div class="cfrdm-card-body">
+                    <div class="cfrdm-stats-grid cfrdm-stats-grid-4" style="margin-bottom: 15px;">
+                        <div class="cfrdm-stat-card small">
+                            <div class="stat-content">
+                                <span class="stat-value"><?php echo number_format_i18n($total_posts); ?></span>
+                                <span class="stat-label"><?php _e('Artigos Indexáveis', 'contentfactory-rdm'); ?></span>
+                            </div>
+                        </div>
+                        <div class="cfrdm-stat-card small published">
+                            <div class="stat-content">
+                                <span class="stat-value"><?php echo number_format_i18n(wp_count_posts('post')->publish); ?></span>
+                                <span class="stat-label"><?php _e('Posts Publicados', 'contentfactory-rdm'); ?></span>
+                            </div>
+                        </div>
+                        <div class="cfrdm-stat-card small">
+                            <div class="stat-content">
+                                <span class="stat-value"><?php echo number_format_i18n(wp_count_posts('page')->publish); ?></span>
+                                <span class="stat-label"><?php _e('Páginas Publicadas', 'contentfactory-rdm'); ?></span>
+                            </div>
+                        </div>
+                        <div class="cfrdm-stat-card small synced">
+                            <div class="stat-content">
+                                <span class="stat-value"><?php echo esc_html(is_string($last_sync) ? $last_sync : 'Nunca'); ?></span>
+                                <span class="stat-label"><?php _e('Última Sincronização', 'contentfactory-rdm'); ?></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="cfrdm-actions">
+                        <button type="button" class="button button-primary" id="cfrdm-start-full-sync" <?php echo ($sync_progress['status'] === 'running') ? 'disabled' : ''; ?>>
+                            <span class="dashicons dashicons-update"></span>
+                            <?php _e('Sincronizar com ContentFactory', 'contentfactory-rdm'); ?>
+                        </button>
+                        <button type="button" class="button" id="cfrdm-export-sitemap">
+                            <span class="dashicons dashicons-download"></span>
+                            <?php _e('Exportar CSV', 'contentfactory-rdm'); ?>
+                        </button>
+                        <span id="cfrdm-sync-status" style="margin-left: 10px;">
+                            <?php if ($sync_progress['status'] === 'running'): ?>
+                                <span class="spinner is-active" style="float:none;"></span>
+                                <?php echo sprintf(__('Processando %d/%d...', 'contentfactory-rdm'), $sync_progress['processed'] ?? 0, $sync_progress['total'] ?? 0); ?>
+                            <?php endif; ?>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Filters -->
+            <div class="tablenav top">
+                <form method="get" action="">
+                    <input type="hidden" name="page" value="cfrdm-indexation">
+                    
+                    <div class="alignleft actions">
+                        <select name="category">
+                            <option value=""><?php _e('Todas as Categorias', 'contentfactory-rdm'); ?></option>
+                            <?php foreach ($categories as $cat): ?>
+                                <option value="<?php echo $cat->term_id; ?>" <?php selected($category_filter, $cat->term_id); ?>>
+                                    <?php echo esc_html($cat->name); ?> (<?php echo $cat->count; ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        
+                        <input type="submit" class="button" value="<?php _e('Filtrar', 'contentfactory-rdm'); ?>">
+                    </div>
+                    
+                    <div class="alignright">
+                        <input type="search" name="s" value="<?php echo esc_attr($search); ?>" placeholder="<?php _e('Buscar artigos...', 'contentfactory-rdm'); ?>">
+                        <input type="submit" class="button" value="<?php _e('Buscar', 'contentfactory-rdm'); ?>">
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Articles Table -->
+            <table class="wp-list-table widefat fixed striped posts">
+                <thead>
+                    <tr>
+                        <th scope="col" class="manage-column column-cb check-column">
+                            <input type="checkbox" id="cb-select-all-1">
+                        </th>
+                        <th scope="col" class="manage-column column-title column-primary sortable <?php echo ($orderby === 'title') ? ($order === 'DESC' ? 'desc' : 'asc') : ''; ?>">
+                            <a href="<?php echo esc_url(add_query_arg(array('orderby' => 'title', 'order' => ($orderby === 'title' && $order === 'ASC') ? 'DESC' : 'ASC'))); ?>">
+                                <span><?php _e('Título', 'contentfactory-rdm'); ?></span>
+                                <span class="sorting-indicators">
+                                    <span class="sorting-indicator asc" aria-hidden="true"></span>
+                                    <span class="sorting-indicator desc" aria-hidden="true"></span>
+                                </span>
+                            </a>
+                        </th>
+                        <th scope="col" class="manage-column"><?php _e('Autor', 'contentfactory-rdm'); ?></th>
+                        <th scope="col" class="manage-column"><?php _e('Categorias', 'contentfactory-rdm'); ?></th>
+                        <th scope="col" class="manage-column"><?php _e('Tags', 'contentfactory-rdm'); ?></th>
+                        <th scope="col" class="manage-column"><?php _e('Palavras', 'contentfactory-rdm'); ?></th>
+                        <th scope="col" class="manage-column"><?php _e('Links Int.', 'contentfactory-rdm'); ?></th>
+                        <th scope="col" class="manage-column sortable <?php echo ($orderby === 'date') ? ($order === 'DESC' ? 'desc' : 'asc') : ''; ?>">
+                            <a href="<?php echo esc_url(add_query_arg(array('orderby' => 'date', 'order' => ($orderby === 'date' && $order === 'DESC') ? 'ASC' : 'DESC'))); ?>">
+                                <span><?php _e('Data', 'contentfactory-rdm'); ?></span>
+                                <span class="sorting-indicators">
+                                    <span class="sorting-indicator asc" aria-hidden="true"></span>
+                                    <span class="sorting-indicator desc" aria-hidden="true"></span>
+                                </span>
+                            </a>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if ($query->have_posts()): ?>
+                        <?php while ($query->have_posts()): $query->the_post(); 
+                            $post_id = get_the_ID();
+                            $categories = get_the_category();
+                            $tags = get_the_tags();
+                            $word_count = str_word_count(strip_tags(get_the_content()));
+                            
+                            // Count internal links
+                            $content = get_the_content();
+                            $site_url = home_url();
+                            preg_match_all('/<a[^>]+href=["\'](' . preg_quote($site_url, '/') . '[^"\']*)["\'][^>]*>/i', $content, $internal_links);
+                            $internal_link_count = count($internal_links[0]);
+                        ?>
+                        <tr>
+                            <th scope="row" class="check-column">
+                                <input type="checkbox" name="post[]" value="<?php echo $post_id; ?>">
+                            </th>
+                            <td class="column-title column-primary">
+                                <strong>
+                                    <a href="<?php echo get_edit_post_link($post_id); ?>" class="row-title">
+                                        <?php the_title(); ?>
+                                    </a>
+                                </strong>
+                                <div class="row-actions">
+                                    <span class="edit">
+                                        <a href="<?php echo get_edit_post_link($post_id); ?>"><?php _e('Editar', 'contentfactory-rdm'); ?></a> |
+                                    </span>
+                                    <span class="view">
+                                        <a href="<?php the_permalink(); ?>" target="_blank"><?php _e('Ver', 'contentfactory-rdm'); ?></a> |
+                                    </span>
+                                    <span class="analyze">
+                                        <a href="#" class="cfrdm-analyze-post" data-post-id="<?php echo $post_id; ?>"><?php _e('Analisar SEO', 'contentfactory-rdm'); ?></a>
+                                    </span>
+                                </div>
+                            </td>
+                            <td><?php the_author(); ?></td>
+                            <td>
+                                <?php 
+                                if ($categories) {
+                                    $cat_names = array_map(function($cat) { return $cat->name; }, $categories);
+                                    echo esc_html(implode(', ', array_slice($cat_names, 0, 3)));
+                                    if (count($cat_names) > 3) {
+                                        echo ' <span class="description">+' . (count($cat_names) - 3) . '</span>';
+                                    }
+                                } else {
+                                    echo '—';
+                                }
+                                ?>
+                            </td>
+                            <td>
+                                <?php 
+                                if ($tags) {
+                                    $tag_names = array_map(function($tag) { return $tag->name; }, $tags);
+                                    echo esc_html(implode(', ', array_slice($tag_names, 0, 3)));
+                                    if (count($tag_names) > 3) {
+                                        echo ' <span class="description">+' . (count($tag_names) - 3) . '</span>';
+                                    }
+                                } else {
+                                    echo '—';
+                                }
+                                ?>
+                            </td>
+                            <td><?php echo number_format_i18n($word_count); ?></td>
+                            <td>
+                                <?php if ($internal_link_count > 0): ?>
+                                    <span class="dashicons dashicons-admin-links" style="color: #2e7d32;"></span>
+                                    <?php echo $internal_link_count; ?>
+                                <?php else: ?>
+                                    <span style="color: #b26a00;">0</span>
+                                <?php endif; ?>
+                            </td>
+                            <td><?php echo get_the_date('d/m/Y H:i'); ?></td>
+                        </tr>
+                        <?php endwhile; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="8" class="no-items"><?php _e('Nenhum artigo encontrado.', 'contentfactory-rdm'); ?></td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <th scope="col" class="manage-column column-cb check-column">
+                            <input type="checkbox" id="cb-select-all-2">
+                        </th>
+                        <th scope="col"><?php _e('Título', 'contentfactory-rdm'); ?></th>
+                        <th scope="col"><?php _e('Autor', 'contentfactory-rdm'); ?></th>
+                        <th scope="col"><?php _e('Categorias', 'contentfactory-rdm'); ?></th>
+                        <th scope="col"><?php _e('Tags', 'contentfactory-rdm'); ?></th>
+                        <th scope="col"><?php _e('Palavras', 'contentfactory-rdm'); ?></th>
+                        <th scope="col"><?php _e('Links Int.', 'contentfactory-rdm'); ?></th>
+                        <th scope="col"><?php _e('Data', 'contentfactory-rdm'); ?></th>
+                    </tr>
+                </tfoot>
+            </table>
+            
+            <!-- Pagination -->
+            <?php if ($total_pages > 1): ?>
+            <div class="tablenav bottom">
+                <div class="tablenav-pages">
+                    <span class="displaying-num">
+                        <?php echo sprintf(__('%d itens', 'contentfactory-rdm'), $total_posts); ?>
+                    </span>
+                    <span class="pagination-links">
+                        <?php
+                        echo paginate_links(array(
+                            'base' => add_query_arg('paged', '%#%'),
+                            'format' => '',
+                            'prev_text' => '&laquo;',
+                            'next_text' => '&raquo;',
+                            'total' => $total_pages,
+                            'current' => $current_page,
+                        ));
+                        ?>
+                    </span>
+                </div>
+            </div>
+            <?php endif; ?>
+            
+            <?php wp_reset_postdata(); ?>
+            
+            <!-- Info Box -->
+            <div class="cfrdm-card" style="margin-top: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <div class="cfrdm-card-body">
+                    <h3 style="color: white; margin-top: 0;">
+                        <span class="dashicons dashicons-lightbulb"></span>
+                        <?php _e('Como funciona a Indexação Inteligente?', 'contentfactory-rdm'); ?>
+                    </h3>
+                    <p style="opacity: 0.9;">
+                        <?php _e('A IA do ContentFactory analisa todos os seus artigos publicados para:', 'contentfactory-rdm'); ?>
+                    </p>
+                    <ul style="opacity: 0.9; margin-left: 20px;">
+                        <li><?php _e('✓ Criar links internos inteligentes baseados em semântica', 'contentfactory-rdm'); ?></li>
+                        <li><?php _e('✓ Identificar oportunidades de backlinks entre artigos', 'contentfactory-rdm'); ?></li>
+                        <li><?php _e('✓ Detectar conteúdos relacionados para clusters temáticos', 'contentfactory-rdm'); ?></li>
+                        <li><?php _e('✓ Sugerir melhorias de SEO baseadas no seu conteúdo existente', 'contentfactory-rdm'); ?></li>
+                        <li><?php _e('✓ Alimentar a linha editorial com contexto do seu site', 'contentfactory-rdm'); ?></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+        jQuery(document).ready(function($) {
+            // Export CSV
+            $('#cfrdm-export-sitemap').on('click', function() {
+                var articles = [];
+                $('table.wp-list-table tbody tr').each(function() {
+                    var $row = $(this);
+                    articles.push({
+                        title: $row.find('.column-title .row-title').text(),
+                        author: $row.find('td:nth-child(3)').text(),
+                        categories: $row.find('td:nth-child(4)').text(),
+                        tags: $row.find('td:nth-child(5)').text(),
+                        words: $row.find('td:nth-child(6)').text(),
+                        internal_links: $row.find('td:nth-child(7)').text().trim(),
+                        date: $row.find('td:nth-child(8)').text()
+                    });
+                });
+                
+                var csv = 'Título,Autor,Categorias,Tags,Palavras,Links Internos,Data\n';
+                articles.forEach(function(a) {
+                    csv += '"' + a.title + '","' + a.author + '","' + a.categories + '","' + a.tags + '",' + a.words + ',' + a.internal_links + ',"' + a.date + '"\n';
+                });
+                
+                var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                var link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'artigos-indexados-' + new Date().toISOString().slice(0,10) + '.csv';
+                link.click();
+            });
+            
+            // Start full sync
+            $('#cfrdm-start-full-sync').on('click', function() {
+                var $btn = $(this);
+                var $status = $('#cfrdm-sync-status');
+                
+                $btn.prop('disabled', true);
+                $status.html('<span class="spinner is-active" style="float:none;"></span> Iniciando sincronização...');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    method: 'POST',
+                    data: {
+                        action: 'cfrdm_start_full_sync',
+                        nonce: '<?php echo wp_create_nonce('cfrdm_admin_nonce'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            $status.html('<span style="color:#2e7d32;">✓ ' + response.data.message + '</span>');
+                            // Poll for status
+                            pollSyncStatus();
+                        } else {
+                            $status.html('<span style="color:#c62828;">✗ ' + (response.data.message || 'Erro') + '</span>');
+                            $btn.prop('disabled', false);
+                        }
+                    },
+                    error: function() {
+                        $status.html('<span style="color:#c62828;">✗ Erro de conexão</span>');
+                        $btn.prop('disabled', false);
+                    }
+                });
+            });
+            
+            function pollSyncStatus() {
+                $.ajax({
+                    url: ajaxurl,
+                    method: 'POST',
+                    data: {
+                        action: 'cfrdm_get_sync_status',
+                        nonce: '<?php echo wp_create_nonce('cfrdm_admin_nonce'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            var progress = response.data;
+                            if (progress.status === 'running') {
+                                $('#cfrdm-sync-status').html(
+                                    '<span class="spinner is-active" style="float:none;"></span> ' +
+                                    'Processando ' + progress.processed + '/' + progress.total + '...'
+                                );
+                                setTimeout(pollSyncStatus, 2000);
+                            } else if (progress.status === 'completed') {
+                                $('#cfrdm-sync-status').html(
+                                    '<span style="color:#2e7d32;">✓ Sincronização concluída! ' +
+                                    progress.synced + ' artigos sincronizados.</span>'
+                                );
+                                $('#cfrdm-start-full-sync').prop('disabled', false);
+                            } else {
+                                $('#cfrdm-start-full-sync').prop('disabled', false);
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        </script>
+        <?php
     }
 }
