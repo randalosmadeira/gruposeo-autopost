@@ -131,6 +131,25 @@ serve(async (req) => {
         log.info("discovered_wp_path", { path: discovery.path });
       }
 
+      // Try to get version info first (public endpoint, no auth required)
+      let versionInfo: { version?: string; is_current?: boolean; features?: Record<string, boolean> } | null = null;
+      try {
+        const versionResponse = await fetch(`${baseUrl}/wp-json/cfrdm/v1/version`, {
+          method: "GET",
+          headers: { "Accept": "application/json" },
+        });
+        
+        if (versionResponse.ok) {
+          const versionContentType = versionResponse.headers.get("content-type") || "";
+          if (versionContentType.includes("application/json")) {
+            versionInfo = await versionResponse.json();
+            log.info("version_endpoint_found", { version: versionInfo?.version });
+          }
+        }
+      } catch (versionError) {
+        log.info("version_endpoint_not_available", { error: "non-critical" });
+      }
+
       log.info("testing_plugin", { url: `${baseUrl}/wp-json/cfrdm/v1/test` });
       
       try {
@@ -189,14 +208,24 @@ serve(async (req) => {
         const pluginData = JSON.parse(responseText);
 
         if (pluginResponse.ok && pluginData.success) {
-          // Check plugin version
-          const pluginVersion = pluginData.version || pluginData.site?.version || "1.0.0";
+          // Get version from multiple sources: /version endpoint, test response, or site info
+          const pluginVersion = versionInfo?.version || pluginData.version || pluginData.site?.version || "1.0.0";
           const isOutdated = compareVersions(pluginVersion, MINIMUM_PLUGIN_VERSION) < 0;
+          
+          // Get feature availability from version endpoint if available
+          const features = versionInfo?.features || {
+            gsc_integration: !isOutdated,
+            ai_auto_fix: !isOutdated,
+            ubersuggest_sync: !isOutdated,
+            https_enforcer: !isOutdated,
+            content_enhancer: !isOutdated,
+          };
           
           log.info("plugin_connection_success", { 
             site: pluginData.site, 
             version: pluginVersion,
-            isOutdated 
+            isOutdated,
+            versionSource: versionInfo ? "version_endpoint" : "test_response"
           });
           log.requestEnd(200, Date.now() - startTime);
           return new Response(
@@ -211,6 +240,7 @@ serve(async (req) => {
               minimumVersion: MINIMUM_PLUGIN_VERSION,
               isOutdated,
               updateRequired: isOutdated,
+              features,
               updateMessage: isOutdated 
                 ? `⚠️ Atualização obrigatória: seu plugin está na v${pluginVersion}, mas a v${MINIMUM_PLUGIN_VERSION}+ é necessária para GSC, AI Auto-Fix e novas funcionalidades.`
                 : null,
