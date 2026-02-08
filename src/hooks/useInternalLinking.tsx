@@ -216,7 +216,18 @@ export function useInternalLinking(projectId: string | null) {
       });
 
       if (syncResponse.error) {
-        throw syncResponse.error;
+        // Extract meaningful error message
+        const errorMsg = syncResponse.error.message || 'Erro desconhecido';
+        const isConnectionError = errorMsg.includes('fetch') || 
+                                   errorMsg.includes('network') || 
+                                   errorMsg.includes('CORS') ||
+                                   errorMsg.includes('Failed to fetch') ||
+                                   errorMsg.includes('Falha ao buscar');
+        
+        if (isConnectionError) {
+          throw new Error('Erro de conexão: Verifique se o plugin ContentFactory está instalado e ativado no WordPress, e se a API Key está configurada corretamente.');
+        }
+        throw new Error(errorMsg);
       }
 
       const results = syncResponse.data?.results || { synced: 0, analyzed: 0, errors: 0, skipped: 0, total: 0 };

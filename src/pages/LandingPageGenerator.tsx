@@ -1313,6 +1313,7 @@ export default function LandingPageGenerator() {
                   ),
                 }));
               }}
+              onFeaturedImageChange={(imageUrl) => setEditorData(prev => ({ ...prev, featuredImage: imageUrl }))}
               onPublish={handlePublish}
               onSave={handleSave}
               isPublishing={isPublishing}
@@ -1321,6 +1322,8 @@ export default function LandingPageGenerator() {
               projects={projects}
               selectedProjectId={config.projectId}
               publishedUrl={publishedUrl || undefined}
+              keyword={config.keyword}
+              segment={config.segment}
             />
           )}
 
