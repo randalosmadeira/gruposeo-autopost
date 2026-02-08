@@ -1,0 +1,533 @@
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Link2,
+  RefreshCw,
+  Plus,
+  Trash2,
+  Settings,
+  Layers,
+  FileText,
+  Target,
+  Sparkles,
+  ExternalLink,
+} from 'lucide-react';
+import { useInternalLinking, type KeywordRule, type IndexedArticle, type TopicCluster } from '@/hooks/useInternalLinking';
+import { cn } from '@/lib/utils';
+
+interface InternalLinkingDashboardProps {
+  projectId: string | null;
+  projectName?: string;
+}
+
+export function InternalLinkingDashboard({ projectId, projectName }: InternalLinkingDashboardProps) {
+  const {
+    isLoading,
+    isSyncing,
+    indexedArticles,
+    topicClusters,
+    keywordRules,
+    fetchIndexedArticles,
+    fetchTopicClusters,
+    fetchKeywordRules,
+    triggerSync,
+    generateClusters,
+    addKeywordRule,
+    deleteKeywordRule,
+    toggleKeywordRule,
+  } = useInternalLinking(projectId);
+
+  const [newRule, setNewRule] = useState({
+    keyword: '',
+    target_url: '',
+    target_title: '',
+    match_type: 'exact' as const,
+    max_links_per_article: 1,
+  });
+  const [isAddRuleOpen, setIsAddRuleOpen] = useState(false);
+
+  // Load data on mount
+  useEffect(() => {
+    if (projectId) {
+      fetchIndexedArticles();
+      fetchTopicClusters();
+      fetchKeywordRules();
+    }
+  }, [projectId, fetchIndexedArticles, fetchTopicClusters, fetchKeywordRules]);
+
+  const handleAddRule = async () => {
+    if (!newRule.keyword || !newRule.target_url) return;
+
+    await addKeywordRule({
+      ...newRule,
+      is_active: true,
+    });
+
+    setNewRule({
+      keyword: '',
+      target_url: '',
+      target_title: '',
+      match_type: 'exact',
+      max_links_per_article: 1,
+    });
+    setIsAddRuleOpen(false);
+  };
+
+  if (!projectId) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center text-muted-foreground">
+          <Link2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
+          <p>Selecione um projeto WordPress para gerenciar a linkagem interna.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Linkagem Interna Inteligente</h2>
+          <p className="text-muted-foreground">
+            {projectName || 'Projeto'} • {indexedArticles.length} artigos indexados
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => generateClusters()}
+            disabled={isLoading || indexedArticles.length === 0}
+          >
+            <Sparkles className="w-4 h-4 mr-2" />
+            Gerar Clusters
+          </Button>
+          <Button
+            onClick={() => triggerSync(true)}
+            disabled={isSyncing}
+          >
+            <RefreshCw className={cn("w-4 h-4 mr-2", isSyncing && "animate-spin")} />
+            {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                <FileText className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{indexedArticles.length}</p>
+                <p className="text-sm text-muted-foreground">Artigos Indexados</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+                <Layers className="w-6 h-6 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{topicClusters.length}</p>
+                <p className="text-sm text-muted-foreground">Clusters Temáticos</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-green-100 dark:bg-green-900/30">
+                <Target className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{keywordRules.filter(r => r.is_active).length}</p>
+                <p className="text-sm text-muted-foreground">Regras Ativas</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-amber-100 dark:bg-amber-900/30">
+                <Link2 className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">
+                  {keywordRules.reduce((sum, r) => sum + r.times_applied, 0)}
+                </p>
+                <p className="text-sm text-muted-foreground">Links Aplicados</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Content Tabs */}
+      <Tabs defaultValue="articles" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="articles">Artigos Indexados</TabsTrigger>
+          <TabsTrigger value="clusters">Clusters Temáticos</TabsTrigger>
+          <TabsTrigger value="rules">Regras de Linkagem</TabsTrigger>
+        </TabsList>
+
+        {/* Indexed Articles Tab */}
+        <TabsContent value="articles">
+          <Card>
+            <CardHeader>
+              <CardTitle>Artigos Indexados</CardTitle>
+              <CardDescription>
+                Artigos analisados e disponíveis para linkagem automática
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : indexedArticles.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">
+                  <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>Nenhum artigo indexado ainda.</p>
+                  <p className="text-sm">Clique em "Sincronizar" para indexar os artigos do WordPress.</p>
+                </div>
+              ) : (
+                <ScrollArea className="h-[400px]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Título</TableHead>
+                        <TableHead>Keyword Principal</TableHead>
+                        <TableHead>Cluster</TableHead>
+                        <TableHead className="text-center">Linkabilidade</TableHead>
+                        <TableHead></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {indexedArticles.map((article) => (
+                        <TableRow key={article.id}>
+                          <TableCell className="font-medium max-w-[300px] truncate">
+                            {article.wp_post_title}
+                          </TableCell>
+                          <TableCell>
+                            {article.primary_keyword ? (
+                              <Badge variant="secondary">{article.primary_keyword}</Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {article.topic_cluster ? (
+                              <Badge variant="outline">{article.topic_cluster}</Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div
+                                  className={cn(
+                                    "h-full rounded-full",
+                                    article.linkability_score >= 70 ? "bg-green-500" :
+                                    article.linkability_score >= 40 ? "bg-amber-500" : "bg-red-500"
+                                  )}
+                                  style={{ width: `${article.linkability_score}%` }}
+                                />
+                              </div>
+                              <span className="text-sm text-muted-foreground w-8">
+                                {article.linkability_score}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => window.open(article.wp_post_url, '_blank')}
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Topic Clusters Tab */}
+        <TabsContent value="clusters">
+          <Card>
+            <CardHeader>
+              <CardTitle>Clusters Temáticos</CardTitle>
+              <CardDescription>
+                Agrupamentos automáticos de artigos por tema para linkagem contextual
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {topicClusters.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">
+                  <Layers className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>Nenhum cluster identificado ainda.</p>
+                  <p className="text-sm">Clique em "Gerar Clusters" após indexar os artigos.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {topicClusters.map((cluster) => (
+                    <Card key={cluster.id} className="border-2">
+                      <CardContent className="pt-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <h4 className="font-semibold">{cluster.name}</h4>
+                          <Badge variant="outline">{cluster.article_count} artigos</Badge>
+                        </div>
+                        
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between text-sm mb-1">
+                            <span className="text-muted-foreground">Força do Cluster</span>
+                            <span className="font-medium">{cluster.cluster_strength}%</span>
+                          </div>
+                          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-purple-500 rounded-full"
+                              style={{ width: `${cluster.cluster_strength}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {cluster.primary_keywords.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {cluster.primary_keywords.slice(0, 4).map((kw, i) => (
+                              <Badge key={i} variant="secondary" className="text-xs">
+                                {kw}
+                              </Badge>
+                            ))}
+                            {cluster.primary_keywords.length > 4 && (
+                              <Badge variant="secondary" className="text-xs">
+                                +{cluster.primary_keywords.length - 4}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Keyword Rules Tab */}
+        <TabsContent value="rules">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Regras de Linkagem</CardTitle>
+                <CardDescription>
+                  Defina palavras-chave que linkam automaticamente para URLs específicas
+                </CardDescription>
+              </div>
+              <Dialog open={isAddRuleOpen} onOpenChange={setIsAddRuleOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nova Regra
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Nova Regra de Linkagem</DialogTitle>
+                    <DialogDescription>
+                      Configure uma palavra-chave para linkar automaticamente
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Palavra-chave</Label>
+                      <Input
+                        placeholder="Ex: SEO WordPress"
+                        value={newRule.keyword}
+                        onChange={(e) => setNewRule({ ...newRule, keyword: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>URL de Destino</Label>
+                      <Input
+                        placeholder="https://exemplo.com/artigo"
+                        value={newRule.target_url}
+                        onChange={(e) => setNewRule({ ...newRule, target_url: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Título (opcional)</Label>
+                      <Input
+                        placeholder="Título para exibição"
+                        value={newRule.target_title}
+                        onChange={(e) => setNewRule({ ...newRule, target_title: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Tipo de Match</Label>
+                        <Select
+                          value={newRule.match_type}
+                          onValueChange={(v) => setNewRule({ ...newRule, match_type: v as any })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="exact">Exato</SelectItem>
+                            <SelectItem value="partial">Parcial</SelectItem>
+                            <SelectItem value="regex">Regex</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Máx. links/artigo</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={10}
+                          value={newRule.max_links_per_article}
+                          onChange={(e) => setNewRule({ ...newRule, max_links_per_article: parseInt(e.target.value) || 1 })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsAddRuleOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button onClick={handleAddRule} disabled={!newRule.keyword || !newRule.target_url}>
+                      Criar Regra
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+            <CardContent>
+              {keywordRules.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">
+                  <Settings className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>Nenhuma regra de linkagem configurada.</p>
+                  <p className="text-sm">Crie regras para automatizar a inserção de links.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Palavra-chave</TableHead>
+                      <TableHead>URL de Destino</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead className="text-center">Aplicações</TableHead>
+                      <TableHead className="text-center">Ativo</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {keywordRules.map((rule) => (
+                      <TableRow key={rule.id}>
+                        <TableCell className="font-medium">
+                          <Badge>{rule.keyword}</Badge>
+                        </TableCell>
+                        <TableCell className="max-w-[200px] truncate">
+                          <a
+                            href={rule.target_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                          >
+                            {rule.target_title || rule.target_url}
+                          </a>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{rule.match_type}</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {rule.times_applied}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Switch
+                            checked={rule.is_active}
+                            onCheckedChange={(checked) => toggleKeywordRule(rule.id, checked)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteKeywordRule(rule.id)}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+export default InternalLinkingDashboard;
