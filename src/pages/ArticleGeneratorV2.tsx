@@ -189,7 +189,7 @@ export default function ArticleGeneratorV2() {
   const { settings } = useSettings();
   const { isGenerating, generateArticle, content: generatedContent } = useArticleGeneration();
   const { publishArticle, isPublishing } = useWordPressPublish();
-  const { generateImage, isGenerating: isGeneratingImage, generatedImage } = useImageGeneration();
+  const { generateImage, generateMultipleImages, isGenerating: isGeneratingImage, generatedImage, generatedImages } = useImageGeneration();
   const { 
     articleId, 
     isSaving, 
@@ -432,8 +432,10 @@ export default function ArticleGeneratorV2() {
       });
     })();
 
-    // Generate featured image automatically if enabled
+    // Generate featured image(s) automatically if enabled
     let imageResult: { image: string } | null = null;
+    let allGeneratedImages: Array<{ image: string }> = [];
+    
     if (config.generateImages) {
       setIsImageLoading(true);
       try {
@@ -444,19 +446,34 @@ export default function ArticleGeneratorV2() {
             ? 'gemini'
             : ((settings?.ai_provider as any) || 'auto');
 
-        imageResult = await generateImage({
+        const imageRequest = {
           title: config.title || config.keyword,
           keywords: config.keyword,
           segment: config.segment as 'legal' | 'health' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'education' | 'general',
-          style: config.imageStyle === 'fotorrealístico' ? 'photorealistic' : 
-                 config.imageStyle === 'ilustração' ? 'illustration' : 'abstract',
-          quality: 'standard',
-          // Use user's settings for image provider/model when BYOK is enabled
-          provider: settings?.byok_enabled ? inferredProvider : 'auto',
+          style: config.imageStyle === 'fotorrealístico' ? 'photorealistic' as const : 
+                 config.imageStyle === 'ilustração' ? 'illustration' as const : 'abstract' as const,
+          quality: 'standard' as const,
+          provider: settings?.byok_enabled ? inferredProvider : 'auto' as const,
           model: imageModel,
-        });
+        };
+
+        // Generate multiple images if count > 1
+        if (config.imageCount > 1) {
+          const multiResult = await generateMultipleImages(imageRequest, config.imageCount);
+          if (multiResult.featuredImage) {
+            imageResult = { image: multiResult.featuredImage.image };
+            allGeneratedImages = multiResult.images.map(img => ({ image: img.image }));
+          }
+        } else {
+          // Generate single image
+          const singleResult = await generateImage(imageRequest);
+          if (singleResult) {
+            imageResult = { image: singleResult.image };
+            allGeneratedImages = [{ image: singleResult.image }];
+          }
+        }
       } catch (error) {
-        console.error('Error generating image:', error);
+        console.error('Error generating image(s):', error);
       } finally {
         setIsImageLoading(false);
       }
