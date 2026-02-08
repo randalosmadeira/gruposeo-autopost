@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useToast } from './use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { createErrorToastContent } from '@/components/ui/error-toast';
+import { removeCodeBlockMarkers, improveContentStructure } from '@/lib/sanitize';
 
 const GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-article`;
 
@@ -205,6 +206,11 @@ export function useArticleGeneration() {
         }
       }
 
+      // Clean up the content - remove code block markers and improve structure
+      fullContent = removeCodeBlockMarkers(fullContent);
+      fullContent = improveContentStructure(fullContent);
+
+      setContent(fullContent);
       setProgress(100);
       setIsGenerating(false);
       
