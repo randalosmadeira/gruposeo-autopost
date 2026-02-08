@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { AnalyzedKeyword } from '@/lib/keyword-analyzer';
@@ -11,6 +11,9 @@ export interface GenerationJob {
   error?: string;
   startedAt?: Date;
   completedAt?: Date;
+  progress?: number;
+  currentStep?: string;
+  content?: string;
 }
 
 export interface BulkGenerationState {
@@ -21,8 +24,78 @@ export interface BulkGenerationState {
   errorCount: number;
 }
 
+// Parse SSE stream and accumulate content
+async function parseSSEStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  onProgress: (content: string, progress: number) => void
+): Promise<string> {
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullContent = '';
+  let estimatedWords = 0;
+  const targetWords = 1500; // Average target
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    let newlineIndex: number;
+    while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+      let line = buffer.slice(0, newlineIndex);
+      buffer = buffer.slice(newlineIndex + 1);
+
+      if (line.endsWith('\r')) line = line.slice(0, -1);
+      if (line.startsWith(':') || line.trim() === '') continue;
+      if (!line.startsWith('data: ')) continue;
+
+      const jsonStr = line.slice(6).trim();
+      if (jsonStr === '[DONE]') {
+        onProgress(fullContent, 100);
+        return fullContent;
+      }
+
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const deltaContent = parsed.choices?.[0]?.delta?.content as string | undefined;
+        if (deltaContent) {
+          fullContent += deltaContent;
+          estimatedWords = fullContent.split(/\s+/).length;
+          const progress = Math.min((estimatedWords / targetWords) * 100, 95);
+          onProgress(fullContent, progress);
+        }
+      } catch {
+        // Incomplete JSON, continue
+      }
+    }
+  }
+
+  // Final flush
+  if (buffer.trim()) {
+    for (let raw of buffer.split('\n')) {
+      if (!raw) continue;
+      if (raw.endsWith('\r')) raw = raw.slice(0, -1);
+      if (raw.startsWith(':') || raw.trim() === '') continue;
+      if (!raw.startsWith('data: ')) continue;
+      const jsonStr = raw.slice(6).trim();
+      if (jsonStr === '[DONE]') continue;
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const deltaContent = parsed.choices?.[0]?.delta?.content as string | undefined;
+        if (deltaContent) {
+          fullContent += deltaContent;
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  return fullContent;
+}
+
 export function useBulkGeneration() {
   const { toast } = useToast();
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [state, setState] = useState<BulkGenerationState>({
     jobs: [],
     isRunning: false,
@@ -35,7 +108,8 @@ export function useBulkGeneration() {
     const jobs: GenerationJob[] = keywords.map((kw, index) => ({
       id: `job-${index}-${Date.now()}`,
       keyword: kw,
-      status: 'pending'
+      status: 'pending',
+      progress: 0,
     }));
 
     setState({
@@ -49,7 +123,11 @@ export function useBulkGeneration() {
     return jobs;
   }, []);
 
-  const generateArticle = async (job: GenerationJob, projectId?: string): Promise<string | null> => {
+  const generateArticleWithStreaming = async (
+    job: GenerationJob, 
+    projectId: string | undefined,
+    onProgress: (content: string, progress: number) => void
+  ): Promise<{ content: string; articleId: string | null }> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) {
       throw new Error('Não autenticado');
@@ -60,11 +138,18 @@ export function useBulkGeneration() {
       type: job.keyword.tipoConteudo === 'landing_page' ? 'sales' : 'blog',
       language: 'pt-BR',
       tone: 'professional',
-      wordCount: job.keyword.comprimentoSugerido,
-      pointOfView: 'third_person',
-      generateImage: true,
-      projectId
+      wordCount: job.keyword.comprimentoSugerido || 'medium',
+      pointOfView: 'terceira',
+      secondaryKeywords: '',
+      includeFaq: true,
+      faqCount: 5,
+      includeTable: false,
+      includeList: true,
+      includeConclusion: true,
+      seoOptimization: true,
     };
+
+    abortControllerRef.current = new AbortController();
 
     const response = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-article`,
@@ -75,6 +160,7 @@ export function useBulkGeneration() {
           'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ config }),
+        signal: abortControllerRef.current.signal,
       }
     );
 
@@ -89,48 +175,136 @@ export function useBulkGeneration() {
       throw new Error(errorData.error || `Erro ${response.status}`);
     }
 
-    const data = await response.json();
-    return data.article?.id || null;
+    if (!response.body) {
+      throw new Error('Stream não disponível');
+    }
+
+    const reader = response.body.getReader();
+    const content = await parseSSEStream(reader, onProgress);
+
+    // Save article to database
+    let articleId: string | null = null;
+    if (content) {
+      const wordCount = content.split(/\s+/).filter(Boolean).length;
+      const titleMatch = content.match(/^#\s*(.+)$/m);
+      const title = titleMatch?.[1] || job.keyword.keyword;
+
+      const { data: article, error } = await supabase
+        .from('articles')
+        .insert({
+          keyword: job.keyword.keyword,
+          title,
+          content,
+          word_count: wordCount,
+          status: 'ready' as const,
+          user_id: session.user.id,
+          project_id: projectId || null,
+          type: job.keyword.tipoConteudo === 'landing_page' ? 'sales' : 'blog',
+        })
+        .select('id')
+        .single();
+
+      if (!error && article) {
+        articleId = article.id;
+      }
+    }
+
+    return { content, articleId };
   };
 
   const startGeneration = useCallback(async (projectId?: string, delayMs = 3000) => {
     setState(prev => ({ ...prev, isRunning: true }));
 
     const pendingJobs = state.jobs.filter(j => j.status === 'pending');
+    let completedCount = state.completedCount;
+    let errorCount = state.errorCount;
     
     for (let i = 0; i < pendingJobs.length; i++) {
       const job = pendingJobs[i];
+      
+      // Check if generation was stopped
+      if (!abortControllerRef.current || abortControllerRef.current.signal.aborted) {
+        // Reset abort controller for next run
+        abortControllerRef.current = null;
+        break;
+      }
       
       // Update job status to generating
       setState(prev => ({
         ...prev,
         currentIndex: i,
         jobs: prev.jobs.map(j => 
-          j.id === job.id ? { ...j, status: 'generating', startedAt: new Date() } : j
+          j.id === job.id 
+            ? { ...j, status: 'generating', startedAt: new Date(), progress: 0, currentStep: 'Iniciando...' } 
+            : j
         )
       }));
 
       try {
-        const articleId = await generateArticle(job, projectId);
+        const { content, articleId } = await generateArticleWithStreaming(
+          job, 
+          projectId && projectId !== 'none' ? projectId : undefined,
+          (streamContent, progress) => {
+            // Update job progress in real-time
+            setState(prev => ({
+              ...prev,
+              jobs: prev.jobs.map(j => 
+                j.id === job.id 
+                  ? { 
+                      ...j, 
+                      progress, 
+                      content: streamContent,
+                      currentStep: progress < 30 ? 'Pesquisando...' : 
+                                   progress < 60 ? 'Escrevendo...' : 
+                                   progress < 90 ? 'Finalizando...' : 'Concluído!'
+                    } 
+                  : j
+              )
+            }));
+          }
+        );
         
+        completedCount++;
         setState(prev => ({
           ...prev,
-          completedCount: prev.completedCount + 1,
+          completedCount,
           jobs: prev.jobs.map(j => 
             j.id === job.id 
-              ? { ...j, status: 'completed', articleId: articleId || undefined, completedAt: new Date() } 
+              ? { 
+                  ...j, 
+                  status: 'completed', 
+                  articleId: articleId || undefined, 
+                  completedAt: new Date(),
+                  progress: 100,
+                  currentStep: 'Salvo!',
+                  content,
+                } 
               : j
           )
         }));
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
         
+        // Check if it was an abort
+        if (error instanceof Error && error.name === 'AbortError') {
+          setState(prev => ({
+            ...prev,
+            jobs: prev.jobs.map(j => 
+              j.id === job.id 
+                ? { ...j, status: 'pending', progress: 0, currentStep: 'Cancelado' } 
+                : j
+            )
+          }));
+          break;
+        }
+        
+        errorCount++;
         setState(prev => ({
           ...prev,
-          errorCount: prev.errorCount + 1,
+          errorCount,
           jobs: prev.jobs.map(j => 
             j.id === job.id 
-              ? { ...j, status: 'error', error: errorMessage, completedAt: new Date() } 
+              ? { ...j, status: 'error', error: errorMessage, completedAt: new Date(), progress: 0 } 
               : j
           )
         }));
@@ -153,18 +327,25 @@ export function useBulkGeneration() {
     }
 
     setState(prev => ({ ...prev, isRunning: false }));
+    abortControllerRef.current = null;
     
     toast({
       title: 'Geração em massa concluída',
-      description: `${state.completedCount} artigos gerados, ${state.errorCount} erros`
+      description: `${completedCount} artigos gerados, ${errorCount} erros`
     });
-  }, [state.jobs, toast]);
+  }, [state.jobs, state.completedCount, state.errorCount, toast]);
 
   const stopGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
     setState(prev => ({ ...prev, isRunning: false }));
   }, []);
 
   const resetJobs = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
     setState({
       jobs: [],
       isRunning: false,

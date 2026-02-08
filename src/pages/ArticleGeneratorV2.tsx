@@ -219,9 +219,9 @@ export default function ArticleGeneratorV2() {
       // Load template from localStorage
       const stored = localStorage.getItem('article_templates');
       const defaultTemplates = [
-        { id: 'default-blog', tone: 'profissional', pointOfView: 'terceira', size: 'medium', language: 'pt-BR', aiModel: 'standard' },
-        { id: 'default-pillar', tone: 'educativo', pointOfView: 'segunda', size: 'very-long', language: 'pt-BR', aiModel: 'premium' },
-        { id: 'default-listicle', tone: 'casual', pointOfView: 'segunda', size: 'medium', language: 'pt-BR', aiModel: 'standard' },
+        { id: 'default-blog', tone: 'profissional', pointOfView: 'terceira', size: 'medium', language: 'pt-BR', aiModel: 'standard', faq: true, lists: true, tables: false, conclusion: true, metaDescription: true, seoOptimization: true, humanizeContent: false, generateImages: true, imageCount: 1, imageStyle: 'fotorrealístico', segment: 'general', contentType: 'how-to', goal: 'inform', intentType: 'informational' },
+        { id: 'default-pillar', tone: 'educativo', pointOfView: 'segunda', size: 'very-long', language: 'pt-BR', aiModel: 'premium', faq: true, lists: true, tables: true, conclusion: true, metaDescription: true, seoOptimization: true, humanizeContent: true, generateImages: true, imageCount: 3, imageStyle: 'fotorrealístico', segment: 'general', contentType: 'pillar', goal: 'educate', intentType: 'informational' },
+        { id: 'default-listicle', tone: 'casual', pointOfView: 'segunda', size: 'medium', language: 'pt-BR', aiModel: 'standard', faq: false, lists: true, tables: false, conclusion: true, metaDescription: true, seoOptimization: true, humanizeContent: false, generateImages: true, imageCount: 1, imageStyle: 'ilustração', segment: 'general', contentType: 'listicle', goal: 'engage', intentType: 'informational' },
       ];
       
       let allTemplates = [...defaultTemplates];
@@ -236,16 +236,35 @@ export default function ArticleGeneratorV2() {
       if (template) {
         setConfig(prev => ({
           ...prev,
+          // Basic settings
           tone: template.tone || prev.tone,
           pointOfView: template.pointOfView || prev.pointOfView,
           size: template.size || prev.size,
           language: template.language || prev.language,
           aiModel: template.aiModel || prev.aiModel,
+          // SEO settings
+          segment: template.segment || prev.segment,
+          contentType: template.contentType || prev.contentType,
+          goal: template.goal || prev.goal,
+          intentType: template.intentType || prev.intentType,
+          // Content elements
+          faq: template.faq ?? prev.faq,
+          lists: template.lists ?? prev.lists,
+          tables: template.tables ?? prev.tables,
+          conclusion: template.conclusion ?? prev.conclusion,
+          metaDescription: template.metaDescription ?? prev.metaDescription,
+          // Advanced options
+          seoOptimization: template.seoOptimization ?? prev.seoOptimization,
+          humanizeContent: template.humanizeContent ?? prev.humanizeContent,
+          generateImages: template.generateImages ?? prev.generateImages,
+          imageCount: template.imageCount || prev.imageCount,
+          imageStyle: template.imageStyle || prev.imageStyle,
         }));
         setTemplateApplied(true);
+        const templateName = (template as { name?: string }).name || 'Template';
         toast({
           title: 'Modelo aplicado!',
-          description: 'As configurações do modelo foram carregadas.',
+          description: `Configurações do modelo "${templateName}" foram carregadas.`,
         });
       }
     }
