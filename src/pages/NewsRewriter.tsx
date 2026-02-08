@@ -54,6 +54,15 @@ const NICHE_OPTIONS = [
   { id: 'marketing', label: 'Marketing', description: 'Estratégias, ROI e tendências', icon: TrendingUp },
 ];
 
+// Combined niche presets for multi-niche projects
+const COMBINED_NICHE_PRESETS = [
+  { id: 'saude_beleza', label: 'Saúde + Beleza', description: 'Bem-estar integral e estética', niches: ['saude', 'beleza'] },
+  { id: 'tecnologia_marketing', label: 'Tecnologia + Marketing', description: 'MarTech e inovação digital', niches: ['tecnologia', 'marketing'] },
+  { id: 'advocacia_tecnologia', label: 'Advocacia + Tech', description: 'Direito digital e regulamentação', niches: ['advocacia', 'tecnologia'] },
+  { id: 'advocacia_tecnologia_marketing', label: 'Advocacia + Tech + Marketing', description: 'Negócios digitais', niches: ['advocacia', 'tecnologia', 'marketing'] },
+  { id: 'tecnologia_crimes', label: 'Tech + Crimes Cibernéticos', description: 'Segurança digital e prevenção', niches: ['tecnologia', 'advocacia', 'geral'] },
+];
+
 // Article length options
 const ARTICLE_LENGTHS = [
   { id: 'short', label: 'Curto', description: '400-600 palavras', wordRange: '400-600' },
