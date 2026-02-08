@@ -724,3 +724,44 @@
 .animate-spin-slow {
   animation: spin-slow 3s linear infinite;
 }
+
+/* Custom Scrollbar - Solid Orange Accent */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--accent));
+  border-radius: 5px;
+  border: 2px solid hsl(var(--muted));
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--accent-light));
+}
+
+::-webkit-scrollbar-corner {
+  background: hsl(var(--muted));
+}
+
+/* Firefox Scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--accent)) hsl(var(--muted));
+}
+
+/* Sidebar Scrollbar - Dark variant */
+.bg-gradient-sidebar::-webkit-scrollbar-thumb,
+[class*="sidebar"]::-webkit-scrollbar-thumb {
+  background: hsl(var(--sidebar-primary));
+}
+
+[class*="sidebar"]::-webkit-scrollbar-track {
+  background: hsl(var(--sidebar-accent));
+}

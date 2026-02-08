@@ -45,6 +45,7 @@ import {
   ExternalLink,
   BarChart3,
   ClipboardList,
+  ArrowLeft,
 } from 'lucide-react';
 import { useInternalLinking, type KeywordRule, type IndexedArticle, type TopicCluster } from '@/hooks/useInternalLinking';
 import { useProjects } from '@/hooks/useProjects';
@@ -171,14 +172,28 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
   }
 
   return (
-    <div className="space-y-6">{/* Header */}
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Linkagem Interna Inteligente</h2>
-          <p className="text-muted-foreground">
-            {projectName || 'Projeto'} • {indexedArticles.length} artigos indexados
-          </p>
+        <div className="flex items-center gap-4">
+          {/* Back Button - only show when not using external projectId */}
+          {!externalProjectId && selectedProjectId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedProjectId(null)}
+              className="gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Voltar
+            </Button>
+          )}
+          <div>
+            <h2 className="text-2xl font-bold">Linkagem Interna Inteligente</h2>
+            <p className="text-muted-foreground">
+              {projectName || 'Projeto'} • {indexedArticles.length} artigos indexados
+            </p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button
