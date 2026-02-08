@@ -5,3 +5,6 @@ export { SEOOptimizationPanel } from './SEOOptimizationPanel';
 export { FAQSchemaPreview } from './FAQSchemaPreview';
 export { SchemaPreview } from './SchemaPreview';
 export { ReportProblemDialog } from './ReportProblemDialog';
+export { VideoInsertPopover } from './VideoInsertPopover';
+export { ImageResizeModal } from './ImageResizeModal';
+export { RecreateArticleButton } from './RecreateArticleButton';

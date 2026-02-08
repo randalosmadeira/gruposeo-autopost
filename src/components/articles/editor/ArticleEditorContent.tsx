@@ -1,10 +1,11 @@
-import { useMemo, useRef, useCallback } from 'react';
+import { useMemo, useRef, useCallback, useState } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Copy, Code } from 'lucide-react';
 import { sanitizeHTML } from '@/lib/sanitize';
 import { useToast } from '@/hooks/use-toast';
 import { marked } from 'marked';
+import { ImageResizeModal } from './ImageResizeModal';
 
 interface ArticleEditorContentProps {
   content: string | null;
@@ -13,6 +14,14 @@ interface ArticleEditorContentProps {
   activeTab: 'visual' | 'html';
   onContentChange: (content: string) => void;
   editorRef?: React.RefObject<HTMLDivElement>;
+}
+
+interface ImageStyles {
+  width: string;
+  height: string;
+  maxWidth: string;
+  borderRadius: string;
+  alignment: 'left' | 'center' | 'right';
 }
 
 export function ArticleEditorContent({
@@ -26,6 +35,10 @@ export function ArticleEditorContent({
   const { toast } = useToast();
   const internalEditorRef = useRef<HTMLDivElement>(null);
   const editorRef = externalEditorRef || internalEditorRef;
+  
+  // Image resize state
+  const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
+  const [isImageResizeOpen, setIsImageResizeOpen] = useState(false);
 
   // Convert markdown to HTML if needed
   const processedContent = useMemo(() => {
@@ -144,14 +157,32 @@ export function ArticleEditorContent({
               onContentChange(newContent);
             }}
             onClick={(e) => {
-              // Interceptar cliques em links para abrir em nova aba
               const target = e.target as HTMLElement;
+              
+              // Handle image click for resizing
+              if (target.tagName === 'IMG') {
+                e.preventDefault();
+                setSelectedImage(target as HTMLImageElement);
+                setIsImageResizeOpen(true);
+                return;
+              }
+              
+              // Interceptar cliques em links para abrir em nova aba
               if (target.tagName === 'A' && target.getAttribute('href')) {
                 e.preventDefault();
                 const url = target.getAttribute('href');
                 if (url) {
                   window.open(url, '_blank', 'noopener,noreferrer');
                 }
+              }
+            }}
+            onDoubleClick={(e) => {
+              // Double-click on image opens resize modal
+              const target = e.target as HTMLElement;
+              if (target.tagName === 'IMG') {
+                e.preventDefault();
+                setSelectedImage(target as HTMLImageElement);
+                setIsImageResizeOpen(true);
               }
             }}
             className="prose prose-lg max-w-none outline-none min-h-[400px]
@@ -240,8 +271,17 @@ export function ArticleEditorContent({
               [&_tbody_tr:hover]:bg-muted/50
               [&_tr:nth-child(even)]:bg-muted/30
               
+              /* === IMAGENS - Clicável para redimensionamento === */
+              [&_img]:cursor-pointer [&_img]:transition-all [&_img]:duration-200
+              [&_img:hover]:ring-2 [&_img:hover]:ring-primary/50 [&_img:hover]:ring-offset-2
+              [&_img]:rounded-lg
+              
               /* === CÓDIGO === */
-              [&_code]:bg-muted [&_code]:px-2 [&_code]:py-1 [&_code]:rounded [&_code]:text-sm [&_code]:font-mono"
+              [&_code]:bg-muted [&_code]:px-2 [&_code]:py-1 [&_code]:rounded [&_code]:text-sm [&_code]:font-mono
+              
+              /* === VÍDEOS EMBED === */
+              [&_.video-embed]:my-6 [&_.video-embed]:rounded-xl [&_.video-embed]:overflow-hidden
+              [&_.video-embed]:shadow-lg"
             dangerouslySetInnerHTML={{ 
               __html: sanitizeHTML(
                 processedContent || '<p>Clique aqui para começar a escrever...</p>'
@@ -250,6 +290,47 @@ export function ArticleEditorContent({
           />
         </div>
       </ScrollArea>
+      
+      {/* Image Resize Modal */}
+      <ImageResizeModal
+        isOpen={isImageResizeOpen}
+        onClose={() => {
+          setIsImageResizeOpen(false);
+          setSelectedImage(null);
+        }}
+        imageElement={selectedImage}
+        onApplyChanges={(styles: ImageStyles) => {
+          if (selectedImage && editorRef.current) {
+            // Apply styles to the image
+            selectedImage.style.width = styles.width;
+            selectedImage.style.height = styles.height;
+            selectedImage.style.maxWidth = styles.maxWidth;
+            selectedImage.style.borderRadius = styles.borderRadius;
+            
+            // Handle alignment by wrapping in div
+            let parent = selectedImage.parentElement;
+            if (parent && parent.classList.contains('image-wrapper')) {
+              parent.style.textAlign = styles.alignment;
+            } else {
+              // Wrap image in alignment div
+              const wrapper = document.createElement('div');
+              wrapper.className = 'image-wrapper';
+              wrapper.style.textAlign = styles.alignment;
+              selectedImage.parentNode?.insertBefore(wrapper, selectedImage);
+              wrapper.appendChild(selectedImage);
+            }
+            
+            // Trigger content change
+            const newContent = editorRef.current.innerHTML;
+            onContentChange(newContent);
+            
+            toast({
+              title: 'Imagem redimensionada!',
+              description: 'As alterações foram aplicadas.',
+            });
+          }
+        }}
+      />
     </div>
   );
 }
