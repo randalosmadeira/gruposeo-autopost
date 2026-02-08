@@ -18,8 +18,22 @@ interface AnalysisResult {
   preservedTitle: string;
   content: string;
   source: string;
+  // Single suggestion (legacy)
   suggestedNiche: string;
   suggestedAngle: string;
+  // Multiple suggestions (new)
+  suggestedNiches: Array<{
+    id: string;
+    label: string;
+    confidence: number;
+    reason: string;
+  }>;
+  suggestedAngles: Array<{
+    id: string;
+    label: string;
+    description: string;
+    confidence: number;
+  }>;
   originalKeyword: string;
   suggestedKeyword: string;
   secondaryKeywords: string[];
@@ -164,6 +178,13 @@ Sua tarefa é analisar uma notícia e fornecer recomendações que PRESERVEM 95%
 - Inclua: nomes de pessoas, empresas, lugares, datas, números, termos técnicos
 - Estes termos devem aparecer no conteúdo reescrito para manter indexabilidade
 
+### 4. MÚLTIPLOS NICHOS E ÂNGULOS
+- Analise o conteúdo e sugira 1 a 3 nichos aplicáveis, ordenados por relevância
+- Nichos disponíveis: geral, advocacia, saude, beleza, tecnologia, marketing
+- Para cada nicho, indique confiança (0-100) e razão
+- Sugira 2 a 4 ângulos de análise específicos para a notícia, ordenados por relevância
+- Cada ângulo deve ter descrição e confiança (0-100)
+
 ${nicheContext}
 
 TÍTULO ORIGINAL: ${title}
@@ -182,8 +203,17 @@ Retorne um JSON com esta estrutura:
   "preservedTitle": "título reescrito mantendo 95% das palavras-chave na mesma ordem (máx 60 chars)",
   "content": "texto completo extraído e limpo (máximo 4000 caracteres)",
   "source": "${source}",
-  "suggestedNiche": "advocacia|saude|beleza|tecnologia|marketing|geral",
-  "suggestedAngle": "ângulo de análise específico para agregar valor original",
+  "suggestedNiche": "nicho principal (id): advocacia|saude|beleza|tecnologia|marketing|geral",
+  "suggestedNiches": [
+    {"id": "advocacia", "label": "Advocacia / Jurídico", "confidence": 95, "reason": "Notícia trata de decisão judicial"},
+    {"id": "tecnologia", "label": "Tecnologia", "confidence": 75, "reason": "Envolve plataforma digital"}
+  ],
+  "suggestedAngle": "ângulo de análise principal para agregar valor original",
+  "suggestedAngles": [
+    {"id": "analise_juridica", "label": "Análise Jurídica", "description": "Implicações legais e jurisprudência aplicável", "confidence": 95},
+    {"id": "visao_consumidor", "label": "Visão do Consumidor", "description": "Como o consumidor pode se proteger", "confidence": 80},
+    {"id": "tendencia_mercado", "label": "Tendência de Mercado", "description": "Impacto no setor financeiro", "confidence": 65}
+  ],
   "originalKeyword": "palavra-chave EXATA identificada no conteúdo original",
   "suggestedKeyword": "mesma keyword ou variação mínima (95% similar)",
   "secondaryKeywords": ["keyword2", "keyword3", "keyword4"],
@@ -202,6 +232,8 @@ IMPORTANTE:
 - O "preservedTitle" deve ranquear para as MESMAS buscas que o original
 - A "suggestedKeyword" deve ter 95%+ de correspondência com a "originalKeyword"
 - Os "indexTerms" são cruciais para manter visibilidade em motores de busca e IAs
+- suggestedNiches deve ter 1-3 itens ordenados por confidence (maior primeiro)
+- suggestedAngles deve ter 2-4 itens ordenados por confidence (maior primeiro)
 - Retorne APENAS JSON válido, sem markdown`;
 
 

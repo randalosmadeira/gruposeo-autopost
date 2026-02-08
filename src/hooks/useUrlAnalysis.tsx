@@ -2,14 +2,32 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+export interface NicheSuggestion {
+  id: string;
+  label: string;
+  confidence: number;
+  reason: string;
+}
+
+export interface AngleSuggestion {
+  id: string;
+  label: string;
+  description: string;
+  confidence: number;
+}
+
 export interface UrlAnalysisResult {
   title: string;
   originalTitle: string;
   preservedTitle: string;
   content: string;
   source: string;
+  // Single suggestion (legacy/primary)
   suggestedNiche: string;
   suggestedAngle: string;
+  // Multiple suggestions (new)
+  suggestedNiches?: NicheSuggestion[];
+  suggestedAngles?: AngleSuggestion[];
   originalKeyword: string;
   suggestedKeyword: string;
   secondaryKeywords: string[];

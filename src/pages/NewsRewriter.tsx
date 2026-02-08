@@ -160,8 +160,12 @@ export default function NewsRewriter() {
     if (analysisResult.content) setSourceContent(analysisResult.content);
     if (analysisResult.source) setSourceName(analysisResult.source);
     
-    // Apply niche
-    if (analysisResult.suggestedNiche) {
+    // Apply niche - prefer first from suggestedNiches array
+    if (analysisResult.suggestedNiches && analysisResult.suggestedNiches.length > 0) {
+      const bestNiche = analysisResult.suggestedNiches[0];
+      const matchingNiche = NICHE_OPTIONS.find(n => n.id === bestNiche.id);
+      if (matchingNiche) setNiche(matchingNiche.id);
+    } else if (analysisResult.suggestedNiche) {
       const matchingNiche = NICHE_OPTIONS.find(n => 
         n.id.toLowerCase() === analysisResult.suggestedNiche.toLowerCase()
       );
@@ -175,8 +179,12 @@ export default function NewsRewriter() {
       setKeyword(analysisResult.suggestedKeyword);
     }
     
-    // Apply angle
-    if (analysisResult.suggestedAngle) {
+    // Apply angle - prefer first from suggestedAngles array
+    if (analysisResult.suggestedAngles && analysisResult.suggestedAngles.length > 0) {
+      const bestAngle = analysisResult.suggestedAngles[0];
+      setSelectedAngle('custom');
+      setCustomAngle(bestAngle.label + ': ' + bestAngle.description);
+    } else if (analysisResult.suggestedAngle) {
       setSelectedAngle('custom');
       setCustomAngle(analysisResult.suggestedAngle);
     }
@@ -597,37 +605,137 @@ export default function NewsRewriter() {
                         </div>
                       )}
 
-                      {/* Suggested Niche */}
-                      <div className="p-3 rounded-lg border bg-background">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium text-muted-foreground">Nicho Sugerido</span>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 px-2 text-xs"
-                            onClick={() => applySuggestion('niche', analysisResult.suggestedNiche)}
-                          >
-                            Aplicar
-                          </Button>
+                      {/* Suggested Niches - Multiple Options */}
+                      {analysisResult.suggestedNiches && analysisResult.suggestedNiches.length > 0 ? (
+                        <div className="p-3 rounded-lg border bg-background">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-xs font-medium text-muted-foreground">🎯 Nichos Sugeridos pela IA</span>
+                            <Badge variant="outline" className="text-xs">
+                              Clique para aplicar
+                            </Badge>
+                          </div>
+                          <div className="space-y-2">
+                            {analysisResult.suggestedNiches.map((nicheSuggestion, i) => {
+                              const matchingNiche = NICHE_OPTIONS.find(n => n.id === nicheSuggestion.id);
+                              const Icon = matchingNiche?.icon || Globe;
+                              const isSelected = niche === nicheSuggestion.id;
+                              return (
+                                <div
+                                  key={i}
+                                  className={cn(
+                                    "p-2 rounded-lg border cursor-pointer transition-all flex items-center justify-between gap-2",
+                                    isSelected
+                                      ? 'border-primary bg-primary/10'
+                                      : 'hover:border-primary/50 hover:bg-muted/50'
+                                  )}
+                                  onClick={() => setNiche(nicheSuggestion.id)}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <Icon className={cn("w-4 h-4", isSelected ? "text-primary" : "text-muted-foreground")} />
+                                    <div>
+                                      <span className={cn("text-sm font-medium", isSelected && "text-primary")}>
+                                        {nicheSuggestion.label}
+                                      </span>
+                                      <p className="text-xs text-muted-foreground">{nicheSuggestion.reason}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
+                                      <div 
+                                        className={cn("h-full rounded-full", isSelected ? "bg-primary" : "bg-green-500")}
+                                        style={{ width: `${nicheSuggestion.confidence}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-xs font-medium w-8">{nicheSuggestion.confidence}%</span>
+                                    {isSelected && <CheckCircle2 className="w-4 h-4 text-primary" />}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                        <p className="text-sm font-medium">{analysisResult.suggestedNiche}</p>
-                      </div>
+                      ) : (
+                        <div className="p-3 rounded-lg border bg-background">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-medium text-muted-foreground">Nicho Sugerido</span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => applySuggestion('niche', analysisResult.suggestedNiche)}
+                            >
+                              Aplicar
+                            </Button>
+                          </div>
+                          <p className="text-sm font-medium">{analysisResult.suggestedNiche}</p>
+                        </div>
+                      )}
 
-                      {/* Suggested Angle */}
-                      <div className="p-3 rounded-lg border bg-background">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium text-muted-foreground">Ângulo de Análise Sugerido</span>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 px-2 text-xs"
-                            onClick={() => applySuggestion('angle', analysisResult.suggestedAngle)}
-                          >
-                            Aplicar
-                          </Button>
+                      {/* Suggested Angles - Multiple Options */}
+                      {analysisResult.suggestedAngles && analysisResult.suggestedAngles.length > 0 ? (
+                        <div className="p-3 rounded-lg border bg-background">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-xs font-medium text-muted-foreground">📐 Ângulos de Análise Sugeridos</span>
+                            <Badge variant="outline" className="text-xs">
+                              Clique para aplicar
+                            </Badge>
+                          </div>
+                          <div className="space-y-2">
+                            {analysisResult.suggestedAngles.map((angleSuggestion, i) => {
+                              const isSelected = selectedAngle === 'custom' && customAngle === angleSuggestion.label;
+                              return (
+                                <div
+                                  key={i}
+                                  className={cn(
+                                    "p-2 rounded-lg border cursor-pointer transition-all",
+                                    isSelected
+                                      ? 'border-primary bg-primary/10'
+                                      : 'hover:border-primary/50 hover:bg-muted/50'
+                                  )}
+                                  onClick={() => {
+                                    setSelectedAngle('custom');
+                                    setCustomAngle(angleSuggestion.label + ': ' + angleSuggestion.description);
+                                  }}
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex-1">
+                                      <span className={cn("text-sm font-medium", isSelected && "text-primary")}>
+                                        {angleSuggestion.label}
+                                      </span>
+                                      <p className="text-xs text-muted-foreground">{angleSuggestion.description}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
+                                        <div 
+                                          className={cn("h-full rounded-full", isSelected ? "bg-primary" : "bg-blue-500")}
+                                          style={{ width: `${angleSuggestion.confidence}%` }}
+                                        />
+                                      </div>
+                                      <span className="text-xs font-medium w-8">{angleSuggestion.confidence}%</span>
+                                      {isSelected && <CheckCircle2 className="w-4 h-4 text-primary" />}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                        <p className="text-sm">{analysisResult.suggestedAngle}</p>
-                      </div>
+                      ) : (
+                        <div className="p-3 rounded-lg border bg-background">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-medium text-muted-foreground">Ângulo de Análise Sugerido</span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => applySuggestion('angle', analysisResult.suggestedAngle)}
+                            >
+                              Aplicar
+                            </Button>
+                          </div>
+                          <p className="text-sm">{analysisResult.suggestedAngle}</p>
+                        </div>
+                      )}
 
                       {/* Topics and Audience */}
                       <div className="grid sm:grid-cols-2 gap-3">
