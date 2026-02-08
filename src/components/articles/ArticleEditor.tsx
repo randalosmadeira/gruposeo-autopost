@@ -16,6 +16,7 @@ import { ArticleEditorContent } from './editor/ArticleEditorContent';
 import { ArticleEditorSidebar } from './editor/ArticleEditorSidebar';
 import { ReportProblemDialog } from './editor/ReportProblemDialog';
 import { RecreateArticleButton } from './editor/RecreateArticleButton';
+import { VersionHistoryPanel } from './editor/VersionHistoryPanel';
 
 interface Article {
   id: string;
@@ -330,6 +331,18 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
             onRecreateComplete={handleRecreateComplete}
             hasError={hasError}
             isEmpty={isEmpty}
+          />
+          
+          {/* Version History */}
+          <VersionHistoryPanel
+            articleId={editedArticle.id}
+            currentTitle={editedArticle.title}
+            currentContent={editedArticle.content}
+            onRestoreVersion={(title, content, excerpt) => {
+              updateField('title', title);
+              updateField('content', content);
+              updateField('excerpt', excerpt);
+            }}
           />
           
           <Button variant="outline" size="sm" className="gap-2">
