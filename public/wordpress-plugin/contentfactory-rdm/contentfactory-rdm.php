@@ -761,6 +761,20 @@ private function init_admin_hooks() {
         register_setting('cfrdm_settings', 'cfrdm_log_retention_days');
         register_setting('cfrdm_settings', 'cfrdm_log_api_calls');
         register_setting('cfrdm_settings', 'cfrdm_log_webhooks');
+        
+        // v3.0.0 - GSC Settings
+        register_setting('cfrdm_settings', 'cfrdm_gsc_client_id');
+        register_setting('cfrdm_settings', 'cfrdm_gsc_client_secret');
+        register_setting('cfrdm_settings', 'cfrdm_gsc_site_url');
+        
+        // v3.0.0 - AI Auto-Fix Settings
+        register_setting('cfrdm_settings', 'cfrdm_ai_auto_fix_enabled');
+        register_setting('cfrdm_settings', 'cfrdm_ai_auto_fix_min_confidence');
+        register_setting('cfrdm_settings', 'cfrdm_content_enhancer_enabled');
+        register_setting('cfrdm_settings', 'cfrdm_https_enforcer_enabled');
+        
+        // v3.0.0 - Auto-Update Settings
+        register_setting('cfrdm_settings', 'cfrdm_auto_update_enabled');
     }
     
     public function register_rest_routes() {
