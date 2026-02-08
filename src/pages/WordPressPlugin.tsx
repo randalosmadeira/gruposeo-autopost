@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '2.6.0';
+const PLUGIN_VERSION = '2.6.1';
 const PLUGIN_LAST_UPDATE = '2026-02-08';
 
 const features = [
@@ -70,6 +70,16 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '2.6.1',
+    date: '2026-02-08',
+    type: 'minor' as const,
+    changes: [
+      { type: 'fix', text: 'CRÍTICO: Corrigido registro de endpoints REST do Article Indexer para funcionar fora do contexto admin' },
+      { type: 'fix', text: 'Endpoints /articles-for-indexing e /export-articles-batch agora respondem corretamente via API externa' },
+      { type: 'improvement', text: 'Article Indexer é carregado nas dependências principais para suporte completo à REST API' },
+    ],
+  },
   {
     version: '2.6.0',
     date: '2026-02-08',
