@@ -17,7 +17,7 @@ export interface PromptConfig {
   currentYear: number;
   
   // Content specifications
-  articleLength: 'short' | 'medium' | 'long' | 'very-long';
+  articleLength: 'short' | 'medium' | 'long' | 'very-long' | 'muito_pequeno' | 'pequeno' | 'medio' | 'grande';
   tone: string;
   pointOfView: string;
   contentType: 'how-to' | 'listicle' | 'pillar' | 'comparative' | 'opinion' | 'news' | 'guide';
@@ -67,11 +67,17 @@ export interface PromptConfig {
   realtimeData: boolean;
 }
 
-const WORD_COUNT_RANGES = {
+const WORD_COUNT_RANGES: Record<string, { min: number; max: number; target: number }> = {
+  // Legacy values
   short: { min: 600, max: 1000, target: 750 },
   medium: { min: 1200, max: 1800, target: 1500 },
   long: { min: 2200, max: 2800, target: 2500 },
   'very-long': { min: 3500, max: 4500, target: 4000 },
+  // New standardized values
+  muito_pequeno: { min: 600, max: 1200, target: 900 },
+  pequeno: { min: 1200, max: 2400, target: 1800 },
+  medio: { min: 2400, max: 3600, target: 3000 },
+  grande: { min: 2600, max: 5200, target: 3900 },
 };
 
 const POV_MAP: Record<string, string> = {
