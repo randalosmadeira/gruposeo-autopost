@@ -30,14 +30,14 @@ export function GeneratorActionBar({
   return (
     <div 
       className={cn(
-        "absolute bottom-0 left-0 p-4 border-t bg-background border-border",
+        "absolute bottom-0 left-0 p-4 border-t bg-background/95 backdrop-blur-sm border-border z-10",
         isMobile ? "w-full" : "w-1/2"
       )}
     >
       {appState === 'form' && (
         <>
           {validationErrors.length > 0 && (
-            <div className="mb-3 p-3 bg-red-50 rounded-lg space-y-1">
+            <div className="mb-3 p-3 bg-destructive/10 rounded-lg space-y-1">
               {validationErrors.map((error, idx) => (
                 <p key={idx} className="text-sm flex items-center gap-2 text-destructive">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
