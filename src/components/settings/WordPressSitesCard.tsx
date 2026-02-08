@@ -38,6 +38,7 @@ import {
   Wifi,
   WifiOff,
   Activity,
+  Download,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
@@ -59,6 +60,9 @@ interface ConnectionHealth {
   canPublish?: boolean;
   pluginActive?: boolean;
   message?: string;
+  pluginVersion?: string;
+  updateRequired?: boolean;
+  updateMessage?: string;
 }
 
 export function WordPressSitesCard() {
@@ -132,6 +136,9 @@ export function WordPressSitesCard() {
             canPublish: data.canPublish !== false,
             pluginActive: isPluginAuth ? true : undefined,
             message: responseTime > 3000 ? 'Conexão lenta' : 'Conexão OK',
+            pluginVersion: data.pluginVersion,
+            updateRequired: data.updateRequired || data.isOutdated,
+            updateMessage: data.updateMessage,
           }
         }));
       } else {
@@ -501,6 +508,34 @@ export function WordPressSitesCard() {
                 key={project.id}
                 className="p-4 border rounded-lg bg-background space-y-3"
               >
+                {/* Plugin Update Required Warning */}
+                {health?.updateRequired && isPluginConnection(project) && (
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 space-y-2">
+                      <div>
+                        <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                          Atualização Obrigatória do Plugin
+                        </p>
+                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                          {health.updateMessage || `Versão instalada: v${health.pluginVersion}. Atualize para v3.0.0+ para acessar GSC, AI Auto-Fix e novas funcionalidades.`}
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs border-amber-300 hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900/50"
+                        asChild
+                      >
+                        <Link to="/plugin-wp">
+                          <Download className="w-3 h-3 mr-1" />
+                          Baixar v3.0.0
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 space-y-2">
                     <div>
@@ -510,6 +545,14 @@ export function WordPressSitesCard() {
                           <Badge variant="secondary" className="text-xs">
                             <Plug className="w-3 h-3 mr-1" />
                             Plugin
+                            {health?.pluginVersion && (
+                              <span className={cn(
+                                "ml-1",
+                                health.updateRequired ? "text-amber-600" : "text-muted-foreground"
+                              )}>
+                                v{health.pluginVersion}
+                              </span>
+                            )}
                           </Badge>
                         )}
                         {project.is_connected && getHealthIcon(health)}
