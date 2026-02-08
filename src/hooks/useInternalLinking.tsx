@@ -58,6 +58,12 @@ const initialSyncProgress: SyncProgress = {
   logs: [],
 };
 
+export interface SyncState {
+  pluginNotFound: boolean;
+  usedFallback: boolean;
+  fallbackReason?: string;
+}
+
 export function useInternalLinking(projectId: string | null) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -66,6 +72,10 @@ export function useInternalLinking(projectId: string | null) {
   const [topicClusters, setTopicClusters] = useState<TopicCluster[]>([]);
   const [keywordRules, setKeywordRules] = useState<KeywordRule[]>([]);
   const [syncProgress, setSyncProgress] = useState<SyncProgress>(initialSyncProgress);
+  const [syncState, setSyncState] = useState<SyncState>({
+    pluginNotFound: false,
+    usedFallback: false,
+  });
 
   const addLog = useCallback((type: SyncLogEntry['type'], message: string, articleTitle?: string) => {
     setSyncProgress(prev => ({
@@ -176,10 +186,11 @@ export function useInternalLinking(projectId: string | null) {
   }, [projectId]);
 
   // Trigger sync from WordPress
-  const triggerSync = useCallback(async (fullSync: boolean = false) => {
+  const triggerSync = useCallback(async (fullSync: boolean = false, useFallback: boolean = false) => {
     if (!projectId) return;
 
     setIsSyncing(true);
+    setSyncState(prev => ({ ...prev, pluginNotFound: false }));
     setSyncProgress({
       phase: 'fetching',
       total: 0,
@@ -203,7 +214,7 @@ export function useInternalLinking(projectId: string | null) {
         throw new Error('Projeto WordPress não configurado');
       }
 
-      addLog('info', `Iniciando sincronização ${fullSync ? 'completa' : 'incremental'}...`);
+      addLog('info', `Iniciando sincronização ${fullSync ? 'completa' : 'incremental'}${useFallback ? ' (REST API)' : ''}...`);
       addLog('info', `Conectando a ${project.wordpress_url}...`);
 
       setSyncProgress(prev => ({ ...prev, phase: 'fetching' }));
@@ -213,6 +224,7 @@ export function useInternalLinking(projectId: string | null) {
           action: 'sync',
           project_id: projectId,
           full_sync: fullSync,
+          use_fallback: useFallback,
         },
       });
 
@@ -259,6 +271,7 @@ export function useInternalLinking(projectId: string | null) {
         const isPluginNotFound = errorMsg.includes('rest_no_route') || 
                                   errorMsg.includes('Nenhuma rota') ||
                                   errorMsg.includes('Falha ao buscar lista de artigos no plugin') ||
+                                  errorMsg.includes('plugin ContentFactory não está instalado') ||
                                   (errorMsg.includes('404') && (errorMsg.includes('plugin') || errorMsg.includes('cfrdm')));
         const isPluginError = errorMsg.includes('Falha ao buscar') || 
                                errorMsg.includes('Falha ao exportar');
@@ -268,7 +281,9 @@ export function useInternalLinking(projectId: string | null) {
                                    errorMsg.includes('Failed to fetch');
         
         if (isPluginNotFound) {
-          throw new Error('Plugin não encontrado: O endpoint da API do plugin ContentFactory não está disponível. Verifique se o plugin está instalado e ativado no WordPress.');
+          // Mark that plugin was not found so UI can show installation guide
+          setSyncState(prev => ({ ...prev, pluginNotFound: true }));
+          throw new Error('Plugin não encontrado: O plugin ContentFactory não está instalado ou ativo. Instale o plugin ou use a REST API padrão como alternativa.');
         }
         if (isPluginError || isConnectionError) {
           throw new Error('Erro de conexão: Verifique se o plugin ContentFactory está instalado e ativado no WordPress, e se a API Key está configurada corretamente.');
@@ -277,6 +292,16 @@ export function useInternalLinking(projectId: string | null) {
       }
 
       const results = syncResponse.data?.results || { synced: 0, analyzed: 0, errors: 0, skipped: 0, total: 0 };
+      const usedFallback = syncResponse.data?.usedFallback || false;
+      const fallbackReason = syncResponse.data?.fallbackReason;
+      
+      // Update sync state
+      setSyncState(prev => ({
+        ...prev,
+        usedFallback,
+        fallbackReason,
+        pluginNotFound: false,
+      }));
       
       // Update progress with results
       setSyncProgress(prev => ({
@@ -290,7 +315,8 @@ export function useInternalLinking(projectId: string | null) {
         errors: results.errors || 0,
       }));
 
-      addLog('success', `Sincronização concluída: ${results.synced} indexados, ${results.analyzed} analisados por IA`);
+      const fallbackInfo = usedFallback ? ' (via REST API)' : '';
+      addLog('success', `Sincronização concluída${fallbackInfo}: ${results.synced} indexados, ${results.analyzed} analisados por IA`);
 
       // Refresh local data
       await fetchIndexedArticles();
@@ -298,7 +324,7 @@ export function useInternalLinking(projectId: string | null) {
 
       toast({
         title: 'Sincronização concluída!',
-        description: `${results.synced} artigos sincronizados, ${results.analyzed} analisados com IA.`,
+        description: `${results.synced} artigos sincronizados, ${results.analyzed} analisados com IA.${fallbackInfo}`,
       });
     } catch (error) {
       console.error('Error triggering sync:', error);
@@ -467,6 +493,7 @@ export function useInternalLinking(projectId: string | null) {
     topicClusters,
     keywordRules,
     syncProgress,
+    syncState,
     
     // Actions
     fetchIndexedArticles,

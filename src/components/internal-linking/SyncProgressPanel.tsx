@@ -37,12 +37,14 @@ interface SyncProgressPanelProps {
   progress: SyncProgress;
   onStartSync: (fullSync: boolean) => void;
   isSyncing: boolean;
+  usedFallback?: boolean;
 }
 
 export function SyncProgressPanel({
   progress,
   onStartSync,
   isSyncing,
+  usedFallback = false,
 }: SyncProgressPanelProps) {
   const getPhaseLabel = (phase: SyncProgress['phase']) => {
     switch (phase) {
@@ -79,6 +81,11 @@ export function SyncProgressPanel({
             <CardTitle className="flex items-center gap-2 text-lg">
               <RefreshCw className={cn("w-5 h-5", isSyncing && "animate-spin")} />
               Sincronização
+              {usedFallback && (
+                <Badge variant="outline" className="text-xs font-normal">
+                  REST API
+                </Badge>
+              )}
             </CardTitle>
             <CardDescription>
               Sincronize artigos do WordPress para indexação e análise por IA

@@ -4,4 +4,5 @@ export { default as InternalLinkingDashboardDefault } from './InternalLinkingDas
 export { InternalLinkingMetrics } from './InternalLinkingMetrics';
 export { InternalLinkingReports } from './InternalLinkingReports';
 export { SyncProgressPanel } from './SyncProgressPanel';
+export { PluginInstallGuide } from './PluginInstallGuide';
 export type { SyncProgress, SyncLogEntry } from './SyncProgressPanel';
