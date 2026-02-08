@@ -365,6 +365,15 @@ export const NICHE_OPTIONS = [
   { id: 'marketing', label: 'Marketing', description: 'Estratégias, ROI e tendências' },
 ];
 
+// Combined niche presets for multi-niche projects
+export const COMBINED_NICHE_PRESETS = [
+  { id: 'saude_beleza', label: 'Saúde + Beleza', niches: ['saude', 'beleza'], description: 'Bem-estar integral e estética' },
+  { id: 'tecnologia_marketing', label: 'Tecnologia + Marketing', niches: ['tecnologia', 'marketing'], description: 'MarTech e inovação digital' },
+  { id: 'advocacia_tecnologia', label: 'Advocacia + Tech', niches: ['advocacia', 'tecnologia'], description: 'Direito digital e regulamentação' },
+  { id: 'advocacia_tecnologia_marketing', label: 'Advocacia + Tech + Marketing', niches: ['advocacia', 'tecnologia', 'marketing'], description: 'Negócios digitais completos' },
+  { id: 'tecnologia_crimes', label: 'Tecnologia + Crimes Cibernéticos', niches: ['tecnologia', 'advocacia', 'geral'], description: 'Segurança digital e prevenção' },
+];
+
 export interface JournalisticRewriteRequest {
   sourceUrl: string;
   sourceContent: string;
@@ -372,10 +381,12 @@ export interface JournalisticRewriteRequest {
   analysisAngle: string;
   keyword?: string;
   niche?: string;
+  niches?: string[]; // Support for combined niches
   articleLength?: 'short' | 'medium' | 'long';
   language?: string;
   projectId?: string;
   internalLinks?: Array<{ anchor: string; url: string }>;
+  adaptiveAngle?: boolean; // Let AI determine best angle
 }
 
 export interface JournalisticRewriteResponse {
@@ -421,15 +432,36 @@ export interface JournalisticRewriteResponse {
 export function buildUserPrompt(request: JournalisticRewriteRequest): string {
   const lengthConfig = ARTICLE_LENGTHS[request.articleLength || 'medium'];
   
+  // Handle combined niches
+  const niches = request.niches || [request.niche || 'geral'];
+  const nichesDisplay = niches.length > 1 
+    ? `Combinados: ${niches.map(n => NICHE_OPTIONS.find(o => o.id === n)?.label || n).join(' + ')}`
+    : NICHE_OPTIONS.find(o => o.id === niches[0])?.label || niches[0];
+
+  // Adaptive angle instruction
+  const angleInstruction = request.adaptiveAngle
+    ? `- Ângulo de Análise: DETERMINE O MELHOR ÂNGULO automaticamente baseado nos nichos combinados e no conteúdo da notícia. Considere: ${niches.join(', ')}`
+    : `- Ângulo de Análise: ${request.analysisAngle}`;
+  
   return `
 CONFIGURAÇÃO DA TAREFA:
 - Idioma: ${request.language || 'pt-BR'}
-- Nicho: ${request.niche || 'geral'}
+- Nicho: ${nichesDisplay}
+- Nichos detectados: ${niches.join(', ')}
 - Tamanho: ${lengthConfig.label} (${lengthConfig.min}-${lengthConfig.max} palavras)
 - Título/Veículo Original: ${request.sourceName}
 - URL Original: ${request.sourceUrl || 'Não informada'}
-- Ângulo de Análise: ${request.analysisAngle}
+${angleInstruction}
 ${request.keyword ? `- Palavra-chave SEO: ${request.keyword}` : ''}
+
+${niches.length > 1 ? `
+INSTRUÇÕES ESPECIAIS PARA NICHOS COMBINADOS:
+Como este projeto abrange múltiplos nichos (${niches.join(' + ')}), você deve:
+1. Adaptar o tom para atender a ambos os públicos
+2. Cruzar informações relevantes entre os nichos
+3. Usar vocabulário que dialogue com especialistas de cada área
+4. Sugerir conexões naturais entre os temas
+` : ''}
 
 ${request.internalLinks && request.internalLinks.length > 0 ? `
 LINKS INTERNOS PARA INCLUIR (naturalmente no texto):
@@ -447,6 +479,7 @@ INSTRUÇÕES CRÍTICAS:
 5. Estrutura: H2 inicial obrigatório, H3 para subseções
 6. Parágrafos curtos (2-4 linhas) para melhor leitura
 7. Creditar fonte no rodapé: "Fonte: ${request.sourceName}${request.sourceUrl ? ` - ${request.sourceUrl}` : ''}"
+${niches.length > 1 ? `8. Integrar perspectivas de TODOS os nichos: ${niches.join(', ')}` : ''}
 
 Se originalidade < 95%, reescreva novamente até atingir 95%+.
 
