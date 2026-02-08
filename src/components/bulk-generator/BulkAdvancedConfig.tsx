@@ -721,6 +721,9 @@ export function BulkAdvancedConfig({
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <p className="font-semibold text-sm">Otimização IA Automática</p>
+                        <Badge variant="secondary" className="text-xs bg-primary/20 text-primary border-0">
+                          RECOMENDADO
+                        </Badge>
                         <Sparkles className={cn('w-4 h-4', config.aiAutoOptimization ? 'text-primary' : 'text-muted-foreground')} />
                       </div>
                       <p className="text-xs text-muted-foreground">
