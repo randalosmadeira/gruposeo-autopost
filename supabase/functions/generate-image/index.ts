@@ -128,13 +128,19 @@ serve(async (req) => {
     // Resolve provider/model overrides
     const requestedModel = body.model;
     const requestedProvider = body.provider;
+    const requestedQuality = body.quality;
+
     const derivedProvider = requestedModel?.startsWith('dall-e')
       ? 'openai'
       : requestedModel?.startsWith('gemini')
         ? 'gemini'
         : undefined;
+
     const provider = requestedProvider || derivedProvider || 'auto';
-    const openaiQuality = requestedModel === 'dall-e-3-standard' ? 'standard' : 'hd';
+    const openaiQuality =
+      requestedModel === 'dall-e-3-standard' || requestedQuality === 'standard'
+        ? 'standard'
+        : 'hd';
 
     log.info("generating_image", { 
       title: body.title,
