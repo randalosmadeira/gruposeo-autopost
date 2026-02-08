@@ -105,27 +105,17 @@ serve(async (req) => {
       .single();
     
     if (customTemplate?.prompt) {
-      // Merge custom prompt with mandatory JSON output instructions
-      // This ensures the AI always returns the expected JSON format
-      const customPromptHasJsonInstructions = 
-        customTemplate.prompt.includes('OUTPUT JSON') || 
-        customTemplate.prompt.includes('"content":') ||
-        customTemplate.prompt.includes('"seo":');
-      
-      if (customPromptHasJsonInstructions) {
-        // Custom prompt already has JSON instructions, use as-is
-        systemPromptToUse = customTemplate.prompt;
-      } else {
-        // Append mandatory JSON instructions to custom prompt
-        systemPromptToUse = customTemplate.prompt + MANDATORY_JSON_OUTPUT_INSTRUCTIONS;
-      }
+      // ALWAYS append mandatory JSON output instructions to custom prompts
+      // This ensures the AI always returns the expected JSON format regardless of custom persona
+      // The mandatory instructions contain the exact JSON schema, checklist, and required fields
+      systemPromptToUse = customTemplate.prompt + "\n\n" + MANDATORY_JSON_OUTPUT_INSTRUCTIONS;
       
       agentName = customTemplate.agent_name || null;
       log.info("using_custom_prompt", { 
         agentName,
         promptLength: systemPromptToUse.length,
         originalLength: customTemplate.prompt.length,
-        mergedWithJsonInstructions: !customPromptHasJsonInstructions
+        mandatoryInstructionsAppended: true
       });
     } else {
       log.info("using_default_prompt");
