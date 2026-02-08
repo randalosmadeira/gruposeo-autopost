@@ -19,7 +19,7 @@ import {
   Braces
 } from 'lucide-react';
 import { SEOOptimizationPanel } from './SEOOptimizationPanel';
-import { FAQSchemaPreview } from './FAQSchemaPreview';
+import { SchemaPreview } from './SchemaPreview';
 import { WordPressCategorySelector } from '../WordPressCategorySelector';
 
 interface Article {
@@ -228,10 +228,17 @@ export function ArticleEditorSidebar({
               
               <p className="text-xs text-muted-foreground">
                 Dados estruturados detectados automaticamente para Google Rich Results.
+                Suporta Article, FAQ e HowTo schemas.
               </p>
 
-              {/* FAQ Schema Preview */}
-              <FAQSchemaPreview content={article.content} />
+              {/* Complete Schema Preview */}
+              <SchemaPreview 
+                content={article.content}
+                title={article.title}
+                excerpt={article.excerpt}
+                keyword={article.keyword}
+                featuredImageUrl={article.featured_image_url}
+              />
             </div>
           </ScrollArea>
         </TabsContent>
