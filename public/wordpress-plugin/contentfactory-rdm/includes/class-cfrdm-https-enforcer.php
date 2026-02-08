@@ -39,9 +39,9 @@ class CFRDM_HTTPS_Enforcer {
         // Register cron job for bulk scanning
         add_action('cfrdm_https_scan', array($this, 'scan_all_posts'));
         
-        // Schedule daily scan (WordPress doesn't have 'weekly' by default)
+        // Schedule weekly scan (using custom interval from CFRDM_Cron_Scheduler)
         if (!wp_next_scheduled('cfrdm_https_scan')) {
-            wp_schedule_event(time(), 'daily', 'cfrdm_https_scan');
+            wp_schedule_event(time(), 'weekly', 'cfrdm_https_scan');
         }
     }
     
