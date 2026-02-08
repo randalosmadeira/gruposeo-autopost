@@ -18,6 +18,16 @@ import { ReportProblemDialog } from './editor/ReportProblemDialog';
 import { RecreateArticleButton } from './editor/RecreateArticleButton';
 import { VersionHistoryPanel } from './editor/VersionHistoryPanel';
 
+interface ArticleConfig {
+  type?: string;
+  source_url?: string;
+  source_name?: string;
+  niche?: string;
+  article_length?: string;
+  analysis_angle?: string;
+  [key: string]: unknown;
+}
+
 interface Article {
   id: string;
   title: string | null;
@@ -31,6 +41,7 @@ interface Article {
   project_id?: string | null;
   wordpress_categories?: number[];
   scheduled_at?: Date | null;
+  config?: ArticleConfig | null;
 }
 
 interface ArticleEditorProps {
@@ -331,6 +342,7 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
             onRecreateComplete={handleRecreateComplete}
             hasError={hasError}
             isEmpty={isEmpty}
+            articleConfig={editedArticle.config || undefined}
           />
           
           {/* Version History */}
