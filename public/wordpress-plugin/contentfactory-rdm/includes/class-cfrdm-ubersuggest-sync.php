@@ -36,8 +36,11 @@ class CFRDM_Ubersuggest_Sync {
         add_action('cfrdm_ubersuggest_sync', array($this, 'sync_data'));
         
         // Schedule weekly sync (using custom interval from CFRDM_Cron_Scheduler)
+        // Fallback to native 'daily' if custom interval not registered
         if (!wp_next_scheduled('cfrdm_ubersuggest_sync')) {
-            wp_schedule_event(time(), 'weekly', 'cfrdm_ubersuggest_sync');
+            $schedules = wp_get_schedules();
+            $interval = isset($schedules['weekly']) ? 'weekly' : 'daily';
+            wp_schedule_event(time(), $interval, 'cfrdm_ubersuggest_sync');
         }
     }
     

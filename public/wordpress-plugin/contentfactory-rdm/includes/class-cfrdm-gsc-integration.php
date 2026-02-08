@@ -38,8 +38,11 @@ class CFRDM_GSC_Integration {
         add_action('cfrdm_gsc_sync', array($this, 'sync_gsc_data'));
         
         // Schedule every 6 hours (using custom interval from CFRDM_Cron_Scheduler)
+        // Only schedule if not already scheduled AND if the interval is registered
         if (!wp_next_scheduled('cfrdm_gsc_sync')) {
-            wp_schedule_event(time(), 'every_6_hours', 'cfrdm_gsc_sync');
+            $schedules = wp_get_schedules();
+            $interval = isset($schedules['every_6_hours']) ? 'every_6_hours' : 'twicedaily';
+            wp_schedule_event(time(), $interval, 'cfrdm_gsc_sync');
         }
         
         // Admin page for OAuth
