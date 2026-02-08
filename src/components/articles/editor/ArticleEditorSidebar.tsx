@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { 
   Sparkles,
   RefreshCw,
@@ -22,10 +23,12 @@ import {
   Braces,
   CalendarIcon,
   Clock,
+  Share2,
 } from 'lucide-react';
 import { SEOOptimizationPanel } from './SEOOptimizationPanel';
 import { SchemaPreview } from './SchemaPreview';
 import { WordPressCategorySelector } from '../WordPressCategorySelector';
+import { ContentVariationsGenerator } from '@/components/content-variations';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -53,6 +56,7 @@ interface ArticleEditorSidebarProps {
   onSchedule?: (date: Date) => void;
   isSaving?: boolean;
   hasChanges?: boolean;
+  niche?: string;
 }
 
 export function ArticleEditorSidebar({
@@ -66,6 +70,7 @@ export function ArticleEditorSidebar({
   onSchedule,
   isSaving,
   hasChanges,
+  niche,
 }: ArticleEditorSidebarProps) {
   const [configTab, setConfigTab] = useState<'config' | 'seo' | 'schema'>('config');
   const [isScheduleEnabled, setIsScheduleEnabled] = useState(!!article.scheduled_at);
@@ -77,6 +82,8 @@ export function ArticleEditorSidebar({
       ? format(new Date(article.scheduled_at), 'HH:mm') 
       : '09:00'
   );
+  const [variationsOpen, setVariationsOpen] = useState(false);
+  
   const excerptLength = article.excerpt?.length || 0;
   const titleLength = article.title?.length || 0;
 
@@ -352,6 +359,37 @@ export function ArticleEditorSidebar({
                   </div>
                 )}
               </div>
+
+              {/* Social Media Variations */}
+              {article.title && article.content && (
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="flex items-center gap-2">
+                    <Share2 className="w-4 h-4 text-primary" />
+                    <Label className="text-sm font-medium">Redes Sociais</Label>
+                  </div>
+                  <Dialog open={variationsOpen} onOpenChange={setVariationsOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" className="w-full gap-2">
+                        <Sparkles className="w-4 h-4" />
+                        Gerar Variações para Redes
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                      <ContentVariationsGenerator
+                        articleId={article.id}
+                        title={article.title || ''}
+                        content={article.content || ''}
+                        excerpt={article.excerpt || undefined}
+                        niche={niche}
+                        onClose={() => setVariationsOpen(false)}
+                      />
+                    </DialogContent>
+                  </Dialog>
+                  <p className="text-xs text-muted-foreground">
+                    Transforme em posts para LinkedIn, Instagram, Twitter e Newsletter
+                  </p>
+                </div>
+              )}
             </div>
           </ScrollArea>
         </TabsContent>
