@@ -507,6 +507,169 @@ REGRAS:
         );
       }
 
+      case "generate_backlink_suggestions": {
+        // Auto-generate backlink suggestions between all indexed articles
+        const { data: indexedArticles, error: fetchError } = await supabase
+          .from("wordpress_article_index")
+          .select("*")
+          .eq("project_id", project_id)
+          .eq("user_id", user.id)
+          .eq("sync_status", "synced")
+          .order("linkability_score", { ascending: false });
+
+        if (fetchError) {
+          return new Response(
+            JSON.stringify({ error: "Failed to fetch articles" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (!indexedArticles || indexedArticles.length < 2) {
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              suggestions_created: 0, 
+              message: "Precisa de pelo menos 2 artigos indexados para gerar sugestões" 
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Group by topic cluster for better matching
+        const clusterGroups: Record<string, typeof indexedArticles> = {};
+        for (const article of indexedArticles) {
+          const cluster = article.topic_cluster || "geral";
+          if (!clusterGroups[cluster]) clusterGroups[cluster] = [];
+          clusterGroups[cluster].push(article);
+        }
+
+        // Use AI to analyze and suggest links
+        const articlesForAI = indexedArticles.slice(0, 50).map(a => ({
+          id: a.id,
+          wp_post_id: a.wp_post_id,
+          title: a.wp_post_title,
+          url: a.wp_post_url,
+          keywords: [a.primary_keyword, ...(a.secondary_keywords || [])].filter(Boolean),
+          cluster: a.topic_cluster,
+          summary: a.semantic_summary,
+          linkability: a.linkability_score,
+          internal_links: a.internal_links_count,
+        }));
+
+        const analysisPrompt = `Você é um especialista em SEO e estratégia de linkagem interna. Analise os artigos abaixo e sugira links internos entre eles para melhorar o SEO.
+
+ARTIGOS DISPONÍVEIS:
+${JSON.stringify(articlesForAI, null, 2)}
+
+Para cada artigo que precisa de mais links (internal_links < 5), sugira até 3 artigos de destino relevantes.
+
+Retorne APENAS um JSON válido:
+{
+  "suggestions": [
+    {
+      "source_article_id": "uuid do artigo fonte",
+      "source_wp_post_id": 123,
+      "target_article_id": "uuid do artigo destino",
+      "target_wp_post_id": 456,
+      "target_url": "url do artigo destino",
+      "anchor_text": "texto âncora sugerido (natural e variado)",
+      "relevance_score": 85,
+      "position_suggestion": "introduction|body|conclusion",
+      "anchor_context": "breve contexto de onde inserir o link (1-2 frases)"
+    }
+  ]
+}
+
+REGRAS IMPORTANTES:
+1. Priorize artigos com poucos links internos (internal_links < 3)
+2. Prefira links dentro do mesmo cluster temático
+3. Artigos com alto linkability_score são melhores destinos
+4. Varie os textos âncora - não use sempre o título
+5. Máximo de 30 sugestões no total
+6. Não sugira links de um artigo para ele mesmo
+7. Distribua as posições (introduction, body, conclusion)`;
+
+        const aiResponse = await fetch(AI_GATEWAY_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            messages: [
+              { role: "system", content: "Você é um especialista em SEO. Responda APENAS com JSON válido." },
+              { role: "user", content: analysisPrompt }
+            ],
+            max_tokens: 4000,
+            temperature: 0.3,
+          }),
+        });
+
+        let suggestions: any[] = [];
+        if (aiResponse.ok) {
+          const aiData = await aiResponse.json();
+          const aiContent = aiData.choices?.[0]?.message?.content || "";
+          try {
+            const jsonStr = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            const parsed = JSON.parse(jsonStr);
+            suggestions = parsed.suggestions || [];
+          } catch (e) {
+            console.error("Failed to parse AI suggestions:", aiContent);
+          }
+        }
+
+        // Insert suggestions into database
+        let suggestionsCreated = 0;
+        for (const suggestion of suggestions) {
+          try {
+            // Check if suggestion already exists
+            const { data: existing } = await supabase
+              .from("internal_link_suggestions")
+              .select("id")
+              .eq("project_id", project_id)
+              .eq("source_wp_post_id", suggestion.source_wp_post_id)
+              .eq("target_wp_post_id", suggestion.target_wp_post_id)
+              .maybeSingle();
+
+            if (existing) continue; // Skip duplicates
+
+            const { error: insertError } = await supabase
+              .from("internal_link_suggestions")
+              .insert({
+                user_id: user.id,
+                project_id: project_id,
+                source_article_id: suggestion.source_article_id,
+                source_wp_post_id: suggestion.source_wp_post_id,
+                target_article_id: suggestion.target_article_id,
+                target_wp_post_id: suggestion.target_wp_post_id,
+                target_url: suggestion.target_url,
+                anchor_text: suggestion.anchor_text,
+                relevance_score: suggestion.relevance_score || 75,
+                position_suggestion: suggestion.position_suggestion || 'body',
+                anchor_context: suggestion.anchor_context,
+                status: 'pending',
+              });
+
+            if (!insertError) {
+              suggestionsCreated++;
+            }
+          } catch (e) {
+            console.error("Error inserting suggestion:", e);
+          }
+        }
+
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            suggestions_created: suggestionsCreated,
+            total_analyzed: indexedArticles.length,
+            clusters_found: Object.keys(clusterGroups).length,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: "Invalid action" }),
