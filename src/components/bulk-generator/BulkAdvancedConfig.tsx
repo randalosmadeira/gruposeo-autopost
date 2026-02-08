@@ -40,6 +40,8 @@ import {
   Globe,
   Wand2,
   Ruler,
+  Brain,
+  Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AIModelSelector } from '@/components/shared/AIModelSelector';
@@ -598,16 +600,16 @@ export function BulkAdvancedConfig({
               <div 
                 className={cn(
                   'p-4 rounded-lg border transition-all',
-                  config.internalLinking ? 'border-2 border-green-500/50 bg-green-50' : 'border-border'
+                  config.internalLinking ? 'border-2 border-success/50 bg-success/5' : 'border-border'
                 )}
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div className={cn(
                       'w-8 h-8 rounded-lg flex items-center justify-center',
-                      config.internalLinking ? 'bg-green-100' : 'bg-muted'
+                      config.internalLinking ? 'bg-success/20' : 'bg-muted'
                     )}>
-                      <Link2 className={cn('w-4 h-4', config.internalLinking ? 'text-green-600' : 'text-muted-foreground')} />
+                      <Link2 className={cn('w-4 h-4', config.internalLinking ? 'text-success' : 'text-muted-foreground')} />
                     </div>
                     <div>
                       <p className="text-sm font-medium">Linkagem Interna</p>
@@ -695,6 +697,76 @@ export function BulkAdvancedConfig({
           </CollapsibleTrigger>
           <CollapsibleContent>
             <CardContent className="space-y-3">
+              {/* AI Auto Optimization - Highlighted First */}
+              <div 
+                className={cn(
+                  'p-4 rounded-lg border-2 transition-all',
+                  config.aiAutoOptimization 
+                    ? 'border-primary bg-primary/5' 
+                    : 'border-border bg-background'
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className={cn(
+                        'w-10 h-10 rounded-lg flex items-center justify-center',
+                        config.aiAutoOptimization ? 'bg-primary/20' : 'bg-muted'
+                      )}
+                    >
+                      <Brain 
+                        className={cn('w-5 h-5', config.aiAutoOptimization ? 'text-primary' : 'text-muted-foreground')}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-sm">Otimização IA Automática</p>
+                        <Sparkles className={cn('w-4 h-4', config.aiAutoOptimization ? 'text-primary' : 'text-muted-foreground')} />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        A IA analisa keywords e aprimora automaticamente o conteúdo
+                      </p>
+                    </div>
+                  </div>
+                  <Switch 
+                    checked={config.aiAutoOptimization} 
+                    onCheckedChange={(v) => updateConfig({ aiAutoOptimization: v })}
+                    className="data-[state=checked]:bg-primary"
+                  />
+                </div>
+                
+                {config.aiAutoOptimization && (
+                  <div className="mt-4 pt-4 border-t border-border/50 space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Info className="w-3.5 h-3.5 text-primary" />
+                      <span className="font-medium">A IA irá automaticamente:</span>
+                    </div>
+                    <ul className="text-xs text-muted-foreground space-y-1.5 ml-5">
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                        Gerar <strong>TITLE SEO</strong> otimizado (até 60 caracteres)
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                        Criar <strong>Meta Descrição</strong> persuasiva (até 160 caracteres)
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                        Analisar todas as keywords e intenções de busca
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                        Otimizar estrutura para featured snippets
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                        Aplicar E-E-A-T automaticamente por segmento
+                      </li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+              
               <ToggleCard
                 icon={Search}
                 title="Otimização SEO Avançada"
@@ -726,16 +798,16 @@ export function BulkAdvancedConfig({
               <div 
                 className={cn(
                   'p-4 rounded-lg border transition-all',
-                  config.generateImages ? 'border-2 border-pink-500/50 bg-pink-50' : 'border-border'
+                  config.generateImages ? 'border-2 border-accent bg-accent/5' : 'border-border'
                 )}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className={cn(
                       'w-8 h-8 rounded-lg flex items-center justify-center',
-                      config.generateImages ? 'bg-pink-100' : 'bg-muted'
+                      config.generateImages ? 'bg-accent/20' : 'bg-muted'
                     )}>
-                      <Image className={cn('w-4 h-4', config.generateImages ? 'text-pink-600' : 'text-muted-foreground')} />
+                      <Image className={cn('w-4 h-4', config.generateImages ? 'text-accent' : 'text-muted-foreground')} />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
@@ -758,7 +830,7 @@ export function BulkAdvancedConfig({
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Label className="text-sm">Quantidade de imagens</Label>
-                        <span className="text-sm font-medium text-pink-600">{config.imageCount}</span>
+                        <span className="text-sm font-medium text-accent">{config.imageCount}</span>
                       </div>
                       <Slider
                         value={[config.imageCount]}
