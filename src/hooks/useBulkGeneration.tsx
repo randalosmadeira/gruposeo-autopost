@@ -74,7 +74,7 @@ export function useBulkGeneration() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify(config),
+        body: JSON.stringify({ config }),
       }
     );
 
