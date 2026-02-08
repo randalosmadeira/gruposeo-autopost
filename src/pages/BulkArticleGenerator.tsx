@@ -44,6 +44,7 @@ import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { ToneVoiceConfig, AIModelSelector, ContentStructureConfig, ArticleListManager } from '@/components/shared';
+import { BulkGenerationHistory } from '@/components/bulk-generator';
 import type { ArticleItem } from '@/components/shared/ArticleListManager';
 
 // Extended article type for generation tracking
@@ -394,6 +395,9 @@ export default function BulkArticleGenerator() {
             )}
           </Button>
         </div>
+
+        {/* Bulk Generation History */}
+        <BulkGenerationHistory />
       </div>
 
       {/* Generate Titles Dialog */}
