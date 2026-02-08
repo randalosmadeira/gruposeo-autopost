@@ -35,9 +35,9 @@ class CFRDM_Ubersuggest_Sync {
         // Register cron job
         add_action('cfrdm_ubersuggest_sync', array($this, 'sync_data'));
         
-        // Schedule weekly sync
+        // Schedule daily sync (WordPress doesn't have 'weekly' by default)
         if (!wp_next_scheduled('cfrdm_ubersuggest_sync')) {
-            wp_schedule_event(time(), 'weekly', 'cfrdm_ubersuggest_sync');
+            wp_schedule_event(time(), 'daily', 'cfrdm_ubersuggest_sync');
         }
     }
     
