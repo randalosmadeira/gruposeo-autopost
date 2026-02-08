@@ -88,8 +88,7 @@ export function RSSScheduler({ projectId }: RSSSchedulerProps) {
   const fetchFeeds = async () => {
     setLoading(true);
     try {
-      // Use raw query to check if table exists
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('rss_schedules')
         .select('*')
         .order('created_at', { ascending: false });
@@ -133,7 +132,7 @@ export function RSSScheduler({ projectId }: RSSSchedulerProps) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Não autenticado');
 
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('rss_schedules')
         .insert({
           user_id: user.id,
@@ -174,7 +173,7 @@ export function RSSScheduler({ projectId }: RSSSchedulerProps) {
 
   const toggleFeedActive = async (feedId: string, isActive: boolean) => {
     try {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('rss_schedules')
         .update({ is_active: isActive })
         .eq('id', feedId);
@@ -196,7 +195,7 @@ export function RSSScheduler({ projectId }: RSSSchedulerProps) {
 
   const deleteFeed = async (feedId: string) => {
     try {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('rss_schedules')
         .delete()
         .eq('id', feedId);
