@@ -160,7 +160,7 @@ export function useInternalLinking(projectId: string | null) {
 
     setIsSyncing(true);
     try {
-      // Get project details to find WordPress URL
+      // Get project details to find WordPress URL and credentials
       const { data: project, error: projectError } = await supabase
         .from('projects')
         .select('wordpress_url, wordpress_username, wordpress_app_password')
@@ -173,19 +173,129 @@ export function useInternalLinking(projectId: string | null) {
 
       toast({
         title: 'Sincronização iniciada',
-        description: 'Os artigos estão sendo indexados. Isso pode levar alguns minutos.',
+        description: 'Buscando artigos do WordPress para indexação...',
       });
 
-      // The sync will be triggered by the WordPress plugin's cron
-      // or can be manually triggered via the plugin admin
+      // Step 1: Fetch articles from WordPress plugin API
+      const isPluginAuth = project.wordpress_username === '__CFRDM_PLUGIN__';
+      const baseUrl = project.wordpress_url.replace(/\/+$/, '');
       
-      // For now, refresh the local data
+      let articlesData: any[] = [];
+      
+      if (isPluginAuth) {
+        // Use plugin API endpoint
+        const articlesUrl = `${baseUrl}/wp-json/cfrdm/v1/articles-for-indexing?per_page=100`;
+        const articlesResponse = await fetch(articlesUrl, {
+          headers: {
+            'X-CFRDM-API-Key': project.wordpress_app_password || '',
+          },
+        });
+
+        if (!articlesResponse.ok) {
+          throw new Error(`Erro ao buscar artigos: ${articlesResponse.status}`);
+        }
+
+        const articlesResult = await articlesResponse.json();
+        
+        if (!articlesResult.success || !articlesResult.articles) {
+          throw new Error('Resposta inválida do plugin WordPress');
+        }
+
+        // Fetch content for each article
+        const articleIds = articlesResult.articles.map((a: any) => a.wp_post_id);
+        
+        if (articleIds.length > 0) {
+          // Use batch export endpoint
+          const batchUrl = `${baseUrl}/wp-json/cfrdm/v1/export-articles-batch`;
+          const batchResponse = await fetch(batchUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CFRDM-API-Key': project.wordpress_app_password || '',
+            },
+            body: JSON.stringify({ post_ids: articleIds }),
+          });
+
+          if (batchResponse.ok) {
+            const batchResult = await batchResponse.json();
+            articlesData = batchResult.articles || [];
+          }
+        }
+      } else {
+        // Use standard WordPress REST API
+        const articlesUrl = `${baseUrl}/wp-json/wp/v2/posts?per_page=100&_fields=id,title,link,slug,categories,tags,content,modified_gmt,status,type`;
+        const authHeader = 'Basic ' + btoa(`${project.wordpress_username}:${project.wordpress_app_password}`);
+        
+        const articlesResponse = await fetch(articlesUrl, {
+          headers: {
+            'Authorization': authHeader,
+          },
+        });
+
+        if (!articlesResponse.ok) {
+          throw new Error(`Erro ao buscar artigos: ${articlesResponse.status}`);
+        }
+
+        const wpArticles = await articlesResponse.json();
+        
+        // Transform to our format
+        articlesData = wpArticles.map((post: any) => ({
+          wp_post_id: post.id,
+          wp_post_url: post.link,
+          wp_post_slug: post.slug,
+          wp_post_title: post.title?.rendered || '',
+          wp_post_type: post.type || 'post',
+          wp_post_status: post.status || 'publish',
+          wp_categories: post.categories?.map((id: number) => `cat-${id}`) || [],
+          wp_tags: post.tags?.map((id: number) => `tag-${id}`) || [],
+          content: post.content?.rendered || '',
+          word_count: (post.content?.rendered || '').split(/\s+/).length,
+          last_wp_modified_at: post.modified_gmt,
+        }));
+      }
+
+      if (articlesData.length === 0) {
+        toast({
+          title: 'Nenhum artigo encontrado',
+          description: 'O site WordPress não possui artigos publicados.',
+        });
+        setIsSyncing(false);
+        return;
+      }
+
+      toast({
+        title: 'Artigos encontrados',
+        description: `Analisando ${articlesData.length} artigos com IA...`,
+      });
+
+      // Step 2: Send to Edge Function for AI analysis
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.access_token) {
+        throw new Error('Sessão expirada');
+      }
+
+      const syncResponse = await supabase.functions.invoke('analyze-wp-articles', {
+        body: {
+          action: 'sync',
+          project_id: projectId,
+          articles: articlesData,
+          site_url: baseUrl,
+        },
+      });
+
+      if (syncResponse.error) {
+        throw syncResponse.error;
+      }
+
+      const results = syncResponse.data?.results || { synced: 0, analyzed: 0, errors: 0 };
+
+      // Refresh local data
       await fetchIndexedArticles();
       await fetchTopicClusters();
 
       toast({
-        title: 'Sincronização concluída',
-        description: 'Os artigos foram atualizados.',
+        title: 'Sincronização concluída!',
+        description: `${results.synced} artigos sincronizados, ${results.analyzed} analisados com IA.`,
       });
     } catch (error) {
       console.error('Error triggering sync:', error);
