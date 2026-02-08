@@ -28,9 +28,11 @@ interface AnalysisResult {
 async function fetchUrlContent(url: string): Promise<{ html: string; title: string }> {
   const response = await fetch(url, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; ContentAnalyzer/1.0)',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Cache-Control': 'no-cache',
     },
   });
 
@@ -120,28 +122,20 @@ function extractSourceName(url: string): string {
   }
 }
 
-async function analyzeWithAI(
+async function analyzeWithGemini(
   content: string,
   title: string,
   source: string,
   projectNiche: string | undefined,
-  projectName: string | undefined
+  projectName: string | undefined,
+  apiKey: string
 ): Promise<AnalysisResult> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY não configurada");
-  }
-
   const nicheContext = projectNiche 
     ? `O projeto WordPress de destino é do nicho "${projectNiche}"${projectName ? ` (${projectName})` : ''}.` 
     : '';
 
-  const systemPrompt = `Você é um especialista em análise de conteúdo jornalístico e SEO.
-Analise notícias e forneça recomendações estruturadas para repostagem.
-Retorne APENAS JSON válido, sem markdown ou explicações.`;
-
-  const userPrompt = `Analise a seguinte notícia e forneça recomendações para repostagem.
+  const prompt = `Você é um especialista em análise de conteúdo jornalístico e SEO.
+Analise a seguinte notícia e forneça recomendações para repostagem.
 
 ${nicheContext}
 
@@ -153,7 +147,8 @@ ${content.substring(0, 5000)}
 
 ---
 
-Retorne um JSON com esta estrutura exata:
+Analise o conteúdo e retorne um JSON com:
+
 {
   "title": "título original extraído",
   "content": "texto completo extraído e limpo da notícia (máximo 3000 caracteres)",
@@ -168,68 +163,57 @@ Retorne um JSON com esta estrutura exata:
 }
 
 IMPORTANTE: 
-- Retorne APENAS o JSON válido
+- Retorne APENAS o JSON válido, sem markdown ou explicações
 - O suggestedAngle deve ser específico e único, não genérico
 - Considere o nicho do projeto WordPress se informado`;
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      temperature: 0.4,
-      max_tokens: 4000,
-    }),
-  });
+  // Use Gemini 2.0 Flash model
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.4,
+          maxOutputTokens: 4000,
+          responseMimeType: "application/json",
+        },
+      }),
+    }
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("Lovable AI error:", response.status, errorText);
-    
-    if (response.status === 429) {
-      throw new Error("Rate limit excedido. Tente novamente em alguns segundos.");
-    }
-    if (response.status === 402) {
-      throw new Error("Créditos insuficientes. Adicione créditos na sua conta Lovable.");
-    }
-    
-    throw new Error(`Erro na API de IA: ${response.status}`);
+    console.error("Gemini API error:", response.status, errorText);
+    throw new Error(`Erro na API Gemini: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
-  const text = data.choices?.[0]?.message?.content;
+  
+  // Check for API errors in response
+  if (data.error) {
+    console.error("Gemini response error:", data.error);
+    throw new Error(`Erro Gemini: ${data.error.message || JSON.stringify(data.error)}`);
+  }
+
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
   if (!text) {
+    console.error("Empty Gemini response:", JSON.stringify(data));
     throw new Error("Resposta vazia da IA");
   }
 
   try {
-    // Clean up potential markdown wrapper
-    let jsonText = text.trim();
-    if (jsonText.startsWith("```json")) {
-      jsonText = jsonText.slice(7);
-    }
-    if (jsonText.startsWith("```")) {
-      jsonText = jsonText.slice(3);
-    }
-    if (jsonText.endsWith("```")) {
-      jsonText = jsonText.slice(0, -3);
-    }
-    
-    return JSON.parse(jsonText.trim());
+    return JSON.parse(text);
   } catch {
     // Try to extract JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]);
     }
+    console.error("Failed to parse Gemini response:", text);
     throw new Error("Falha ao processar resposta da IA");
   }
 }
@@ -274,11 +258,24 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Get Gemini API key from environment (set via Supabase secrets)
+    const geminiKey = Deno.env.get("GEMINI_API_KEY");
+
+    if (!geminiKey) {
+      console.error("GEMINI_API_KEY not found in environment");
+      return new Response(
+        JSON.stringify({ error: "Chave de API Gemini não configurada no servidor" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Fetch and extract content from URL
     console.log("Fetching URL:", url);
     const { html, title } = await fetchUrlContent(url);
     const content = extractMainContent(html);
     const source = extractSourceName(url);
+
+    console.log("Extracted content length:", content.length, "chars");
 
     if (!content || content.length < 100) {
       return new Response(
@@ -287,15 +284,18 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Analyze with Lovable AI
-    console.log("Analyzing content with Lovable AI...");
-    const analysis = await analyzeWithAI(
+    // Analyze with Gemini
+    console.log("Analyzing content with Gemini API...");
+    const analysis = await analyzeWithGemini(
       content,
       title,
       source,
       projectNiche,
-      projectName
+      projectName,
+      geminiKey
     );
+
+    console.log("Analysis completed successfully");
 
     return new Response(
       JSON.stringify({
