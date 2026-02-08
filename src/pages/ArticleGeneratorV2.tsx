@@ -542,7 +542,7 @@ export default function ArticleGeneratorV2() {
           isMobile ? "w-full min-h-screen" : "w-1/2"
         )}>
           <ScrollArea className={isMobile ? "h-auto" : "h-[calc(100vh-73px)]"}>
-            <div className="p-4 md:p-5 space-y-3 md:space-y-4 pb-44">
+            <div className="p-4 md:p-5 space-y-3 md:space-y-4 pb-52">
               {/* Tutorial Banner */}
               {showTutorial && (
                 <GeneratorTutorialBanner onClose={() => setShowTutorial(false)} />
@@ -589,7 +589,7 @@ export default function ArticleGeneratorV2() {
                 <AccordionItem value="templates" className="border rounded-lg px-4 mt-4 border-border">
                   <AccordionTrigger className="py-4">
                     <div className="flex items-center gap-2">
-                      <FileText className="w-5 h-5 text-violet-500" />
+                      <FileText className="w-5 h-5 text-primary" />
                       <span className="font-semibold">Modelos de Artigo</span>
                     </div>
                   </AccordionTrigger>
