@@ -80,10 +80,11 @@ function analyzeArticleBasic(article: ArticleData): AnalysisResult {
 }
 
 // Analyze article content with AI (with fallback)
-async function analyzeArticle(article: ArticleData, useAI: boolean = true): Promise<AnalysisResult> {
-  // If AI is disabled, use basic analysis
+// Returns { result, usedAI, creditsExhausted }
+async function analyzeArticle(article: ArticleData, useAI: boolean = true): Promise<{ result: AnalysisResult; usedAI: boolean; creditsExhausted: boolean }> {
+  // If AI is disabled, use basic analysis immediately
   if (!useAI) {
-    return analyzeArticleBasic(article);
+    return { result: analyzeArticleBasic(article), usedAI: false, creditsExhausted: false };
   }
   
   const prompt = `Analise o seguinte artigo e extraia informações para otimização de SEO e linkagem interna.
@@ -112,6 +113,9 @@ IMPORTANTE:
 - topic_cluster: identifique o tema principal para agrupar artigos relacionados`;
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout per article
+    
     const response = await fetch(AI_GATEWAY_URL, {
       method: "POST",
       headers: {
@@ -127,19 +131,23 @@ IMPORTANTE:
         max_tokens: 800,
         temperature: 0.2,
       }),
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const error = await response.text();
       console.error("AI Gateway error:", error);
       
-      // Check for payment/credit errors - use fallback
+      // Check for payment/credit errors - signal to stop using AI
       if (response.status === 402 || error.includes('credits') || error.includes('payment')) {
         console.log("AI credits exhausted, using basic analysis");
-        return analyzeArticleBasic(article);
+        return { result: analyzeArticleBasic(article), usedAI: false, creditsExhausted: true };
       }
       
-      throw new Error(`AI analysis failed: ${response.status}`);
+      // Other errors - use fallback but don't signal credits issue
+      return { result: analyzeArticleBasic(article), usedAI: false, creditsExhausted: false };
     }
 
     const data = await response.json();
@@ -148,14 +156,19 @@ IMPORTANTE:
     // Parse JSON from response
     try {
       let jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      return JSON.parse(jsonStr);
+      return { result: JSON.parse(jsonStr), usedAI: true, creditsExhausted: false };
     } catch (e) {
       console.error("Failed to parse AI response:", content);
-      return analyzeArticleBasic(article);
+      return { result: analyzeArticleBasic(article), usedAI: false, creditsExhausted: false };
     }
-  } catch (e) {
-    console.error("AI analysis error, using fallback:", e);
-    return analyzeArticleBasic(article);
+  } catch (e: any) {
+    // Handle abort/timeout
+    if (e.name === 'AbortError') {
+      console.log("AI request timed out, using basic analysis");
+    } else {
+      console.error("AI analysis error, using fallback:", e);
+    }
+    return { result: analyzeArticleBasic(article), usedAI: false, creditsExhausted: false };
   }
 }
 
@@ -530,32 +543,21 @@ serve(async (req) => {
 
             // Analyze with AI (with automatic fallback when credits exhausted)
             // Use AI only if credits not exhausted and not too many consecutive errors
-            const useAI = !aiCreditsExhausted && consecutiveAIErrors < MAX_AI_ERRORS;
+            const shouldTryAI = !aiCreditsExhausted && consecutiveAIErrors < MAX_AI_ERRORS;
             
-            let analysis: AnalysisResult;
-            try {
-              analysis = await analyzeArticle(article, useAI);
-              
-              // If we successfully used AI, reset error counter
-              if (useAI) {
-                consecutiveAIErrors = 0;
-                results.analyzedWithAI++;
-              } else {
-                results.analyzedBasic++;
-              }
-            } catch (e: any) {
-              const errorMsg = e?.message || String(e);
-              
-              // Check if it's a credit exhaustion error
-              if (errorMsg.includes('402') || errorMsg.includes('credits') || errorMsg.includes('payment')) {
-                console.log("AI credits exhausted, switching to basic analysis for remaining articles");
-                aiCreditsExhausted = true;
-              } else {
-                consecutiveAIErrors++;
-              }
-              
-              // Use basic analysis as fallback
-              analysis = analyzeArticleBasic(article);
+            const analysisResult = await analyzeArticle(article, shouldTryAI);
+            const analysis = analysisResult.result;
+            
+            // Update AI status based on result
+            if (analysisResult.creditsExhausted) {
+              aiCreditsExhausted = true;
+              console.log("AI credits exhausted, all remaining articles will use basic analysis");
+            }
+            
+            if (analysisResult.usedAI) {
+              consecutiveAIErrors = 0;
+              results.analyzedWithAI++;
+            } else {
               results.analyzedBasic++;
             }
             
