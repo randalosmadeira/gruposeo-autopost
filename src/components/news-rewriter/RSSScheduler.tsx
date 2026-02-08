@@ -63,6 +63,15 @@ const NICHE_OPTIONS = [
   { value: 'marketing', label: 'Marketing' },
 ];
 
+// Combined niche presets
+const COMBINED_NICHE_PRESETS = [
+  { value: 'saude_beleza', label: 'Saúde + Beleza', description: 'Bem-estar integral e estética' },
+  { value: 'tecnologia_marketing', label: 'Tecnologia + Marketing', description: 'MarTech e inovação digital' },
+  { value: 'advocacia_tecnologia', label: 'Advocacia + Tech', description: 'Direito digital e regulamentação' },
+  { value: 'advocacia_tecnologia_marketing', label: 'Advocacia + Tech + Marketing', description: 'Negócios digitais' },
+  { value: 'tecnologia_crimes', label: 'Tech + Crimes Cibernéticos', description: 'Segurança digital' },
+];
+
 interface RSSSchedulerProps {
   projectId?: string;
 }
@@ -295,7 +304,7 @@ export function RSSScheduler({ projectId }: RSSSchedulerProps) {
             </div>
             <div className="grid sm:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Nicho</Label>
+                <Label>Nicho Principal</Label>
                 <Select
                   value={newFeed.niche}
                   onValueChange={(v) => setNewFeed(prev => ({ ...prev, niche: v }))}
@@ -304,8 +313,22 @@ export function RSSScheduler({ projectId }: RSSSchedulerProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="" disabled className="text-muted-foreground text-xs">
+                      — Nichos Simples —
+                    </SelectItem>
                     {NICHE_OPTIONS.map(opt => (
                       <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                    <SelectItem value="" disabled className="text-muted-foreground text-xs mt-2">
+                      — Nichos Combinados —
+                    </SelectItem>
+                    {COMBINED_NICHE_PRESETS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        <div className="flex flex-col">
+                          <span>{opt.label}</span>
+                          <span className="text-xs text-muted-foreground">{opt.description}</span>
+                        </div>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
