@@ -568,18 +568,72 @@ export default function LandingPageGenerator() {
   };
 
   const handlePublish = async (projectId: string) => {
-    // Simulate publish
-    const result = await publishArticle({
-      id: 'landing-page-' + Date.now(),
-      title: editorData.title,
-      project_id: projectId,
-    });
-    
-    if (result.success && result.postUrl) {
-      setPublishedUrl(result.postUrl);
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: 'Erro',
+          description: 'Você precisa estar logado para publicar.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // First, save the landing page to the database
+      const { data: savedArticle, error: saveError } = await supabase
+        .from('articles')
+        .insert({
+          user_id: user.id,
+          project_id: projectId,
+          title: editorData.title,
+          content: editorData.sections?.map(s => `<h2>${s.title}</h2>\n${s.content}`).join('\n\n') || '',
+          excerpt: editorData.headline || '',
+          keyword: config.keyword || editorData.title || 'landing-page',
+          slug: (editorData.title || 'landing-page').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          featured_image_url: editorData.featuredImage || null,
+          type: 'sales' as const,
+          status: 'ready' as const,
+          config: {
+            template: config.template,
+            seo_title: editorData.title,
+            seo_description: editorData.headline,
+            focus_keyword: config.keyword,
+          },
+        })
+        .select()
+        .single();
+
+      if (saveError || !savedArticle) {
+        console.error('Error saving landing page:', saveError);
+        toast({
+          title: 'Erro ao salvar',
+          description: 'Não foi possível salvar a landing page antes de publicar.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Now publish with the saved article ID
+      const result = await publishArticle({
+        id: savedArticle.id,
+        title: savedArticle.title,
+        project_id: projectId,
+      });
+      
+      if (result.success && result.postUrl) {
+        setPublishedUrl(result.postUrl);
+        toast({
+          title: 'Publicado!',
+          description: 'Landing page publicada com sucesso.',
+        });
+      }
+    } catch (error) {
+      console.error('Publish error:', error);
       toast({
-        title: 'Publicado!',
-        description: 'Landing page publicada com sucesso.',
+        title: 'Erro ao publicar',
+        description: error instanceof Error ? error.message : 'Erro desconhecido',
+        variant: 'destructive',
       });
     }
   };
