@@ -740,34 +740,40 @@ export type Database = {
       }
       prompt_templates: {
         Row: {
+          agent_name: string | null
           created_at: string
           description: string | null
           id: string
           is_default: boolean | null
           name: string
           prompt: string
+          target_function: string | null
           template_type: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          agent_name?: string | null
           created_at?: string
           description?: string | null
           id?: string
           is_default?: boolean | null
           name: string
           prompt: string
+          target_function?: string | null
           template_type?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          agent_name?: string | null
           created_at?: string
           description?: string | null
           id?: string
           is_default?: boolean | null
           name?: string
           prompt?: string
+          target_function?: string | null
           template_type?: string | null
           updated_at?: string
           user_id?: string
