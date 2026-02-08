@@ -1099,11 +1099,229 @@ class CFRDM_Admin {
                     </div>
                 </div>
                 
+                <!-- v3.0.0 - Google Search Console Settings -->
+                <div class="cfrdm-card">
+                    <div class="cfrdm-card-header">
+                        <h2>
+                            <span class="dashicons dashicons-google"></span>
+                            <?php _e('Google Search Console (v3.0.0)', 'contentfactory-rdm'); ?>
+                        </h2>
+                    </div>
+                    <div class="cfrdm-card-body">
+                        <?php 
+                        $gsc_connected = false;
+                        if (class_exists('CFRDM_GSC_Integration')) {
+                            $gsc_status = CFRDM_GSC_Integration::get_connection_status();
+                            $gsc_connected = $gsc_status['connected'];
+                        }
+                        ?>
+                        
+                        <?php if ($gsc_connected): ?>
+                        <div class="notice notice-success inline" style="margin:0 0 15px;">
+                            <p><strong>✓ Conectado ao Google Search Console</strong></p>
+                            <p>Site: <?php echo esc_html($gsc_status['site_url']); ?><br>
+                            Última sincronização: <?php echo esc_html($gsc_status['last_sync'] ?? 'Nunca'); ?></p>
+                        </div>
+                        <p>
+                            <button type="button" class="button" id="cfrdm-gsc-sync" onclick="cfrdmGSCSync()">
+                                <span class="dashicons dashicons-update"></span>
+                                <?php _e('Sincronizar Agora', 'contentfactory-rdm'); ?>
+                            </button>
+                            <button type="button" class="button button-link-delete" id="cfrdm-gsc-disconnect" onclick="cfrdmGSCDisconnect()">
+                                <?php _e('Desconectar', 'contentfactory-rdm'); ?>
+                            </button>
+                        </p>
+                        <?php else: ?>
+                        <p class="description" style="margin-bottom:15px;">
+                            <?php _e('Conecte o Google Search Console para sincronizar automaticamente erros 404, páginas não indexadas e problemas de schema.', 'contentfactory-rdm'); ?>
+                        </p>
+                        <table class="form-table">
+                            <tr>
+                                <th><label for="cfrdm_gsc_client_id"><?php _e('Client ID (OAuth)', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <input type="text" name="cfrdm_gsc_client_id" id="cfrdm_gsc_client_id" class="regular-text"
+                                        value="<?php echo esc_attr(get_option('cfrdm_gsc_client_id')); ?>"
+                                        placeholder="xxxxx.apps.googleusercontent.com" />
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="cfrdm_gsc_client_secret"><?php _e('Client Secret', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <input type="password" name="cfrdm_gsc_client_secret" id="cfrdm_gsc_client_secret" class="regular-text"
+                                        value="<?php echo esc_attr(get_option('cfrdm_gsc_client_secret')); ?>" />
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="cfrdm_gsc_site_url"><?php _e('Site URL no GSC', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <input type="url" name="cfrdm_gsc_site_url" id="cfrdm_gsc_site_url" class="regular-text"
+                                        value="<?php echo esc_attr(get_option('cfrdm_gsc_site_url', get_site_url())); ?>" />
+                                    <p class="description"><?php _e('URL exata configurada no Search Console (com ou sem www)', 'contentfactory-rdm'); ?></p>
+                                </td>
+                            </tr>
+                        </table>
+                        
+                        <?php if (get_option('cfrdm_gsc_client_id') && get_option('cfrdm_gsc_client_secret')): ?>
+                        <p style="margin-top:15px;">
+                            <?php if (class_exists('CFRDM_GSC_Integration')): ?>
+                            <a href="<?php echo esc_url(CFRDM_GSC_Integration::get_instance()->get_auth_url()); ?>" class="button button-primary">
+                                <span class="dashicons dashicons-admin-links"></span>
+                                <?php _e('Conectar ao Google Search Console', 'contentfactory-rdm'); ?>
+                            </a>
+                            <?php endif; ?>
+                        </p>
+                        <?php endif; ?>
+                        
+                        <div class="notice notice-info inline" style="margin:15px 0 0;">
+                            <p><strong><?php _e('Como obter as credenciais:', 'contentfactory-rdm'); ?></strong></p>
+                            <ol style="margin:5px 0 0 20px;">
+                                <li><?php _e('Acesse o', 'contentfactory-rdm'); ?> <a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a></li>
+                                <li><?php _e('Crie um novo projeto ou selecione um existente', 'contentfactory-rdm'); ?></li>
+                                <li><?php _e('Ative as APIs: Search Console API e Indexing API', 'contentfactory-rdm'); ?></li>
+                                <li><?php _e('Em Credenciais, crie um Client ID OAuth 2.0 (tipo: Web Application)', 'contentfactory-rdm'); ?></li>
+                                <li><?php _e('Adicione como URI de redirecionamento:', 'contentfactory-rdm'); ?> <code><?php echo admin_url('admin.php?page=cfrdm-gsc-auth'); ?></code></li>
+                            </ol>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                
+                <!-- v3.0.0 - AI Auto-Fix Settings -->
+                <div class="cfrdm-card">
+                    <div class="cfrdm-card-header">
+                        <h2>
+                            <span class="dashicons dashicons-superhero-alt"></span>
+                            <?php _e('Correção Automática por IA (v3.0.0)', 'contentfactory-rdm'); ?>
+                        </h2>
+                    </div>
+                    <div class="cfrdm-card-body">
+                        <p class="description" style="margin-bottom:15px;">
+                            <?php _e('O motor de IA analisa problemas detectados pelo GSC e aplica correções automaticamente quando a confiança é alta o suficiente.', 'contentfactory-rdm'); ?>
+                        </p>
+                        <table class="form-table">
+                            <tr>
+                                <th><label for="cfrdm_ai_auto_fix_enabled"><?php _e('Auto-Fix Habilitado', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="cfrdm_ai_auto_fix_enabled" id="cfrdm_ai_auto_fix_enabled" value="1" 
+                                            <?php checked(get_option('cfrdm_ai_auto_fix_enabled', false)); ?> />
+                                        <?php _e('Permitir correções automáticas por IA', 'contentfactory-rdm'); ?>
+                                    </label>
+                                    <p class="description"><?php _e('⚠️ Ações serão executadas automaticamente. Desative para apenas receber sugestões.', 'contentfactory-rdm'); ?></p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="cfrdm_ai_auto_fix_min_confidence"><?php _e('Confiança Mínima (%)', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <input type="number" name="cfrdm_ai_auto_fix_min_confidence" id="cfrdm_ai_auto_fix_min_confidence" 
+                                        value="<?php echo esc_attr(get_option('cfrdm_ai_auto_fix_min_confidence', 80)); ?>" min="50" max="100" style="width:80px;" />
+                                    <p class="description"><?php _e('Correções só serão aplicadas se a IA tiver confiança acima deste valor.', 'contentfactory-rdm'); ?></p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="cfrdm_content_enhancer_enabled"><?php _e('Melhoria de Conteúdo', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="cfrdm_content_enhancer_enabled" id="cfrdm_content_enhancer_enabled" value="1" 
+                                            <?php checked(get_option('cfrdm_content_enhancer_enabled', false)); ?> />
+                                        <?php _e('Expandir automaticamente conteúdo fino (thin content)', 'contentfactory-rdm'); ?>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="cfrdm_https_enforcer_enabled"><?php _e('HTTPS Enforcer', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="cfrdm_https_enforcer_enabled" id="cfrdm_https_enforcer_enabled" value="1" 
+                                            <?php checked(get_option('cfrdm_https_enforcer_enabled', false)); ?> />
+                                        <?php _e('Converter links HTTP para HTTPS automaticamente', 'contentfactory-rdm'); ?>
+                                    </label>
+                                </td>
+                            </tr>
+                        </table>
+                        
+                        <p style="margin-top:15px;">
+                            <a href="<?php echo admin_url('admin.php?page=cfrdm-diagnostics'); ?>" class="button">
+                                <span class="dashicons dashicons-chart-bar"></span>
+                                <?php _e('Ver Fila de Correções', 'contentfactory-rdm'); ?>
+                            </a>
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- v3.0.0 - Auto-Update Settings -->
+                <div class="cfrdm-card">
+                    <div class="cfrdm-card-header">
+                        <h2>
+                            <span class="dashicons dashicons-update"></span>
+                            <?php _e('Atualizações Automáticas (v3.0.0)', 'contentfactory-rdm'); ?>
+                        </h2>
+                    </div>
+                    <div class="cfrdm-card-body">
+                        <table class="form-table">
+                            <tr>
+                                <th><label for="cfrdm_auto_update_enabled"><?php _e('Atualização Automática', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="cfrdm_auto_update_enabled" id="cfrdm_auto_update_enabled" value="1" 
+                                            <?php checked(get_option('cfrdm_auto_update_enabled', false)); ?> />
+                                        <?php _e('Atualizar plugin automaticamente quando houver nova versão', 'contentfactory-rdm'); ?>
+                                    </label>
+                                    <p class="description"><?php _e('Backups são criados automaticamente antes de cada atualização.', 'contentfactory-rdm'); ?></p>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
                 <p class="submit">
                     <button type="submit" name="cfrdm_save_settings" class="button button-primary button-large">
                         <?php _e('Salvar Configurações', 'contentfactory-rdm'); ?>
                     </button>
                 </p>
+                
+                <script>
+                function cfrdmGSCSync() {
+                    var btn = document.getElementById('cfrdm-gsc-sync');
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="dashicons dashicons-update spin"></span> Sincronizando...';
+                    
+                    fetch('<?php echo esc_url(rest_url('cfrdm/v1/gsc-sync')); ?>', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-WP-Nonce': '<?php echo wp_create_nonce('wp_rest'); ?>'
+                        },
+                        credentials: 'same-origin'
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        alert(data.success ? 'Sincronização concluída!' : 'Erro: ' + data.message);
+                        location.reload();
+                    })
+                    .catch(e => {
+                        alert('Erro: ' + e.message);
+                        btn.disabled = false;
+                    });
+                }
+                
+                function cfrdmGSCDisconnect() {
+                    if (!confirm('Tem certeza que deseja desconectar o Google Search Console?')) return;
+                    
+                    fetch('<?php echo esc_url(rest_url('cfrdm/v1/gsc-disconnect')); ?>', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-WP-Nonce': '<?php echo wp_create_nonce('wp_rest'); ?>'
+                        },
+                        credentials: 'same-origin'
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        location.reload();
+                    });
+                }
+                </script>
             </form>
         </div>
         <?php

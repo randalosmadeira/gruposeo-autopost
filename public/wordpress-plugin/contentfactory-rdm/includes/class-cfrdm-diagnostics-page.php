@@ -1,6 +1,8 @@
 <?php
 /**
- * Diagnostics admin page
+ * Diagnostics admin page - v3.0.0
+ * 
+ * Enhanced with AI Auto-Fix, GSC Integration, and Cron Jobs monitoring
  */
 
 if (!defined('ABSPATH')) {
@@ -37,7 +39,7 @@ class CFRDM_Diagnostics_Page {
         $basic_health_url = esc_url(rest_url('cfrdm/v1/health'));
 
         echo '<div class="wrap cfrdm-wrap">';
-        echo '<h1>Diagnóstico <span style="display:inline-block;margin-left:10px;padding:4px 10px;border-radius:999px;background:' . esc_attr($status_color) . ';color:#fff;font-size:12px;">' . esc_html($status_label) . '</span></h1>';
+        echo '<h1>Diagnóstico v3.0.0 <span style="display:inline-block;margin-left:10px;padding:4px 10px;border-radius:999px;background:' . esc_attr($status_color) . ';color:#fff;font-size:12px;">' . esc_html($status_label) . '</span></h1>';
 
         echo '<div class="notice notice-info"><p><strong>Endpoints:</strong><br>';
         echo '• Health básico: <code>' . $basic_health_url . '</code><br>';
@@ -70,27 +72,75 @@ class CFRDM_Diagnostics_Page {
         ));
 
         // Tables with repair option
-        echo '<h2>Tabelas</h2>';
-        $logs_ok = !empty($report['tables']['logs_table']);
-        $news_ok = !empty($report['tables']['news_table']);
+        echo '<h2>Tabelas do Banco de Dados</h2>';
+        self::render_tables_section();
+
+        // v3.0.0 - Cron Jobs Status
+        echo '<h2>Cron Jobs v3.0.0</h2>';
+        self::render_cron_jobs_section();
+
+        // v3.0.0 - GSC Integration Status
+        echo '<h2>Google Search Console</h2>';
+        self::render_gsc_status_section();
+
+        // v3.0.0 - AI Auto-Fix Queue
+        echo '<h2>Fila de Correção Automática (AI)</h2>';
+        self::render_fix_queue_section();
+
+        // Builders
+        echo '<h2>Page Builders</h2>';
+        if (!empty($report['page_builders'])) {
+            echo '<p>Detectados: <strong>' . esc_html(implode(', ', array_values($report['page_builders']))) . '</strong></p>';
+        } else {
+            echo '<p>Nenhum page builder conhecido detectado.</p>';
+        }
+
+        echo '</div>';
+    }
+
+    /**
+     * Render tables section with v3.0.0 tables
+     */
+    private static function render_tables_section() {
+        global $wpdb;
+        
+        $tables = array(
+            'cfrdm_logs' => $wpdb->prefix . 'cfrdm_logs',
+            'cfrdm_news' => $wpdb->prefix . 'cfrdm_news',
+            'cfrdm_structured_logs' => $wpdb->prefix . 'cfrdm_structured_logs',
+            'cfrdm_social_queue' => $wpdb->prefix . 'cfrdm_social_queue',
+            'cfrdm_social_accounts' => $wpdb->prefix . 'cfrdm_social_accounts',
+            'cfrdm_cron_jobs' => $wpdb->prefix . 'cfrdm_cron_jobs',
+            'cfrdm_cron_history' => $wpdb->prefix . 'cfrdm_cron_history',
+            'cfrdm_content_queue' => $wpdb->prefix . 'cfrdm_content_queue',
+            'cfrdm_fix_queue' => $wpdb->prefix . 'cfrdm_fix_queue',
+            'cfrdm_ubersuggest_data' => $wpdb->prefix . 'cfrdm_ubersuggest_data',
+        );
+        
+        $table_status = array();
+        $missing_tables = array();
+        
+        foreach ($tables as $name => $full_name) {
+            $exists = $wpdb->get_var("SHOW TABLES LIKE '$full_name'") === $full_name;
+            $table_status[$name] = $exists ? '✓ OK' : '✗ NÃO ENCONTRADA';
+            if (!$exists) {
+                $missing_tables[] = $name;
+            }
+        }
+        
+        // Add API Key status
         $api_key = get_option('cfrdm_api_key');
-        $api_key_ok = !empty($api_key);
+        $table_status['API Key'] = !empty($api_key) ? '✓ OK (' . substr($api_key, 0, 8) . '...)' : '✗ NÃO GERADA';
+        if (empty($api_key)) {
+            $missing_tables[] = 'API Key';
+        }
         
-        self::render_kv_table(array(
-            'cfrdm_logs' => $logs_ok ? 'OK' : 'NÃO ENCONTRADA',
-            'cfrdm_news' => $news_ok ? 'OK' : 'NÃO ENCONTRADA',
-            'API Key' => $api_key_ok ? 'OK (' . substr($api_key, 0, 8) . '...)' : 'NÃO GERADA',
-        ));
+        self::render_kv_table($table_status);
         
-        // Show repair button if tables are missing OR API key is missing
-        if (!$logs_ok || !$news_ok || !$api_key_ok) {
-            $repair_reason = array();
-            if (!$logs_ok) $repair_reason[] = 'tabela de logs';
-            if (!$news_ok) $repair_reason[] = 'tabela de news';
-            if (!$api_key_ok) $repair_reason[] = 'API Key';
-            
+        // Show repair button if any tables are missing
+        if (!empty($missing_tables)) {
             echo '<div style="margin: 15px 0; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">';
-            echo '<p style="margin:0 0 10px 0;"><strong>⚠️ Problemas detectados:</strong> ' . esc_html(implode(', ', $repair_reason)) . '</p>';
+            echo '<p style="margin:0 0 10px 0;"><strong>⚠️ Problemas detectados:</strong> ' . esc_html(implode(', ', $missing_tables)) . '</p>';
             echo '<button type="button" id="cfrdm-repair-tables" class="button button-primary" onclick="cfrdmRepairTables()">';
             echo '<span class="dashicons dashicons-admin-tools" style="vertical-align:middle;margin-right:5px;"></span>';
             echo 'Reparar Tabelas e Gerar API Key</button>';
@@ -132,16 +182,153 @@ class CFRDM_Diagnostics_Page {
             }
             </script>';
         }
+    }
 
-        // Builders
-        echo '<h2>Page Builders</h2>';
-        if (!empty($report['page_builders'])) {
-            echo '<p>Detectados: <strong>' . esc_html(implode(', ', array_values($report['page_builders']))) . '</strong></p>';
-        } else {
-            echo '<p>Nenhum page builder conhecido detectado.</p>';
+    /**
+     * Render cron jobs status section
+     */
+    private static function render_cron_jobs_section() {
+        $cron_jobs = array(
+            'cfrdm_daily_cleanup' => 'Limpeza diária',
+            'cfrdm_sync_stats' => 'Sincronização de estatísticas',
+            'cfrdm_fetch_news' => 'Buscar notícias',
+            'cfrdm_process_social_queue' => 'Processar fila social',
+            'cfrdm_process_content_queue' => 'Processar fila de conteúdo',
+            'cfrdm_cleanup_structured_logs' => 'Limpar logs estruturados',
+            'cfrdm_reset_stuck_cron_jobs' => 'Resetar jobs travados',
+            'cfrdm_gsc_sync' => 'Sincronização GSC',
+            'cfrdm_process_fix_queue' => 'Processar fila de correção AI',
+            'cfrdm_ubersuggest_sync' => 'Sincronização Ubersuggest',
+            'cfrdm_https_scan' => 'Scan HTTPS',
+            'cfrdm_check_updates' => 'Verificar atualizações',
+            'cfrdm_enhance_content' => 'Melhorar conteúdo',
+        );
+        
+        $status = array();
+        foreach ($cron_jobs as $hook => $label) {
+            $next = wp_next_scheduled($hook);
+            if ($next) {
+                $time_diff = $next - time();
+                if ($time_diff > 0) {
+                    $human = human_time_diff(time(), $next);
+                    $status[$label] = "✓ Próximo em {$human}";
+                } else {
+                    $status[$label] = '⚠️ Atrasado';
+                }
+            } else {
+                $status[$label] = '✗ Não agendado';
+            }
         }
+        
+        self::render_kv_table($status);
+        
+        echo '<p><small>Os cron jobs são executados automaticamente pelo WordPress. Se estiverem atrasados, verifique se o WP-Cron está funcionando.</small></p>';
+    }
 
-        echo '</div>';
+    /**
+     * Render GSC status section
+     */
+    private static function render_gsc_status_section() {
+        if (!class_exists('CFRDM_GSC_Integration')) {
+            echo '<p>Módulo GSC não carregado.</p>';
+            return;
+        }
+        
+        $gsc_status = CFRDM_GSC_Integration::get_connection_status();
+        
+        $status_data = array(
+            'Status' => $gsc_status['connected'] ? '✓ Conectado' : '✗ Não conectado',
+            'Site URL' => $gsc_status['site_url'] ?? '-',
+            'Credenciais' => $gsc_status['has_credentials'] ? '✓ Configuradas' : '✗ Não configuradas',
+            'Última sincronização' => $gsc_status['last_sync'] ?? 'Nunca',
+        );
+        
+        self::render_kv_table($status_data);
+        
+        if (!$gsc_status['connected']) {
+            echo '<div style="margin: 15px 0; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">';
+            echo '<p style="margin:0 0 10px 0;"><strong>Configurar Google Search Console</strong></p>';
+            echo '<p>Para ativar a sincronização automática de erros 404 e problemas de indexação:</p>';
+            echo '<ol style="margin:10px 0;">';
+            echo '<li>Acesse o <a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a></li>';
+            echo '<li>Crie um projeto e ative a API do Search Console</li>';
+            echo '<li>Configure as credenciais OAuth 2.0</li>';
+            echo '<li>Adicione o Client ID e Client Secret nas <a href="' . admin_url('admin.php?page=cfrdm-settings') . '">Configurações</a></li>';
+            echo '</ol>';
+            echo '</div>';
+        }
+    }
+
+    /**
+     * Render AI fix queue section
+     */
+    private static function render_fix_queue_section() {
+        if (!class_exists('CFRDM_AI_Auto_Fix')) {
+            echo '<p>Módulo AI Auto-Fix não carregado.</p>';
+            return;
+        }
+        
+        global $wpdb;
+        $table = $wpdb->prefix . 'cfrdm_fix_queue';
+        
+        // Check if table exists
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table'") !== $table) {
+            echo '<p>Tabela da fila de correção não encontrada. Execute a reparação de tabelas acima.</p>';
+            return;
+        }
+        
+        // Get stats
+        $pending = $wpdb->get_var("SELECT COUNT(*) FROM $table WHERE status = 'pending'");
+        $processing = $wpdb->get_var("SELECT COUNT(*) FROM $table WHERE status = 'processing'");
+        $completed = $wpdb->get_var("SELECT COUNT(*) FROM $table WHERE status = 'completed'");
+        $failed = $wpdb->get_var("SELECT COUNT(*) FROM $table WHERE status = 'failed'");
+        
+        $stats = array(
+            'Pendentes' => $pending ?? 0,
+            'Processando' => $processing ?? 0,
+            'Concluídos' => $completed ?? 0,
+            'Falharam' => $failed ?? 0,
+            'Auto-Fix habilitado' => CFRDM_AI_Auto_Fix::is_enabled() ? '✓ Sim' : '✗ Não',
+            'Confiança mínima' => (CFRDM_AI_Auto_Fix::get_min_confidence() * 100) . '%',
+        );
+        
+        self::render_kv_table($stats);
+        
+        // Show recent items
+        $recent = $wpdb->get_results("SELECT * FROM $table ORDER BY created_at DESC LIMIT 5");
+        
+        if (!empty($recent)) {
+            echo '<h3>Itens Recentes</h3>';
+            echo '<table class="widefat striped" style="max-width:900px;">';
+            echo '<thead><tr><th>Tipo</th><th>URL</th><th>Status</th><th>Ação</th><th>Data</th></tr></thead>';
+            echo '<tbody>';
+            foreach ($recent as $item) {
+                $status_badge = self::get_status_badge($item->status);
+                $url_short = strlen($item->url) > 50 ? substr($item->url, 0, 50) . '...' : $item->url;
+                echo '<tr>';
+                echo '<td>' . esc_html($item->issue_type) . '</td>';
+                echo '<td title="' . esc_attr($item->url) . '">' . esc_html($url_short) . '</td>';
+                echo '<td>' . $status_badge . '</td>';
+                echo '<td>' . esc_html($item->fix_action ?? '-') . '</td>';
+                echo '<td>' . esc_html($item->created_at) . '</td>';
+                echo '</tr>';
+            }
+            echo '</tbody></table>';
+        }
+    }
+
+    /**
+     * Get status badge HTML
+     */
+    private static function get_status_badge($status) {
+        $colors = array(
+            'pending' => '#f0ad4e',
+            'processing' => '#5bc0de',
+            'completed' => '#5cb85c',
+            'failed' => '#d9534f',
+        );
+        $color = $colors[$status] ?? '#999';
+        return '<span style="display:inline-block;padding:2px 8px;border-radius:12px;background:' . $color . ';color:#fff;font-size:11px;">' . esc_html($status) . '</span>';
     }
 
     private static function render_issue_list($title, $items) {
@@ -163,7 +350,7 @@ class CFRDM_Diagnostics_Page {
         foreach ($data as $k => $v) {
             echo '<tr>';
             echo '<th style="width:260px;">' . esc_html($k) . '</th>';
-            echo '<td>' . esc_html($v) . '</td>';
+            echo '<td>' . $v . '</td>';
             echo '</tr>';
         }
         echo '</tbody>';

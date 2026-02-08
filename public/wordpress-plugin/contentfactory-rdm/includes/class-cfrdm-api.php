@@ -271,6 +271,52 @@ class CFRDM_API {
             'callback' => array(__CLASS__, 'get_cron_diagnostics'),
             'permission_callback' => array(__CLASS__, 'verify_api_key'),
         ));
+        
+        // ===== v3.0.0 - GSC Integration Endpoints =====
+        
+        // GSC status
+        register_rest_route('cfrdm/v1', '/gsc/status', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'get_gsc_status'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // GSC sync
+        register_rest_route('cfrdm/v1', '/gsc-sync', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'trigger_gsc_sync'),
+            'permission_callback' => array(__CLASS__, 'verify_admin'),
+        ));
+        
+        // GSC disconnect
+        register_rest_route('cfrdm/v1', '/gsc-disconnect', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'disconnect_gsc'),
+            'permission_callback' => array(__CLASS__, 'verify_admin'),
+        ));
+        
+        // ===== v3.0.0 - AI Auto-Fix Endpoints =====
+        
+        // Fix queue
+        register_rest_route('cfrdm/v1', '/fix-queue', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'get_fix_queue'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Fix queue stats
+        register_rest_route('cfrdm/v1', '/fix-queue/stats', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'get_fix_queue_stats'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Trigger fix queue processing
+        register_rest_route('cfrdm/v1', '/fix-queue/process', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'process_fix_queue'),
+            'permission_callback' => array(__CLASS__, 'verify_admin'),
+        ));
     }
     
     public static function verify_api_key($request) {
@@ -1588,6 +1634,17 @@ class CFRDM_API {
             $created[] = 'cfrdm_content_queue';
         }
         
+        // v3.0.0 - Create AI Auto-Fix tables
+        if (class_exists('CFRDM_AI_Auto_Fix')) {
+            CFRDM_AI_Auto_Fix::create_table();
+            $created[] = 'cfrdm_fix_queue';
+        }
+        
+        if (class_exists('CFRDM_Ubersuggest_Sync')) {
+            CFRDM_Ubersuggest_Sync::create_table();
+            $created[] = 'cfrdm_ubersuggest_data';
+        }
+        
         // Always regenerate API key if missing or empty
         $current_key = get_option('cfrdm_api_key');
         if (empty($current_key)) {
@@ -1616,6 +1673,166 @@ class CFRDM_API {
             'success' => true,
             'message' => __('Tabelas criadas com sucesso!', 'contentfactory-rdm'),
             'created' => $created,
+        ), 200);
+    }
+    
+    // ===== v3.0.0 - GSC Integration Methods =====
+    
+    /**
+     * Get GSC connection status
+     */
+    public static function get_gsc_status($request) {
+        if (!class_exists('CFRDM_GSC_Integration')) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => __('Módulo GSC não disponível', 'contentfactory-rdm'),
+            ), 400);
+        }
+        
+        $status = CFRDM_GSC_Integration::get_connection_status();
+        $stats = CFRDM_GSC_Integration::get_stats();
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'status' => $status,
+            'stats' => $stats,
+        ), 200);
+    }
+    
+    /**
+     * Trigger GSC sync manually
+     */
+    public static function trigger_gsc_sync($request) {
+        if (!class_exists('CFRDM_GSC_Integration')) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => __('Módulo GSC não disponível', 'contentfactory-rdm'),
+            ), 400);
+        }
+        
+        $gsc = CFRDM_GSC_Integration::get_instance();
+        
+        if (!CFRDM_GSC_Integration::is_connected()) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => __('GSC não está conectado', 'contentfactory-rdm'),
+            ), 400);
+        }
+        
+        $gsc->sync_gsc_data();
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => __('Sincronização iniciada', 'contentfactory-rdm'),
+        ), 200);
+    }
+    
+    /**
+     * Disconnect from GSC
+     */
+    public static function disconnect_gsc($request) {
+        if (!class_exists('CFRDM_GSC_Integration')) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => __('Módulo GSC não disponível', 'contentfactory-rdm'),
+            ), 400);
+        }
+        
+        $gsc = CFRDM_GSC_Integration::get_instance();
+        $gsc->disconnect();
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => __('GSC desconectado', 'contentfactory-rdm'),
+        ), 200);
+    }
+    
+    // ===== v3.0.0 - AI Auto-Fix Methods =====
+    
+    /**
+     * Get fix queue items
+     */
+    public static function get_fix_queue($request) {
+        if (!class_exists('CFRDM_AI_Auto_Fix')) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => __('Módulo AI Auto-Fix não disponível', 'contentfactory-rdm'),
+            ), 400);
+        }
+        
+        $status = $request->get_param('status');
+        $limit = intval($request->get_param('limit')) ?: 50;
+        
+        $items = CFRDM_AI_Auto_Fix::get_queue($status, $limit);
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'items' => $items,
+            'count' => count($items),
+        ), 200);
+    }
+    
+    /**
+     * Get fix queue stats
+     */
+    public static function get_fix_queue_stats($request) {
+        global $wpdb;
+        
+        $table = $wpdb->prefix . 'cfrdm_fix_queue';
+        
+        // Check if table exists
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table'") !== $table) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => __('Tabela não encontrada', 'contentfactory-rdm'),
+            ), 400);
+        }
+        
+        $stats = array(
+            'pending' => $wpdb->get_var("SELECT COUNT(*) FROM $table WHERE status = 'pending'") ?: 0,
+            'processing' => $wpdb->get_var("SELECT COUNT(*) FROM $table WHERE status = 'processing'") ?: 0,
+            'completed' => $wpdb->get_var("SELECT COUNT(*) FROM $table WHERE status = 'completed'") ?: 0,
+            'failed' => $wpdb->get_var("SELECT COUNT(*) FROM $table WHERE status = 'failed'") ?: 0,
+            'total' => $wpdb->get_var("SELECT COUNT(*) FROM $table") ?: 0,
+        );
+        
+        // Get by issue type
+        $by_type = $wpdb->get_results("
+            SELECT issue_type, COUNT(*) as count 
+            FROM $table 
+            GROUP BY issue_type
+        ", ARRAY_A);
+        
+        $stats['by_type'] = array();
+        foreach ($by_type as $row) {
+            $stats['by_type'][$row['issue_type']] = intval($row['count']);
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'stats' => $stats,
+        ), 200);
+    }
+    
+    /**
+     * Trigger fix queue processing
+     */
+    public static function process_fix_queue($request) {
+        if (!class_exists('CFRDM_AI_Auto_Fix')) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => __('Módulo AI Auto-Fix não disponível', 'contentfactory-rdm'),
+            ), 400);
+        }
+        
+        $limit = intval($request->get_param('limit')) ?: 10;
+        
+        $autofix = CFRDM_AI_Auto_Fix::get_instance();
+        $autofix->process_queue($limit);
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => __('Processamento da fila iniciado', 'contentfactory-rdm'),
         ), 200);
     }
 }
