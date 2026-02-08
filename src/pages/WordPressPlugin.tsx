@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '2.6.2';
+const PLUGIN_VERSION = '3.0.0';
 const PLUGIN_LAST_UPDATE = '2026-02-08';
 
 const features = [
@@ -70,6 +70,23 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '3.0.0',
+    date: '2026-02-08',
+    type: 'major' as const,
+    changes: [
+      { type: 'feature', text: 'Integração nativa com Google Search Console via OAuth 2.0' },
+      { type: 'feature', text: 'Sistema de correção automática de erros 404 via IA com redirecionamentos 301' },
+      { type: 'feature', text: 'Fila de correção inteligente (cfrdm_fix_queue) com priorização' },
+      { type: 'feature', text: 'Sincronização com Ubersuggest para dados de SEO e prioridade' },
+      { type: 'feature', text: 'HTTPS Enforcer para forçar URLs seguras automaticamente' },
+      { type: 'feature', text: 'AI Content Enhancer para otimização automática de conteúdo' },
+      { type: 'feature', text: 'Página de diagnóstico avançada com status de tabelas e cron jobs' },
+      { type: 'improvement', text: 'Painel de configurações expandido com opções GSC e AI Auto-Fix' },
+      { type: 'improvement', text: 'Intervalos de cron customizados (every_6_hours, weekly)' },
+      { type: 'fix', text: 'Correção de intervalos de cron inválidos que causavam falha na ativação' },
+    ],
+  },
   {
     version: '2.6.2',
     date: '2026-02-08',
@@ -225,7 +242,7 @@ export default function WordPressPluginPage() {
         throw new Error('Erro ao criar pasta do plugin');
       }
       
-      // Fetch all plugin files
+      // Fetch all plugin files (v3.0.0 includes GSC, AI Auto-Fix, Ubersuggest, HTTPS Enforcer)
       const files = [
         { path: 'contentfactory-rdm.php', url: '/wordpress-plugin/contentfactory-rdm/contentfactory-rdm.php' },
         { path: 'readme.txt', url: '/wordpress-plugin/contentfactory-rdm/readme.txt' },
@@ -251,6 +268,13 @@ export default function WordPressPluginPage() {
         { path: 'includes/class-cfrdm-cron-scheduler.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-cron-scheduler.php' },
         { path: 'includes/class-cfrdm-content-queue.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-content-queue.php' },
         { path: 'includes/class-cfrdm-article-indexer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-article-indexer.php' },
+        // v3.0.0 - GSC, AI Auto-Fix, Ubersuggest, HTTPS Enforcer
+        { path: 'includes/class-cfrdm-gsc-integration.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-gsc-integration.php' },
+        { path: 'includes/class-cfrdm-ai-auto-fix.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-auto-fix.php' },
+        { path: 'includes/class-cfrdm-ai-content-enhancer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-content-enhancer.php' },
+        { path: 'includes/class-cfrdm-ubersuggest-sync.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ubersuggest-sync.php' },
+        { path: 'includes/class-cfrdm-https-enforcer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-https-enforcer.php' },
+        { path: 'includes/class-cfrdm-auto-update.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-auto-update.php' },
         { path: 'assets/css/admin.css', url: '/wordpress-plugin/contentfactory-rdm/assets/css/admin.css' },
         { path: 'assets/js/admin.js', url: '/wordpress-plugin/contentfactory-rdm/assets/js/admin.js' },
       ];
