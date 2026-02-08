@@ -4,7 +4,7 @@ Tags: content, seo, articles, automation, ai, image-optimization, indexing
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.5.2
+Stable tag: 2.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,6 +65,17 @@ Sim! Na versão 2.1, o plugin notifica automaticamente o Google e o Bing quando 
 Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject schema) e FAQs automaticamente.
 
 == Changelog ==
+
+= 2.6.0 =
+* **NOVO**: Verificação automática de saúde do plugin ao selecionar projeto
+* **NOVO**: Barra de status de qualidade de conexão com latência em tempo real
+* **NOVO**: Testes de conectividade integrados no painel de integrações
+* **NOVO**: Guia visual de instalação do plugin quando não detectado
+* **NOVO**: Fallback automático para REST API padrão quando plugin não instalado
+* **MELHORADO**: Sistema de indexação automática com crawling periódico (2x/dia)
+* **MELHORADO**: Endpoints REST para sincronização em batch de artigos
+* **MELHORADO**: Detecção de clusters temáticos com análise semântica
+* **CORRIGIDO**: Erros específicos do WordPress agora exibem mensagens claras
 
 = 2.5.2 =
 * **MELHORADO**: Sincronização de artigos diretamente pelo painel de Linkagem Interna do app
