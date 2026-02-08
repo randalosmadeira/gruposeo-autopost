@@ -485,6 +485,7 @@ agência advogados, Serviços, Médio, Baixa, MÉDIA`}
                       <TableHead className="w-10">Status</TableHead>
                       <TableHead>Keyword</TableHead>
                       <TableHead>Tipo</TableHead>
+                      <TableHead className="w-[200px]">Progresso</TableHead>
                       <TableHead>Resultado</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -494,6 +495,28 @@ agência advogados, Serviços, Médio, Baixa, MÉDIA`}
                         <TableCell>{getStatusIcon(job.status)}</TableCell>
                         <TableCell className="font-medium">{job.keyword.keyword}</TableCell>
                         <TableCell>{getTypeBadge(job.keyword.tipoConteudo)}</TableCell>
+                        <TableCell>
+                          {job.status === 'generating' && (
+                            <div className="space-y-1">
+                              <Progress value={job.progress || 0} className="h-2" />
+                              <span className="text-xs text-muted-foreground">
+                                {job.currentStep || 'Iniciando...'} ({Math.round(job.progress || 0)}%)
+                              </span>
+                            </div>
+                          )}
+                          {job.status === 'completed' && (
+                            <div className="flex items-center gap-1 text-success text-xs">
+                              <CheckCircle2 className="w-3 h-3" />
+                              100%
+                            </div>
+                          )}
+                          {job.status === 'pending' && (
+                            <span className="text-xs text-muted-foreground">Aguardando</span>
+                          )}
+                          {job.status === 'error' && (
+                            <span className="text-xs text-destructive">Falhou</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-sm">
                           {job.status === 'completed' && job.articleId && (
                             <a 
@@ -504,10 +527,12 @@ agência advogados, Serviços, Médio, Baixa, MÉDIA`}
                             </a>
                           )}
                           {job.status === 'error' && (
-                            <span className="text-destructive">{job.error}</span>
+                            <span className="text-destructive text-xs">{job.error}</span>
                           )}
-                          {job.status === 'generating' && (
-                            <span className="text-muted-foreground">Gerando...</span>
+                          {job.status === 'generating' && job.content && (
+                            <span className="text-muted-foreground text-xs">
+                              {job.content.split(/\s+/).length} palavras
+                            </span>
                           )}
                         </TableCell>
                       </TableRow>
