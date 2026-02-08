@@ -59,6 +59,38 @@ interface ProjectCardProps {
   isUpdating?: boolean;
 }
 
+/**
+ * Sanitiza a URL do WordPress removendo sufixos de API e barras finais
+ * para evitar duplicação de paths durante chamadas de API
+ */
+function sanitizeWordPressUrl(url: string): string {
+  if (!url) return '';
+  
+  let sanitized = url.trim();
+  
+  // Remove sufixos de API que não devem estar na URL base
+  const apiSuffixes = [
+    '/wp-json/cfrdm/v1/',
+    '/wp-json/cfrdm/v1',
+    '/wp-json/wp/v2/',
+    '/wp-json/wp/v2',
+    '/wp-json/',
+    '/wp-json',
+  ];
+  
+  for (const suffix of apiSuffixes) {
+    if (sanitized.toLowerCase().endsWith(suffix.toLowerCase())) {
+      sanitized = sanitized.slice(0, -suffix.length);
+      break;
+    }
+  }
+  
+  // Remove barra final
+  sanitized = sanitized.replace(/\/+$/, '');
+  
+  return sanitized;
+}
+
 export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: ProjectCardProps) {
   const { toast } = useToast();
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -68,7 +100,7 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
     name: project.name,
     domain: project.domain,
     description: project.description || '',
-    wordpress_url: project.wordpress_url || '',
+    wordpress_url: sanitizeWordPressUrl(project.wordpress_url || ''),
     wordpress_username: project.wordpress_username || '',
     wordpress_app_password: project.wordpress_app_password || '',
     seo_plugin: project.seo_plugin || 'none',
@@ -81,7 +113,9 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
   );
 
   const handleTestConnection = async () => {
-    if (!formData.wordpress_url || !formData.wordpress_username || !formData.wordpress_app_password) {
+    const cleanUrl = sanitizeWordPressUrl(formData.wordpress_url);
+    
+    if (!cleanUrl || !formData.wordpress_username || !formData.wordpress_app_password) {
       toast({
         title: 'Dados incompletos',
         description: 'Preencha URL, usuário e senha do WordPress.',
@@ -90,9 +124,12 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
       return;
     }
 
+    // Update form with sanitized URL
+    setFormData({ ...formData, wordpress_url: cleanUrl });
+
     setIsTesting(true);
     try {
-      const response = await fetch(`${formData.wordpress_url}/wp-json/wp/v2/posts?per_page=1`, {
+      const response = await fetch(`${cleanUrl}/wp-json/wp/v2/posts?per_page=1`, {
         headers: {
           'Authorization': 'Basic ' + btoa(`${formData.wordpress_username}:${formData.wordpress_app_password}`),
         },
@@ -122,16 +159,18 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
   };
 
   const handleSave = async () => {
+    const cleanUrl = sanitizeWordPressUrl(formData.wordpress_url);
+    
     await onUpdate({
       id: project.id,
       name: formData.name,
       domain: formData.domain,
       description: formData.description || null,
-      wordpress_url: formData.wordpress_url || null,
+      wordpress_url: cleanUrl || null,
       wordpress_username: formData.wordpress_username || null,
       wordpress_app_password: formData.wordpress_app_password || null,
       seo_plugin: formData.seo_plugin,
-      is_connected: !!(formData.wordpress_url && formData.wordpress_username && formData.wordpress_app_password),
+      is_connected: !!(cleanUrl && formData.wordpress_username && formData.wordpress_app_password),
     });
     setIsEditOpen(false);
   };
@@ -276,8 +315,12 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
                 <Input 
                   placeholder="https://meusite.com"
                   value={formData.wordpress_url} 
-                  onChange={(e) => setFormData({ ...formData, wordpress_url: e.target.value })} 
+                  onChange={(e) => setFormData({ ...formData, wordpress_url: e.target.value })}
+                  onBlur={(e) => setFormData({ ...formData, wordpress_url: sanitizeWordPressUrl(e.target.value) })}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Apenas a URL base (ex: https://meusite.com/blog). Não inclua /wp-json/
+                </p>
               </div>
               
               <div className="space-y-2">
