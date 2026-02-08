@@ -15,9 +15,11 @@ import {
   Eye,
   Code,
   FolderOpen,
-  Save
+  Save,
+  Braces
 } from 'lucide-react';
 import { SEOOptimizationPanel } from './SEOOptimizationPanel';
+import { FAQSchemaPreview } from './FAQSchemaPreview';
 import { WordPressCategorySelector } from '../WordPressCategorySelector';
 
 interface Article {
@@ -54,27 +56,34 @@ export function ArticleEditorSidebar({
   isSaving,
   hasChanges,
 }: ArticleEditorSidebarProps) {
-  const [configTab, setConfigTab] = useState<'config' | 'seo'>('config');
+  const [configTab, setConfigTab] = useState<'config' | 'seo' | 'schema'>('config');
   const excerptLength = article.excerpt?.length || 0;
 
   return (
     <div className="w-80 flex flex-col border-l bg-card h-full">
       {/* Config/SEO Tabs */}
-      <Tabs value={configTab} onValueChange={(v) => setConfigTab(v as 'config' | 'seo')} className="flex-1 flex flex-col min-h-0">
+      <Tabs value={configTab} onValueChange={(v) => setConfigTab(v as 'config' | 'seo' | 'schema')} className="flex-1 flex flex-col min-h-0">
         <TabsList className="w-full rounded-none border-b h-12 bg-transparent p-0 shrink-0">
           <TabsTrigger 
             value="config" 
-            className="flex-1 h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent gap-2"
+            className="flex-1 h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent gap-1.5"
           >
             <Settings className="w-4 h-4" />
-            Config
+            <span className="hidden xl:inline">Config</span>
           </TabsTrigger>
           <TabsTrigger 
             value="seo" 
-            className="flex-1 h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent gap-2"
+            className="flex-1 h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent gap-1.5"
           >
             <Wand2 className="w-4 h-4" />
-            SEO
+            <span className="hidden xl:inline">SEO</span>
+          </TabsTrigger>
+          <TabsTrigger 
+            value="schema" 
+            className="flex-1 h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent gap-1.5"
+          >
+            <Braces className="w-4 h-4" />
+            <span className="hidden xl:inline">Schema</span>
           </TabsTrigger>
         </TabsList>
 
@@ -202,6 +211,27 @@ export function ArticleEditorSidebar({
                 title={article.title}
                 excerpt={article.excerpt}
               />
+            </div>
+          </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="schema" className="flex-1 m-0 min-h-0 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="p-4 space-y-4">
+              {/* Schema Header */}
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center">
+                  <Braces className="w-4 h-4 text-primary" />
+                </div>
+                <h3 className="font-semibold">Schema Markup</h3>
+              </div>
+              
+              <p className="text-xs text-muted-foreground">
+                Dados estruturados detectados automaticamente para Google Rich Results.
+              </p>
+
+              {/* FAQ Schema Preview */}
+              <FAQSchemaPreview content={article.content} />
             </div>
           </ScrollArea>
         </TabsContent>
