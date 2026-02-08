@@ -109,26 +109,45 @@ export default function NewsRewriter() {
     projectName: currentProject?.name,
   });
 
-  // Handle URL analysis
+  // Handle URL analysis - auto-apply best suggestions
   const handleAnalyzeUrl = async () => {
     if (!sourceUrl.trim()) return;
     
     const result = await analyzeUrl(sourceUrl);
     if (result) {
-      // Auto-fill form with AI suggestions
+      // Auto-fill content and source
       if (result.content) setSourceContent(result.content);
       if (result.source) setSourceName(result.source);
-      if (result.suggestedNiche) {
+      
+      // AUTO-APPLY: Best niche (highest confidence)
+      if (result.suggestedNiches && result.suggestedNiches.length > 0) {
+        const bestNiche = result.suggestedNiches[0];
+        const matchingNiche = NICHE_OPTIONS.find(n => n.id === bestNiche.id);
+        if (matchingNiche) setNiche(matchingNiche.id);
+      } else if (result.suggestedNiche) {
         const matchingNiche = NICHE_OPTIONS.find(n => 
           n.id.toLowerCase() === result.suggestedNiche.toLowerCase()
         );
         if (matchingNiche) setNiche(matchingNiche.id);
       }
-      if (result.suggestedKeyword) setKeyword(result.suggestedKeyword);
-      if (result.suggestedAngle) {
+      
+      // AUTO-APPLY: Keyword (prefer original for 95% SEO preservation)
+      if (result.originalKeyword) {
+        setKeyword(result.originalKeyword);
+      } else if (result.suggestedKeyword) {
+        setKeyword(result.suggestedKeyword);
+      }
+      
+      // AUTO-APPLY: Best angle (highest confidence)
+      if (result.suggestedAngles && result.suggestedAngles.length > 0) {
+        const bestAngle = result.suggestedAngles[0];
+        setSelectedAngle('custom');
+        setCustomAngle(bestAngle.label + ': ' + bestAngle.description);
+      } else if (result.suggestedAngle) {
         setSelectedAngle('custom');
         setCustomAngle(result.suggestedAngle);
       }
+      
       setShowAISuggestions(true);
     }
   };

@@ -1,21 +1,20 @@
 /**
- * OpenAI & Gemini API Helper - Direct API Integration
+ * Gemini API Helper - Direct API Integration
  * 
  * This module provides a unified interface for AI calls using
- * YOUR OWN API keys (OPENAI_API_KEY and GEMINI_API_KEY).
+ * ONLY Gemini (GEMINI_API_KEY).
  * 
- * PRIORITY: OpenAI (GPT-4o) is the PRIMARY provider.
- * FALLBACK: Gemini is used only when OpenAI fails.
+ * PROVIDER: Gemini is the EXCLUSIVE provider.
+ * No OpenAI calls - all requests go through Gemini.
  * 
- * NO Lovable AI Gateway - Direct API calls only.
+ * NO Lovable AI Gateway - Direct Gemini API calls only.
  */
 
 // API endpoints
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
-const OPENAI_API_BASE = "https://api.openai.com/v1";
 
-// Default provider configuration
-const DEFAULT_PROVIDER: "openai" | "gemini" = "openai";
+// Default provider configuration - GEMINI ONLY
+const DEFAULT_PROVIDER: "gemini" = "gemini";
 
 // Model mappings - internal names to Gemini model IDs
 export const GEMINI_MODELS = {
@@ -553,15 +552,13 @@ async function generateImageWithGemini(
 }
 
 /**
- * Generate image - OpenAI DALL-E 3 is PRIMARY, Gemini as fallback
- * provider: "openai" | "gemini" | "auto" (default: auto = OpenAI first)
+ * Generate image - GEMINI ONLY (Imagen 3)
+ * All image generation goes through Gemini
  */
 export async function generateGeminiImage(
   prompt: string,
   options: GeminiImageOptions = {}
 ): Promise<{ imageData: string; mimeType: string } | null> {
-  const provider = options.provider || "auto";
-  
   const aspectRatio = options.aspectRatio || "16:9";
   const enhancedPrompt = `Create a professional, high-quality photograph for a blog article.
 
@@ -574,138 +571,46 @@ Requirements:
 - High resolution, sharp details, suitable for web publication
 - Professional business/editorial quality`;
   
-  if (provider === "gemini") {
-    return await generateImageWithGemini(enhancedPrompt, options);
-  }
-  
-  if (provider === "openai") {
-    return await generateImageWithOpenAI(enhancedPrompt, options);
-  }
-  
-  // Auto mode: OpenAI FIRST (DALL-E 3), then Gemini as fallback
-  console.log("Image generation: trying OpenAI DALL-E 3 first (primary provider)...");
-  let result = await generateImageWithOpenAI(enhancedPrompt, options);
+  console.log("Image generation: using Gemini Imagen (exclusive provider)...");
+  const result = await generateImageWithGemini(enhancedPrompt, options);
   
   if (result) {
     return result;
   }
   
-  console.log("OpenAI failed, trying Gemini Imagen as fallback...");
-  result = await generateImageWithGemini(enhancedPrompt, options);
-  
-  if (result) {
-    return result;
-  }
-  
-  console.log("All image generation providers failed");
+  console.log("Gemini image generation failed");
   return null;
 }
 
 /**
- * Universal AI call - OpenAI is PRIMARY, Gemini as fallback
- * By default uses OpenAI GPT-4o
+ * Universal AI call - GEMINI ONLY
+ * All text generation goes through Gemini
  */
 export async function callAI(
   messages: GeminiMessage[],
-  options: GeminiTextOptions & { fallbackToGemini?: boolean; forceGemini?: boolean } = {}
+  options: GeminiTextOptions = {}
 ): Promise<string> {
-  // Force Gemini if explicitly requested
-  if (options.forceGemini && hasGeminiKey()) {
-    try {
-      return await callGemini(messages, options);
-    } catch (error) {
-      console.warn("Gemini failed:", error);
-      if (hasOpenAIKey()) {
-        console.log("Falling back to OpenAI...");
-        return await callOpenAI(messages, {
-          model: "gpt-4o",
-          maxTokens: options.maxTokens,
-          temperature: options.temperature,
-        });
-      }
-      throw error;
-    }
+  if (!hasGeminiKey()) {
+    throw new Error("GEMINI_API_KEY não configurada.");
   }
   
-  // Default: OpenAI FIRST (primary provider)
-  if (hasOpenAIKey()) {
-    try {
-      console.log("Using OpenAI GPT-4o (primary provider)...");
-      return await callOpenAI(messages, {
-        model: "gpt-4o",
-        maxTokens: options.maxTokens,
-        temperature: options.temperature,
-      });
-    } catch (error) {
-      console.warn("OpenAI failed:", error);
-      if (options.fallbackToGemini !== false && hasGeminiKey()) {
-        console.log("Falling back to Gemini...");
-        return await callGemini(messages, options);
-      }
-      throw error;
-    }
-  }
-  
-  // If no OpenAI key, try Gemini
-  if (hasGeminiKey()) {
-    console.log("OpenAI not available, using Gemini...");
-    return await callGemini(messages, options);
-  }
-  
-  throw new Error("Nenhuma chave API configurada (OPENAI_API_KEY ou GEMINI_API_KEY)");
+  console.log("Using Gemini (exclusive provider)...");
+  return await callGemini(messages, options);
 }
 
 /**
- * Universal AI call with streaming - OpenAI is PRIMARY
+ * Universal AI call with streaming - GEMINI ONLY
  */
 export async function callAIStream(
   messages: GeminiMessage[],
-  options: GeminiTextOptions & { fallbackToGemini?: boolean; forceGemini?: boolean } = {}
+  options: GeminiTextOptions = {}
 ): Promise<Response> {
-  // Force Gemini if explicitly requested
-  if (options.forceGemini && hasGeminiKey()) {
-    try {
-      return await callGeminiStream(messages, options);
-    } catch (error) {
-      console.warn("Gemini stream failed:", error);
-      if (hasOpenAIKey()) {
-        console.log("Falling back to OpenAI stream...");
-        return await callOpenAIStream(messages, {
-          model: "gpt-4o",
-          maxTokens: options.maxTokens,
-          temperature: options.temperature,
-        });
-      }
-      throw error;
-    }
+  if (!hasGeminiKey()) {
+    throw new Error("GEMINI_API_KEY não configurada.");
   }
   
-  // Default: OpenAI FIRST (primary provider)
-  if (hasOpenAIKey()) {
-    try {
-      console.log("Using OpenAI GPT-4o stream (primary provider)...");
-      return await callOpenAIStream(messages, {
-        model: "gpt-4o",
-        maxTokens: options.maxTokens,
-        temperature: options.temperature,
-      });
-    } catch (error) {
-      console.warn("OpenAI stream failed:", error);
-      if (options.fallbackToGemini !== false && hasGeminiKey()) {
-        console.log("Falling back to Gemini stream...");
-        return await callGeminiStream(messages, options);
-      }
-      throw error;
-    }
-  }
-  
-  // If no OpenAI key, try Gemini
-  if (hasGeminiKey()) {
-    console.log("OpenAI not available, using Gemini stream...");
-    return await callGeminiStream(messages, options);
-  }
-  
-  throw new Error("Nenhuma chave API configurada (OPENAI_API_KEY ou GEMINI_API_KEY)");
+  console.log("Using Gemini stream (exclusive provider)...");
+  return await callGeminiStream(messages, options);
 }
 
 /**
@@ -732,21 +637,18 @@ export function extractJSON<T>(text: string): T | null {
 }
 
 /**
- * Get available AI providers status
+ * Get available AI providers status - GEMINI ONLY
  */
 export function getAIProvidersStatus(): {
   gemini: boolean;
-  openai: boolean;
   imageGeneration: boolean;
   primaryProvider: string;
 } {
   const hasGemini = hasGeminiKey();
-  const hasOpenAI = hasOpenAIKey();
   
   return {
     gemini: hasGemini,
-    openai: hasOpenAI,
-    imageGeneration: hasGemini || hasOpenAI,
-    primaryProvider: hasOpenAI ? "OpenAI GPT-4o" : (hasGemini ? "Google Gemini" : "none"),
+    imageGeneration: hasGemini,
+    primaryProvider: hasGemini ? "Google Gemini" : "none",
   };
 }
