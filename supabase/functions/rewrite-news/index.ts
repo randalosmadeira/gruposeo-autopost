@@ -153,10 +153,18 @@ serve(async (req) => {
       { maxTokens: 8000 }
     );
 
+    // Log raw response for debugging
+    log.info("ai_response_received", { 
+      responseLength: aiResponse.length,
+      hasContent: aiResponse.includes('"content"'),
+      hasHtml: aiResponse.includes('"html"'),
+      preview: aiResponse.substring(0, 300)
+    });
+
     const parsed = extractJSON<JournalisticRewriteResponse>(aiResponse);
     
     if (!parsed) {
-      log.error("json_parse_failed", { response: aiResponse.substring(0, 500) });
+      log.error("json_parse_failed", { response: aiResponse.substring(0, 1000) });
       return new Response(
         JSON.stringify({ 
           error: "Failed to parse AI response", 
@@ -166,6 +174,15 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Log parsed content for debugging
+    log.info("json_parsed", {
+      hasContent: !!parsed.content,
+      hasHtml: !!parsed.content?.html,
+      htmlLength: parsed.content?.html?.length || 0,
+      metaTitle: parsed.seo?.metaTitle || 'missing',
+      wordCount: parsed.content?.wordCount || 0
+    });
 
     // Validate compliance scores
     const complianceCheck = parsed.internal?.complianceCheck || {
