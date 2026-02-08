@@ -112,6 +112,13 @@ class CFRDM_API {
             'permission_callback' => array(__CLASS__, 'verify_admin'),
         ));
         
+        // Check tables status (public for diagnostics)
+        register_rest_route('cfrdm/v1', '/check-tables', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'check_tables_status'),
+            'permission_callback' => '__return_true',
+        ));
+        
         // Repair/recreate database tables (admin only)
         register_rest_route('cfrdm/v1', '/repair-tables', array(
             'methods' => 'POST',
@@ -1604,6 +1611,50 @@ class CFRDM_API {
     }
     
     /**
+     * Check tables status (public endpoint for diagnostics)
+     */
+    public static function check_tables_status($request) {
+        global $wpdb;
+        
+        $tables = array(
+            'cfrdm_logs' => defined('CFRDM_LOG_TABLE') ? CFRDM_LOG_TABLE : 'cfrdm_logs',
+            'cfrdm_news' => defined('CFRDM_NEWS_TABLE') ? CFRDM_NEWS_TABLE : 'cfrdm_news',
+            'cfrdm_structured_logs' => defined('CFRDM_STRUCTURED_LOGS_TABLE') ? CFRDM_STRUCTURED_LOGS_TABLE : 'cfrdm_structured_logs',
+            'cfrdm_social_queue' => defined('CFRDM_SOCIAL_QUEUE_TABLE') ? CFRDM_SOCIAL_QUEUE_TABLE : 'cfrdm_social_queue',
+            'cfrdm_social_accounts' => defined('CFRDM_SOCIAL_ACCOUNTS_TABLE') ? CFRDM_SOCIAL_ACCOUNTS_TABLE : 'cfrdm_social_accounts',
+            'cfrdm_cron_jobs' => defined('CFRDM_CRON_JOBS_TABLE') ? CFRDM_CRON_JOBS_TABLE : 'cfrdm_cron_jobs',
+            'cfrdm_cron_history' => defined('CFRDM_CRON_HISTORY_TABLE') ? CFRDM_CRON_HISTORY_TABLE : 'cfrdm_cron_history',
+            'cfrdm_content_queue' => defined('CFRDM_CONTENT_QUEUE_TABLE') ? CFRDM_CONTENT_QUEUE_TABLE : 'cfrdm_content_queue',
+            'cfrdm_fix_queue' => defined('CFRDM_FIX_QUEUE_TABLE') ? CFRDM_FIX_QUEUE_TABLE : 'cfrdm_fix_queue',
+            'cfrdm_ubersuggest_data' => defined('CFRDM_UBERSUGGEST_TABLE') ? CFRDM_UBERSUGGEST_TABLE : 'cfrdm_ubersuggest_data',
+        );
+        
+        $status = array();
+        $missing = array();
+        
+        foreach ($tables as $key => $table_name) {
+            $full_table = $wpdb->prefix . $table_name;
+            $exists = !empty($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $full_table)));
+            $status[$key] = $exists;
+            if (!$exists) {
+                $missing[] = $key;
+            }
+        }
+        
+        // Check API key
+        $api_key = get_option('cfrdm_api_key');
+        $has_api_key = !empty($api_key);
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'tables' => $status,
+            'missing' => $missing,
+            'has_api_key' => $has_api_key,
+            'needs_repair' => !empty($missing) || !$has_api_key,
+        ), 200);
+    }
+    
+    /**
      * Repair/recreate database tables
      */
     public static function repair_tables($request) {
@@ -1611,7 +1662,10 @@ class CFRDM_API {
         
         $charset_collate = $wpdb->get_charset_collate();
         $created = array();
+        $verified = array();
         $errors = array();
+        
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         
         // Logs table
         $logs_table = $wpdb->prefix . CFRDM_LOG_TABLE;
@@ -1631,6 +1685,13 @@ class CFRDM_API {
             KEY post_id (post_id),
             KEY created_at (created_at)
         ) $charset_collate;";
+        
+        dbDelta($sql_logs);
+        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $logs_table))) {
+            $created[] = 'cfrdm_logs';
+        } else {
+            $errors[] = 'cfrdm_logs: ' . $wpdb->last_error;
+        }
         
         // News table
         $news_table = $wpdb->prefix . CFRDM_NEWS_TABLE;
@@ -1652,70 +1713,112 @@ class CFRDM_API {
             KEY is_dismissed (is_dismissed)
         ) $charset_collate;";
         
-        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-        
-        // Create logs table
-        $result = dbDelta($sql_logs);
-        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $logs_table))) {
-            $created[] = 'cfrdm_logs';
-        } else {
-            $errors[] = 'cfrdm_logs: ' . $wpdb->last_error;
-        }
-        
-        // Create news table
-        $result = dbDelta($sql_news);
+        dbDelta($sql_news);
         if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $news_table))) {
             $created[] = 'cfrdm_news';
         } else {
             $errors[] = 'cfrdm_news: ' . $wpdb->last_error;
         }
         
-        // Also create advanced module tables
-        if (class_exists('CFRDM_Structured_Logs')) {
-            CFRDM_Structured_Logs::create_table();
+        // Structured logs table (cfrdm_structured_logs)
+        $structured_logs_table = $wpdb->prefix . (defined('CFRDM_STRUCTURED_LOGS_TABLE') ? CFRDM_STRUCTURED_LOGS_TABLE : 'cfrdm_structured_logs');
+        $sql_structured = "CREATE TABLE IF NOT EXISTS $structured_logs_table (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            article_id varchar(50) DEFAULT NULL,
+            post_id bigint(20) DEFAULT NULL,
+            source_url varchar(500) DEFAULT NULL,
+            source_title varchar(500) DEFAULT NULL,
+            status varchar(50) DEFAULT 'processing',
+            step varchar(50) DEFAULT 'init',
+            message text,
+            error_details text,
+            metadata longtext,
+            duration_ms int DEFAULT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY article_id (article_id),
+            KEY post_id (post_id),
+            KEY status (status),
+            KEY step (step),
+            KEY created_at (created_at)
+        ) $charset_collate;";
+        
+        dbDelta($sql_structured);
+        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $structured_logs_table))) {
             $created[] = 'cfrdm_structured_logs';
+        } else {
+            $errors[] = 'cfrdm_structured_logs: ' . $wpdb->last_error;
         }
         
+        // Social queue table
         if (class_exists('CFRDM_Social_Poster')) {
             CFRDM_Social_Poster::create_tables();
+        }
+        $social_queue_table = $wpdb->prefix . (defined('CFRDM_SOCIAL_QUEUE_TABLE') ? CFRDM_SOCIAL_QUEUE_TABLE : 'cfrdm_social_queue');
+        $social_accounts_table = $wpdb->prefix . (defined('CFRDM_SOCIAL_ACCOUNTS_TABLE') ? CFRDM_SOCIAL_ACCOUNTS_TABLE : 'cfrdm_social_accounts');
+        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $social_queue_table))) {
             $created[] = 'cfrdm_social_queue';
+        }
+        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $social_accounts_table))) {
             $created[] = 'cfrdm_social_accounts';
         }
         
+        // Cron tables
         if (class_exists('CFRDM_Cron_Scheduler')) {
             CFRDM_Cron_Scheduler::create_tables();
+        }
+        $cron_jobs_table = $wpdb->prefix . (defined('CFRDM_CRON_JOBS_TABLE') ? CFRDM_CRON_JOBS_TABLE : 'cfrdm_cron_jobs');
+        $cron_history_table = $wpdb->prefix . (defined('CFRDM_CRON_HISTORY_TABLE') ? CFRDM_CRON_HISTORY_TABLE : 'cfrdm_cron_history');
+        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $cron_jobs_table))) {
             $created[] = 'cfrdm_cron_jobs';
+        }
+        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $cron_history_table))) {
             $created[] = 'cfrdm_cron_history';
         }
         
+        // Content queue table
         if (class_exists('CFRDM_Content_Queue')) {
             CFRDM_Content_Queue::create_table();
+        }
+        $content_queue_table = $wpdb->prefix . (defined('CFRDM_CONTENT_QUEUE_TABLE') ? CFRDM_CONTENT_QUEUE_TABLE : 'cfrdm_content_queue');
+        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $content_queue_table))) {
             $created[] = 'cfrdm_content_queue';
         }
         
-        // v3.0.0 - Create AI Auto-Fix tables
+        // v3.0.0 - AI Auto-Fix tables
         if (class_exists('CFRDM_AI_Auto_Fix')) {
             CFRDM_AI_Auto_Fix::create_table();
+        }
+        $fix_queue_table = $wpdb->prefix . (defined('CFRDM_FIX_QUEUE_TABLE') ? CFRDM_FIX_QUEUE_TABLE : 'cfrdm_fix_queue');
+        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $fix_queue_table))) {
             $created[] = 'cfrdm_fix_queue';
         }
         
+        // Ubersuggest table
         if (class_exists('CFRDM_Ubersuggest_Sync')) {
             CFRDM_Ubersuggest_Sync::create_table();
+        }
+        $ubersuggest_table = $wpdb->prefix . (defined('CFRDM_UBERSUGGEST_TABLE') ? CFRDM_UBERSUGGEST_TABLE : 'cfrdm_ubersuggest_data');
+        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $ubersuggest_table))) {
             $created[] = 'cfrdm_ubersuggest_data';
         }
         
         // Always regenerate API key if missing or empty
         $current_key = get_option('cfrdm_api_key');
+        $api_key_generated = false;
         if (empty($current_key)) {
             $new_key = wp_generate_uuid4();
             update_option('cfrdm_api_key', $new_key);
+            $api_key_generated = true;
         }
         
         // Log the repair
         if (class_exists('CFRDM_Logger') && cfrdm_tables_exist()) {
-            CFRDM_Logger::log('system', 'Tabelas reparadas via API', array(
+            CFRDM_Logger::log('system', 'Tabelas reparadas via API REST', array(
                 'created' => $created,
                 'errors' => $errors,
+                'api_key_generated' => $api_key_generated,
             ));
         }
         
@@ -1725,13 +1828,15 @@ class CFRDM_API {
                 'message' => __('Algumas tabelas não puderam ser criadas.', 'contentfactory-rdm'),
                 'created' => $created,
                 'errors' => $errors,
+                'api_key_generated' => $api_key_generated,
             ), 500);
         }
         
         return new WP_REST_Response(array(
             'success' => true,
-            'message' => __('Tabelas criadas com sucesso!', 'contentfactory-rdm'),
+            'message' => __('Todas as tabelas foram criadas/verificadas com sucesso!', 'contentfactory-rdm'),
             'created' => $created,
+            'api_key_generated' => $api_key_generated,
         ), 200);
     }
     
