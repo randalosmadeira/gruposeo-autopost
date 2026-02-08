@@ -15,6 +15,7 @@ import { ArticleEditorToolbar } from './editor/ArticleEditorToolbar';
 import { ArticleEditorContent } from './editor/ArticleEditorContent';
 import { ArticleEditorSidebar } from './editor/ArticleEditorSidebar';
 import { ReportProblemDialog } from './editor/ReportProblemDialog';
+import { RecreateArticleButton } from './editor/RecreateArticleButton';
 
 interface Article {
   id: string;
@@ -284,6 +285,13 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
   };
 
   const status = statusLabels[editedArticle.status] || statusLabels.draft;
+  
+  // Check if article has error or is empty
+  const hasError = editedArticle.status === 'error';
+  const isEmpty = !editedArticle.content || 
+    editedArticle.content.trim() === '' || 
+    editedArticle.content.includes('Clique aqui para começar a escrever') ||
+    editedArticle.content.length < 100;
 
   // Format last saved time
   const formatLastSaved = () => {
@@ -293,6 +301,13 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
     if (diff < 60) return 'Salvo agora';
     if (diff < 3600) return `Salvo há ${Math.floor(diff / 60)} min`;
     return `Salvo às ${lastSaved.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  };
+  
+  const handleRecreateComplete = (newContent: string, newTitle: string, newExcerpt: string) => {
+    updateField('content', newContent);
+    updateField('title', newTitle);
+    updateField('excerpt', newExcerpt);
+    setHasChanges(false);
   };
 
   return (
@@ -308,6 +323,15 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
           </Badge>
         </div>
         <div className="flex items-center gap-2">
+          {/* Recreate button for articles with errors */}
+          <RecreateArticleButton
+            articleId={editedArticle.id}
+            keyword={editedArticle.keyword}
+            onRecreateComplete={handleRecreateComplete}
+            hasError={hasError}
+            isEmpty={isEmpty}
+          />
+          
           <Button variant="outline" size="sm" className="gap-2">
             <Download className="w-4 h-4" />
             Exportar

@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
+import { VideoInsertPopover } from './VideoInsertPopover';
 
 interface ArticleEditorToolbarProps {
   hasChanges: boolean;
@@ -453,6 +454,13 @@ export function ArticleEditorToolbar({
           </div>
         </PopoverContent>
       </Popover>
+
+      {/* Video Insertion */}
+      <VideoInsertPopover 
+        onInsertVideo={(embedHtml) => {
+          execCommand('insertHTML', embedHtml);
+        }}
+      />
 
       {/* Table Insertion */}
       <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
