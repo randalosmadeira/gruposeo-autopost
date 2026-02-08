@@ -435,36 +435,199 @@
   @apply border-t-2 border-border my-12;
 }
 
-/* ===== FAQ - Seção Especial ===== */
+/* ===== FAQ - Seção Especial com Ícones ===== */
+.article-prose .faq-section {
+  @apply my-10 p-6 bg-primary/5 rounded-2xl border border-primary/20;
+}
+
+.article-prose .faq-section-title {
+  @apply text-2xl font-bold text-primary mb-6 flex items-center gap-3;
+}
+
+.article-prose .faq-section-title::before {
+  content: "?";
+  @apply w-10 h-10 bg-primary text-primary-foreground rounded-full;
+  @apply flex items-center justify-center text-xl font-bold;
+  display: inline-flex;
+}
+
 .article-prose .faq-item {
-  @apply mb-6 pb-6 border-b border-border;
+  @apply mb-6 pb-6 border-b border-primary/10;
+  @apply bg-white rounded-xl p-5 shadow-sm;
 }
 
 .article-prose .faq-item:last-child {
-  @apply border-b-0;
+  @apply border-b-0 mb-0 pb-0;
 }
 
 .article-prose .faq-question {
-  @apply font-bold text-lg text-foreground mb-3;
+  @apply font-bold text-lg text-foreground mb-3 flex items-start gap-3;
+}
+
+.article-prose .faq-question::before {
+  content: "P";
+  @apply shrink-0 w-7 h-7 bg-primary text-primary-foreground rounded-full;
+  @apply flex items-center justify-center text-sm font-bold;
+  display: inline-flex;
 }
 
 .article-prose .faq-answer {
-  @apply text-foreground/85;
+  @apply text-foreground/85 pl-10;
+  @apply relative;
 }
 
-/* ===== CALLOUTS / DESTAQUE ===== */
+.article-prose .faq-answer::before {
+  content: "R";
+  @apply absolute left-0 top-0 w-7 h-7 bg-accent text-accent-foreground rounded-full;
+  @apply flex items-center justify-center text-sm font-bold;
+  display: inline-flex;
+}
+
+/* ===== CALLOUTS / BOXES DE DESTAQUE ===== */
 .article-prose .callout,
-.article-prose .highlight-box {
-  @apply my-8 p-6 rounded-xl border-l-4;
+.article-prose .highlight-box,
+.article-prose .info-box {
+  @apply relative my-8 p-6 pl-16 rounded-xl border-l-4;
   @apply bg-info-light/50 border-info;
 }
 
-.article-prose .callout-warning {
-  @apply bg-warning-light border-warning;
+.article-prose .callout::before,
+.article-prose .info-box::before {
+  content: "i";
+  @apply absolute left-4 top-6 w-8 h-8 bg-info text-info-foreground rounded-full;
+  @apply flex items-center justify-center text-lg font-bold;
+  display: inline-flex;
 }
 
-.article-prose .callout-success {
+.article-prose .callout-warning,
+.article-prose .warning-box {
+  @apply bg-warning-light/50 border-warning;
+}
+
+.article-prose .callout-warning::before,
+.article-prose .warning-box::before {
+  content: "!";
+  @apply bg-warning text-warning-foreground;
+}
+
+.article-prose .callout-success,
+.article-prose .success-box {
   @apply bg-success-light border-success;
+}
+
+.article-prose .callout-success::before,
+.article-prose .success-box::before {
+  content: "✓";
+  @apply bg-success text-success-foreground;
+}
+
+.article-prose .callout-error,
+.article-prose .error-box {
+  @apply bg-destructive/10 border-destructive;
+}
+
+.article-prose .callout-error::before,
+.article-prose .error-box::before {
+  content: "✕";
+  @apply bg-destructive text-destructive-foreground;
+}
+
+.article-prose .callout-tip,
+.article-prose .tip-box {
+  @apply bg-accent/10 border-accent;
+}
+
+.article-prose .callout-tip::before,
+.article-prose .tip-box::before {
+  content: "💡";
+  @apply bg-accent text-accent-foreground text-base;
+}
+
+/* Título dentro do callout */
+.article-prose .callout-title,
+.article-prose .box-title {
+  @apply font-bold text-lg mb-2 text-foreground;
+}
+
+/* ===== DESTAQUE ESPECIAL / QUOTE BOX ===== */
+.article-prose .quote-box {
+  @apply relative my-10 p-8 bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl;
+  @apply border border-primary/20 text-center;
+}
+
+.article-prose .quote-box::before {
+  content: open-quote;
+  @apply absolute -top-4 left-6 text-6xl text-primary/30 font-serif;
+}
+
+.article-prose .quote-box::after {
+  content: close-quote;
+  @apply absolute -bottom-8 right-6 text-6xl text-primary/30 font-serif;
+}
+
+.article-prose .quote-box p {
+  @apply text-xl font-medium text-foreground italic mb-0;
+}
+
+.article-prose .quote-author {
+  @apply mt-4 text-sm font-semibold text-primary;
+}
+
+/* ===== LISTA DE BENEFÍCIOS/FEATURES ===== */
+.article-prose .feature-list {
+  @apply my-8 space-y-4;
+}
+
+.article-prose .feature-item {
+  @apply flex items-start gap-4 p-4 bg-success-light/50 rounded-xl border border-success/20;
+}
+
+.article-prose .feature-item::before {
+  content: "✓";
+  @apply shrink-0 w-6 h-6 bg-success text-success-foreground rounded-full;
+  @apply flex items-center justify-center text-sm font-bold;
+  display: inline-flex;
+}
+
+/* ===== LISTA DE RISCOS/ALERTAS ===== */
+.article-prose .risk-list {
+  @apply my-8 space-y-4;
+}
+
+.article-prose .risk-item {
+  @apply flex items-start gap-4 p-4 bg-destructive/5 rounded-xl border border-destructive/20;
+}
+
+.article-prose .risk-item::before {
+  content: "!";
+  @apply shrink-0 w-6 h-6 bg-destructive text-destructive-foreground rounded-full;
+  @apply flex items-center justify-center text-sm font-bold;
+  display: inline-flex;
+}
+
+/* ===== CTA BOX ===== */
+.article-prose .cta-box {
+  @apply my-10 p-8 bg-gradient-to-r from-primary to-primary/80 rounded-2xl text-center;
+  @apply shadow-lg;
+}
+
+.article-prose .cta-box h3,
+.article-prose .cta-box h4 {
+  @apply text-primary-foreground mb-4 mt-0 pl-0;
+}
+
+.article-prose .cta-box h3::before,
+.article-prose .cta-box h4::before {
+  content: none;
+}
+
+.article-prose .cta-box p {
+  @apply text-primary-foreground/90 mb-6;
+}
+
+.article-prose .cta-box a {
+  @apply inline-block px-8 py-4 bg-accent text-accent-foreground font-bold rounded-xl;
+  @apply no-underline border-none hover:bg-accent/90 transition-colors;
 }
 
 /* ===== RESPONSIVO ===== */
