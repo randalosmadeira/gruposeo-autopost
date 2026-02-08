@@ -274,7 +274,15 @@ async function fetchWordPressArticlesForIndexing(args: {
     
     // Check if plugin is not found - offer to use fallback
     if (errorMsg.startsWith('PLUGIN_NOT_FOUND:')) {
-      throw new Error(`O plugin ContentFactory não está instalado ou ativo neste site WordPress. Instale o plugin ou configure credenciais de Application Password no projeto para usar a REST API padrão como alternativa.`);
+      // Check if we have real Application Password credentials for fallback
+      // If username is __CFRDM_PLUGIN__, we're using plugin auth and need to either install the plugin
+      // or reconfigure the project with real WordPress credentials
+      throw new Error(JSON.stringify({
+        code: 'PLUGIN_NOT_FOUND',
+        message: 'O plugin ContentFactory não está instalado ou ativo neste site WordPress.',
+        canUseFallback: false,
+        instructions: 'Instale o plugin ContentFactory no WordPress ou reconfigure o projeto com credenciais de Application Password (vá em Projetos → Editar → Conexão Standard).',
+      }));
     }
     
     // For other errors, just throw them
