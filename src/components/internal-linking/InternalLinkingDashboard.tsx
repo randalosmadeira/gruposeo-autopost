@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
 import {
   Select,
   SelectContent,
@@ -46,6 +47,10 @@ import {
   BarChart3,
   ClipboardList,
   ArrowLeft,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Wifi,
 } from 'lucide-react';
 import { useInternalLinking, type KeywordRule, type IndexedArticle, type TopicCluster, type SyncState } from '@/hooks/useInternalLinking';
 import { useProjects } from '@/hooks/useProjects';
@@ -53,7 +58,15 @@ import { InternalLinkingMetrics } from './InternalLinkingMetrics';
 import { InternalLinkingReports } from './InternalLinkingReports';
 import { SyncProgressPanel } from './SyncProgressPanel';
 import { PluginInstallGuide } from './PluginInstallGuide';
+import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+
+interface PluginHealthStatus {
+  status: 'unknown' | 'checking' | 'healthy' | 'not_installed' | 'error';
+  message?: string;
+  version?: string;
+  lastChecked?: Date;
+}
 
 interface InternalLinkingDashboardProps {
   projectId?: string | null;
@@ -86,6 +99,7 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
   } = useInternalLinking(projectId);
 
   const [useFallbackMode, setUseFallbackMode] = useState(false);
+  const [pluginHealth, setPluginHealth] = useState<PluginHealthStatus>({ status: 'unknown' });
 
   const [newRule, setNewRule] = useState({
     keyword: '',
@@ -95,6 +109,67 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
     max_links_per_article: 1,
   });
   const [isAddRuleOpen, setIsAddRuleOpen] = useState(false);
+
+  // Check plugin health when project changes
+  const checkPluginHealth = useCallback(async () => {
+    if (!projectId) return;
+    
+    const project = projects.find(p => p.id === projectId);
+    if (!project?.wordpress_url || !project?.wordpress_app_password) {
+      setPluginHealth({ status: 'error', message: 'Projeto não configurado' });
+      return;
+    }
+
+    const isPluginAuth = project.wordpress_username === '__CFRDM_PLUGIN__';
+    if (!isPluginAuth) {
+      setPluginHealth({ status: 'healthy', message: 'Usando REST API padrão' });
+      return;
+    }
+
+    setPluginHealth({ status: 'checking' });
+
+    try {
+      const { data, error } = await supabase.functions.invoke('test-wordpress-connection', {
+        body: {
+          wordpress_url: project.wordpress_url,
+          use_plugin: true,
+          api_key: project.wordpress_app_password,
+        },
+      });
+
+      if (error) throw new Error(error.message);
+
+      if (data?.success) {
+        setPluginHealth({
+          status: 'healthy',
+          message: 'Plugin ativo e funcionando',
+          version: data.site?.version,
+          lastChecked: new Date(),
+        });
+      } else {
+        const isNotInstalled = data?.error?.includes('rest_no_route') || 
+                                data?.error?.includes('404');
+        setPluginHealth({
+          status: isNotInstalled ? 'not_installed' : 'error',
+          message: isNotInstalled ? 'Plugin não instalado' : data?.error || 'Erro desconhecido',
+          lastChecked: new Date(),
+        });
+      }
+    } catch (error) {
+      setPluginHealth({
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Erro ao verificar plugin',
+        lastChecked: new Date(),
+      });
+    }
+  }, [projectId, projects]);
+
+  // Auto-check plugin health when project is selected
+  useEffect(() => {
+    if (projectId) {
+      checkPluginHealth();
+    }
+  }, [projectId, checkPluginHealth]);
 
   // Load data on mount
   useEffect(() => {
@@ -193,13 +268,51 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
             </Button>
           )}
           <div>
-            <h2 className="text-2xl font-bold">Linkagem Interna Inteligente</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-bold">Linkagem Interna Inteligente</h2>
+              {/* Plugin Health Badge */}
+              {pluginHealth.status === 'checking' && (
+                <Badge variant="secondary" className="gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Verificando...
+                </Badge>
+              )}
+              {pluginHealth.status === 'healthy' && (
+                <Badge variant="outline" className="gap-1 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-900/30 dark:border-emerald-800">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Plugin OK
+                </Badge>
+              )}
+              {pluginHealth.status === 'not_installed' && (
+                <Badge variant="outline" className="gap-1 text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-900/30 dark:border-amber-800">
+                  <XCircle className="w-3 h-3" />
+                  Plugin não instalado
+                </Badge>
+              )}
+              {pluginHealth.status === 'error' && (
+                <Badge variant="destructive" className="gap-1">
+                  <XCircle className="w-3 h-3" />
+                  Erro
+                </Badge>
+              )}
+            </div>
             <p className="text-muted-foreground">
               {projectName || 'Projeto'} • {indexedArticles.length} artigos indexados
             </p>
           </div>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={checkPluginHealth}
+            disabled={pluginHealth.status === 'checking'}
+          >
+            <RefreshCw className={cn(
+              "w-4 h-4",
+              pluginHealth.status === 'checking' && "animate-spin"
+            )} />
+          </Button>
           <Button
             variant="outline"
             onClick={() => generateClusters()}
@@ -211,8 +324,8 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
         </div>
       </div>
 
-      {/* Plugin Install Guide - Show when plugin not found */}
-      {syncState.pluginNotFound && (
+      {/* Plugin Install Guide - Show when plugin not found via sync OR health check */}
+      {(syncState.pluginNotFound || pluginHealth.status === 'not_installed') && (
         <PluginInstallGuide
           showFallbackOption={true}
           onUseFallback={() => {
