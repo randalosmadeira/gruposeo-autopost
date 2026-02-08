@@ -38,7 +38,8 @@ import {
 } from '@/lib/keyword-analyzer';
 import { useBulkGeneration } from '@/hooks/useBulkGeneration';
 import { useProjects } from '@/hooks/useProjects';
-import { BulkAdvancedConfig, defaultBulkConfig, BulkGenerationConfig } from '@/components/bulk-generator';
+import { BulkAdvancedConfig } from '@/components/bulk-generator';
+import { BulkGenerationConfig, defaultBulkConfig } from '@/types/bulk-generation';
 
 export default function BulkKeywordGenerator() {
   const [activeTab, setActiveTab] = useState<'input' | 'config' | 'analysis' | 'generation'>('input');

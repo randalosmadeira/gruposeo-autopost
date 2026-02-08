@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { AnalyzedKeyword } from '@/lib/keyword-analyzer';
-import { BulkGenerationConfig } from '@/components/bulk-generator';
+import { BulkGenerationConfig } from '@/types/bulk-generation';
 
 export interface GenerationJob {
   id: string;
@@ -105,6 +105,9 @@ export function useBulkGeneration() {
     errorCount: 0
   });
 
+  // Use ref to store jobs to avoid stale closure issues
+  const jobsRef = useRef<GenerationJob[]>([]);
+
   const initializeJobs = useCallback((keywords: AnalyzedKeyword[]) => {
     const jobs: GenerationJob[] = keywords.map((kw, index) => ({
       id: `job-${index}-${Date.now()}`,
@@ -113,6 +116,7 @@ export function useBulkGeneration() {
       progress: 0,
     }));
 
+    jobsRef.current = jobs;
     setState({
       jobs,
       isRunning: false,
@@ -168,8 +172,6 @@ export function useBulkGeneration() {
       aiModel: bulkConfig?.aiModel || 'standard',
     };
 
-    abortControllerRef.current = new AbortController();
-
     const response = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-article`,
       {
@@ -179,7 +181,7 @@ export function useBulkGeneration() {
           'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ config }),
-        signal: abortControllerRef.current.signal,
+        signal: abortControllerRef.current?.signal,
       }
     );
 
@@ -238,28 +240,30 @@ export function useBulkGeneration() {
   ) => {
     setState(prev => ({ ...prev, isRunning: true }));
 
-    const pendingJobs = state.jobs.filter(j => j.status === 'pending');
-    let completedCount = state.completedCount;
-    let errorCount = state.errorCount;
+    // Use ref to get fresh jobs list (avoids stale closure)
+    const pendingJobs = jobsRef.current.filter(j => j.status === 'pending');
+    let completedCount = 0;
+    let errorCount = 0;
+    
+    // Initialize abort controller for this generation session
+    abortControllerRef.current = new AbortController();
     
     for (let i = 0; i < pendingJobs.length; i++) {
       const job = pendingJobs[i];
       
       // Check if generation was stopped
-      if (!abortControllerRef.current || abortControllerRef.current.signal.aborted) {
-        // Reset abort controller for next run
-        abortControllerRef.current = null;
+      if (abortControllerRef.current?.signal.aborted) {
         break;
       }
       
-      // Update job status to generating
+      // Update job status to generating - also update ref
+      const updatedJobGenerating = { ...job, status: 'generating' as const, startedAt: new Date(), progress: 0, currentStep: 'Iniciando...' };
+      jobsRef.current = jobsRef.current.map(j => j.id === job.id ? updatedJobGenerating : j);
       setState(prev => ({
         ...prev,
         currentIndex: i,
         jobs: prev.jobs.map(j => 
-          j.id === job.id 
-            ? { ...j, status: 'generating', startedAt: new Date(), progress: 0, currentStep: 'Iniciando...' } 
-            : j
+          j.id === job.id ? updatedJobGenerating : j
         )
       }));
 
@@ -289,22 +293,20 @@ export function useBulkGeneration() {
         );
         
         completedCount++;
+        const completedJob = { 
+          ...job, 
+          status: 'completed' as const, 
+          articleId: articleId || undefined, 
+          completedAt: new Date(),
+          progress: 100,
+          currentStep: 'Salvo!',
+          content,
+        };
+        jobsRef.current = jobsRef.current.map(j => j.id === job.id ? completedJob : j);
         setState(prev => ({
           ...prev,
           completedCount,
-          jobs: prev.jobs.map(j => 
-            j.id === job.id 
-              ? { 
-                  ...j, 
-                  status: 'completed', 
-                  articleId: articleId || undefined, 
-                  completedAt: new Date(),
-                  progress: 100,
-                  currentStep: 'Salvo!',
-                  content,
-                } 
-              : j
-          )
+          jobs: prev.jobs.map(j => j.id === job.id ? completedJob : j)
         }));
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
@@ -357,7 +359,7 @@ export function useBulkGeneration() {
       title: 'Geração em massa concluída',
       description: `${completedCount} artigos gerados, ${errorCount} erros`
     });
-  }, [state.jobs, state.completedCount, state.errorCount, toast]);
+  }, [toast]);
 
   const stopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
