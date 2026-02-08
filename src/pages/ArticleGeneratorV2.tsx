@@ -538,11 +538,11 @@ export default function ArticleGeneratorV2() {
       )}>
         {/* Left Panel - Form */}
         <div className={cn(
-          "border-r border-border overflow-hidden",
+          "border-r border-border overflow-hidden relative",
           isMobile ? "w-full min-h-screen" : "w-1/2"
         )}>
-          <ScrollArea className={isMobile ? "h-auto" : "h-full"}>
-            <div className="p-4 md:p-6 space-y-4 md:space-y-6 pb-32">
+          <ScrollArea className={isMobile ? "h-auto" : "h-[calc(100vh-73px)]"}>
+            <div className="p-4 md:p-5 space-y-3 md:space-y-4 pb-36">
               {/* Tutorial Banner */}
               {showTutorial && (
                 <GeneratorTutorialBanner onClose={() => setShowTutorial(false)} />

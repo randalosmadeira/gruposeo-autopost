@@ -74,8 +74,8 @@ export function GeneratorPreviewPanel({
         </div>
       )}
       
-      <ScrollArea className="h-full">
-        <div className="p-6">
+      <ScrollArea className="h-[calc(100vh-73px)]">
+        <div className="p-4 md:p-5">
           {/* Preview Header */}
           <div className="flex items-center gap-2 mb-2">
             <Eye className="w-5 h-5 text-primary" />
@@ -83,11 +83,11 @@ export function GeneratorPreviewPanel({
               Prévia em Tempo Real
             </h2>
           </div>
-          <p className="text-sm mb-6 text-muted-foreground">
+          <p className="text-sm mb-4 text-muted-foreground">
             Prévia do artigo em tempo real
           </p>
 
-          <div className="rounded-lg border p-6 min-h-[500px] border-border">
+          <div className="rounded-lg border p-4 md:p-5 min-h-[400px] border-border">
             {title || keyword ? (
               <article className="space-y-6">
                 {/* Article Title */}
@@ -96,26 +96,26 @@ export function GeneratorPreviewPanel({
                 </h1>
                 
                 {/* Metadata Tags */}
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-700">
+                <div className="flex flex-wrap gap-1.5">
+                  <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
                     Tamanho: {selectedSize?.words || 'N/A'}
                   </Badge>
-                  <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-700">
+                  <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
                     Idioma: {language === 'pt-BR' ? '🇧🇷 Português' : language === 'en-US' ? '🇺🇸 English' : '🇪🇸 Español'}
                   </Badge>
-                  <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-700">
+                  <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
                     Tom: {tone.charAt(0).toUpperCase() + tone.slice(1)}
                   </Badge>
-                  <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-700">
+                  <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
                     Ponto de Vista: {selectedPov?.label || pointOfView}
                   </Badge>
                 </div>
 
                 {/* Meta Description Preview */}
                 {metaDescription && (
-                  <div className="p-4 rounded-lg text-sm bg-blue-50">
+                  <div className="p-3 rounded-lg text-sm bg-primary/5">
                     <strong className="block mb-1 text-foreground">Meta Descrição:</strong>
-                    <p className="text-muted-foreground">
+                    <p className="text-muted-foreground text-xs">
                       Descubra tudo sobre {keyword || '[palavra-chave]'}. 
                       Guia completo com dicas práticas e informações atualizadas para {new Date().getFullYear()}.
                     </p>
@@ -123,66 +123,66 @@ export function GeneratorPreviewPanel({
                 )}
 
                 {/* Content Placeholder */}
-                <div className="p-6 rounded-lg border-2 border-dashed text-center border-border">
-                  <FileText className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
-                  <p className="text-sm text-muted-foreground">
+                <div className="p-4 rounded-lg border-2 border-dashed text-center border-border">
+                  <FileText className="w-6 h-6 mx-auto mb-2 text-muted-foreground/50" />
+                  <p className="text-xs text-muted-foreground">
                     O conteúdo do artigo aparecerá aqui quando gerado
                   </p>
                 </div>
 
                 {/* Included Elements */}
-                <div className="pt-4 border-t border-border">
-                  <p className="text-sm font-medium mb-3 text-foreground">
+                <div className="pt-3 border-t border-border">
+                  <p className="text-xs font-medium mb-2 text-foreground">
                     Elementos incluídos:
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {metaDescription && (
-                      <Badge variant="secondary" className="bg-blue-50 text-blue-700">
+                      <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
                         📝 Meta Descrição
                       </Badge>
                     )}
                     {lists && (
-                      <Badge variant="secondary" className="bg-blue-50 text-blue-700">
+                      <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
                         📋 Listas
                       </Badge>
                     )}
                     {tables && (
-                      <Badge variant="secondary" className="bg-blue-50 text-blue-700">
+                      <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
                         📊 Tabelas
                       </Badge>
                     )}
                     {conclusion && (
-                      <Badge variant="secondary" className="bg-blue-50 text-blue-700">
+                      <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
                         ✅ Conclusão
                       </Badge>
                     )}
                     {faq && (
-                      <Badge variant="secondary" className="bg-blue-50 text-blue-700">
+                      <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
                         ❓ FAQ
                       </Badge>
                     )}
                     {internalLinking && (
-                      <Badge variant="secondary" className="bg-green-50 text-green-700">
+                      <Badge variant="secondary" className="text-xs bg-accent/10 text-accent">
                         🔗 Linkagem Interna
                       </Badge>
                     )}
                     {seoOptimization && (
-                      <Badge variant="secondary" className="bg-blue-50 text-blue-700">
+                      <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
                         🔍 SEO Otimizado
                       </Badge>
                     )}
                     {realtimeData && (
-                      <Badge variant="secondary" className="bg-green-50 text-green-700">
+                      <Badge variant="secondary" className="text-xs bg-accent/10 text-accent">
                         🌐 Dados em Tempo Real
                       </Badge>
                     )}
                     {humanizeContent && (
-                      <Badge variant="secondary" className="bg-orange-50 text-orange-700">
+                      <Badge variant="secondary" className="text-xs bg-accent/20 text-accent">
                         👤 Conteúdo Humanizado
                       </Badge>
                     )}
                     {generateImages && (
-                      <Badge variant="secondary" className="bg-pink-50 text-pink-700">
+                      <Badge variant="secondary" className="text-xs bg-accent/20 text-accent">
                         🖼️ {imageCount} {imageCount === 1 ? 'Imagem' : 'Imagens'} IA
                       </Badge>
                     )}

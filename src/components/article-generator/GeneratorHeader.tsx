@@ -23,47 +23,47 @@ export function GeneratorHeader({
   statusText = 'Pronto Para Gerar',
 }: GeneratorHeaderProps) {
   return (
-    <header className="border-b flex bg-background border-border">
+    <header className="border-b flex bg-background border-border shrink-0">
       {/* Left Header - Generator Title */}
       <div 
         className={cn(
-          "flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-r border-border",
+          "flex items-center justify-between px-4 md:px-5 py-3 border-r border-border",
           isMobile ? "w-full" : "w-1/2"
         )}
       >
-        <div className="flex items-center gap-2 md:gap-3">
-          <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-primary/10">
+        <div className="flex items-center gap-2 md:gap-3 min-w-0">
+          <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg flex items-center justify-center shrink-0 bg-primary/10">
             <Zap className="w-4 h-4 md:w-5 md:h-5 text-primary" />
           </div>
-          <div>
-            <h1 className="text-lg md:text-xl font-semibold text-foreground">
+          <div className="min-w-0">
+            <h1 className="text-base md:text-lg font-semibold text-foreground truncate">
               Gerador de Artigos IA
             </h1>
-            <p className="text-xs md:text-sm hidden sm:block text-muted-foreground">
-              Crie conteúdo de alta qualidade com inteligência artificial
+            <p className="text-xs hidden sm:block text-muted-foreground truncate">
+              Crie conteúdo de alta qualidade com IA
             </p>
           </div>
         </div>
-        <Badge className="text-xs md:text-sm px-3 py-1.5 bg-primary text-primary-foreground">
-          Total: {totalCredits} {totalCredits === 1 ? 'Crédito' : 'Créditos'}
+        <Badge className="text-xs px-2 py-1 shrink-0 ml-2 bg-primary text-primary-foreground">
+          {totalCredits} {totalCredits === 1 ? 'Crédito' : 'Créditos'}
         </Badge>
       </div>
       
       {/* Right Header - Preview Status */}
       {!isMobile && (
-        <div className="w-1/2 flex items-center justify-between px-4 md:px-6 py-3 md:py-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-              <Eye className="w-4 h-4 text-green-600" />
+        <div className="w-1/2 flex items-center justify-between px-4 md:px-5 py-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center shrink-0">
+              <Eye className="w-4 h-4 text-accent" />
             </div>
-            <div>
-              <h2 className="font-semibold text-foreground">{rightPanelTitle}</h2>
-              <p className="text-xs text-muted-foreground">{rightPanelDescription}</p>
+            <div className="min-w-0">
+              <h2 className="font-semibold text-foreground text-sm truncate">{rightPanelTitle}</h2>
+              <p className="text-xs text-muted-foreground truncate">{rightPanelDescription}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            {statusText}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0 ml-2">
+            <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+            <span className="hidden md:inline">{statusText}</span>
           </div>
         </div>
       )}
