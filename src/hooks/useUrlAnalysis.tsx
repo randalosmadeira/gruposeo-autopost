@@ -4,15 +4,24 @@ import { useToast } from '@/hooks/use-toast';
 
 export interface UrlAnalysisResult {
   title: string;
+  originalTitle: string;
+  preservedTitle: string;
   content: string;
   source: string;
   suggestedNiche: string;
   suggestedAngle: string;
+  originalKeyword: string;
   suggestedKeyword: string;
+  secondaryKeywords: string[];
   summary: string;
   mainTopics: string[];
   targetAudience: string;
   publishingStrategy: string;
+  seoPreservation: {
+    titleMatchPercent: number;
+    keywordMatchPercent: number;
+    indexTerms: string[];
+  };
 }
 
 interface UseUrlAnalysisOptions {

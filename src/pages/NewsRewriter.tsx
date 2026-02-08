@@ -408,7 +408,7 @@ export default function NewsRewriter() {
                         <Lightbulb className="w-5 h-5 text-primary" />
                         Sugestões da IA
                         <Badge variant="secondary" className="ml-auto">
-                          Baseado no projeto WordPress
+                          SEO Preservado 95%+
                         </Badge>
                       </CardTitle>
                       <CardDescription>
@@ -416,28 +416,106 @@ export default function NewsRewriter() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      {/* Main suggestions grid */}
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        {/* Suggested Niche */}
+                      {/* SEO Preservation Stats */}
+                      {analysisResult.seoPreservation && (
+                        <div className="p-3 rounded-lg border border-green-500/30 bg-green-500/5">
+                          <span className="text-xs font-medium text-green-600 block mb-2">🎯 Preservação de Indexação</span>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <span className="text-xs text-muted-foreground">Título</span>
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-green-500 rounded-full" 
+                                    style={{ width: `${analysisResult.seoPreservation.titleMatchPercent}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs font-medium">{analysisResult.seoPreservation.titleMatchPercent}%</span>
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-xs text-muted-foreground">Keyword</span>
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-green-500 rounded-full" 
+                                    style={{ width: `${analysisResult.seoPreservation.keywordMatchPercent}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs font-medium">{analysisResult.seoPreservation.keywordMatchPercent}%</span>
+                              </div>
+                            </div>
+                          </div>
+                          {analysisResult.seoPreservation.indexTerms?.length > 0 && (
+                            <div className="mt-3">
+                              <span className="text-xs text-muted-foreground block mb-1">Termos de Indexação:</span>
+                              <div className="flex flex-wrap gap-1">
+                                {analysisResult.seoPreservation.indexTerms.slice(0, 8).map((term, i) => (
+                                  <Badge key={i} variant="outline" className="text-xs bg-green-500/10 border-green-500/30">
+                                    {term}
+                                  </Badge>
+                                ))}
+                                {analysisResult.seoPreservation.indexTerms.length > 8 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    +{analysisResult.seoPreservation.indexTerms.length - 8}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Preserved Title */}
+                      {analysisResult.preservedTitle && (
                         <div className="p-3 rounded-lg border bg-background">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-medium text-muted-foreground">Nicho Sugerido</span>
+                            <span className="text-xs font-medium text-muted-foreground">Título Preservado (95% SEO)</span>
                             <Button
                               size="sm"
                               variant="ghost"
                               className="h-6 px-2 text-xs"
-                              onClick={() => applySuggestion('niche', analysisResult.suggestedNiche)}
+                              onClick={() => {
+                                // Copy to clipboard
+                                navigator.clipboard.writeText(analysisResult.preservedTitle);
+                              }}
                             >
-                              Aplicar
+                              Copiar
                             </Button>
                           </div>
-                          <p className="text-sm font-medium">{analysisResult.suggestedNiche}</p>
+                          <p className="text-sm font-medium">{analysisResult.preservedTitle}</p>
+                          {analysisResult.originalTitle && (
+                            <p className="text-xs text-muted-foreground mt-1 line-through">
+                              Original: {analysisResult.originalTitle}
+                            </p>
+                          )}
                         </div>
+                      )}
+
+                      {/* Main suggestions grid */}
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        {/* Original Keyword */}
+                        {analysisResult.originalKeyword && (
+                          <div className="p-3 rounded-lg border bg-background">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-medium text-muted-foreground">Keyword Original</span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 px-2 text-xs"
+                                onClick={() => applySuggestion('keyword', analysisResult.originalKeyword)}
+                              >
+                                Usar Exata
+                              </Button>
+                            </div>
+                            <p className="text-sm font-medium">{analysisResult.originalKeyword}</p>
+                          </div>
+                        )}
 
                         {/* Suggested Keyword */}
                         <div className="p-3 rounded-lg border bg-background">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-medium text-muted-foreground">Palavra-chave SEO</span>
+                            <span className="text-xs font-medium text-muted-foreground">Keyword Sugerida (95%)</span>
                             <Button
                               size="sm"
                               variant="ghost"
@@ -449,6 +527,41 @@ export default function NewsRewriter() {
                           </div>
                           <p className="text-sm font-medium">{analysisResult.suggestedKeyword}</p>
                         </div>
+                      </div>
+
+                      {/* Secondary Keywords */}
+                      {analysisResult.secondaryKeywords?.length > 0 && (
+                        <div className="p-3 rounded-lg border bg-background">
+                          <span className="text-xs font-medium text-muted-foreground block mb-2">Keywords Secundárias</span>
+                          <div className="flex flex-wrap gap-1">
+                            {analysisResult.secondaryKeywords.map((kw, i) => (
+                              <Badge 
+                                key={i} 
+                                variant="secondary" 
+                                className="text-xs cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                                onClick={() => applySuggestion('keyword', kw)}
+                              >
+                                {kw}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Suggested Niche */}
+                      <div className="p-3 rounded-lg border bg-background">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium text-muted-foreground">Nicho Sugerido</span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-xs"
+                            onClick={() => applySuggestion('niche', analysisResult.suggestedNiche)}
+                          >
+                            Aplicar
+                          </Button>
+                        </div>
+                        <p className="text-sm font-medium">{analysisResult.suggestedNiche}</p>
                       </div>
 
                       {/* Suggested Angle */}
@@ -472,7 +585,7 @@ export default function NewsRewriter() {
                         <div className="p-3 rounded-lg border bg-background">
                           <span className="text-xs font-medium text-muted-foreground block mb-2">Tópicos Principais</span>
                           <div className="flex flex-wrap gap-1">
-                            {analysisResult.mainTopics.map((topic, i) => (
+                            {analysisResult.mainTopics?.map((topic, i) => (
                               <Badge key={i} variant="outline" className="text-xs">
                                 {topic}
                               </Badge>

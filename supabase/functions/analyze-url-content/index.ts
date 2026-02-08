@@ -14,15 +14,24 @@ interface AnalyzeRequest {
 
 interface AnalysisResult {
   title: string;
+  originalTitle: string;
+  preservedTitle: string;
   content: string;
   source: string;
   suggestedNiche: string;
   suggestedAngle: string;
+  originalKeyword: string;
   suggestedKeyword: string;
+  secondaryKeywords: string[];
   summary: string;
   mainTopics: string[];
   targetAudience: string;
   publishingStrategy: string;
+  seoPreservation: {
+    titleMatchPercent: number;
+    keywordMatchPercent: number;
+    indexTerms: string[];
+  };
 }
 
 async function fetchUrlContent(url: string): Promise<{ html: string; title: string }> {
@@ -134,8 +143,26 @@ async function analyzeWithGemini(
     ? `O projeto WordPress de destino é do nicho "${projectNiche}"${projectName ? ` (${projectName})` : ''}.` 
     : '';
 
-  const prompt = `Você é um especialista em análise de conteúdo jornalístico e SEO.
-Analise a seguinte notícia e forneça recomendações para repostagem.
+  const prompt = `Você é um especialista em análise de conteúdo jornalístico, SEO avançado e preservação de indexabilidade.
+Sua tarefa é analisar uma notícia e fornecer recomendações que PRESERVEM 95% do potencial de indexação do título e palavras-chave originais.
+
+## REGRAS CRÍTICAS DE PRESERVAÇÃO SEO:
+
+### 1. TÍTULO - Preservação de 95%
+- Extraia o título EXATO da notícia original
+- Crie um "preservedTitle" que MANTENHA as mesmas palavras-chave principais na MESMA ordem
+- Apenas pequenas variações são permitidas (artigos, preposições, pontuação)
+- O título deve ranquear para as MESMAS buscas no Google, Bing, ChatGPT, Claude e Gemini
+
+### 2. PALAVRA-CHAVE - Correspondência Exata
+- Identifique a keyword principal EXATA usada pelo autor original (geralmente no título e primeiro parágrafo)
+- Mantenha a mesma estrutura de frase-chave (ex: "advogado trabalhista SP" não deve virar "advocacia trabalhista")
+- Preserve termos técnicos, nomes próprios e expressões de busca exatas
+
+### 3. TERMOS DE INDEXAÇÃO
+- Liste TODOS os termos que fazem este conteúdo indexável nas buscas
+- Inclua: nomes de pessoas, empresas, lugares, datas, números, termos técnicos
+- Estes termos devem aparecer no conteúdo reescrito para manter indexabilidade
 
 ${nicheContext}
 
@@ -143,29 +170,40 @@ TÍTULO ORIGINAL: ${title}
 FONTE: ${source}
 
 CONTEÚDO:
-${content.substring(0, 5000)}
+${content.substring(0, 6000)}
 
 ---
 
-Analise o conteúdo e retorne um JSON com:
+Retorne um JSON com esta estrutura:
 
 {
-  "title": "título original extraído",
-  "content": "texto completo extraído e limpo da notícia (máximo 3000 caracteres)",
+  "title": "título original EXATO extraído da notícia",
+  "originalTitle": "título original completo sem modificação",
+  "preservedTitle": "título reescrito mantendo 95% das palavras-chave na mesma ordem (máx 60 chars)",
+  "content": "texto completo extraído e limpo (máximo 4000 caracteres)",
   "source": "${source}",
-  "suggestedNiche": "advocacia|saude|beleza|tecnologia|marketing|geral - baseado no conteúdo${projectNiche ? ` e alinhamento com ${projectNiche}` : ''}",
-  "suggestedAngle": "Sugestão de ângulo de análise específico para repostagem (ex: 'Impacto para consumidores brasileiros', 'Análise das implicações jurídicas')",
-  "suggestedKeyword": "palavra-chave principal sugerida para SEO",
-  "summary": "Resumo executivo em 2-3 frases do que a notícia trata",
+  "suggestedNiche": "advocacia|saude|beleza|tecnologia|marketing|geral",
+  "suggestedAngle": "ângulo de análise específico para agregar valor original",
+  "originalKeyword": "palavra-chave EXATA identificada no conteúdo original",
+  "suggestedKeyword": "mesma keyword ou variação mínima (95% similar)",
+  "secondaryKeywords": ["keyword2", "keyword3", "keyword4"],
+  "summary": "resumo em 2-3 frases",
   "mainTopics": ["tópico1", "tópico2", "tópico3"],
-  "targetAudience": "Descrição do público-alvo ideal para este conteúdo",
-  "publishingStrategy": "Recomendação de como e quando publicar este conteúdo repostado"
+  "targetAudience": "público-alvo ideal",
+  "publishingStrategy": "estratégia de publicação",
+  "seoPreservation": {
+    "titleMatchPercent": 95,
+    "keywordMatchPercent": 95,
+    "indexTerms": ["termo1", "termo2", "termo3", "nome próprio", "data", "número"]
+  }
 }
 
-IMPORTANTE: 
-- Retorne APENAS o JSON válido, sem markdown ou explicações
-- O suggestedAngle deve ser específico e único, não genérico
-- Considere o nicho do projeto WordPress se informado`;
+IMPORTANTE:
+- O "preservedTitle" deve ranquear para as MESMAS buscas que o original
+- A "suggestedKeyword" deve ter 95%+ de correspondência com a "originalKeyword"
+- Os "indexTerms" são cruciais para manter visibilidade em motores de busca e IAs
+- Retorne APENAS JSON válido, sem markdown`;
+
 
   // Use Gemini 2.0 Flash model
   const response = await fetch(
