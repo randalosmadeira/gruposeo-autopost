@@ -37,9 +37,9 @@ class CFRDM_GSC_Integration {
         // Register cron job
         add_action('cfrdm_gsc_sync', array($this, 'sync_gsc_data'));
         
-        // Schedule if not already scheduled - use 'twicedaily' (WordPress default) instead of custom interval
+        // Schedule every 6 hours (using custom interval from CFRDM_Cron_Scheduler)
         if (!wp_next_scheduled('cfrdm_gsc_sync')) {
-            wp_schedule_event(time(), 'twicedaily', 'cfrdm_gsc_sync');
+            wp_schedule_event(time(), 'every_6_hours', 'cfrdm_gsc_sync');
         }
         
         // Admin page for OAuth
