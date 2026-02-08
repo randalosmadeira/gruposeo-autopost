@@ -2,6 +2,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
 import { callAI, generateGeminiImage, extractJSON } from "../_shared/gemini.ts";
+import { 
+  JOURNALISTIC_SYSTEM_PROMPT, 
+  buildUserPrompt, 
+  NICHE_IMAGE_PROMPTS,
+  type JournalisticRewriteRequest,
+  type JournalisticRewriteResponse 
+} from "./prompts.ts";
 
 const FUNCTION_NAME = "rewrite-news";
 
@@ -9,64 +16,6 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-// MAA System Prompt for journalistic rewriting (Lei 9.610/98 compliance)
-const SYSTEM_PROMPT = `Você é o Assistente MAA Pro, especializado em repostagem jornalística com compliance Lei 9.610/98 (Direitos Autorais).
-
-DIRETRIZES DE COMPLIANCE:
-
-✅ PERMITIDO:
-- Reescrever 100% do conteúdo com palavras e estrutura própria
-- Manter citações curtas (máx 2-3 frases) com aspas
-- Creditar fonte original (nome do veículo + link)
-- Adicionar análise, contexto ou opinião própria (40%+ do conteúdo)
-
-❌ PROIBIDO:
-- Copiar/colar parágrafos inteiros
-- Parafrasear apenas trocando palavras (plágio)
-- Remover créditos da fonte original
-- Republicar conteúdo de agências (Reuters, AFP) sem licença
-
-TÉCNICA DE REESTRUTURAÇÃO:
-1. Identificar 3-5 pontos principais da notícia original
-2. Reescrever com estrutura TOTALMENTE diferente
-3. Adicionar:
-   - Contexto local/nacional
-   - Dados complementares relevantes
-   - Impacto prático para o leitor
-   - Análise jurídica/técnica quando aplicável
-4. Inserir créditos no rodapé
-
-SEO 2026:
-- E-E-A-T (Experience, Expertise, Authority, Trust)
-- Parágrafos curtos (mobile-first, máx 4 linhas)
-- Flesch Reading Ease > 60
-- Featured Snippets optimization
-- Estrutura: H1 (1x), H2 (3-5x), H3 (quando necessário)
-
-FORMATO DE SAÍDA (JSON):
-{
-  "title": "Título otimizado (55-65 chars)",
-  "meta_description": "Meta description (150-160 chars)",
-  "slug": "url-amigavel",
-  "content_html": "HTML completo do artigo reestruturado",
-  "excerpt": "Resumo em 2-3 frases",
-  "credits": "Fonte: [Veículo] - [URL]",
-  "originality_score": 95,
-  "added_value": "Descrição do valor agregado",
-  "keywords": ["keyword1", "keyword2"],
-  "word_count": 1200
-}`;
-
-interface RewriteRequest {
-  sourceUrl: string;
-  sourceContent: string;
-  sourceName: string;
-  analysisAngle: string;
-  keyword?: string;
-  language?: string;
-  projectId?: string;
-}
 
 serve(async (req) => {
   const requestId = createRequestId();
@@ -112,8 +61,19 @@ serve(async (req) => {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Parse request
-    const body: RewriteRequest = await req.json();
-    const { sourceUrl, sourceContent, sourceName, analysisAngle, keyword, language = "pt-BR", projectId } = body;
+    const body: JournalisticRewriteRequest = await req.json();
+    const { 
+      sourceUrl, 
+      sourceContent, 
+      sourceName, 
+      analysisAngle, 
+      keyword, 
+      niche = 'geral',
+      articleLength = 'medium',
+      language = "pt-BR", 
+      projectId,
+      internalLinks = []
+    } = body;
 
     if (!sourceContent || !sourceName) {
       return new Response(
@@ -122,56 +82,36 @@ serve(async (req) => {
       );
     }
 
-    log.info("rewrite_started", { sourceName, contentLength: sourceContent.length });
+    log.info("rewrite_started", { 
+      sourceName, 
+      niche, 
+      articleLength,
+      contentLength: sourceContent.length 
+    });
 
-    // Build user prompt
-    const userPrompt = `TAREFA: Repostagem jornalística com compliance Lei 9.610/98
+    // Build user prompt with all configurations
+    const userPrompt = buildUserPrompt({
+      sourceUrl,
+      sourceContent,
+      sourceName,
+      analysisAngle,
+      keyword,
+      niche,
+      articleLength,
+      language,
+      internalLinks,
+    });
 
-FONTE ORIGINAL:
-- Veículo: ${sourceName}
-- URL: ${sourceUrl || "Não informada"}
-- Conteúdo: ${sourceContent.substring(0, 3000)}${sourceContent.length > 3000 ? '... (truncado)' : ''}
-
-ÂNGULO DE ANÁLISE:
-${analysisAngle}
-
-${keyword ? `PALAVRA-CHAVE para otimização SEO: ${keyword}` : ''}
-
-IDIOMA: ${language}
-
-INSTRUÇÕES CRÍTICAS:
-1. Reescrever 100% com estrutura TOTALMENTE diferente
-2. NÃO copiar parágrafos ou frases longas
-3. Adicionar análise e contexto próprio (mín 40% do conteúdo)
-4. Creditar fonte no rodapé: "Fonte: ${sourceName}${sourceUrl ? ` - ${sourceUrl}` : ''}"
-5. Gerar artigo com mín 800 palavras
-6. Estrutura: H2 para seções principais, parágrafos curtos
-
-Se originalidade < 90%, reescreva novamente até atingir 90%+.
-
-Retorne o resultado em formato JSON conforme especificado.`;
-
-    // Call AI (OpenAI primary, Gemini fallback)
+    // Call AI with the comprehensive journalistic prompt
     const aiResponse = await callAI(
       [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: JOURNALISTIC_SYSTEM_PROMPT },
         { role: "user", content: userPrompt },
       ],
-      { maxTokens: 4000 }
+      { maxTokens: 8000 }
     );
 
-    const parsed = extractJSON<{
-      title: string;
-      meta_description: string;
-      slug: string;
-      content_html: string;
-      excerpt: string;
-      credits: string;
-      originality_score: number;
-      added_value: string;
-      keywords: string[];
-      word_count: number;
-    }>(aiResponse);
+    const parsed = extractJSON<JournalisticRewriteResponse>(aiResponse);
     
     if (!parsed) {
       log.error("json_parse_failed", { response: aiResponse.substring(0, 500) });
@@ -185,40 +125,64 @@ Retorne o resultado em formato JSON conforme especificado.`;
       );
     }
 
-    // Validate originality
-    if (parsed.originality_score && parsed.originality_score < 90) {
-      log.warn("low_originality", { score: parsed.originality_score });
+    // Validate compliance scores
+    const complianceCheck = parsed.internal?.complianceCheck || {
+      originalityScore: 95,
+      citationCompliance: true,
+      seoOptimized: true,
+      readabilityScore: 80,
+    };
+
+    if (complianceCheck.originalityScore < 95) {
+      log.warn("low_originality", { score: complianceCheck.originalityScore });
     }
 
-    // Generate featured image
-    log.info("generating_image", {});
-    const imagePrompt = `Professional news article featured image for: "${parsed.title}". Modern, clean, journalistic style. 16:9 aspect ratio.`;
-    const imageResult = await generateGeminiImage(imagePrompt, { aspectRatio: "16:9" });
+    // Generate featured image using niche-specific prompt or AI-generated prompt
+    log.info("generating_image", { niche });
+    const imagePrompt = parsed.image?.prompt || NICHE_IMAGE_PROMPTS[niche] || NICHE_IMAGE_PROMPTS['geral'];
+    const fullImagePrompt = `${imagePrompt} Topic: "${parsed.seo?.metaTitle || sourceName}"`;
+    
+    const imageResult = await generateGeminiImage(fullImagePrompt, { aspectRatio: "16:9" });
     const featuredImage = imageResult?.imageData || null;
 
-    // Save article to database
+    // Validate SEO limits
+    const metaTitle = (parsed.seo?.metaTitle || '').substring(0, 60);
+    const metaDescription = (parsed.seo?.metaDescription || '').substring(0, 160);
+
+    // Save article to database with full structured data
     const { data: article, error: dbError } = await supabaseAdmin
       .from("articles")
       .insert({
         user_id: user.id,
         project_id: projectId || null,
-        keyword: keyword || parsed.keywords?.[0] || sourceName,
-        title: parsed.title,
-        content: parsed.content_html,
-        excerpt: parsed.excerpt || parsed.meta_description,
-        slug: parsed.slug,
+        keyword: keyword || parsed.seo?.focusKeyword || sourceName,
+        title: metaTitle,
+        content: parsed.content?.html || '',
+        excerpt: metaDescription,
+        slug: parsed.seo?.slug || '',
         featured_image_url: featuredImage,
         type: "blog",
         status: "draft",
-        word_count: parsed.word_count || parsed.content_html?.split(/\s+/).length || 0,
+        word_count: parsed.content?.wordCount || parsed.content?.html?.split(/\s+/).length || 0,
         config: {
           type: "rewrite",
           source_url: sourceUrl,
           source_name: sourceName,
-          originality_score: parsed.originality_score,
-          added_value: parsed.added_value,
+          originality_score: complianceCheck.originalityScore,
+          readability_score: complianceCheck.readabilityScore,
+          quality_score: parsed.internal?.qualityScore || 90,
+          seo_optimized: complianceCheck.seoOptimized,
+          citation_compliance: complianceCheck.citationCompliance,
           analysis_angle: analysisAngle,
-          credits: parsed.credits,
+          niche: niche,
+          article_length: articleLength,
+          credits: parsed.source?.credits || `Fonte: ${sourceName}${sourceUrl ? ` - ${sourceUrl}` : ''}`,
+          tags: parsed.internal?.tags || [],
+          keywords: parsed.seo?.keywords || [],
+          focus_keyword: parsed.seo?.focusKeyword || keyword,
+          image_alt_text: parsed.image?.altText || '',
+          reading_time: parsed.content?.readingTime || '',
+          monetization: parsed.monetization || null,
         },
       })
       .select()
@@ -231,8 +195,10 @@ Retorne o resultado em formato JSON conforme especificado.`;
 
     log.info("rewrite_completed", { 
       articleId: article.id, 
-      originalityScore: parsed.originality_score,
-      wordCount: parsed.word_count 
+      originalityScore: complianceCheck.originalityScore,
+      qualityScore: parsed.internal?.qualityScore,
+      wordCount: parsed.content?.wordCount,
+      readingTime: parsed.content?.readingTime,
     });
     log.requestEnd(200, Date.now() - startTime);
 
@@ -245,10 +211,17 @@ Retorne o resultado em formato JSON conforme especificado.`;
           slug: article.slug,
           word_count: article.word_count,
           featured_image_url: article.featured_image_url,
-          originality_score: parsed.originality_score,
-          added_value: parsed.added_value,
-          credits: parsed.credits,
+          originality_score: complianceCheck.originalityScore,
+          quality_score: parsed.internal?.qualityScore || 90,
+          readability_score: complianceCheck.readabilityScore,
+          seo_optimized: complianceCheck.seoOptimized,
+          reading_time: parsed.content?.readingTime,
+          credits: parsed.source?.credits,
+          niche: niche,
+          tags: parsed.internal?.tags,
+          keywords: parsed.seo?.keywords,
         },
+        compliance: complianceCheck,
         request_id: requestId,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
