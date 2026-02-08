@@ -127,6 +127,59 @@ export type Database = {
           },
         ]
       }
+      article_versions: {
+        Row: {
+          article_id: string
+          change_description: string | null
+          content: string | null
+          created_at: string
+          excerpt: string | null
+          featured_image_url: string | null
+          id: string
+          is_auto_save: boolean | null
+          title: string | null
+          user_id: string
+          version_number: number
+          word_count: number | null
+        }
+        Insert: {
+          article_id: string
+          change_description?: string | null
+          content?: string | null
+          created_at?: string
+          excerpt?: string | null
+          featured_image_url?: string | null
+          id?: string
+          is_auto_save?: boolean | null
+          title?: string | null
+          user_id: string
+          version_number?: number
+          word_count?: number | null
+        }
+        Update: {
+          article_id?: string
+          change_description?: string | null
+          content?: string | null
+          created_at?: string
+          excerpt?: string | null
+          featured_image_url?: string | null
+          id?: string
+          is_auto_save?: boolean | null
+          title?: string | null
+          user_id?: string
+          version_number?: number
+          word_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "article_versions_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       articles: {
         Row: {
           config: Json | null
