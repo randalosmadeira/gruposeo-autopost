@@ -42,6 +42,10 @@ import {
   Calendar,
   RefreshCw,
   Folder,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 
 interface BulkGenerationGroup {
@@ -66,6 +70,8 @@ interface BulkGenerationGroup {
   }>;
 }
 
+const ITEMS_PER_PAGE = 5;
+
 export function BulkGenerationHistory() {
   const { toast } = useToast();
   const { projects } = useProjects();
@@ -78,6 +84,10 @@ export function BulkGenerationHistory() {
   const [publishProjectId, setPublishProjectId] = useState<string>('');
   const [isPublishing, setIsPublishing] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalArticles, setTotalArticles] = useState(0);
   
   // Fetch articles and group them by date/hour
   const fetchHistory = useCallback(async () => {
@@ -158,6 +168,7 @@ export function BulkGenerationHistory() {
       });
 
       setGroups(groupedArray);
+      setTotalArticles(articles?.length || 0);
     } catch (error) {
       console.error('Error fetching history:', error);
     } finally {
@@ -380,7 +391,30 @@ export function BulkGenerationHistory() {
           </div>
         ) : (
           <div className="space-y-4">
-            {groups.map((group) => {
+            {/* Stats summary */}
+            <div className="flex items-center justify-between text-sm text-muted-foreground border-b pb-3">
+              <span>
+                Mostrando {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, groups.length)} - {Math.min(currentPage * ITEMS_PER_PAGE, groups.length)} de {groups.length} grupos ({totalArticles} artigos total)
+              </span>
+              <Select 
+                value={String(ITEMS_PER_PAGE)} 
+                onValueChange={(v) => setCurrentPage(1)}
+              >
+                <SelectTrigger className="w-[140px] h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5 por página</SelectItem>
+                  <SelectItem value="10">10 por página</SelectItem>
+                  <SelectItem value="20">20 por página</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Paginated groups */}
+            {groups
+              .slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+              .map((group) => {
               const groupKey = `${group.date}-${group.hour}`;
               const isExpanded = expandedGroups.has(groupKey);
               const readyArticles = group.articles.filter(a => a.status === 'ready' || a.status === 'draft');
@@ -503,6 +537,84 @@ export function BulkGenerationHistory() {
                 </div>
               );
             })}
+
+            {/* Pagination Controls */}
+            {groups.length > ITEMS_PER_PAGE && (
+              <div className="flex items-center justify-between pt-4 border-t">
+                <div className="text-sm text-muted-foreground">
+                  Página {currentPage} de {Math.ceil(groups.length / ITEMS_PER_PAGE)}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  
+                  {/* Page numbers */}
+                  <div className="flex items-center gap-1 mx-2">
+                    {Array.from({ length: Math.min(5, Math.ceil(groups.length / ITEMS_PER_PAGE)) }, (_, i) => {
+                      const totalPages = Math.ceil(groups.length / ITEMS_PER_PAGE);
+                      let pageNum: number;
+                      
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={currentPage === pageNum ? "default" : "outline"}
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => setCurrentPage(pageNum)}
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(groups.length / ITEMS_PER_PAGE), p + 1))}
+                    disabled={currentPage === Math.ceil(groups.length / ITEMS_PER_PAGE)}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(Math.ceil(groups.length / ITEMS_PER_PAGE))}
+                    disabled={currentPage === Math.ceil(groups.length / ITEMS_PER_PAGE)}
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
