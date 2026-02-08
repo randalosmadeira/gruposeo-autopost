@@ -134,7 +134,7 @@ export function ArticleEditorContent({
             </h1>
           )}
 
-          {/* Editable Content */}
+          {/* Editable Content - Padrão de Qualidade SEO */}
           <article 
             ref={editorRef}
             contentEditable
@@ -144,59 +144,76 @@ export function ArticleEditorContent({
               onContentChange(newContent);
             }}
             className="prose prose-lg max-w-none outline-none min-h-[400px]
-              focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 rounded-lg p-2 -m-2
+              focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 rounded-lg p-4 -m-2
               
-              /* H2 - Subtítulos principais com badge */
-              [&_h2]:relative [&_h2]:pl-14 [&_h2]:text-xl [&_h2]:font-bold 
-              [&_h2]:mt-10 [&_h2]:mb-5 [&_h2]:pt-6 [&_h2]:border-t [&_h2]:border-border/50
+              /* === H1 - Título Principal - NEGRITO MÁXIMO === */
+              [&_h1]:text-3xl [&_h1]:md:text-4xl [&_h1]:font-extrabold 
+              [&_h1]:text-foreground [&_h1]:leading-tight
+              [&_h1]:mb-6 [&_h1]:mt-0
+              
+              /* === H2 - Subtítulos principais com badge e DESTAQUE === */
+              [&_h2]:relative [&_h2]:pl-14 [&_h2]:text-2xl [&_h2]:md:text-3xl [&_h2]:font-bold 
+              [&_h2]:mt-12 [&_h2]:mb-6 [&_h2]:pt-8 [&_h2]:border-t-2 [&_h2]:border-border
+              [&_h2]:leading-snug
               [&_h2]:before:content-['H2'] [&_h2]:before:absolute [&_h2]:before:left-0 
               [&_h2]:before:px-2.5 [&_h2]:before:py-1 [&_h2]:before:text-xs 
-              [&_h2]:before:font-semibold [&_h2]:before:bg-primary [&_h2]:before:text-primary-foreground 
-              [&_h2]:before:rounded-md [&_h2]:before:top-6
+              [&_h2]:before:font-bold [&_h2]:before:bg-primary [&_h2]:before:text-primary-foreground 
+              [&_h2]:before:rounded-md [&_h2]:before:top-8
               
-              /* H3 - Subtítulos secundários */
-              [&_h3]:relative [&_h3]:pl-14 [&_h3]:text-lg [&_h3]:font-semibold 
-              [&_h3]:mt-8 [&_h3]:mb-4
+              /* === H3 - Subtítulos secundários === */
+              [&_h3]:relative [&_h3]:pl-14 [&_h3]:text-xl [&_h3]:md:text-2xl [&_h3]:font-bold 
+              [&_h3]:mt-10 [&_h3]:mb-5 [&_h3]:leading-snug
               [&_h3]:before:content-['H3'] [&_h3]:before:absolute [&_h3]:before:left-0 
               [&_h3]:before:px-2.5 [&_h3]:before:py-1 [&_h3]:before:text-xs 
-              [&_h3]:before:font-semibold [&_h3]:before:bg-chart-4 [&_h3]:before:text-primary-foreground 
+              [&_h3]:before:font-bold [&_h3]:before:bg-chart-4 [&_h3]:before:text-primary-foreground 
               [&_h3]:before:rounded-md [&_h3]:before:top-0
               
-              /* H4 - Subtítulos terciários */
-              [&_h4]:relative [&_h4]:pl-14 [&_h4]:text-base [&_h4]:font-semibold 
-              [&_h4]:mt-6 [&_h4]:mb-3
+              /* === H4 - Subtítulos terciários === */
+              [&_h4]:relative [&_h4]:pl-14 [&_h4]:text-lg [&_h4]:md:text-xl [&_h4]:font-semibold 
+              [&_h4]:mt-8 [&_h4]:mb-4 [&_h4]:leading-snug
               [&_h4]:before:content-['H4'] [&_h4]:before:absolute [&_h4]:before:left-0 
               [&_h4]:before:px-2 [&_h4]:before:py-0.5 [&_h4]:before:text-[10px] 
-              [&_h4]:before:font-medium [&_h4]:before:bg-muted [&_h4]:before:text-muted-foreground 
-              [&_h4]:before:rounded [&_h4]:before:top-0.5
+              [&_h4]:before:font-semibold [&_h4]:before:bg-muted [&_h4]:before:text-muted-foreground 
+              [&_h4]:before:rounded [&_h4]:before:top-1
               
-              /* Parágrafos - Espaçamento generoso */
-              [&_p]:leading-relaxed [&_p]:mb-6 [&_p]:text-foreground [&_p]:text-base
+              /* === PARÁGRAFOS - Separação Clara por Blocos === */
+              [&_p]:leading-[1.85] [&_p]:mb-6 [&_p]:text-foreground [&_p]:text-[1.0625rem]
+              [&_p]:tracking-[-0.01em]
               [&_p+p]:mt-0
               
-              /* Listas - Espaçamento entre itens */
-              [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-6 [&_ul]:mt-4 [&_ul]:space-y-2
-              [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mb-6 [&_ol]:mt-4 [&_ol]:space-y-2
-              [&_li]:leading-relaxed [&_li]:text-foreground
+              /* === LISTAS - Espaçamento Generoso === */
+              [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-6 [&_ul]:mt-4 [&_ul]:space-y-3
+              [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mb-6 [&_ol]:mt-4 [&_ol]:space-y-3
+              [&_li]:leading-relaxed [&_li]:text-foreground [&_li]:pl-2
               [&_li_p]:mb-2
+              [&_li]:marker:text-primary [&_li]:marker:font-bold
               
-              /* Estilos de texto */
+              /* === TEXTO EM DESTAQUE === */
               [&_strong]:font-bold [&_strong]:text-foreground
               [&_em]:italic
-              [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_a]:font-medium
               
-              /* Blockquotes - Destaque visual */
-              [&_blockquote]:border-l-4 [&_blockquote]:border-primary [&_blockquote]:pl-6 
-              [&_blockquote]:py-3 [&_blockquote]:my-6 [&_blockquote]:italic 
-              [&_blockquote]:bg-muted/30 [&_blockquote]:rounded-r-lg
+              /* === LINKS - COR DESTACADA para chamar atenção === */
+              [&_a]:text-primary [&_a]:font-medium [&_a]:no-underline
+              [&_a]:border-b-2 [&_a]:border-primary/40
+              [&_a]:transition-all [&_a]:duration-200
+              [&_a:hover]:text-accent [&_a:hover]:border-accent
               
-              /* Tabelas */
-              [&_table]:w-full [&_table]:my-6 [&_table]:border-collapse
-              [&_th]:bg-muted [&_th]:p-3 [&_th]:text-left [&_th]:font-semibold [&_th]:border [&_th]:border-border
-              [&_td]:p-3 [&_td]:border [&_td]:border-border
+              /* === CITAÇÕES - Bloco Visual Destacado === */
+              [&_blockquote]:relative [&_blockquote]:border-l-4 [&_blockquote]:border-primary 
+              [&_blockquote]:pl-8 [&_blockquote]:py-6 [&_blockquote]:my-8 
+              [&_blockquote]:italic [&_blockquote]:text-lg
+              [&_blockquote]:bg-primary/5 [&_blockquote]:rounded-r-xl
               
-              /* Código inline */
-              [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-sm [&_code]:font-mono"
+              /* === TABELAS - Layout Profissional === */
+              [&_table]:w-full [&_table]:my-8 [&_table]:border-collapse [&_table]:rounded-lg [&_table]:overflow-hidden [&_table]:shadow-sm
+              [&_thead]:bg-primary [&_thead]:text-primary-foreground
+              [&_th]:px-5 [&_th]:py-4 [&_th]:text-left [&_th]:font-bold
+              [&_td]:px-5 [&_td]:py-4 [&_td]:border-b [&_td]:border-border
+              [&_tbody_tr:hover]:bg-muted/50
+              [&_tr:nth-child(even)]:bg-muted/30
+              
+              /* === CÓDIGO === */
+              [&_code]:bg-muted [&_code]:px-2 [&_code]:py-1 [&_code]:rounded [&_code]:text-sm [&_code]:font-mono"
             dangerouslySetInnerHTML={{ 
               __html: sanitizeHTML(
                 processedContent || '<p>Clique aqui para começar a escrever...</p>'
