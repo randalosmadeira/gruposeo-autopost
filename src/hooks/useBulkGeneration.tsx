@@ -260,6 +260,9 @@ export function useBulkGeneration() {
       seoOptimization: bulkConfig?.seoOptimization ?? true,
       humanizeContent: bulkConfig?.humanizeContent ?? true,
       realtimeData: bulkConfig?.realtimeData ?? false,
+      // AI Auto Optimization - analyzes all keywords and improves content automatically
+      // Always enforces: TITLE ≤60 chars, META_DESCRIPTION ≤160 chars
+      aiAutoOptimization: bulkConfig?.aiAutoOptimization ?? true,
       // Company data - cite strategically in all content
       companyName: bulkConfig?.companyName || '',
       companyPhone: bulkConfig?.companyPhone || '',

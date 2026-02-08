@@ -37,6 +37,9 @@ export interface BulkGenerationConfig {
   // AI Model
   aiModel: string;
   
+  // AI Auto Optimization - analyzes all keywords and improves content
+  aiAutoOptimization: boolean;
+  
   // Advanced settings
   seoOptimization: boolean;
   realtimeData: boolean;
@@ -81,6 +84,8 @@ export const defaultBulkConfig: BulkGenerationConfig = {
   projectId: '',
   // AI Model
   aiModel: 'standard',
+  // AI Auto Optimization - enabled by default
+  aiAutoOptimization: true,
   // Advanced settings - optimized defaults
   seoOptimization: true,
   realtimeData: false,

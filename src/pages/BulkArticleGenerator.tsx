@@ -87,6 +87,8 @@ export default function BulkArticleGenerator() {
     // SEO options
     seoOptimization: true,
     humanizeContent: false,
+    // AI Auto Optimization - analyzes all keywords and improves content automatically
+    aiAutoOptimization: true,
   });
 
   // Projects for internal linking
@@ -242,7 +244,7 @@ export default function BulkArticleGenerator() {
         );
       case 'completed':
         return (
-          <Badge className="gap-1 bg-green-100 text-green-700 hover:bg-green-100">
+          <Badge className="gap-1 bg-success/10 text-success hover:bg-success/10">
             <CheckCircle2 className="w-3 h-3" />
             Pronto
           </Badge>
@@ -528,19 +530,19 @@ export default function BulkArticleGenerator() {
                 <h4 className="font-semibold text-sm text-muted-foreground">Opções SEO</h4>
                 <div className="flex flex-wrap gap-2">
                   {globalConfig.seoOptimization && (
-                    <Badge className="bg-green-100 text-green-700 hover:bg-green-100 gap-1">
+                    <Badge className="bg-success/10 text-success gap-1">
                       <Sparkles className="w-3 h-3" />
                       Otimização SEO
                     </Badge>
                   )}
                   {globalConfig.humanizeContent && (
-                    <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 gap-1">
+                    <Badge className="bg-primary/10 text-primary gap-1">
                       <Bot className="w-3 h-3" />
                       Humanizar Conteúdo
                     </Badge>
                   )}
                   {globalConfig.internalLinking && (
-                    <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 gap-1">
+                    <Badge className="bg-accent/10 text-accent gap-1">
                       <ArrowRight className="w-3 h-3" />
                       Linkagem Interna
                     </Badge>

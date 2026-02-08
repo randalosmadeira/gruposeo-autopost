@@ -15,6 +15,8 @@ import {
   Image,
   Clock,
   Info,
+  Brain,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -26,6 +28,7 @@ interface AdvancedSettingsProps {
   generateImages: boolean;
   imageCount: number;
   imageStyle: string;
+  aiAutoOptimization?: boolean;
   onUsePlatformCreditsChange: (value: boolean) => void;
   onSeoOptimizationChange: (value: boolean) => void;
   onRealtimeDataChange: (value: boolean) => void;
@@ -33,6 +36,7 @@ interface AdvancedSettingsProps {
   onGenerateImagesChange: (value: boolean) => void;
   onImageCountChange: (value: number) => void;
   onImageStyleChange: (value: string) => void;
+  onAiAutoOptimizationChange?: (value: boolean) => void;
   accentColor?: string;
 }
 
@@ -126,6 +130,7 @@ export function AdvancedSettings({
   generateImages,
   imageCount,
   imageStyle,
+  aiAutoOptimization = true,
   onUsePlatformCreditsChange,
   onSeoOptimizationChange,
   onRealtimeDataChange,
@@ -133,10 +138,82 @@ export function AdvancedSettings({
   onGenerateImagesChange,
   onImageCountChange,
   onImageStyleChange,
+  onAiAutoOptimizationChange,
   accentColor = '#4169E1',
 }: AdvancedSettingsProps) {
   return (
     <div className="space-y-4">
+      {/* AI Auto Optimization - NEW - Always First */}
+      {onAiAutoOptimizationChange && (
+        <div 
+          className={cn(
+            'p-4 rounded-lg border-2 transition-all',
+            aiAutoOptimization 
+              ? 'border-primary bg-primary/5' 
+              : 'border-border bg-background'
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div 
+                className={cn(
+                  'w-10 h-10 rounded-lg flex items-center justify-center',
+                  aiAutoOptimization ? 'bg-primary/20' : 'bg-muted'
+                )}
+              >
+                <Brain 
+                  className={cn('w-5 h-5', aiAutoOptimization ? 'text-primary' : 'text-muted-foreground')}
+                />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-sm">Otimização IA Automática</p>
+                  <Sparkles className={cn('w-4 h-4', aiAutoOptimization ? 'text-primary' : 'text-muted-foreground')} />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  A IA analisa keywords e aprimora automaticamente o conteúdo
+                </p>
+              </div>
+            </div>
+            <Switch 
+              checked={aiAutoOptimization} 
+              onCheckedChange={onAiAutoOptimizationChange}
+              className="data-[state=checked]:bg-primary"
+            />
+          </div>
+          
+          {aiAutoOptimization && (
+            <div className="mt-4 pt-4 border-t border-border/50 space-y-2">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Info className="w-3.5 h-3.5 text-primary" />
+                <span className="font-medium">A IA irá automaticamente:</span>
+              </div>
+              <ul className="text-xs text-muted-foreground space-y-1.5 ml-5">
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                  Gerar <strong>TITLE SEO</strong> otimizado (até 60 caracteres)
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                  Criar <strong>Meta Descrição</strong> persuasiva (até 160 caracteres)
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                  Analisar todas as keywords e intenções de busca
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                  Otimizar estrutura para featured snippets
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                  Aplicar E-E-A-T automaticamente por segmento
+                </li>
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
       {/* Platform Credits Toggle */}
       <SettingsToggle
         icon={CreditCard}

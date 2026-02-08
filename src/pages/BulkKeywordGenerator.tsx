@@ -321,6 +321,12 @@ agência advogados, Serviços, Médio, Baixa, MÉDIA`}
                     <Badge>{bulkConfig.contentLength}</Badge>
                   </div>
                   <div className="flex justify-between">
+                    <span className="text-muted-foreground">IA Auto</span>
+                    <Badge variant={bulkConfig.aiAutoOptimization ? 'default' : 'outline'} className={bulkConfig.aiAutoOptimization ? 'bg-primary' : ''}>
+                      {bulkConfig.aiAutoOptimization ? 'Ativo' : 'Desativado'}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between">
                     <span className="text-muted-foreground">SEO Avançado</span>
                     <Badge variant={bulkConfig.seoOptimization ? 'default' : 'outline'}>
                       {bulkConfig.seoOptimization ? 'Sim' : 'Não'}
