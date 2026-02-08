@@ -6,6 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -55,9 +62,9 @@ import {
   Trash2,
   RotateCcw,
   Sparkles,
-  Check,
-  X,
   Save,
+  Bot,
+  Zap,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -76,6 +83,16 @@ const VARIABLES = [
   { name: '${context}', required: false, description: 'Contexto geral' },
   { name: '${currentYear}', required: false, description: 'Ano atual' },
   { name: '${language}', required: false, description: 'Alias para idioma' },
+];
+
+const TARGET_FUNCTIONS = [
+  { id: 'article_generator', label: 'Gerador de Artigos', icon: '📝' },
+  { id: 'news_rewriter', label: 'Repostagem Jornalística', icon: '📰' },
+  { id: 'landing_page', label: 'Landing Pages', icon: '🎯' },
+  { id: 'authority_planner', label: 'Planejador de Autoridade', icon: '📊' },
+  { id: 'bulk_generator', label: 'Geração em Massa', icon: '⚡' },
+  { id: 'image_generator', label: 'Geração de Imagens', icon: '🎨' },
+  { id: 'content_variations', label: 'Variações de Conteúdo', icon: '🔄' },
 ];
 
 const DEFAULT_TEMPLATES = [
@@ -168,6 +185,7 @@ Todos os links devem ter target="_blank" rel="noopener noreferrer"
 }`,
     isDefault: true,
     type: 'blog',
+    targetFunction: 'article_generator',
   },
   {
     id: 'news-article',
@@ -226,6 +244,7 @@ Você é um jornalista profissional experiente. Sua missão é redigir uma maté
 }`,
     isDefault: true,
     type: 'news',
+    targetFunction: 'news_rewriter',
   },
   {
     id: 'tutorial',
@@ -293,6 +312,7 @@ Você é um instrutor técnico experiente. Sua tarefa é criar um tutorial compl
 }`,
     isDefault: true,
     type: 'tutorial',
+    targetFunction: 'article_generator',
   },
   {
     id: 'image-generator',
@@ -364,6 +384,7 @@ O objeto ou pessoa principal deve estar em foco claro, com um fundo levemente de
 }`,
     isDefault: true,
     type: 'image',
+    targetFunction: 'image_generator',
   },
 ];
 
@@ -382,6 +403,8 @@ interface TemplateData {
   type?: string;
   is_default?: boolean;
   template_type?: string;
+  agentName?: string;
+  targetFunction?: string;
 }
 
 export function PromptTemplatesCard() {
@@ -419,13 +442,30 @@ export function PromptTemplatesCard() {
     if (editingTemplate && originalTemplate) {
       const hasChanges = 
         editingTemplate.name !== originalTemplate.name ||
-        editingTemplate.prompt !== originalTemplate.prompt;
+        editingTemplate.prompt !== originalTemplate.prompt ||
+        editingTemplate.agentName !== originalTemplate.agentName ||
+        editingTemplate.targetFunction !== originalTemplate.targetFunction ||
+        editingTemplate.description !== originalTemplate.description;
       setHasUnsavedChanges(hasChanges);
     }
   }, [editingTemplate, originalTemplate]);
 
   const createTemplate = useMutation({
-    mutationFn: async ({ name, prompt, templateType }: { name: string; prompt: string; templateType?: string }) => {
+    mutationFn: async ({ 
+      name, 
+      prompt, 
+      templateType,
+      agentName,
+      targetFunction,
+      description,
+    }: { 
+      name: string; 
+      prompt: string; 
+      templateType?: string;
+      agentName?: string;
+      targetFunction?: string;
+      description?: string;
+    }) => {
       if (!user) throw new Error('Not authenticated');
       const { data, error } = await supabase
         .from('prompt_templates')
@@ -435,6 +475,9 @@ export function PromptTemplatesCard() {
           prompt,
           is_default: false,
           template_type: templateType || 'custom',
+          agent_name: agentName || null,
+          target_function: targetFunction || null,
+          description: description || null,
         })
         .select()
         .single();
@@ -453,16 +496,39 @@ export function PromptTemplatesCard() {
       handleEditTemplate({
         id: data.id,
         name: data.name,
-        description: data.prompt?.slice(0, 80) + '...',
+        description: data.description || data.prompt?.slice(0, 80) + '...',
         prompt: data.prompt,
         isDefault: false,
         type: data.template_type,
+        agentName: data.agent_name,
+        targetFunction: data.target_function,
       });
     },
   });
 
   const updateTemplate = useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; name?: string; prompt?: string }) => {
+    mutationFn: async ({ 
+      id, 
+      name,
+      prompt,
+      agentName,
+      targetFunction,
+      description,
+    }: { 
+      id: string; 
+      name?: string; 
+      prompt?: string;
+      agentName?: string | null;
+      targetFunction?: string | null;
+      description?: string | null;
+    }) => {
+      const updates: Record<string, any> = {};
+      if (name !== undefined) updates.name = name;
+      if (prompt !== undefined) updates.prompt = prompt;
+      if (agentName !== undefined) updates.agent_name = agentName;
+      if (targetFunction !== undefined) updates.target_function = targetFunction;
+      if (description !== undefined) updates.description = description;
+
       const { data, error } = await supabase
         .from('prompt_templates')
         .update(updates)
@@ -525,6 +591,9 @@ export function PromptTemplatesCard() {
       name: `${template.name} (cópia)`,
       prompt: template.prompt,
       templateType: template.type || 'custom',
+      agentName: template.agentName,
+      targetFunction: template.targetFunction,
+      description: template.description,
     });
   };
 
@@ -534,6 +603,8 @@ export function PromptTemplatesCard() {
       name: `${template.name} (personalizado)`,
       prompt: template.prompt,
       templateType: template.type || 'custom',
+      targetFunction: template.targetFunction,
+      description: template.description,
     });
   };
 
@@ -593,6 +664,9 @@ export function PromptTemplatesCard() {
       id: editingTemplate.id,
       name: editingTemplate.name,
       prompt: editingTemplate.prompt,
+      agentName: editingTemplate.agentName || null,
+      targetFunction: editingTemplate.targetFunction || null,
+      description: editingTemplate.description || null,
     });
   };
 
@@ -601,16 +675,23 @@ export function PromptTemplatesCard() {
     ...templates.map((t: any) => ({
       id: t.id,
       name: t.name,
-      description: t.prompt?.slice(0, 80) + '...',
+      description: t.description || t.prompt?.slice(0, 80) + '...',
       prompt: t.prompt,
       isDefault: false,
       type: t.template_type,
+      agentName: t.agent_name,
+      targetFunction: t.target_function,
     })),
   ];
 
   // Check if a user template is based on a default one
   const getRelatedDefaultTemplate = (type?: string) => {
     return DEFAULT_TEMPLATES.find(t => t.type === type);
+  };
+
+  const getTargetFunctionLabel = (functionId?: string) => {
+    const func = TARGET_FUNCTIONS.find(f => f.id === functionId);
+    return func ? `${func.icon} ${func.label}` : null;
   };
 
   return (
@@ -663,6 +744,18 @@ export function PromptTemplatesCard() {
                         {template.isDefault && (
                           <Badge variant="secondary" className="text-xs">
                             padrão
+                          </Badge>
+                        )}
+                        {template.agentName && (
+                          <Badge variant="outline" className="text-xs gap-1">
+                            <Bot className="w-3 h-3" />
+                            {template.agentName}
+                          </Badge>
+                        )}
+                        {template.targetFunction && (
+                          <Badge variant="outline" className="text-xs gap-1 bg-primary/5">
+                            <Zap className="w-3 h-3" />
+                            {getTargetFunctionLabel(template.targetFunction)}
                           </Badge>
                         )}
                       </div>
@@ -746,7 +839,7 @@ export function PromptTemplatesCard() {
                   <Button 
                     onClick={handleCreateTemplate}
                     disabled={isCreating || !newTemplateName.trim()}
-                    className="bg-orange-500 hover:bg-orange-600"
+                    className="bg-primary hover:bg-primary/90"
                   >
                     {isCreating ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -773,7 +866,7 @@ export function PromptTemplatesCard() {
                 <DialogDescription className="text-sm text-muted-foreground mt-1">
                   {editingTemplate?.isDefault 
                     ? 'Este é um modelo padrão. Crie uma versão personalizada para editar.'
-                    : 'Edite o nome e o prompt do modelo. Clique nas variáveis para inseri-las.'}
+                    : 'Edite o nome, descrição, vinculação e o prompt do modelo.'}
                 </DialogDescription>
               </div>
               {hasUnsavedChanges && !editingTemplate?.isDefault && (
@@ -785,16 +878,74 @@ export function PromptTemplatesCard() {
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-            {/* Name */}
+            {/* Name and Agent Name */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="template-name">Nome do Modelo</Label>
+                <Input
+                  id="template-name"
+                  value={editingTemplate?.name || ''}
+                  onChange={(e) => setEditingTemplate({ ...editingTemplate!, name: e.target.value })}
+                  disabled={editingTemplate?.isDefault}
+                  placeholder="Nome do modelo de prompt"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="agent-name" className="flex items-center gap-2">
+                  <Bot className="w-4 h-4" />
+                  Nome do Agente (opcional)
+                </Label>
+                <Input
+                  id="agent-name"
+                  value={editingTemplate?.agentName || ''}
+                  onChange={(e) => setEditingTemplate({ ...editingTemplate!, agentName: e.target.value })}
+                  disabled={editingTemplate?.isDefault}
+                  placeholder="Ex: Redator SEO, Jornalista, Analista..."
+                />
+              </div>
+            </div>
+
+            {/* Description */}
             <div className="space-y-2">
-              <Label htmlFor="template-name">Nome</Label>
+              <Label htmlFor="template-description">Descrição curta</Label>
               <Input
-                id="template-name"
-                value={editingTemplate?.name || ''}
-                onChange={(e) => setEditingTemplate({ ...editingTemplate!, name: e.target.value })}
+                id="template-description"
+                value={editingTemplate?.description || ''}
+                onChange={(e) => setEditingTemplate({ ...editingTemplate!, description: e.target.value })}
                 disabled={editingTemplate?.isDefault}
-                placeholder="Nome do modelo de prompt"
+                placeholder="Breve descrição do que este prompt faz..."
               />
+            </div>
+
+            {/* Target Function */}
+            <div className="space-y-2">
+              <Label htmlFor="target-function" className="flex items-center gap-2">
+                <Zap className="w-4 h-4" />
+                Função Vinculada
+              </Label>
+              <Select
+                value={editingTemplate?.targetFunction || ''}
+                onValueChange={(value) => setEditingTemplate({ 
+                  ...editingTemplate!, 
+                  targetFunction: value || undefined 
+                })}
+                disabled={editingTemplate?.isDefault}
+              >
+                <SelectTrigger id="target-function">
+                  <SelectValue placeholder="Selecione onde este prompt será usado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Nenhuma (usar em qualquer lugar)</SelectItem>
+                  {TARGET_FUNCTIONS.map((func) => (
+                    <SelectItem key={func.id} value={func.id}>
+                      {func.icon} {func.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Vincule este prompt a uma função específica para que apareça automaticamente lá.
+              </p>
             </div>
 
             {/* Variables */}
@@ -930,14 +1081,14 @@ export function PromptTemplatesCard() {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir modelo de prompt?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação não pode ser desfeita. O modelo será permanentemente removido da sua conta.
+              Esta ação não pode ser desfeita. O modelo será permanentemente excluído.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteConfirm && deleteTemplate.mutate(deleteConfirm)}
-              className="bg-destructive hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteTemplate.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
