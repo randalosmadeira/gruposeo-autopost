@@ -41,7 +41,7 @@ import { useNewsRewriter, type RewriteResult, type ComplianceCheck } from '@/hoo
 import { useProjects } from '@/hooks/useProjects';
 import { useUrlAnalysis } from '@/hooks/useUrlAnalysis';
 import { cn } from '@/lib/utils';
-import { RSSNewsImporter, type RSSItem, AutoAuditPanel, RepostHistory, RSSScheduler } from '@/components/news-rewriter';
+import { RSSNewsImporter, type RSSItem, AutoAuditPanel, RepostHistory, RSSScheduler, MonitoredPortalsManager } from '@/components/news-rewriter';
 import { FeedMonitorDashboard, ContentPerformanceAnalytics } from '@/components/feed-monitor';
 
 // Niche options with icons
@@ -96,7 +96,7 @@ export default function NewsRewriter() {
   const [niche, setNiche] = useState('geral');
   const [articleLength, setArticleLength] = useState<'short' | 'medium' | 'long'>('medium');
   const [inputTab, setInputTab] = useState<'manual' | 'rss'>('manual');
-  const [mainTab, setMainTab] = useState<'new' | 'history' | 'schedule' | 'monitor' | 'analytics'>('new');
+  const [mainTab, setMainTab] = useState<'new' | 'history' | 'schedule' | 'monitor' | 'analytics' | 'portals'>('new');
   const [autoPublish, setAutoPublish] = useState(false);
   const [showAISuggestions, setShowAISuggestions] = useState(false);
 
@@ -149,6 +149,36 @@ export default function NewsRewriter() {
       case 'keyword':
         setKeyword(value);
         break;
+    }
+  };
+
+  // Apply ALL AI suggestions at once
+  const applyAllSuggestions = () => {
+    if (!analysisResult) return;
+    
+    // Apply content
+    if (analysisResult.content) setSourceContent(analysisResult.content);
+    if (analysisResult.source) setSourceName(analysisResult.source);
+    
+    // Apply niche
+    if (analysisResult.suggestedNiche) {
+      const matchingNiche = NICHE_OPTIONS.find(n => 
+        n.id.toLowerCase() === analysisResult.suggestedNiche.toLowerCase()
+      );
+      if (matchingNiche) setNiche(matchingNiche.id);
+    }
+    
+    // Apply keyword - prefer original for 95% SEO preservation
+    if (analysisResult.originalKeyword) {
+      setKeyword(analysisResult.originalKeyword);
+    } else if (analysisResult.suggestedKeyword) {
+      setKeyword(analysisResult.suggestedKeyword);
+    }
+    
+    // Apply angle
+    if (analysisResult.suggestedAngle) {
+      setSelectedAngle('custom');
+      setCustomAngle(analysisResult.suggestedAngle);
     }
   };
 
@@ -224,11 +254,15 @@ export default function NewsRewriter() {
           </div>
           
           {/* Main Tabs */}
-          <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'new' | 'history' | 'schedule' | 'monitor' | 'analytics')}>
-            <TabsList className="grid grid-cols-5 w-auto">
+          <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'new' | 'history' | 'schedule' | 'monitor' | 'analytics' | 'portals')}>
+            <TabsList className="grid grid-cols-6 w-auto">
               <TabsTrigger value="new" className="gap-2">
                 <PenTool className="w-4 h-4" />
                 <span className="hidden sm:inline">Nova</span>
+              </TabsTrigger>
+              <TabsTrigger value="portals" className="gap-2">
+                <Globe className="w-4 h-4" />
+                <span className="hidden sm:inline">Portais</span>
               </TabsTrigger>
               <TabsTrigger value="history" className="gap-2">
                 <History className="w-4 h-4" />
@@ -249,6 +283,11 @@ export default function NewsRewriter() {
             </TabsList>
           </Tabs>
         </div>
+
+        {/* Portals Tab */}
+        {mainTab === 'portals' && (
+          <MonitoredPortalsManager />
+        )}
 
         {/* History Tab */}
         {mainTab === 'history' && (
@@ -404,13 +443,23 @@ export default function NewsRewriter() {
                 {showAISuggestions && analysisResult && (
                   <Card className="border-primary/30 bg-primary/5">
                     <CardHeader className="pb-3">
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <Lightbulb className="w-5 h-5 text-primary" />
-                        Sugestões da IA
-                        <Badge variant="secondary" className="ml-auto">
-                          SEO Preservado 95%+
-                        </Badge>
-                      </CardTitle>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Lightbulb className="w-5 h-5 text-primary" />
+                          Sugestões da IA
+                          <Badge variant="secondary">
+                            SEO Preservado 95%+
+                          </Badge>
+                        </CardTitle>
+                        <Button 
+                          size="sm" 
+                          onClick={applyAllSuggestions}
+                          className="gap-2"
+                        >
+                          <Wand2 className="w-4 h-4" />
+                          Aplicar Tudo
+                        </Button>
+                      </div>
                       <CardDescription>
                         {analysisResult.summary}
                       </CardDescription>

@@ -446,6 +446,122 @@ export type Database = {
           },
         ]
       }
+      monitored_portals: {
+        Row: {
+          active_days: string[] | null
+          active_hours: string[] | null
+          article_length: string | null
+          articles_generated: number | null
+          auto_meta_description: boolean | null
+          auto_publish: boolean | null
+          auto_title: boolean | null
+          created_at: string
+          custom_slug_prefix: string | null
+          default_angle: string | null
+          excluded_keywords: string[] | null
+          id: string
+          is_active: boolean | null
+          last_article_at: string | null
+          last_check_at: string | null
+          last_error: string | null
+          max_articles_per_day: number | null
+          monitoring_frequency: string | null
+          next_check_at: string | null
+          niches: string[] | null
+          portal_domain: string
+          portal_name: string
+          portal_url: string
+          preferred_keywords: string[] | null
+          preserve_original_seo: boolean | null
+          project_id: string | null
+          publish_delay_minutes: number | null
+          rss_feed_url: string | null
+          seo_preservation_percent: number | null
+          sitemap_priority: number | null
+          update_sitemap: boolean | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active_days?: string[] | null
+          active_hours?: string[] | null
+          article_length?: string | null
+          articles_generated?: number | null
+          auto_meta_description?: boolean | null
+          auto_publish?: boolean | null
+          auto_title?: boolean | null
+          created_at?: string
+          custom_slug_prefix?: string | null
+          default_angle?: string | null
+          excluded_keywords?: string[] | null
+          id?: string
+          is_active?: boolean | null
+          last_article_at?: string | null
+          last_check_at?: string | null
+          last_error?: string | null
+          max_articles_per_day?: number | null
+          monitoring_frequency?: string | null
+          next_check_at?: string | null
+          niches?: string[] | null
+          portal_domain: string
+          portal_name: string
+          portal_url: string
+          preferred_keywords?: string[] | null
+          preserve_original_seo?: boolean | null
+          project_id?: string | null
+          publish_delay_minutes?: number | null
+          rss_feed_url?: string | null
+          seo_preservation_percent?: number | null
+          sitemap_priority?: number | null
+          update_sitemap?: boolean | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active_days?: string[] | null
+          active_hours?: string[] | null
+          article_length?: string | null
+          articles_generated?: number | null
+          auto_meta_description?: boolean | null
+          auto_publish?: boolean | null
+          auto_title?: boolean | null
+          created_at?: string
+          custom_slug_prefix?: string | null
+          default_angle?: string | null
+          excluded_keywords?: string[] | null
+          id?: string
+          is_active?: boolean | null
+          last_article_at?: string | null
+          last_check_at?: string | null
+          last_error?: string | null
+          max_articles_per_day?: number | null
+          monitoring_frequency?: string | null
+          next_check_at?: string | null
+          niches?: string[] | null
+          portal_domain?: string
+          portal_name?: string
+          portal_url?: string
+          preferred_keywords?: string[] | null
+          preserve_original_seo?: boolean | null
+          project_id?: string | null
+          publish_delay_minutes?: number | null
+          rss_feed_url?: string | null
+          seo_preservation_percent?: number | null
+          sitemap_priority?: number | null
+          update_sitemap?: boolean | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monitored_portals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       news_agents: {
         Row: {
           active_days: string[] | null
