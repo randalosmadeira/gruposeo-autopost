@@ -10,6 +10,13 @@ if (!defined('ABSPATH')) {
 class CFRDM_API {
     
     public static function register_routes() {
+        // Version endpoint (public, no auth required)
+        register_rest_route('cfrdm/v1', '/version', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'get_version'),
+            'permission_callback' => '__return_true',
+        ));
+        
         // Health check
         register_rest_route('cfrdm/v1', '/health', array(
             'methods' => 'GET',
@@ -343,6 +350,27 @@ class CFRDM_API {
         return current_user_can('manage_options');
     }
     
+    /**
+     * Get plugin version (public endpoint)
+     */
+    public static function get_version() {
+        return new WP_REST_Response(array(
+            'success' => true,
+            'version' => CFRDM_VERSION,
+            'minimum_supported' => '3.0.0',
+            'is_current' => version_compare(CFRDM_VERSION, '3.0.0', '>='),
+            'released' => '2026-02-08',
+            'features' => array(
+                'gsc_integration' => version_compare(CFRDM_VERSION, '3.0.0', '>='),
+                'ai_auto_fix' => version_compare(CFRDM_VERSION, '3.0.0', '>='),
+                'ubersuggest_sync' => version_compare(CFRDM_VERSION, '3.0.0', '>='),
+                'https_enforcer' => version_compare(CFRDM_VERSION, '3.0.0', '>='),
+                'content_enhancer' => version_compare(CFRDM_VERSION, '3.0.0', '>='),
+            ),
+            'changelog_url' => 'https://gruposeo-autopost.lovable.app/wordpress-plugin',
+        ), 200);
+    }
+    
     public static function health_check() {
         return new WP_REST_Response(array(
             'success' => true,
@@ -377,6 +405,7 @@ class CFRDM_API {
         return new WP_REST_Response(array(
             'success' => true,
             'message' => __('Conexão estabelecida com sucesso!', 'contentfactory-rdm'),
+            'version' => CFRDM_VERSION,
             'site' => array(
                 'name' => get_bloginfo('name'),
                 'url' => get_site_url(),
