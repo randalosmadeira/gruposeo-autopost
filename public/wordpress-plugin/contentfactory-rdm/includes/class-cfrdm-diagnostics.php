@@ -48,12 +48,33 @@ class CFRDM_Diagnostics {
             $issues['warnings'][] = sprintf('memory_limit baixo (%s). Recomendado: 128M+ para evitar conflitos com page builders.', $memory_limit);
         }
 
-        // Tables checks
+        // Tables checks - core tables are warnings
         if (!$tables['logs_table']) {
-            $issues['warnings'][] = 'Tabela de logs (cfrdm_logs) não encontrada. Algumas telas podem ficar sem histórico até reativar o plugin.';
+            $issues['warnings'][] = 'Tabela de logs (cfrdm_logs) não encontrada. Use "Reparar Tabelas" para criar.';
         }
         if (!$tables['news_table']) {
-            $issues['warnings'][] = 'Tabela de notícias (cfrdm_news) não encontrada. O painel de notícias pode não funcionar até reativar o plugin.';
+            $issues['warnings'][] = 'Tabela de notícias (cfrdm_news) não encontrada. Use "Reparar Tabelas" para criar.';
+        }
+        if (!$tables['structured_logs_table']) {
+            $issues['warnings'][] = 'Tabela de logs estruturados (cfrdm_structured_logs) não encontrada. Use "Reparar Tabelas" para criar.';
+        }
+        
+        // Optional module tables - just info
+        $optional_missing = array();
+        if (!$tables['social_queue_table']) {
+            $optional_missing[] = 'cfrdm_social_queue';
+        }
+        if (!$tables['cron_jobs_table']) {
+            $optional_missing[] = 'cfrdm_cron_jobs';
+        }
+        if (!$tables['content_queue_table']) {
+            $optional_missing[] = 'cfrdm_content_queue';
+        }
+        if (!$tables['fix_queue_table']) {
+            $optional_missing[] = 'cfrdm_fix_queue';
+        }
+        if (!empty($optional_missing)) {
+            $issues['info'][] = 'Tabelas opcionais ausentes: ' . implode(', ', $optional_missing) . '. Use "Reparar Tabelas" se precisar desses módulos.';
         }
 
         // Dependencies checks
@@ -134,17 +155,44 @@ class CFRDM_Diagnostics {
         $result = array(
             'logs_table' => false,
             'news_table' => false,
+            'structured_logs_table' => false,
+            'social_queue_table' => false,
+            'social_accounts_table' => false,
+            'cron_jobs_table' => false,
+            'cron_history_table' => false,
+            'content_queue_table' => false,
+            'fix_queue_table' => false,
+            'ubersuggest_table' => false,
         );
 
         if (!$wpdb) {
             return $result;
         }
 
+        // Core tables
         $logs_table = $wpdb->prefix . (defined('CFRDM_LOG_TABLE') ? CFRDM_LOG_TABLE : 'cfrdm_logs');
         $news_table = $wpdb->prefix . (defined('CFRDM_NEWS_TABLE') ? CFRDM_NEWS_TABLE : 'cfrdm_news');
+        $structured_logs_table = $wpdb->prefix . (defined('CFRDM_STRUCTURED_LOGS_TABLE') ? CFRDM_STRUCTURED_LOGS_TABLE : 'cfrdm_structured_logs');
+        
+        // Advanced module tables
+        $social_queue_table = $wpdb->prefix . (defined('CFRDM_SOCIAL_QUEUE_TABLE') ? CFRDM_SOCIAL_QUEUE_TABLE : 'cfrdm_social_queue');
+        $social_accounts_table = $wpdb->prefix . (defined('CFRDM_SOCIAL_ACCOUNTS_TABLE') ? CFRDM_SOCIAL_ACCOUNTS_TABLE : 'cfrdm_social_accounts');
+        $cron_jobs_table = $wpdb->prefix . (defined('CFRDM_CRON_JOBS_TABLE') ? CFRDM_CRON_JOBS_TABLE : 'cfrdm_cron_jobs');
+        $cron_history_table = $wpdb->prefix . (defined('CFRDM_CRON_HISTORY_TABLE') ? CFRDM_CRON_HISTORY_TABLE : 'cfrdm_cron_history');
+        $content_queue_table = $wpdb->prefix . (defined('CFRDM_CONTENT_QUEUE_TABLE') ? CFRDM_CONTENT_QUEUE_TABLE : 'cfrdm_content_queue');
+        $fix_queue_table = $wpdb->prefix . (defined('CFRDM_FIX_QUEUE_TABLE') ? CFRDM_FIX_QUEUE_TABLE : 'cfrdm_fix_queue');
+        $ubersuggest_table = $wpdb->prefix . (defined('CFRDM_UBERSUGGEST_TABLE') ? CFRDM_UBERSUGGEST_TABLE : 'cfrdm_ubersuggest_data');
 
         $result['logs_table'] = !empty($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $logs_table)));
         $result['news_table'] = !empty($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $news_table)));
+        $result['structured_logs_table'] = !empty($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $structured_logs_table)));
+        $result['social_queue_table'] = !empty($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $social_queue_table)));
+        $result['social_accounts_table'] = !empty($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $social_accounts_table)));
+        $result['cron_jobs_table'] = !empty($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $cron_jobs_table)));
+        $result['cron_history_table'] = !empty($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $cron_history_table)));
+        $result['content_queue_table'] = !empty($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $content_queue_table)));
+        $result['fix_queue_table'] = !empty($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $fix_queue_table)));
+        $result['ubersuggest_table'] = !empty($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $ubersuggest_table)));
 
         return $result;
     }

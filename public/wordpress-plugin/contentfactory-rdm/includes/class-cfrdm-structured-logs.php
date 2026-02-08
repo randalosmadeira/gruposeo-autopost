@@ -17,9 +17,9 @@ if (!defined('ABSPATH')) {
 class CFRDM_Structured_Logs {
     
     /**
-     * Table name (without prefix)
+     * Table name (without prefix) - uses the constant defined in main plugin file
      */
-    const TABLE_NAME = 'cfrdm_logs';
+    const TABLE_NAME = 'cfrdm_structured_logs';
     
     /**
      * Maximum days to keep logs
@@ -58,10 +58,29 @@ class CFRDM_Structured_Logs {
     );
     
     /**
+     * Check if table exists
+     */
+    public static function table_exists() {
+        global $wpdb;
+        
+        $table_name = self::get_table_name();
+        $result = $wpdb->get_var($wpdb->prepare(
+            "SHOW TABLES LIKE %s",
+            $table_name
+        ));
+        
+        return !empty($result);
+    }
+    
+    /**
      * Get the full table name with prefix
      */
     public static function get_table_name() {
         global $wpdb;
+        // Use constant from main plugin if available, otherwise use class constant
+        if (defined('CFRDM_STRUCTURED_LOGS_TABLE')) {
+            return $wpdb->prefix . CFRDM_STRUCTURED_LOGS_TABLE;
+        }
         return $wpdb->prefix . self::TABLE_NAME;
     }
     
