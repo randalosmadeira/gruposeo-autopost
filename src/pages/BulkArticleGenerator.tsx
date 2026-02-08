@@ -1,10 +1,8 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -13,14 +11,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -28,7 +18,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Accordion,
   AccordionContent,
@@ -37,17 +26,12 @@ import {
 } from '@/components/ui/accordion';
 import {
   FileText,
-  Plus,
-  Trash2,
   Loader2,
   CheckCircle2,
   XCircle,
   Clock,
   Sparkles,
   ArrowRight,
-  Info,
-  Wand2,
-  Play,
   Settings,
   Eye,
   ListChecks,
@@ -58,17 +42,12 @@ import {
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { ToneVoiceConfig, AIModelSelector, ContentStructureConfig } from '@/components/shared';
+import { ToneVoiceConfig, AIModelSelector, ContentStructureConfig, ArticleListManager } from '@/components/shared';
+import type { ArticleItem } from '@/components/shared/ArticleListManager';
 
-// Types
-interface ArticleRow {
-  id: string;
-  keyword: string;
-  title: string;
-  size: string;
-  status: 'pending' | 'generating' | 'completed' | 'error';
+// Extended article type for generation tracking
+interface ArticleRow extends ArticleItem {
   articleId?: string;
   error?: string;
 }
@@ -84,19 +63,9 @@ export default function BulkArticleGenerator() {
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  const [articles, setArticles] = useState<ArticleRow[]>(() => {
-    // Initialize with 30 empty rows
-    return Array.from({ length: 30 }, (_, i) => ({
-      id: crypto.randomUUID(),
-      keyword: '',
-      title: '',
-      size: 'medium',
-      status: 'pending' as const,
-    }));
-  });
+  const [articles, setArticles] = useState<ArticleRow[]>([]);
   
   const [isGenerating, setIsGenerating] = useState(false);
-  const [defaultSize, setDefaultSize] = useState('medium');
   const [showTitlesDialog, setShowTitlesDialog] = useState(false);
   const [generatingTitles, setGeneratingTitles] = useState(false);
 
@@ -131,44 +100,6 @@ export default function BulkArticleGenerator() {
   // Stats
   const filledArticles = articles.filter(a => a.keyword.trim());
   const totalCount = filledArticles.length;
-  const completedCount = articles.filter(a => a.status === 'completed').length;
-  const errorCount = articles.filter(a => a.status === 'error').length;
-  
-  // Calculate estimated time and credits (1 credit per article, ~2min per article)
-  const estimatedCredits = totalCount;
-  const estimatedTime = totalCount > 0 ? `${Math.ceil(totalCount * 2 / 60)}h` : '0';
-
-  // Update a single article row
-  const updateArticle = useCallback((id: string, field: keyof ArticleRow, value: string) => {
-    setArticles(prev => prev.map(a => 
-      a.id === id ? { ...a, [field]: value } : a
-    ));
-  }, []);
-
-  // Add more rows
-  const addRows = useCallback((count: number = 10) => {
-    setArticles(prev => [
-      ...prev,
-      ...Array.from({ length: count }, () => ({
-        id: crypto.randomUUID(),
-        keyword: '',
-        title: '',
-        size: defaultSize,
-        status: 'pending' as const,
-      })),
-    ]);
-  }, [defaultSize]);
-
-  // Remove empty rows at the end
-  const removeRow = useCallback((id: string) => {
-    setArticles(prev => prev.filter(a => a.id !== id));
-  }, []);
-
-  // Apply size to all
-  const applyDefaultSize = useCallback((size: string) => {
-    setDefaultSize(size);
-    setArticles(prev => prev.map(a => ({ ...a, size })));
-  }, []);
 
   // Generate titles for all keywords
   const handleGenerateTitles = useCallback(async () => {
@@ -202,46 +133,6 @@ export default function BulkArticleGenerator() {
       description: `${articlesWithKeywords.length} títulos foram gerados com sucesso.`,
     });
   }, [articles, toast]);
-
-  // Handle paste for bulk input
-  const handlePaste = useCallback((e: React.ClipboardEvent, startIndex: number) => {
-    const text = e.clipboardData.getData('text');
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    
-    if (lines.length > 1) {
-      e.preventDefault();
-      
-      setArticles(prev => {
-        const newArticles = [...prev];
-        lines.forEach((line, i) => {
-          const targetIndex = startIndex + i;
-          if (targetIndex < newArticles.length) {
-            // Check if line contains separator (tab or comma)
-            const parts = line.split(/[\t,]/).map(p => p.trim());
-            newArticles[targetIndex] = {
-              ...newArticles[targetIndex],
-              keyword: parts[0] || '',
-              title: parts[1] || '',
-            };
-          } else {
-            newArticles.push({
-              id: crypto.randomUUID(),
-              keyword: line,
-              title: '',
-              size: defaultSize,
-              status: 'pending',
-            });
-          }
-        });
-        return newArticles;
-      });
-      
-      toast({
-        title: `${lines.length} linhas coladas`,
-        description: 'As palavras-chave foram distribuídas nas linhas.',
-      });
-    }
-  }, [defaultSize, toast]);
 
   // Start generation
   const handleStartGeneration = useCallback(async () => {
@@ -389,42 +280,7 @@ export default function BulkArticleGenerator() {
               </div>
             </div>
 
-            {/* Stats Cards */}
-            <div className="flex items-center gap-3">
-              <Card className="border-2 border-primary/20 shadow-sm">
-                <CardContent className="px-4 py-3 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <FileText className="w-4 h-4 text-primary" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-muted-foreground mb-0.5">Total de artigos</p>
-                    <p className="text-2xl font-bold text-foreground">{totalCount}</p>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="border-2 border-primary/20 shadow-sm">
-                <CardContent className="px-4 py-3 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-primary" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-muted-foreground mb-0.5">Créditos estimados</p>
-                    <p className="text-2xl font-bold text-foreground">{estimatedCredits}</p>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="border-2 border-primary/20 shadow-sm">
-                <CardContent className="px-4 py-3 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Clock className="w-4 h-4 text-primary" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-muted-foreground mb-0.5">Tempo estimado</p>
-                    <p className="text-2xl font-bold text-foreground">{estimatedTime}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            {/* Stats are now shown in ArticleListManager */}
           </div>
         </div>
       </div>
@@ -486,171 +342,34 @@ export default function BulkArticleGenerator() {
           </AccordionItem>
         </Accordion>
 
-        {/* Action Bar */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Lista de Artigos</h2>
-                <p className="text-sm text-muted-foreground">
-                  Configure palavra-chave, título e tamanho para cada artigo
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button 
-                  onClick={() => addRows(10)} 
-                  variant="outline" 
-                  className="gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Adicionar
-                </Button>
-                <Button 
-                  onClick={() => setShowTitlesDialog(true)}
-                  variant="outline" 
-                  className="gap-2"
-                >
-                  <Wand2 className="w-4 h-4" />
-                  Gerar Títulos
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Table */}
-        <Card className="mb-6">
-          <ScrollArea className="h-[500px]">
-            <Table>
-              <TableHeader className="sticky top-0 bg-background z-10">
-                <TableRow>
-                  <TableHead className="w-14 text-center">#</TableHead>
-                  <TableHead className="w-[30%]">Palavra-chave</TableHead>
-                  <TableHead className="w-[35%]">Título</TableHead>
-                  <TableHead className="w-[15%]">Tamanho</TableHead>
-                  <TableHead className="w-[10%] text-center">Status</TableHead>
-                  <TableHead className="w-14"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {articles.map((article, index) => (
-                  <TableRow key={article.id}>
-                    <TableCell className="text-center font-medium text-muted-foreground">
-                      {index + 1}
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        placeholder="Ex: marketing digital"
-                        value={article.keyword}
-                        onChange={(e) => updateArticle(article.id, 'keyword', e.target.value)}
-                        onPaste={(e) => handlePaste(e, index)}
-                        disabled={article.status === 'generating' || article.status === 'completed'}
-                        className="h-9"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          placeholder="Ex: Guia Completo de Marketing Digital"
-                          value={article.title}
-                          onChange={(e) => updateArticle(article.id, 'title', e.target.value)}
-                          disabled={article.status === 'generating' || article.status === 'completed'}
-                          className="h-9"
-                        />
-                        {!article.title && article.keyword && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 shrink-0"
-                            onClick={() => updateArticle(article.id, 'title', `${article.keyword}: Guia Completo`)}
-                          >
-                            <Wand2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={article.size}
-                        onValueChange={(v) => updateArticle(article.id, 'size', v)}
-                        disabled={article.status === 'generating' || article.status === 'completed'}
-                      >
-                        <SelectTrigger className="h-9">
-                          <SelectValue placeholder="Selecionar" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {articleSizes.map(s => (
-                            <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {getStatusBadge(article.status)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {article.keyword.trim() && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-primary"
-                            onClick={() => {
-                              setPreviewArticle(article);
-                              setShowPreviewDialog(true);
-                            }}
-                            title="Preview do Prompt"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {article.status === 'pending' && !article.keyword && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onClick={() => removeRow(article.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </ScrollArea>
-        </Card>
-
-        {/* Apply size to all */}
-        <Card className="mb-6">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">Aplicar tamanho a todos:</span>
-              <Select value={defaultSize} onValueChange={applyDefaultSize}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Selecionar tamanho padrão" />
-                </SelectTrigger>
-                <SelectContent>
-                  {articleSizes.map(s => (
-                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Tip */}
-        <Card className="mb-6 bg-primary/5 border-primary/20">
-          <CardContent className="p-4 flex items-center gap-3">
-            <Info className="w-5 h-5 text-primary shrink-0" />
-            <p className="text-sm text-muted-foreground">
-              <strong>Dica:</strong> Cole múltiplas linhas usando Ctrl+V para adicionar vários artigos de uma vez.
-            </p>
-          </CardContent>
-        </Card>
+        {/* Article List Manager - Replaces manual table */}
+        <ArticleListManager
+          items={articles.map(a => ({
+            id: a.id,
+            keyword: a.keyword,
+            title: a.title,
+            size: a.size,
+            status: a.status,
+          }))}
+          onItemsChange={(newItems) => {
+            setArticles(prev => {
+              // Merge with existing articles to preserve articleId and error
+              const merged = newItems.map(item => {
+                const existing = prev.find(a => a.id === item.id);
+                return {
+                  ...item,
+                  articleId: existing?.articleId,
+                  error: existing?.error,
+                };
+              });
+              return merged;
+            });
+          }}
+          onGenerateTitles={handleGenerateTitles}
+          isGeneratingTitles={generatingTitles}
+          type="blog"
+          accentColor="#4169E1"
+        />
 
         {/* Footer Action */}
         <div className="flex justify-center">
