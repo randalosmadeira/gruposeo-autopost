@@ -658,6 +658,68 @@ export type Database = {
         }
         Relationships: []
       }
+      rss_schedules: {
+        Row: {
+          article_length: string | null
+          articles_generated: number | null
+          auto_publish: boolean | null
+          created_at: string
+          feed_name: string
+          feed_url: string
+          frequency: string | null
+          id: string
+          is_active: boolean | null
+          last_run_at: string | null
+          next_run_at: string | null
+          niche: string | null
+          project_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          article_length?: string | null
+          articles_generated?: number | null
+          auto_publish?: boolean | null
+          created_at?: string
+          feed_name: string
+          feed_url: string
+          frequency?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_run_at?: string | null
+          next_run_at?: string | null
+          niche?: string | null
+          project_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          article_length?: string | null
+          articles_generated?: number | null
+          auto_publish?: boolean | null
+          created_at?: string
+          feed_name?: string
+          feed_url?: string
+          frequency?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_run_at?: string | null
+          next_run_at?: string | null
+          niche?: string | null
+          project_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rss_schedules_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       token_usage_logs: {
         Row: {
           article_id: string | null
