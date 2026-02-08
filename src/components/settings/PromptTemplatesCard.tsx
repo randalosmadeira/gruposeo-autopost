@@ -924,10 +924,10 @@ export function PromptTemplatesCard() {
                 Função Vinculada
               </Label>
               <Select
-                value={editingTemplate?.targetFunction || ''}
+                value={editingTemplate?.targetFunction || 'none'}
                 onValueChange={(value) => setEditingTemplate({ 
                   ...editingTemplate!, 
-                  targetFunction: value || undefined 
+                  targetFunction: value === 'none' ? undefined : value 
                 })}
                 disabled={editingTemplate?.isDefault}
               >
@@ -935,7 +935,7 @@ export function PromptTemplatesCard() {
                   <SelectValue placeholder="Selecione onde este prompt será usado" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhuma (usar em qualquer lugar)</SelectItem>
+                  <SelectItem value="none">Nenhuma (usar em qualquer lugar)</SelectItem>
                   {TARGET_FUNCTIONS.map((func) => (
                     <SelectItem key={func.id} value={func.id}>
                       {func.icon} {func.label}
