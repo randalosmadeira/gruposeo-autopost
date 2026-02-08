@@ -17,19 +17,19 @@ import {
   Play,
   Pause,
   Loader2,
-  AlertTriangle,
-  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface ScheduledFeed {
   id: string;
   feed_url: string;
   feed_name: string;
   niche: string;
-  article_length: 'short' | 'medium' | 'long';
-  frequency: 'hourly' | 'twice_daily' | 'daily' | 'weekly';
+  article_length: string;
+  frequency: string;
   auto_publish: boolean;
   project_id: string | null;
   is_active: boolean;
@@ -38,10 +38,19 @@ interface ScheduledFeed {
   articles_generated: number;
 }
 
+interface NewFeedState {
+  feed_url: string;
+  feed_name: string;
+  niche: string;
+  article_length: string;
+  frequency: string;
+  auto_publish: boolean;
+}
+
 const FREQUENCY_OPTIONS = [
   { value: 'hourly', label: 'A cada hora', description: '24x por dia' },
   { value: 'twice_daily', label: '2x por dia', description: '08:00 e 18:00' },
-  { value: 'daily', label: 'Diariamente', label2: '1x por dia', description: '09:00' },
+  { value: 'daily', label: 'Diariamente', description: '09:00' },
   { value: 'weekly', label: 'Semanalmente', description: 'Segundas 09:00' },
 ];
 
@@ -62,36 +71,44 @@ export function RSSScheduler({ projectId }: RSSSchedulerProps) {
   const [feeds, setFeeds] = useState<ScheduledFeed[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [tableExists, setTableExists] = useState(true);
   const { toast } = useToast();
 
   // New feed form
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newFeed, setNewFeed] = useState({
+  const [newFeed, setNewFeed] = useState<NewFeedState>({
     feed_url: '',
     feed_name: '',
     niche: 'geral',
-    article_length: 'medium' as const,
-    frequency: 'daily' as const,
+    article_length: 'medium',
+    frequency: 'daily',
     auto_publish: false,
   });
 
   const fetchFeeds = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // Use raw query to check if table exists
+      const { data, error } = await (supabase as any)
         .from('rss_schedules')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) {
-        // Table might not exist yet, handle gracefully
-        console.log('RSS schedules not available yet');
-        setFeeds([]);
+        // Table doesn't exist yet
+        if (error.message?.includes('does not exist') || error.code === '42P01') {
+          setTableExists(false);
+          setFeeds([]);
+        } else {
+          console.error('Error fetching feeds:', error);
+        }
       } else {
+        setTableExists(true);
         setFeeds((data as ScheduledFeed[]) || []);
       }
     } catch (error) {
       console.error('Error fetching scheduled feeds:', error);
+      setTableExists(false);
     } finally {
       setLoading(false);
     }
@@ -116,7 +133,7 @@ export function RSSScheduler({ projectId }: RSSSchedulerProps) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Não autenticado');
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('rss_schedules')
         .insert({
           user_id: user.id,
@@ -157,7 +174,7 @@ export function RSSScheduler({ projectId }: RSSSchedulerProps) {
 
   const toggleFeedActive = async (feedId: string, isActive: boolean) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('rss_schedules')
         .update({ is_active: isActive })
         .eq('id', feedId);
@@ -179,7 +196,7 @@ export function RSSScheduler({ projectId }: RSSSchedulerProps) {
 
   const deleteFeed = async (feedId: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('rss_schedules')
         .delete()
         .eq('id', feedId);
@@ -201,6 +218,28 @@ export function RSSScheduler({ projectId }: RSSSchedulerProps) {
       <Card>
         <CardContent className="flex items-center justify-center py-8">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!tableExists) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="w-5 h-5" />
+            Agendamento de Feeds RSS
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              O sistema de agendamento está sendo configurado. 
+              Por favor, aguarde alguns minutos e recarregue a página.
+            </AlertDescription>
+          </Alert>
         </CardContent>
       </Card>
     );
@@ -276,7 +315,7 @@ export function RSSScheduler({ projectId }: RSSSchedulerProps) {
                 <Label>Tamanho do Artigo</Label>
                 <Select
                   value={newFeed.article_length}
-                  onValueChange={(v) => setNewFeed(prev => ({ ...prev, article_length: v as 'short' | 'medium' | 'long' }))}
+                  onValueChange={(v) => setNewFeed(prev => ({ ...prev, article_length: v }))}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -292,7 +331,7 @@ export function RSSScheduler({ projectId }: RSSSchedulerProps) {
                 <Label>Frequência</Label>
                 <Select
                   value={newFeed.frequency}
-                  onValueChange={(v) => setNewFeed(prev => ({ ...prev, frequency: v as 'hourly' | 'twice_daily' | 'daily' | 'weekly' }))}
+                  onValueChange={(v) => setNewFeed(prev => ({ ...prev, frequency: v }))}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -362,10 +401,10 @@ export function RSSScheduler({ projectId }: RSSSchedulerProps) {
                       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {FREQUENCY_OPTIONS.find(f => f.value === feed.frequency)?.label}
+                          {FREQUENCY_OPTIONS.find(f => f.value === feed.frequency)?.label || feed.frequency}
                         </span>
                         <span>
-                          {NICHE_OPTIONS.find(n => n.value === feed.niche)?.label}
+                          {NICHE_OPTIONS.find(n => n.value === feed.niche)?.label || feed.niche}
                         </span>
                         <span>
                           {feed.articles_generated} artigos gerados

@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
 import { 
   Newspaper, 
   Sparkles, 
@@ -31,11 +32,13 @@ import {
   BarChart3,
   Rss,
   PenTool,
+  History,
+  Calendar,
 } from 'lucide-react';
 import { useNewsRewriter, type RewriteResult, type ComplianceCheck } from '@/hooks/useNewsRewriter';
 import { useProjects } from '@/hooks/useProjects';
 import { cn } from '@/lib/utils';
-import { RSSNewsImporter, type RSSItem, AutoAuditPanel } from '@/components/news-rewriter';
+import { RSSNewsImporter, type RSSItem, AutoAuditPanel, RepostHistory, RSSScheduler } from '@/components/news-rewriter';
 
 // Niche options with icons
 const NICHE_OPTIONS = [
@@ -66,7 +69,7 @@ const ANALYSIS_ANGLES = [
 
 export default function NewsRewriter() {
   const navigate = useNavigate();
-  const { rewriteNews, isRewriting, progress, lastResult, lastCompliance } = useNewsRewriter();
+  const { rewriteNews, isRewriting, progress, lastResult, lastCompliance, lastAudit } = useNewsRewriter();
   const { projects } = useProjects();
   
   // Form state
@@ -80,6 +83,8 @@ export default function NewsRewriter() {
   const [niche, setNiche] = useState('geral');
   const [articleLength, setArticleLength] = useState<'short' | 'medium' | 'long'>('medium');
   const [inputTab, setInputTab] = useState<'manual' | 'rss'>('manual');
+  const [mainTab, setMainTab] = useState<'new' | 'history' | 'schedule'>('new');
+  const [autoPublish, setAutoPublish] = useState(false);
 
   // Validation
   const contentLength = sourceContent.length;
@@ -106,6 +111,7 @@ export default function NewsRewriter() {
       articleLength,
       projectId: projectId && projectId !== 'none' ? projectId : undefined,
       language: 'pt-BR',
+      autoPublish: autoPublish && projectId && projectId !== 'none',
     });
 
     if (result) {
@@ -138,372 +144,428 @@ export default function NewsRewriter() {
     <>
       <div className="container max-w-6xl py-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Newspaper className="w-6 h-6 text-primary" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Newspaper className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Repostagem Jornalística</h1>
+              <p className="text-muted-foreground">
+                Reescreva notícias com compliance Lei 9.610/98, otimização SEO e ângulo de análise próprio
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">Repostagem Jornalística</h1>
-            <p className="text-muted-foreground">
-              Reescreva notícias com compliance Lei 9.610/98, otimização SEO e ângulo de análise próprio
-            </p>
-          </div>
+          
+          {/* Main Tabs */}
+          <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'new' | 'history' | 'schedule')}>
+            <TabsList>
+              <TabsTrigger value="new" className="gap-2">
+                <PenTool className="w-4 h-4" />
+                Nova Repostagem
+              </TabsTrigger>
+              <TabsTrigger value="history" className="gap-2">
+                <History className="w-4 h-4" />
+                Histórico
+              </TabsTrigger>
+              <TabsTrigger value="schedule" className="gap-2">
+                <Calendar className="w-4 h-4" />
+                Agendamento
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
-        {/* Compliance Alert */}
-        <Alert className="border-warning/50 bg-warning/10">
-          <Scale className="h-4 w-4 text-warning" />
-          <AlertDescription>
-            <strong>Lei 9.610/98 (Direitos Autorais):</strong> O sistema reescreve 100% do conteúdo, 
-            mantém citações curtas (máx 2-3 frases) com aspas e credita a fonte original no rodapé.
-            Originalidade garantida ≥95%.
-          </AlertDescription>
-        </Alert>
+        {/* History Tab */}
+        {mainTab === 'history' && (
+          <RepostHistory limit={20} />
+        )}
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Main Form */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Input Source Tabs */}
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="w-5 h-5" />
-                    Fonte do Conteúdo
-                  </CardTitle>
-                  <Tabs value={inputTab} onValueChange={(v) => setInputTab(v as 'manual' | 'rss')}>
-                    <TabsList className="h-8">
-                      <TabsTrigger value="manual" className="text-xs gap-1 px-3">
-                        <PenTool className="w-3 h-3" />
-                        Manual
-                      </TabsTrigger>
-                      <TabsTrigger value="rss" className="text-xs gap-1 px-3">
-                        <Rss className="w-3 h-3" />
-                        Feed RSS
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {inputTab === 'rss' ? (
-                  <RSSNewsImporter onSelectNews={handleRSSSelect} />
-                ) : (
-                  <div className="space-y-4">
-                    {/* Source Name */}
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="sourceName" className="flex items-center gap-2">
-                          <Building2 className="w-4 h-4" />
-                          Veículo / Fonte *
-                        </Label>
-                        <Input
-                          id="sourceName"
-                          placeholder="Ex: Folha de São Paulo, G1, Estadão..."
-                          value={sourceName}
-                          onChange={(e) => setSourceName(e.target.value)}
-                          className="border-border bg-background"
-                        />
+        {/* Schedule Tab */}
+        {mainTab === 'schedule' && (
+          <RSSScheduler projectId={projectId && projectId !== 'none' ? projectId : undefined} />
+        )}
+
+        {/* New Repost Tab */}
+        {mainTab === 'new' && (
+          <>
+            {/* Compliance Alert */}
+            <Alert className="border-warning/50 bg-warning/10">
+              <Scale className="h-4 w-4 text-warning" />
+              <AlertDescription>
+                <strong>Lei 9.610/98 (Direitos Autorais):</strong> O sistema reescreve 100% do conteúdo, 
+                mantém citações curtas (máx 2-3 frases) com aspas e credita a fonte original no rodapé.
+                Originalidade garantida ≥95%.
+              </AlertDescription>
+            </Alert>
+
+            <div className="grid lg:grid-cols-3 gap-6">
+              {/* Main Form */}
+              <div className="lg:col-span-2 space-y-6">
+                {/* Input Source Tabs */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-2">
+                        <FileText className="w-5 h-5" />
+                        Fonte do Conteúdo
+                      </CardTitle>
+                      <Tabs value={inputTab} onValueChange={(v) => setInputTab(v as 'manual' | 'rss')}>
+                        <TabsList className="h-8">
+                          <TabsTrigger value="manual" className="text-xs gap-1 px-3">
+                            <PenTool className="w-3 h-3" />
+                            Manual
+                          </TabsTrigger>
+                          <TabsTrigger value="rss" className="text-xs gap-1 px-3">
+                            <Rss className="w-3 h-3" />
+                            Feed RSS
+                          </TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {inputTab === 'rss' ? (
+                      <RSSNewsImporter onSelectNews={handleRSSSelect} />
+                    ) : (
+                      <div className="space-y-4">
+                        {/* Source Name */}
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="sourceName" className="flex items-center gap-2">
+                              <Building2 className="w-4 h-4" />
+                              Veículo / Fonte *
+                            </Label>
+                            <Input
+                              id="sourceName"
+                              placeholder="Ex: Folha de São Paulo, G1, Estadão..."
+                              value={sourceName}
+                              onChange={(e) => setSourceName(e.target.value)}
+                              className="border-border bg-background"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="sourceUrl" className="flex items-center gap-2">
+                              <LinkIcon className="w-4 h-4" />
+                              URL da Notícia (opcional)
+                            </Label>
+                            <Input
+                              id="sourceUrl"
+                              type="url"
+                              placeholder="https://..."
+                              value={sourceUrl}
+                              onChange={(e) => setSourceUrl(e.target.value)}
+                              className="border-border bg-background"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="space-y-2">
+                          <Label htmlFor="sourceContent">Texto da Notícia *</Label>
+                          <Textarea
+                            id="sourceContent"
+                            placeholder="Cole aqui o texto completo da notícia que deseja reescrever..."
+                            className="min-h-[220px] font-mono text-sm border-border bg-background"
+                            value={sourceContent}
+                            onChange={(e) => setSourceContent(e.target.value)}
+                          />
+                          <div className="flex items-center justify-between text-sm text-muted-foreground">
+                            <span>{wordCount} palavras</span>
+                            <span className={!isContentValid && contentLength > 0 ? 'text-destructive' : ''}>
+                              {contentLength}/10.000 caracteres
+                            </span>
+                          </div>
+                          {contentLength > 0 && contentLength < 200 && (
+                            <p className="text-sm text-destructive">
+                              Mínimo de 200 caracteres para uma repostagem de qualidade
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="sourceUrl" className="flex items-center gap-2">
-                          <LinkIcon className="w-4 h-4" />
-                          URL da Notícia (opcional)
-                        </Label>
-                        <Input
-                          id="sourceUrl"
-                          type="url"
-                          placeholder="https://..."
-                          value={sourceUrl}
-                          onChange={(e) => setSourceUrl(e.target.value)}
-                          className="border-border bg-background"
-                        />
-                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Niche Selection */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <NicheIcon className="w-5 h-5" />
+                      Nicho de Conteúdo
+                    </CardTitle>
+                    <CardDescription>
+                      Selecione o nicho para aplicar tom e estilo específico
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {NICHE_OPTIONS.map((option) => {
+                        const Icon = option.icon;
+                        return (
+                          <div
+                            key={option.id}
+                            className={cn(
+                              "p-3 rounded-lg border-2 cursor-pointer transition-all",
+                              niche === option.id
+                                ? 'border-primary bg-primary/5'
+                                : 'border-border hover:border-primary/50'
+                            )}
+                            onClick={() => setNiche(option.id)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Icon className={cn(
+                                "w-4 h-4",
+                                niche === option.id ? "text-primary" : "text-muted-foreground"
+                              )} />
+                              <span className="font-medium text-sm">{option.label}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1 ml-6">
+                              {option.description}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Analysis Angle Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Target className="w-5 h-5" />
+                      Ângulo de Análise
+                    </CardTitle>
+                    <CardDescription>
+                      Escolha como você quer abordar a notícia (adiciona 40%+ de conteúdo original)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {ANALYSIS_ANGLES.map((angle) => (
+                        <div
+                          key={angle.id}
+                          className={cn(
+                            "p-3 rounded-lg border-2 cursor-pointer transition-all",
+                            selectedAngle === angle.id
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:border-primary/50'
+                          )}
+                          onClick={() => setSelectedAngle(angle.id)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={cn(
+                              "w-4 h-4 rounded-full border-2 flex items-center justify-center",
+                              selectedAngle === angle.id ? 'border-primary' : 'border-muted-foreground'
+                            )}>
+                              {selectedAngle === angle.id && (
+                                <div className="w-2 h-2 rounded-full bg-primary" />
+                              )}
+                            </div>
+                            <span className="font-medium text-sm">{angle.label}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1 ml-6">
+                            {angle.description}
+                          </p>
+                        </div>
+                      ))}
                     </div>
 
-                    {/* Content */}
-                    <div className="space-y-2">
-                      <Label htmlFor="sourceContent">Texto da Notícia *</Label>
+                    {selectedAngle === 'custom' && (
                       <Textarea
-                        id="sourceContent"
-                        placeholder="Cole aqui o texto completo da notícia que deseja reescrever..."
-                        className="min-h-[220px] font-mono text-sm border-border bg-background"
-                        value={sourceContent}
-                        onChange={(e) => setSourceContent(e.target.value)}
+                        placeholder="Descreva seu ângulo de análise personalizado..."
+                        value={customAngle}
+                        onChange={(e) => setCustomAngle(e.target.value)}
+                        className="min-h-[80px] border-border bg-background"
                       />
-                      <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>{wordCount} palavras</span>
-                        <span className={!isContentValid && contentLength > 0 ? 'text-destructive' : ''}>
-                          {contentLength}/10.000 caracteres
-                        </span>
-                      </div>
-                      {contentLength > 0 && contentLength < 200 && (
-                        <p className="text-sm text-destructive">
-                          Mínimo de 200 caracteres para uma repostagem de qualidade
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
 
-            {/* Niche Selection */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <NicheIcon className="w-5 h-5" />
-                  Nicho de Conteúdo
-                </CardTitle>
-                <CardDescription>
-                  Selecione o nicho para aplicar tom e estilo específico
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {NICHE_OPTIONS.map((option) => {
-                    const Icon = option.icon;
-                    return (
+              {/* Sidebar */}
+              <div className="space-y-6">
+                {/* Article Length */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4" />
+                      Tamanho do Artigo
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {ARTICLE_LENGTHS.map((length) => (
                       <div
-                        key={option.id}
+                        key={length.id}
                         className={cn(
-                          "p-3 rounded-lg border-2 cursor-pointer transition-all",
-                          niche === option.id
+                          "p-3 rounded-lg border cursor-pointer transition-all",
+                          articleLength === length.id
                             ? 'border-primary bg-primary/5'
                             : 'border-border hover:border-primary/50'
                         )}
-                        onClick={() => setNiche(option.id)}
+                        onClick={() => setArticleLength(length.id as 'short' | 'medium' | 'long')}
                       >
-                        <div className="flex items-center gap-2">
-                          <Icon className={cn(
-                            "w-4 h-4",
-                            niche === option.id ? "text-primary" : "text-muted-foreground"
-                          )} />
-                          <span className="font-medium text-sm">{option.label}</span>
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-sm">{length.label}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {length.wordRange}
+                          </Badge>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1 ml-6">
-                          {option.description}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Analysis Angle Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="w-5 h-5" />
-                  Ângulo de Análise
-                </CardTitle>
-                <CardDescription>
-                  Escolha como você quer abordar a notícia (adiciona 40%+ de conteúdo original)
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid sm:grid-cols-2 gap-3">
-                  {ANALYSIS_ANGLES.map((angle) => (
-                    <div
-                      key={angle.id}
-                      className={cn(
-                        "p-3 rounded-lg border-2 cursor-pointer transition-all",
-                        selectedAngle === angle.id
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border hover:border-primary/50'
-                      )}
-                      onClick={() => setSelectedAngle(angle.id)}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className={cn(
-                          "w-4 h-4 rounded-full border-2 flex items-center justify-center",
-                          selectedAngle === angle.id ? 'border-primary' : 'border-muted-foreground'
-                        )}>
-                          {selectedAngle === angle.id && (
-                            <div className="w-2 h-2 rounded-full bg-primary" />
-                          )}
-                        </div>
-                        <span className="font-medium text-sm">{angle.label}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1 ml-6">
-                        {angle.description}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                {selectedAngle === 'custom' && (
-                  <Textarea
-                    placeholder="Descreva seu ângulo de análise personalizado..."
-                    value={customAngle}
-                    onChange={(e) => setCustomAngle(e.target.value)}
-                    className="min-h-[80px] border-border bg-background"
-                  />
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Article Length */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4" />
-                  Tamanho do Artigo
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {ARTICLE_LENGTHS.map((length) => (
-                  <div
-                    key={length.id}
-                    className={cn(
-                      "p-3 rounded-lg border cursor-pointer transition-all",
-                      articleLength === length.id
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50'
-                    )}
-                    onClick={() => setArticleLength(length.id as 'short' | 'medium' | 'long')}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">{length.label}</span>
-                      <Badge variant="secondary" className="text-xs">
-                        {length.wordRange}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Options Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Opções SEO</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Keyword */}
-                <div className="space-y-2">
-                  <Label htmlFor="keyword">Palavra-chave Principal</Label>
-                  <Input
-                    id="keyword"
-                    placeholder="Ex: marketing jurídico"
-                    value={keyword}
-                    onChange={(e) => setKeyword(e.target.value)}
-                    className="border-border bg-background"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Otimiza título, meta e conteúdo
-                  </p>
-                </div>
-
-                {/* Project */}
-                {projects && projects.length > 0 && (
-                  <div className="space-y-2">
-                    <Label htmlFor="project">Projeto (opcional)</Label>
-                    <Select value={projectId} onValueChange={setProjectId}>
-                      <SelectTrigger className="border-border bg-background">
-                        <SelectValue placeholder="Selecionar projeto" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Nenhum projeto</SelectItem>
-                        {projects.map((project) => (
-                          <SelectItem key={project.id} value={project.id}>
-                            {project.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Checklist Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <FileCheck className="w-4 h-4" />
-                  Checklist Compliance
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[150px]">
-                  <div className="space-y-2">
-                    {[
-                      { check: !!sourceName, label: 'Fonte identificada' },
-                      { check: isContentValid, label: 'Conteúdo com 200+ caracteres' },
-                      { check: selectedAngle !== 'custom' || !!customAngle, label: 'Ângulo de análise definido' },
-                      { check: true, label: 'Créditos automáticos (Lei 9.610)' },
-                      { check: true, label: 'Reescrita 100% original (≥95%)' },
-                      { check: true, label: 'SEO otimizado (título ≤60, meta ≤160)' },
-                    ].map((item, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        {item.check ? (
-                          <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
-                        ) : (
-                          <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
-                        )}
-                        <span className={cn(
-                          "text-xs",
-                          item.check ? 'text-foreground' : 'text-muted-foreground'
-                        )}>
-                          {item.label}
-                        </span>
                       </div>
                     ))}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
 
-            {/* Submit Button */}
-            <Button 
-              className="w-full gap-2" 
-              size="lg"
-              disabled={!isFormValid || isRewriting}
-              onClick={handleSubmit}
-            >
-              {isRewriting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {progress || 'Processando...'}
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  Gerar Repostagem
-                </>
-              )}
-            </Button>
+                {/* Options Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Opções SEO & Publicação</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Keyword */}
+                    <div className="space-y-2">
+                      <Label htmlFor="keyword">Palavra-chave Principal</Label>
+                      <Input
+                        id="keyword"
+                        placeholder="Ex: marketing jurídico"
+                        value={keyword}
+                        onChange={(e) => setKeyword(e.target.value)}
+                        className="border-border bg-background"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Otimiza título, meta e conteúdo
+                      </p>
+                    </div>
 
-            {/* Auto Audit Panel */}
-            {lastCompliance && (
-              <AutoAuditPanel 
-                compliance={lastCompliance} 
-                qualityScore={lastResult?.quality_score}
-              />
-            )}
+                    {/* Project */}
+                    {projects && projects.length > 0 && (
+                      <div className="space-y-2">
+                        <Label htmlFor="project">Projeto WordPress</Label>
+                        <Select value={projectId} onValueChange={setProjectId}>
+                          <SelectTrigger className="border-border bg-background">
+                            <SelectValue placeholder="Selecionar projeto" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nenhum projeto</SelectItem>
+                            {projects.map((project) => (
+                              <SelectItem key={project.id} value={project.id}>
+                                {project.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
 
-            {/* What happens */}
-            <Card className="bg-muted/50">
-              <CardContent className="pt-4">
-                <h4 className="font-medium text-sm mb-2">O que acontece:</h4>
-                <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li>IA analisa nicho e tom adequado</li>
-                  <li>Reescreve com estrutura nova (95%+ original)</li>
-                  <li>Adiciona análise e contexto (40%+)</li>
-                  <li>Otimiza SEO (título ≤60, meta ≤160)</li>
-                  <li>Gera imagem destacada por nicho</li>
-                  <li>Auditoria automática de qualidade</li>
-                  <li>Artigo salvo como rascunho</li>
-                </ol>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+                    {/* Auto Publish Toggle */}
+                    {projectId && projectId !== 'none' && (
+                      <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="auto-publish" className="text-sm font-medium">
+                            Auto-publicar se aprovado
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            Publica automaticamente quando score ≥95%
+                          </p>
+                        </div>
+                        <Switch
+                          id="auto-publish"
+                          checked={autoPublish}
+                          onCheckedChange={setAutoPublish}
+                        />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Checklist Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <FileCheck className="w-4 h-4" />
+                      Checklist Compliance
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[150px]">
+                      <div className="space-y-2">
+                        {[
+                          { check: !!sourceName, label: 'Fonte identificada' },
+                          { check: isContentValid, label: 'Conteúdo com 200+ caracteres' },
+                          { check: selectedAngle !== 'custom' || !!customAngle, label: 'Ângulo de análise definido' },
+                          { check: true, label: 'Créditos automáticos (Lei 9.610)' },
+                          { check: true, label: 'Reescrita 100% original (≥95%)' },
+                          { check: true, label: 'SEO otimizado (título ≤60, meta ≤160)' },
+                        ].map((item, index) => (
+                          <div key={index} className="flex items-center gap-2">
+                            {item.check ? (
+                              <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                            ) : (
+                              <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
+                            )}
+                            <span className={cn(
+                              "text-xs",
+                              item.check ? 'text-foreground' : 'text-muted-foreground'
+                            )}>
+                              {item.label}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+
+                {/* Submit Button */}
+                <Button 
+                  className="w-full gap-2" 
+                  size="lg"
+                  disabled={!isFormValid || isRewriting}
+                  onClick={handleSubmit}
+                >
+                  {isRewriting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {progress || 'Processando...'}
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      Gerar Repostagem
+                    </>
+                  )}
+                </Button>
+
+                {/* Auto Audit Panel */}
+                {lastCompliance && (
+                  <AutoAuditPanel 
+                    compliance={lastCompliance} 
+                    qualityScore={lastResult?.quality_score}
+                  />
+                )}
+
+                {/* What happens */}
+                <Card className="bg-muted/50">
+                  <CardContent className="pt-4">
+                    <h4 className="font-medium text-sm mb-2">O que acontece:</h4>
+                    <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                      <li>IA analisa nicho e tom adequado</li>
+                      <li>Reescreve com estrutura nova (95%+ original)</li>
+                      <li>Adiciona análise e contexto (40%+)</li>
+                      <li>Otimiza SEO (título ≤60, meta ≤160)</li>
+                      <li>Gera imagem destacada por nicho</li>
+                      <li>Auditoria automática de qualidade</li>
+                      {autoPublish && projectId && projectId !== 'none' && (
+                        <li className="text-primary font-medium">Auto-publica se aprovado ✓</li>
+                      )}
+                    </ol>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </>
   );
