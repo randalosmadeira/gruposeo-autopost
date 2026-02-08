@@ -22,7 +22,6 @@ import {
   Braces,
   CalendarIcon,
   Clock,
-  Upload
 } from 'lucide-react';
 import { SEOOptimizationPanel } from './SEOOptimizationPanel';
 import { SchemaPreview } from './SchemaPreview';
@@ -41,16 +40,6 @@ interface Article {
   project_id?: string | null;
   wordpress_categories?: number[];
   scheduled_at?: Date | null;
-}
-
-interface ArticleEditorSidebarProps {
-  article: Article;
-  activeTab: 'visual' | 'html';
-  onActiveTabChange: (tab: 'visual' | 'html') => void;
-  onFieldUpdate: <K extends keyof Article>(field: K, value: Article[K]) => void;
-  onRegenerate: (type: 'title' | 'excerpt' | 'image' | 'content') => void;
-  isRegenerating: 'title' | 'excerpt' | 'image' | 'content' | null;
-  onSave?: () => void;
 }
 
 interface ArticleEditorSidebarProps {
