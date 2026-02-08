@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '2.6.1';
+const PLUGIN_VERSION = '2.6.2';
 const PLUGIN_LAST_UPDATE = '2026-02-08';
 
 const features = [
@@ -70,6 +70,16 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '2.6.2',
+    date: '2026-02-08',
+    type: 'minor' as const,
+    changes: [
+      { type: 'improvement', text: 'Paginação completa para buscar TODOS os artigos sem limite de 100' },
+      { type: 'improvement', text: 'Análise básica automática quando créditos de IA esgotarem' },
+      { type: 'fix', text: 'Sincronização agora processa sites com centenas de artigos' },
+    ],
+  },
   {
     version: '2.6.1',
     date: '2026-02-08',
