@@ -33,16 +33,67 @@ interface AnalysisResult {
   suggested_anchor_texts: string[];
 }
 
-// Analyze article content with AI
-async function analyzeArticle(article: ArticleData): Promise<AnalysisResult> {
+// Quick analysis without AI (fallback when credits exhausted or for bulk processing)
+function analyzeArticleBasic(article: ArticleData): AnalysisResult {
+  const title = article.wp_post_title || '';
+  const content = article.content || '';
+  
+  // Extract keywords from title and categories
+  const words = title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  const categories = article.wp_categories || [];
+  
+  // Simple keyword extraction
+  const primaryKeyword = words.slice(0, 3).join(' ') || title.substring(0, 50);
+  const secondaryKeywords = [...new Set([...words.slice(3, 8), ...categories.slice(0, 3)])].slice(0, 5);
+  
+  // Detect topic cluster from categories
+  const topicCluster = categories[0] || 'Geral';
+  
+  // Generate simple summary
+  const plainText = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const semanticSummary = plainText.substring(0, 150) || title;
+  
+  // Calculate scores based on content quality
+  const wordCount = article.word_count || plainText.split(/\s+/).length;
+  const hasHeadings = /<h[2-4]/i.test(content);
+  const hasImages = /<img/i.test(content);
+  const hasLinks = /<a\s/i.test(content);
+  
+  let seoScore = 50;
+  if (wordCount > 500) seoScore += 15;
+  if (wordCount > 1000) seoScore += 10;
+  if (hasHeadings) seoScore += 10;
+  if (hasImages) seoScore += 10;
+  if (hasLinks) seoScore += 5;
+  
+  const linkabilityScore = Math.min(100, 40 + (wordCount / 50) + (hasHeadings ? 15 : 0) + (categories.length * 5));
+  
+  return {
+    primary_keyword: primaryKeyword,
+    secondary_keywords: secondaryKeywords as string[],
+    topic_cluster: topicCluster,
+    semantic_summary: semanticSummary,
+    linkability_score: Math.min(100, Math.round(linkabilityScore)),
+    seo_score: Math.min(100, seoScore),
+    suggested_anchor_texts: [title, primaryKeyword, ...secondaryKeywords.slice(0, 2)].filter(Boolean) as string[],
+  };
+}
+
+// Analyze article content with AI (with fallback)
+async function analyzeArticle(article: ArticleData, useAI: boolean = true): Promise<AnalysisResult> {
+  // If AI is disabled, use basic analysis
+  if (!useAI) {
+    return analyzeArticleBasic(article);
+  }
+  
   const prompt = `Analise o seguinte artigo e extraia informações para otimização de SEO e linkagem interna.
 
 TÍTULO: ${article.wp_post_title}
 CATEGORIAS: ${article.wp_categories?.join(', ') || 'Não especificadas'}
 TAGS: ${article.wp_tags?.join(', ') || 'Não especificadas'}
 
-CONTEÚDO (primeiros 3000 caracteres):
-${article.content.substring(0, 3000)}
+CONTEÚDO (primeiros 2000 caracteres):
+${article.content.substring(0, 2000)}
 
 Retorne APENAS um JSON válido (sem markdown, sem explicações) com a seguinte estrutura:
 {
@@ -60,49 +111,51 @@ IMPORTANTE:
 - seo_score: 0-100, qualidade SEO geral do conteúdo
 - topic_cluster: identifique o tema principal para agrupar artigos relacionados`;
 
-  const response = await fetch(AI_GATEWAY_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        { role: "system", content: "Você é um especialista em SEO e análise de conteúdo. Responda APENAS com JSON válido." },
-        { role: "user", content: prompt }
-      ],
-      max_tokens: 1000,
-      temperature: 0.3,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    console.error("AI Gateway error:", error);
-    throw new Error(`AI analysis failed: ${response.status}`);
-  }
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || "";
-
-  // Parse JSON from response
   try {
-    // Remove markdown code blocks if present
-    let jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    return JSON.parse(jsonStr);
+    const response = await fetch(AI_GATEWAY_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-lite", // Use cheaper model for bulk analysis
+        messages: [
+          { role: "system", content: "Você é um especialista em SEO e análise de conteúdo. Responda APENAS com JSON válido." },
+          { role: "user", content: prompt }
+        ],
+        max_tokens: 800,
+        temperature: 0.2,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("AI Gateway error:", error);
+      
+      // Check for payment/credit errors - use fallback
+      if (response.status === 402 || error.includes('credits') || error.includes('payment')) {
+        console.log("AI credits exhausted, using basic analysis");
+        return analyzeArticleBasic(article);
+      }
+      
+      throw new Error(`AI analysis failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || "";
+
+    // Parse JSON from response
+    try {
+      let jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      return JSON.parse(jsonStr);
+    } catch (e) {
+      console.error("Failed to parse AI response:", content);
+      return analyzeArticleBasic(article);
+    }
   } catch (e) {
-    console.error("Failed to parse AI response:", content);
-    // Return default values
-    return {
-      primary_keyword: article.wp_post_title.substring(0, 50),
-      secondary_keywords: [],
-      topic_cluster: "Geral",
-      semantic_summary: article.wp_post_title,
-      linkability_score: 50,
-      seo_score: 50,
-      suggested_anchor_texts: [article.wp_post_title],
-    };
+    console.error("AI analysis error, using fallback:", e);
+    return analyzeArticleBasic(article);
   }
 }
 
@@ -142,105 +195,165 @@ function stripTrailingSlashes(url: string): string {
   return url.replace(/\/+$/, '');
 }
 
-// Fetch articles using standard WordPress REST API
+// Fetch articles using standard WordPress REST API with full pagination
 async function fetchArticlesViaRestAPI(
   baseUrl: string,
   username: string,
   appPassword: string
 ): Promise<ArticleData[]> {
   const authHeader = `Basic ${btoa(`${username}:${appPassword}`)}`;
+  const allArticles: ArticleData[] = [];
+  let page = 1;
+  const perPage = 100;
+  let hasMore = true;
   
-  const postsUrl = `${baseUrl}/wp-json/wp/v2/posts?per_page=100&_fields=id,title,link,slug,categories,tags,content,modified_gmt,status,type`;
-  const postsResp = await fetch(postsUrl, {
-    headers: { Authorization: authHeader },
-  });
+  console.log("Fetching articles via REST API with pagination...");
+  
+  while (hasMore) {
+    const postsUrl = `${baseUrl}/wp-json/wp/v2/posts?per_page=${perPage}&page=${page}&_fields=id,title,link,slug,categories,tags,content,modified_gmt,status,type`;
+    const postsResp = await fetch(postsUrl, {
+      headers: { Authorization: authHeader },
+    });
 
-  if (!postsResp.ok) {
-    const t = await postsResp.text().catch(() => '');
-    throw new Error(`Falha ao buscar posts via REST API (${postsResp.status}): ${t}`);
+    if (!postsResp.ok) {
+      // Check if it's just no more pages (empty page returns 400)
+      if (postsResp.status === 400 && page > 1) {
+        hasMore = false;
+        break;
+      }
+      const t = await postsResp.text().catch(() => '');
+      throw new Error(`Falha ao buscar posts via REST API (${postsResp.status}): ${t}`);
+    }
+
+    const posts = await postsResp.json().catch(() => []) as any[];
+    
+    if (!posts.length) {
+      hasMore = false;
+      break;
+    }
+    
+    const articles = (posts || []).map((post: any) => ({
+      wp_post_id: Number(post.id),
+      wp_post_url: String(post.link || ''),
+      wp_post_slug: post.slug ? String(post.slug) : undefined,
+      wp_post_title: String(post.title?.rendered || ''),
+      wp_post_type: post.type ? String(post.type) : undefined,
+      wp_post_status: post.status ? String(post.status) : undefined,
+      wp_categories: Array.isArray(post.categories) ? post.categories.map((id: number) => `cat-${id}`) : [],
+      wp_tags: Array.isArray(post.tags) ? post.tags.map((id: number) => `tag-${id}`) : [],
+      content: String(post.content?.rendered || ''),
+      word_count: String(post.content?.rendered || '').split(/\s+/).filter(Boolean).length,
+      last_wp_modified_at: post.modified_gmt ? String(post.modified_gmt) : undefined,
+    })).filter((a: ArticleData) => Number.isFinite(a.wp_post_id) && !!a.wp_post_url);
+    
+    allArticles.push(...articles);
+    console.log(`REST API: Fetched page ${page}, got ${articles.length} articles (total: ${allArticles.length})`);
+    
+    // Check total pages from headers
+    const totalPages = parseInt(postsResp.headers.get('X-WP-TotalPages') || '1', 10);
+    if (page >= totalPages || posts.length < perPage) {
+      hasMore = false;
+    } else {
+      page++;
+    }
   }
-
-  const posts = await postsResp.json().catch(() => []) as any[];
-
-  return (posts || []).map((post: any) => ({
-    wp_post_id: Number(post.id),
-    wp_post_url: String(post.link || ''),
-    wp_post_slug: post.slug ? String(post.slug) : undefined,
-    wp_post_title: String(post.title?.rendered || ''),
-    wp_post_type: post.type ? String(post.type) : undefined,
-    wp_post_status: post.status ? String(post.status) : undefined,
-    wp_categories: Array.isArray(post.categories) ? post.categories.map((id: number) => `cat-${id}`) : [],
-    wp_tags: Array.isArray(post.tags) ? post.tags.map((id: number) => `tag-${id}`) : [],
-    content: String(post.content?.rendered || ''),
-    word_count: String(post.content?.rendered || '').split(/\s+/).filter(Boolean).length,
-    last_wp_modified_at: post.modified_gmt ? String(post.modified_gmt) : undefined,
-  })).filter((a: ArticleData) => Number.isFinite(a.wp_post_id) && !!a.wp_post_url);
+  
+  console.log(`REST API: Total articles fetched: ${allArticles.length}`);
+  return allArticles;
 }
 
-// Fetch articles using ContentFactory plugin endpoints
+// Fetch articles using ContentFactory plugin endpoints with full pagination
 async function fetchArticlesViaPlugin(
   baseUrl: string,
   apiKey: string
 ): Promise<ArticleData[]> {
-  const listUrl = `${baseUrl}/wp-json/cfrdm/v1/articles-for-indexing?per_page=100`;
-  const listResp = await fetch(listUrl, {
-    headers: {
-      'X-CFRDM-API-Key': apiKey,
-    },
-  });
+  const allArticles: ArticleData[] = [];
+  let page = 1;
+  const perPage = 100;
+  let hasMore = true;
+  
+  console.log("Fetching articles via ContentFactory plugin with pagination...");
+  
+  while (hasMore) {
+    const listUrl = `${baseUrl}/wp-json/cfrdm/v1/articles-for-indexing?per_page=${perPage}&page=${page}`;
+    const listResp = await fetch(listUrl, {
+      headers: {
+        'X-CFRDM-API-Key': apiKey,
+      },
+    });
 
-  if (!listResp.ok) {
-    const t = await listResp.text().catch(() => '');
-    const errorInfo = `(${listResp.status}): ${t}`;
-    
-    // Check if it's a "route not found" error - plugin not installed
-    if (listResp.status === 404 && t.includes('rest_no_route')) {
-      throw new Error(`PLUGIN_NOT_FOUND:${errorInfo}`);
+    if (!listResp.ok) {
+      const t = await listResp.text().catch(() => '');
+      const errorInfo = `(${listResp.status}): ${t}`;
+      
+      // Check if it's a "route not found" error - plugin not installed
+      if (listResp.status === 404 && t.includes('rest_no_route')) {
+        throw new Error(`PLUGIN_NOT_FOUND:${errorInfo}`);
+      }
+      throw new Error(`Falha ao buscar lista de artigos no plugin ${errorInfo}`);
     }
-    throw new Error(`Falha ao buscar lista de artigos no plugin ${errorInfo}`);
+
+    const listJson = await listResp.json().catch(() => null) as any;
+    const ids: number[] = Array.isArray(listJson?.articles)
+      ? listJson.articles.map((a: any) => Number(a.wp_post_id)).filter((n: number) => Number.isFinite(n))
+      : [];
+
+    if (ids.length === 0) {
+      hasMore = false;
+      break;
+    }
+    
+    // Get total pages from response
+    const totalPages = listJson?.pages || 1;
+    
+    // Fetch content in batch
+    const batchUrl = `${baseUrl}/wp-json/cfrdm/v1/export-articles-batch`;
+    const batchResp = await fetch(batchUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CFRDM-API-Key': apiKey,
+      },
+      body: JSON.stringify({ post_ids: ids }),
+    });
+
+    if (!batchResp.ok) {
+      const t = await batchResp.text().catch(() => '');
+      throw new Error(`Falha ao exportar artigos no plugin (${batchResp.status}): ${t}`);
+    }
+
+    const batchJson = await batchResp.json().catch(() => null) as any;
+    const articles: any[] = Array.isArray(batchJson?.articles) ? batchJson.articles : [];
+
+    const formattedArticles = articles
+      .filter((a: any) => a && typeof a.content === 'string')
+      .map((a: any) => ({
+        wp_post_id: Number(a.wp_post_id),
+        wp_post_url: String(a.wp_post_url || ''),
+        wp_post_slug: a.wp_post_slug ? String(a.wp_post_slug) : undefined,
+        wp_post_title: String(a.wp_post_title || ''),
+        wp_post_type: a.wp_post_type ? String(a.wp_post_type) : undefined,
+        wp_post_status: a.wp_post_status ? String(a.wp_post_status) : undefined,
+        wp_categories: Array.isArray(a.wp_categories) ? a.wp_categories.map(String) : [],
+        wp_tags: Array.isArray(a.wp_tags) ? a.wp_tags.map(String) : [],
+        content: String(a.content || ''),
+        word_count: typeof a.word_count === 'number' ? a.word_count : undefined,
+        last_wp_modified_at: a.last_wp_modified_at ? String(a.last_wp_modified_at) : undefined,
+      }))
+      .filter((a: ArticleData) => Number.isFinite(a.wp_post_id) && !!a.wp_post_url);
+    
+    allArticles.push(...formattedArticles);
+    console.log(`Plugin: Fetched page ${page}/${totalPages}, got ${formattedArticles.length} articles (total: ${allArticles.length})`);
+    
+    if (page >= totalPages || ids.length < perPage) {
+      hasMore = false;
+    } else {
+      page++;
+    }
   }
-
-  const listJson = await listResp.json().catch(() => null) as any;
-  const ids: number[] = Array.isArray(listJson?.articles)
-    ? listJson.articles.map((a: any) => Number(a.wp_post_id)).filter((n: number) => Number.isFinite(n))
-    : [];
-
-  if (ids.length === 0) return [];
-
-  const batchUrl = `${baseUrl}/wp-json/cfrdm/v1/export-articles-batch`;
-  const batchResp = await fetch(batchUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CFRDM-API-Key': apiKey,
-    },
-    body: JSON.stringify({ post_ids: ids }),
-  });
-
-  if (!batchResp.ok) {
-    const t = await batchResp.text().catch(() => '');
-    throw new Error(`Falha ao exportar artigos no plugin (${batchResp.status}): ${t}`);
-  }
-
-  const batchJson = await batchResp.json().catch(() => null) as any;
-  const articles: any[] = Array.isArray(batchJson?.articles) ? batchJson.articles : [];
-
-  return articles
-    .filter((a: any) => a && typeof a.content === 'string')
-    .map((a: any) => ({
-      wp_post_id: Number(a.wp_post_id),
-      wp_post_url: String(a.wp_post_url || ''),
-      wp_post_slug: a.wp_post_slug ? String(a.wp_post_slug) : undefined,
-      wp_post_title: String(a.wp_post_title || ''),
-      wp_post_type: a.wp_post_type ? String(a.wp_post_type) : undefined,
-      wp_post_status: a.wp_post_status ? String(a.wp_post_status) : undefined,
-      wp_categories: Array.isArray(a.wp_categories) ? a.wp_categories.map(String) : [],
-      wp_tags: Array.isArray(a.wp_tags) ? a.wp_tags.map(String) : [],
-      content: String(a.content || ''),
-      word_count: typeof a.word_count === 'number' ? a.word_count : undefined,
-      last_wp_modified_at: a.last_wp_modified_at ? String(a.last_wp_modified_at) : undefined,
-    }))
-    .filter((a: ArticleData) => Number.isFinite(a.wp_post_id) && !!a.wp_post_url);
+  
+  console.log(`Plugin: Total articles fetched: ${allArticles.length}`);
+  return allArticles;
 }
 
 async function fetchWordPressArticlesForIndexing(args: {
@@ -384,9 +497,18 @@ serve(async (req) => {
           total: inputArticles.length,
           synced: 0,
           analyzed: 0,
+          analyzedWithAI: 0,
+          analyzedBasic: 0,
           errors: 0,
           skipped: 0,
         };
+        
+        // Track if AI credits are exhausted
+        let aiCreditsExhausted = false;
+        let consecutiveAIErrors = 0;
+        const MAX_AI_ERRORS = 3;
+
+        console.log(`Starting sync for ${inputArticles.length} articles...`);
 
         for (const article of inputArticles as ArticleData[]) {
           try {
@@ -406,8 +528,37 @@ serve(async (req) => {
               continue;
             }
 
-            // Analyze with AI
-            const analysis = await analyzeArticle(article);
+            // Analyze with AI (with automatic fallback when credits exhausted)
+            // Use AI only if credits not exhausted and not too many consecutive errors
+            const useAI = !aiCreditsExhausted && consecutiveAIErrors < MAX_AI_ERRORS;
+            
+            let analysis: AnalysisResult;
+            try {
+              analysis = await analyzeArticle(article, useAI);
+              
+              // If we successfully used AI, reset error counter
+              if (useAI) {
+                consecutiveAIErrors = 0;
+                results.analyzedWithAI++;
+              } else {
+                results.analyzedBasic++;
+              }
+            } catch (e: any) {
+              const errorMsg = e?.message || String(e);
+              
+              // Check if it's a credit exhaustion error
+              if (errorMsg.includes('402') || errorMsg.includes('credits') || errorMsg.includes('payment')) {
+                console.log("AI credits exhausted, switching to basic analysis for remaining articles");
+                aiCreditsExhausted = true;
+              } else {
+                consecutiveAIErrors++;
+              }
+              
+              // Use basic analysis as fallback
+              analysis = analyzeArticleBasic(article);
+              results.analyzedBasic++;
+            }
+            
             results.analyzed++;
 
             // Upsert article index
@@ -448,13 +599,15 @@ serve(async (req) => {
               results.synced++;
             }
 
-            // Small delay to avoid rate limiting
-            await new Promise(r => setTimeout(r, 200));
+            // Small delay to avoid rate limiting (shorter for basic analysis)
+            await new Promise(r => setTimeout(r, useAI ? 150 : 50));
           } catch (e) {
             console.error("Article processing error:", e);
             results.errors++;
           }
         }
+        
+        console.log(`Sync completed: ${results.synced} synced, ${results.analyzedWithAI} with AI, ${results.analyzedBasic} basic, ${results.skipped} skipped, ${results.errors} errors`);
 
         return new Response(
           JSON.stringify({ 
@@ -462,6 +615,10 @@ serve(async (req) => {
             results,
             usedFallback: usedFallbackMode,
             fallbackReason,
+            aiStatus: aiCreditsExhausted ? 'credits_exhausted' : 'ok',
+            message: aiCreditsExhausted 
+              ? `Sincronização concluída. ${results.analyzedWithAI} artigos analisados com IA, ${results.analyzedBasic} com análise básica (créditos de IA esgotados).`
+              : `Sincronização concluída com sucesso. ${results.synced} artigos indexados.`,
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
