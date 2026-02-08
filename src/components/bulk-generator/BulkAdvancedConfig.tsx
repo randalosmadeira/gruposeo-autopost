@@ -50,10 +50,10 @@ export { defaultBulkConfig };
 export type { BulkGenerationConfig };
 
 const contentLengthOptions = [
-  { value: 'short', label: 'Curto', words: '600-1.000', description: 'Posts rápidos' },
-  { value: 'medium', label: 'Médio', words: '1.200-1.800', description: 'Artigos padrão' },
-  { value: 'long', label: 'Longo', words: '2.200-2.800', description: 'Conteúdo completo' },
-  { value: 'very-long', label: 'Muito Longo', words: '3.500-4.500', description: 'Pillar pages' },
+  { value: 'muito_pequeno', label: 'Muito Pequeno', words: '600-1.200', description: 'Posts rápidos' },
+  { value: 'pequeno', label: 'Pequeno', words: '1.200-2.400', description: 'Artigos padrão' },
+  { value: 'medio', label: 'Médio', words: '2.400-3.600', description: 'Conteúdo completo' },
+  { value: 'grande', label: 'Grande', words: '2.600-5.200', description: 'Pillar pages' },
 ];
 
 const segmentOptions = [

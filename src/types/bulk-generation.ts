@@ -1,7 +1,7 @@
 // Types for bulk generation configuration - shared between components and hooks
 export interface BulkGenerationConfig {
-  // Content size
-  contentLength: 'short' | 'medium' | 'long' | 'very-long';
+  // Content size - standardized across all generators
+  contentLength: 'muito_pequeno' | 'pequeno' | 'medio' | 'grande';
   
   // Advanced SEO fields (new)
   segment: 'legal' | 'health' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'education' | 'general';
@@ -52,7 +52,7 @@ export interface BulkGenerationConfig {
 }
 
 export const defaultBulkConfig: BulkGenerationConfig = {
-  contentLength: 'long',
+  contentLength: 'medio',
   // Advanced SEO defaults
   segment: 'general',
   contentType: 'how-to',

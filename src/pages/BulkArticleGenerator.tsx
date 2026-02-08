@@ -74,10 +74,10 @@ interface ArticleRow {
 }
 
 const articleSizes = [
-  { value: 'short', label: 'Curto (~750)' },
-  { value: 'medium', label: 'Médio (~1.500)' },
-  { value: 'long', label: 'Longo (~2.500)' },
-  { value: 'very-long', label: 'Muito Longo (~4.000)' },
+  { value: 'muito_pequeno', label: 'Muito Pequeno (600-1200 palavras)' },
+  { value: 'pequeno', label: 'Pequeno (1200-2400 palavras)' },
+  { value: 'medio', label: 'Médio (2400-3600 palavras)' },
+  { value: 'grande', label: 'Grande (2600-5200 palavras)' },
 ];
 
 export default function BulkArticleGenerator() {
