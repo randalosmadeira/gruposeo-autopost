@@ -630,6 +630,15 @@ private function init_admin_hooks() {
         
         add_submenu_page(
             'cfrdm-dashboard',
+            __('Indexação de Artigos', 'contentfactory-rdm'),
+            __('📊 Indexação', 'contentfactory-rdm'),
+            'manage_options',
+            'cfrdm-indexation',
+            array('CFRDM_Admin', 'render_article_indexation')
+        );
+        
+        add_submenu_page(
+            'cfrdm-dashboard',
             __('Redes Sociais', 'contentfactory-rdm'),
             __('Redes Sociais', 'contentfactory-rdm'),
             'manage_options',

@@ -73,18 +73,27 @@ class CFRDM_Diagnostics_Page {
         echo '<h2>Tabelas</h2>';
         $logs_ok = !empty($report['tables']['logs_table']);
         $news_ok = !empty($report['tables']['news_table']);
+        $api_key = get_option('cfrdm_api_key');
+        $api_key_ok = !empty($api_key);
         
         self::render_kv_table(array(
             'cfrdm_logs' => $logs_ok ? 'OK' : 'NÃO ENCONTRADA',
             'cfrdm_news' => $news_ok ? 'OK' : 'NÃO ENCONTRADA',
+            'API Key' => $api_key_ok ? 'OK (' . substr($api_key, 0, 8) . '...)' : 'NÃO GERADA',
         ));
         
-        // Show repair button if tables are missing
-        if (!$logs_ok || !$news_ok) {
-            echo '<div style="margin: 15px 0;">';
+        // Show repair button if tables are missing OR API key is missing
+        if (!$logs_ok || !$news_ok || !$api_key_ok) {
+            $repair_reason = array();
+            if (!$logs_ok) $repair_reason[] = 'tabela de logs';
+            if (!$news_ok) $repair_reason[] = 'tabela de news';
+            if (!$api_key_ok) $repair_reason[] = 'API Key';
+            
+            echo '<div style="margin: 15px 0; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">';
+            echo '<p style="margin:0 0 10px 0;"><strong>⚠️ Problemas detectados:</strong> ' . esc_html(implode(', ', $repair_reason)) . '</p>';
             echo '<button type="button" id="cfrdm-repair-tables" class="button button-primary" onclick="cfrdmRepairTables()">';
             echo '<span class="dashicons dashicons-admin-tools" style="vertical-align:middle;margin-right:5px;"></span>';
-            echo 'Reparar Tabelas</button>';
+            echo 'Reparar Tabelas e Gerar API Key</button>';
             echo '<span id="cfrdm-repair-status" style="margin-left:10px;"></span>';
             echo '</div>';
             
