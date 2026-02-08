@@ -38,8 +38,11 @@ export default function Auth() {
     setIsSubmitting(true);
     try {
       await signIn(loginEmail, loginPassword);
-    } catch {
-      // Error handled in hook
+    } catch (error) {
+      // Show more descriptive error for network issues
+      if (error instanceof Error && error.message.includes('Failed to fetch')) {
+        console.error('Network error during login:', error);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -50,8 +53,11 @@ export default function Auth() {
     setIsSubmitting(true);
     try {
       await signUp(signupEmail, signupPassword, signupName);
-    } catch {
-      // Error handled in hook
+    } catch (error) {
+      // Show more descriptive error for network issues
+      if (error instanceof Error && error.message.includes('Failed to fetch')) {
+        console.error('Network error during signup:', error);
+      }
     } finally {
       setIsSubmitting(false);
     }
