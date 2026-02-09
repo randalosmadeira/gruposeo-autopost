@@ -47,6 +47,17 @@ class CFRDM_Sitemap_Optimizer {
         
         // robots.txt enhancement
         add_filter('robots_txt', array($this, 'enhance_robots_txt'), 100, 2);
+        
+        // Invalidate news sitemap cache on publish
+        add_action('publish_post', array($this, 'invalidate_news_cache'), 150);
+        add_action('publish_page', array($this, 'invalidate_news_cache'), 150);
+    }
+    
+    /**
+     * Invalidate news sitemap cache
+     */
+    public function invalidate_news_cache($post_id = null) {
+        delete_transient('cfrdm_news_sitemap');
     }
     
     public static function is_enabled() {
@@ -148,9 +159,12 @@ class CFRDM_Sitemap_Optimizer {
     }
     
     /**
-     * Generate Google News sitemap
+     * Generate Google News sitemap (cached)
      */
     private function generate_news_sitemap() {
+        $cached = get_transient('cfrdm_news_sitemap');
+        if ($cached) return $cached;
+        
         $posts = get_posts(array(
             'post_type' => 'post',
             'post_status' => 'publish',
@@ -196,6 +210,8 @@ class CFRDM_Sitemap_Optimizer {
         }
         
         $xml .= '</urlset>';
+        
+        set_transient('cfrdm_news_sitemap', $xml, 900); // 15 min cache
         return $xml;
     }
     

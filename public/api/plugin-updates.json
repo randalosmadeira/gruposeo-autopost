@@ -1,27 +1,27 @@
 {
   "latest_version": "3.1.0",
   "version": "3.1.0",
-  "update_available": false,
   "minimum_version": "3.0.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
-  "tested": "6.5",
+  "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "## v3.1.0 (2026-02-09)\n\n### Novas Funcionalidades\n- Auditor de Meta Descriptions com IA (cron a cada 6h)\n- IndexNow: notificação automática ao Bing/Google/Yandex\n- llms.txt + headers AI-friendly para ChatGPT/Claude/Gemini\n- Duplicador de Posts/Páginas com ação em lote\n- Exclusão em massa de posts selecionados\n- News Sitemap para Google News\n- Sitemap Optimizer com prioridades dinâmicas\n- robots.txt otimizado para crawlers de IA\n- Open Graph e Twitter Cards auto-preenchidos\n\n### Melhorias\n- Auto-preenchimento de OG/Twitter Cards via IA\n- Ping automático ao Google e Bing na publicação\n- Schema JSON-LD aprimorado para artigos\n\n## v3.0.0 (2026-02-08)\n\n### Novas Funcionalidades\n- Integração nativa com Google Search Console via OAuth 2.0\n- Sistema de correção automática de erros 404 via IA\n- Sincronização com Ubersuggest para dados de SEO\n- HTTPS Enforcer para forçar URLs seguras\n- AI Content Enhancer para otimização automática\n- Página de diagnóstico avançada",
+  "changelog": "## v3.1.0 (2026-02-09)\n\n### Novas Funcionalidades\n- Auditor de Meta Descriptions com IA (cron a cada 6h)\n- IndexNow: notificação automática ao Bing/Google/Yandex\n- llms.txt + headers AI-friendly para ChatGPT/Claude/Gemini\n- Duplicador de Posts/Páginas com ação em lote\n- Exclusão em massa de posts selecionados\n- News Sitemap para Google News\n- Sitemap Optimizer com prioridades dinâmicas\n- robots.txt otimizado para crawlers de IA\n- Open Graph e Twitter Cards auto-preenchidos\n\n### Integração em Tempo Real\n- Publicação → Meta Audit automático → IndexNow → llms.txt invalidação\n- Post Duplicator → Meta Audit → Sitemap refresh\n- Todos os módulos conectados e sincronizados\n\n### Segurança de Atualização\n- Verificação pré-update (PHP, WP, disco, DB, erros recentes)\n- Lock de atualização para evitar conflitos\n- Verificação de integridade pós-update\n- Rollback automático em caso de falha\n- Notificação à plataforma ContentFactory após update\n\n## v3.0.2 (2026-02-08)\n- Correção ordem de registro de cron intervals\n- Fallback para intervalos customizados\n- Prevenção de fatal errors durante init\n\n## v3.0.0 (2026-02-08)\n- Integração Google Search Console via OAuth 2.0\n- AI Auto-Fix para erros 404\n- Ubersuggest Sync\n- HTTPS Enforcer\n- AI Content Enhancer",
   "versions": {
     "3.1.0": {
       "released": "2026-02-09",
       "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-      "features": ["meta_auditor", "indexnow", "llms_txt", "post_duplicator", "sitemap_optimizer", "news_sitemap", "ai_og_twitter"]
+      "features": ["meta_auditor", "indexnow", "llms_txt", "post_duplicator", "sitemap_optimizer", "news_sitemap", "ai_og_twitter", "realtime_integration", "safe_update"]
+    },
+    "3.0.2": {
+      "released": "2026-02-08",
+      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
+      "features": ["cron_fallback_protection", "activation_fix"]
     },
     "3.0.0": {
       "released": "2026-02-08",
       "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
       "features": ["gsc_integration", "ai_auto_fix", "ubersuggest_sync", "https_enforcer", "content_enhancer"]
-    },
-    "2.6.2": {
-      "released": "2026-02-08",
-      "features": ["pagination_complete", "basic_analysis_fallback"]
     }
   }
 }

@@ -1,18 +1,21 @@
 {
-  "version": "3.0.2",
+  "version": "3.1.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.0.2 - Correção crítica: ordem de registro dos intervalos de cron durante ativação. Adicionado fallback para intervalos customizados não registrados. Prevenção de fatal errors durante init de módulos v3.0.",
-  "released": "2026-02-08",
+  "changelog": "v3.1.0 - Auditor de Meta Descriptions com IA (cron 6h), IndexNow automático, llms.txt para IAs, Duplicador de Posts, Sitemap Optimizer, News Sitemap, robots.txt otimizado para crawlers de IA. Módulos conectados em tempo real: publicação → meta audit → IndexNow → llms.txt. Sistema de atualização com verificação de segurança pré-update e rollback automático.",
+  "released": "2026-02-09",
   "features": [
-    "gsc_integration",
-    "ai_auto_fix",
-    "ubersuggest_sync",
-    "https_enforcer",
-    "content_enhancer",
-    "ajax_table_repair",
-    "cron_fallback_protection"
+    "meta_auditor",
+    "indexnow",
+    "llms_txt",
+    "post_duplicator",
+    "sitemap_optimizer",
+    "news_sitemap",
+    "ai_og_twitter",
+    "realtime_module_integration",
+    "safe_auto_update",
+    "pre_update_checks"
   ]
 }

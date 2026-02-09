@@ -213,6 +213,21 @@ class CFRDM_Post_Duplicator {
             'title' => $post->post_title,
         ), $new_id);
         
+        // Trigger Meta Auditor on the duplicate to ensure SEO meta is complete
+        if (class_exists('CFRDM_Meta_Auditor')) {
+            CFRDM_Meta_Auditor::get_instance()->audit_single_post($new_id);
+        }
+        
+        // Notify sitemap optimizer to invalidate cache
+        if (class_exists('CFRDM_Sitemap_Optimizer')) {
+            delete_transient('cfrdm_news_sitemap');
+        }
+        
+        // Invalidate llms.txt cache so new content appears
+        if (class_exists('CFRDM_LLMS_Txt')) {
+            CFRDM_LLMS_Txt::get_instance()->invalidate_cache();
+        }
+        
         return $new_id;
     }
     

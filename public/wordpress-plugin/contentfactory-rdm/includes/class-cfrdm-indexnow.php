@@ -87,7 +87,7 @@ class CFRDM_IndexNow {
     }
     
     /**
-     * On post publish - notify all engines
+     * On post publish - notify all engines + trigger meta audit
      */
     public function on_post_publish($post_id, $post) {
         if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) {
@@ -110,7 +110,17 @@ class CFRDM_IndexNow {
             $this->ping_bing($url);
         }
         
-        CFRDM_Logger::success('indexnow', 'URL submetida para indexação', array(
+        // Trigger meta audit on publish to ensure SEO meta is complete
+        if (class_exists('CFRDM_Meta_Auditor') && CFRDM_Meta_Auditor::is_enabled()) {
+            CFRDM_Meta_Auditor::get_instance()->audit_single_post($post_id);
+        }
+        
+        // Invalidate llms.txt cache
+        if (class_exists('CFRDM_LLMS_Txt')) {
+            CFRDM_LLMS_Txt::get_instance()->invalidate_cache();
+        }
+        
+        CFRDM_Logger::success('indexnow', 'URL submetida para indexação + meta auditada', array(
             'url' => $url,
             'post_id' => $post_id,
         ), $post_id);

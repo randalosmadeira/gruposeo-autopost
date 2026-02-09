@@ -105,9 +105,14 @@ class CFRDM_Auto_Update {
                 'new' => $update_info['version'],
             ));
             
-            // Auto-apply if enabled
+            // Auto-apply if enabled AND safety checks pass
             if (self::is_enabled()) {
-                $this->apply_update_patch();
+                $safety = $this->run_pre_update_checks($update_info);
+                if ($safety['safe']) {
+                    $this->apply_update_patch();
+                } else {
+                    CFRDM_Logger::warning('auto_update', 'Atualização bloqueada por verificação de segurança', $safety);
+                }
             }
             
             return $update_info;
@@ -118,7 +123,58 @@ class CFRDM_Auto_Update {
     }
     
     /**
-     * Check remote API for updates
+     * Pre-update safety checks to prevent site corruption
+     */
+    public function run_pre_update_checks($update_info) {
+        $result = array('safe' => true, 'warnings' => array());
+        
+        // 1. Check PHP version
+        if (version_compare(PHP_VERSION, $update_info['requires_php'] ?? '7.4', '<')) {
+            $result['safe'] = false;
+            $result['warnings'][] = 'PHP version incompatible: ' . PHP_VERSION . ' < ' . $update_info['requires_php'];
+        }
+        
+        // 2. Check WordPress version
+        global $wp_version;
+        if (version_compare($wp_version, $update_info['requires_wp'] ?? '5.8', '<')) {
+            $result['safe'] = false;
+            $result['warnings'][] = 'WordPress version incompatible: ' . $wp_version . ' < ' . $update_info['requires_wp'];
+        }
+        
+        // 3. Check disk space (need at least 50MB free)
+        $free_space = @disk_free_space(CFRDM_PLUGIN_DIR);
+        if ($free_space !== false && $free_space < 50 * 1024 * 1024) {
+            $result['safe'] = false;
+            $result['warnings'][] = 'Insufficient disk space: ' . size_format($free_space);
+        }
+        
+        // 4. Check if site is healthy (no recent fatal errors)
+        $recent_errors = get_option('cfrdm_recent_fatal_errors', 0);
+        if ($recent_errors > 3) {
+            $result['safe'] = false;
+            $result['warnings'][] = 'Site has recent fatal errors, skipping auto-update';
+        }
+        
+        // 5. Check if another update is in progress
+        $lock = get_option('cfrdm_update_lock', 0);
+        if ($lock > 0 && (time() - $lock) < 600) { // 10 min lock
+            $result['safe'] = false;
+            $result['warnings'][] = 'Another update is in progress';
+        }
+        
+        // 6. Test database connectivity
+        global $wpdb;
+        $test = $wpdb->get_var("SELECT 1");
+        if ($test != 1) {
+            $result['safe'] = false;
+            $result['warnings'][] = 'Database connectivity issue';
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Check remote API for updates (with version comparison)
      */
     private function check_remote_api() {
         $response = wp_remote_get(self::UPDATE_API_URL . '?current_version=' . CFRDM_VERSION, array(
@@ -137,9 +193,11 @@ class CFRDM_Auto_Update {
         
         $body = json_decode(wp_remote_retrieve_body($response), true);
         
-        if (isset($body['update_available']) && $body['update_available']) {
+        // Compare versions locally (don't rely on update_available flag)
+        $latest = $body['latest_version'] ?? ($body['version'] ?? null);
+        if ($latest && version_compare($latest, CFRDM_VERSION, '>')) {
             return array(
-                'version' => $body['version'],
+                'version' => $latest,
                 'download_url' => $body['download_url'] ?? self::PLUGIN_DOWNLOAD_URL,
                 'patch_url' => $body['patch_url'] ?? null,
                 'changelog' => $body['changelog'] ?? '',
@@ -314,7 +372,7 @@ class CFRDM_Auto_Update {
     }
     
     /**
-     * Apply update patch
+     * Apply update patch with lock + safety
      * 
      * @return array Result
      */
@@ -325,11 +383,16 @@ class CFRDM_Auto_Update {
             return array('success' => false, 'error' => 'Nenhuma atualização disponível');
         }
         
-        // Check requirements
-        if (version_compare(PHP_VERSION, $update_info['requires_php'], '<')) {
+        // Set update lock
+        update_option('cfrdm_update_lock', time());
+        
+        // Run safety checks
+        $safety = $this->run_pre_update_checks($update_info);
+        if (!$safety['safe']) {
+            delete_option('cfrdm_update_lock');
             return array(
                 'success' => false,
-                'error' => 'Requer PHP ' . $update_info['requires_php'],
+                'error' => 'Verificação de segurança falhou: ' . implode('; ', $safety['warnings']),
             );
         }
         
@@ -337,6 +400,7 @@ class CFRDM_Auto_Update {
         $backup_path = $this->create_backup();
         
         if (!$backup_path) {
+            delete_option('cfrdm_update_lock');
             return array('success' => false, 'error' => 'Falha ao criar backup');
         }
         
@@ -354,14 +418,24 @@ class CFRDM_Auto_Update {
                 throw new Exception($result['error']);
             }
             
+            // Verify plugin still loads correctly after update
+            $verify = $this->verify_plugin_integrity();
+            if (!$verify['ok']) {
+                throw new Exception('Integridade do plugin comprometida: ' . $verify['error']);
+            }
+            
             // Run database migrations
             $this->run_database_migration($update_info['version']);
             
             // Clear update info
             delete_option(self::OPTION_UPDATE_INFO);
+            delete_option('cfrdm_update_lock');
             
             // Notify admin
             $this->notify_admin($update_info);
+            
+            // Notify ContentFactory platform about successful update
+            $this->notify_platform_update($update_info);
             
             CFRDM_Logger::success('auto_update', 'Atualização aplicada com sucesso', array(
                 'from' => CFRDM_VERSION,
@@ -377,6 +451,7 @@ class CFRDM_Auto_Update {
         } catch (Exception $e) {
             // Rollback on failure
             $this->rollback_update($backup_path);
+            delete_option('cfrdm_update_lock');
             
             CFRDM_Logger::error('auto_update', 'Falha na atualização - rollback executado', array(
                 'error' => $e->getMessage(),
@@ -388,6 +463,70 @@ class CFRDM_Auto_Update {
                 'rollback' => true,
             );
         }
+    }
+    
+    /**
+     * Verify plugin integrity after update
+     */
+    private function verify_plugin_integrity() {
+        $main_file = CFRDM_PLUGIN_DIR . 'contentfactory-rdm.php';
+        
+        if (!file_exists($main_file)) {
+            return array('ok' => false, 'error' => 'Arquivo principal não encontrado');
+        }
+        
+        $content = file_get_contents($main_file);
+        
+        // Check for PHP syntax errors
+        if (strpos($content, '<?php') === false) {
+            return array('ok' => false, 'error' => 'Arquivo principal corrompido');
+        }
+        
+        // Check essential class files exist
+        $required_files = array(
+            'includes/class-cfrdm-logger.php',
+            'includes/class-cfrdm-api.php',
+            'includes/class-cfrdm-seo.php',
+        );
+        
+        foreach ($required_files as $file) {
+            if (!file_exists(CFRDM_PLUGIN_DIR . $file)) {
+                return array('ok' => false, 'error' => 'Arquivo essencial ausente: ' . $file);
+            }
+        }
+        
+        return array('ok' => true);
+    }
+    
+    /**
+     * Notify ContentFactory platform about this site's update status
+     */
+    private function notify_platform_update($update_info) {
+        $api_key = get_option('cfrdm_api_key', '');
+        $api_url = get_option('cfrdm_api_url', '');
+        
+        if (empty($api_url)) return;
+        
+        $payload = array(
+            'action' => 'plugin_updated',
+            'site_url' => get_site_url(),
+            'site_name' => get_bloginfo('name'),
+            'previous_version' => CFRDM_VERSION,
+            'new_version' => $update_info['version'],
+            'php_version' => PHP_VERSION,
+            'wp_version' => get_bloginfo('version'),
+            'updated_at' => current_time('c'),
+        );
+        
+        wp_remote_post($api_url . '/webhooks', array(
+            'timeout' => 15,
+            'headers' => array(
+                'Content-Type' => 'application/json',
+                'X-API-Key' => $api_key,
+            ),
+            'body' => wp_json_encode($payload),
+            'blocking' => false,
+        ));
     }
     
     /**
@@ -463,12 +602,37 @@ class CFRDM_Auto_Update {
         // Version-specific migrations
         switch ($version) {
             case '3.0.0':
-                // Create new tables for v3.0.0
                 if (class_exists('CFRDM_AI_Auto_Fix')) {
                     CFRDM_AI_Auto_Fix::create_table();
                 }
                 if (class_exists('CFRDM_Ubersuggest_Sync')) {
                     CFRDM_Ubersuggest_Sync::create_table();
+                }
+                break;
+                
+            case '3.1.0':
+                // Enable default options for new modules
+                if (get_option('cfrdm_indexnow_enabled') === false) {
+                    update_option('cfrdm_indexnow_enabled', true);
+                }
+                if (get_option('cfrdm_llms_txt_enabled') === false) {
+                    update_option('cfrdm_llms_txt_enabled', true);
+                }
+                if (get_option('cfrdm_sitemap_optimizer_enabled') === false) {
+                    update_option('cfrdm_sitemap_optimizer_enabled', true);
+                }
+                if (get_option('cfrdm_meta_auditor_enabled') === false) {
+                    update_option('cfrdm_meta_auditor_enabled', true);
+                }
+                if (get_option('cfrdm_google_ping_enabled') === false) {
+                    update_option('cfrdm_google_ping_enabled', true);
+                }
+                if (get_option('cfrdm_bing_ping_enabled') === false) {
+                    update_option('cfrdm_bing_ping_enabled', true);
+                }
+                // Generate IndexNow key
+                if (empty(get_option('cfrdm_indexnow_key'))) {
+                    update_option('cfrdm_indexnow_key', wp_generate_password(32, false));
                 }
                 break;
         }
