@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '3.0.2');
+define('CFRDM_VERSION', '3.1.0');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -76,6 +76,13 @@ function cfrdm_load_dependencies() {
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-https-enforcer.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-auto-update.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-content-enhancer.php';
+    
+    // v3.1.0 - SEO Discovery & Automation modules
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-meta-auditor.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-indexnow.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-llms-txt.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-post-duplicator.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-sitemap-optimizer.php';
 }
 
 /**
@@ -152,9 +159,26 @@ class ContentFactory_RDM {
             new CFRDM_Article_Indexer();
         }
         
+        // Initialize v3.1.0 modules (work in all contexts)
+        try {
+            CFRDM_IndexNow::get_instance()->init();
+            CFRDM_LLMS_Txt::get_instance()->init();
+            CFRDM_Sitemap_Optimizer::get_instance()->init();
+            CFRDM_Meta_Auditor::get_instance()->init();
+        } catch (Exception $e) {
+            error_log('ContentFactory v3.1.0 init error: ' . $e->getMessage());
+        }
+        
         // Only load admin-specific hooks in admin context
         if (is_admin()) {
             $this->init_admin_hooks();
+            
+            // Post Duplicator (admin only)
+            try {
+                CFRDM_Post_Duplicator::get_instance()->init();
+            } catch (Exception $e) {
+                error_log('ContentFactory Post Duplicator init error: ' . $e->getMessage());
+            }
         }
         
         // REST API hooks - load only when needed
@@ -642,6 +666,13 @@ private function init_admin_hooks() {
             CFRDM_HTTPS_Enforcer::get_instance()->init();
             CFRDM_Auto_Update::get_instance()->init();
             CFRDM_AI_Content_Enhancer::get_instance()->init();
+            
+            // v3.1.0 modules
+            CFRDM_Meta_Auditor::get_instance()->init();
+            CFRDM_IndexNow::get_instance()->init();
+            CFRDM_LLMS_Txt::get_instance()->init();
+            CFRDM_Post_Duplicator::get_instance()->init();
+            CFRDM_Sitemap_Optimizer::get_instance()->init();
         } catch (Exception $e) {
             error_log('ContentFactory RDM activation error: ' . $e->getMessage());
         }
@@ -690,6 +721,8 @@ private function init_admin_hooks() {
         wp_clear_scheduled_hook('cfrdm_daily_cleanup');
         wp_clear_scheduled_hook('cfrdm_sync_stats');
         wp_clear_scheduled_hook('cfrdm_fetch_news');
+        wp_clear_scheduled_hook('cfrdm_meta_audit');
+        wp_clear_scheduled_hook('cfrdm_regenerate_llms_txt');
         
         flush_rewrite_rules();
         
@@ -967,6 +1000,15 @@ private function init_admin_hooks() {
         
         // v3.0.0 - Auto-Update Settings
         register_setting('cfrdm_settings', 'cfrdm_auto_update_enabled');
+        
+        // v3.1.0 - SEO Discovery Settings
+        register_setting('cfrdm_settings', 'cfrdm_meta_auditor_enabled');
+        register_setting('cfrdm_settings', 'cfrdm_meta_auditor_batch_size');
+        register_setting('cfrdm_settings', 'cfrdm_indexnow_enabled');
+        register_setting('cfrdm_settings', 'cfrdm_google_ping_enabled');
+        register_setting('cfrdm_settings', 'cfrdm_bing_ping_enabled');
+        register_setting('cfrdm_settings', 'cfrdm_llms_txt_enabled');
+        register_setting('cfrdm_settings', 'cfrdm_sitemap_optimizer_enabled');
     }
     
     public function register_rest_routes() {

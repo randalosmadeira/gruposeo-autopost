@@ -1,14 +1,19 @@
 {
-  "latest_version": "3.0.0",
-  "version": "3.0.0",
+  "latest_version": "3.1.0",
+  "version": "3.1.0",
   "update_available": false,
   "minimum_version": "3.0.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.5",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "## v3.0.0 (2026-02-08)\n\n### Novas Funcionalidades\n- Integração nativa com Google Search Console via OAuth 2.0\n- Sistema de correção automática de erros 404 via IA\n- Sincronização com Ubersuggest para dados de SEO\n- HTTPS Enforcer para forçar URLs seguras\n- AI Content Enhancer para otimização automática\n- Página de diagnóstico avançada\n\n### Melhorias\n- Intervalos de cron customizados\n- Painel de configurações expandido\n\n### Correções\n- Correção de intervalos de cron inválidos",
+  "changelog": "## v3.1.0 (2026-02-09)\n\n### Novas Funcionalidades\n- Auditor de Meta Descriptions com IA (cron a cada 6h)\n- IndexNow: notificação automática ao Bing/Google/Yandex\n- llms.txt + headers AI-friendly para ChatGPT/Claude/Gemini\n- Duplicador de Posts/Páginas com ação em lote\n- Exclusão em massa de posts selecionados\n- News Sitemap para Google News\n- Sitemap Optimizer com prioridades dinâmicas\n- robots.txt otimizado para crawlers de IA\n- Open Graph e Twitter Cards auto-preenchidos\n\n### Melhorias\n- Auto-preenchimento de OG/Twitter Cards via IA\n- Ping automático ao Google e Bing na publicação\n- Schema JSON-LD aprimorado para artigos\n\n## v3.0.0 (2026-02-08)\n\n### Novas Funcionalidades\n- Integração nativa com Google Search Console via OAuth 2.0\n- Sistema de correção automática de erros 404 via IA\n- Sincronização com Ubersuggest para dados de SEO\n- HTTPS Enforcer para forçar URLs seguras\n- AI Content Enhancer para otimização automática\n- Página de diagnóstico avançada",
   "versions": {
+    "3.1.0": {
+      "released": "2026-02-09",
+      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
+      "features": ["meta_auditor", "indexnow", "llms_txt", "post_duplicator", "sitemap_optimizer", "news_sitemap", "ai_og_twitter"]
+    },
     "3.0.0": {
       "released": "2026-02-08",
       "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
