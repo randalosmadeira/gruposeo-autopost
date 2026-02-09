@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '3.0.2';
-const PLUGIN_LAST_UPDATE = '2026-02-08';
+const PLUGIN_VERSION = '3.1.0';
+const PLUGIN_LAST_UPDATE = '2026-02-09';
 
 const features = [
   {
@@ -39,24 +39,45 @@ const features = [
     description: 'Crie, edite e publique artigos com suporte a schemas HowTo, Review e FAQ.',
   },
   {
-    icon: Webhook,
-    title: 'Social Auto-Poster',
-    description: 'Fila automática para publicação em redes sociais com templates personalizáveis.',
-  },
-  {
-    icon: Settings,
-    title: 'Queue System',
-    description: 'Sistema de fila avançado com prioridades, retry automático e backoff exponencial.',
-  },
-  {
     icon: Shield,
     title: 'SEO Completo + IA',
     description: 'Geração de SEO via IA: slug, meta description, tags e títulos virais automáticos.',
   },
   {
     icon: Zap,
-    title: 'Cron Scheduler',
-    description: 'Agendador interno com diagnóstico, histórico de execução e controle de jobs.',
+    title: 'Meta Auditor IA',
+    description: 'Auditoria automática a cada 6h: verifica e corrige meta descriptions, OG tags e focus keywords.',
+    isNew: true,
+  },
+  {
+    icon: Webhook,
+    title: 'IndexNow + Ping',
+    description: 'Notificação instantânea ao Google, Bing e Yandex quando artigos são publicados ou atualizados.',
+    isNew: true,
+  },
+  {
+    icon: Settings,
+    title: 'Descoberta por IA',
+    description: 'Endpoints llms.txt + headers HTTP para ChatGPT, Claude e Gemini encontrarem seus artigos.',
+    isNew: true,
+  },
+  {
+    icon: FileText,
+    title: 'Duplicador de Posts',
+    description: 'Clone posts e páginas com um clique. Exclusão em massa de múltiplos posts selecionados.',
+    isNew: true,
+  },
+  {
+    icon: Zap,
+    title: 'Sitemap Otimizado',
+    description: 'Sitemap dinâmico com prioridades automáticas, News Sitemap e robots.txt para crawlers de IA.',
+    isNew: true,
+  },
+  {
+    icon: Shield,
+    title: 'Atualização Segura',
+    description: 'Pre-update checks, rollback automático e verificação de integridade pós-atualização.',
+    isNew: true,
   },
 ];
 
@@ -70,6 +91,26 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '3.1.0',
+    date: '2026-02-09',
+    type: 'major' as const,
+    changes: [
+      { type: 'feature', text: 'Auditor de Meta Descriptions com IA (cron automático a cada 6 horas)' },
+      { type: 'feature', text: 'IndexNow: notificação instantânea ao Google/Bing/Yandex ao publicar' },
+      { type: 'feature', text: 'llms.txt + headers AI-friendly para ChatGPT, Claude e Gemini' },
+      { type: 'feature', text: 'Duplicador de Posts/Páginas com ação individual e em lote' },
+      { type: 'feature', text: 'Exclusão em massa de posts selecionados' },
+      { type: 'feature', text: 'News Sitemap para Google News' },
+      { type: 'feature', text: 'Sitemap Optimizer com prioridades dinâmicas baseadas em data' },
+      { type: 'feature', text: 'robots.txt otimizado para crawlers de IA (GPTBot, Claude-Web, etc.)' },
+      { type: 'feature', text: 'Open Graph e Twitter Cards auto-preenchidos pela IA' },
+      { type: 'improvement', text: 'Módulos conectados em tempo real: publicação → meta audit → IndexNow → llms.txt' },
+      { type: 'improvement', text: 'Pre-update checks (PHP, WP, disco, DB) antes de atualizar' },
+      { type: 'improvement', text: 'Rollback automático em caso de falha na atualização' },
+      { type: 'improvement', text: 'Verificação de integridade pós-update com notificação à plataforma' },
+    ],
+  },
   {
     version: '3.0.2',
     date: '2026-02-08',
@@ -265,7 +306,7 @@ export default function WordPressPluginPage() {
         throw new Error('Erro ao criar pasta do plugin');
       }
       
-      // Fetch all plugin files (v3.0.0 includes GSC, AI Auto-Fix, Ubersuggest, HTTPS Enforcer)
+      // Fetch all plugin files (v3.1.0 includes all modules)
       const files = [
         { path: 'contentfactory-rdm.php', url: '/wordpress-plugin/contentfactory-rdm/contentfactory-rdm.php' },
         { path: 'readme.txt', url: '/wordpress-plugin/contentfactory-rdm/readme.txt' },
@@ -291,13 +332,19 @@ export default function WordPressPluginPage() {
         { path: 'includes/class-cfrdm-cron-scheduler.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-cron-scheduler.php' },
         { path: 'includes/class-cfrdm-content-queue.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-content-queue.php' },
         { path: 'includes/class-cfrdm-article-indexer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-article-indexer.php' },
-        // v3.0.0 - GSC, AI Auto-Fix, Ubersuggest, HTTPS Enforcer
+        // v3.0.0
         { path: 'includes/class-cfrdm-gsc-integration.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-gsc-integration.php' },
         { path: 'includes/class-cfrdm-ai-auto-fix.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-auto-fix.php' },
         { path: 'includes/class-cfrdm-ai-content-enhancer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-content-enhancer.php' },
         { path: 'includes/class-cfrdm-ubersuggest-sync.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ubersuggest-sync.php' },
         { path: 'includes/class-cfrdm-https-enforcer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-https-enforcer.php' },
         { path: 'includes/class-cfrdm-auto-update.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-auto-update.php' },
+        // v3.1.0
+        { path: 'includes/class-cfrdm-meta-auditor.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-meta-auditor.php' },
+        { path: 'includes/class-cfrdm-indexnow.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-indexnow.php' },
+        { path: 'includes/class-cfrdm-llms-txt.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-llms-txt.php' },
+        { path: 'includes/class-cfrdm-post-duplicator.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-post-duplicator.php' },
+        { path: 'includes/class-cfrdm-sitemap-optimizer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-sitemap-optimizer.php' },
         { path: 'assets/css/admin.css', url: '/wordpress-plugin/contentfactory-rdm/assets/css/admin.css' },
         { path: 'assets/js/admin.js', url: '/wordpress-plugin/contentfactory-rdm/assets/js/admin.js' },
       ];
@@ -392,13 +439,16 @@ export default function WordPressPluginPage() {
       {/* Features Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {features.map((feature) => (
-          <Card key={feature.title}>
+          <Card key={feature.title} className={(feature as any).isNew ? 'border-primary/30' : ''}>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-primary/10">
                   <feature.icon className="w-5 h-5 text-primary" />
                 </div>
                 <CardTitle className="text-base">{feature.title}</CardTitle>
+                {(feature as any).isNew && (
+                  <Badge className="text-[10px] px-1.5 py-0">v3.1</Badge>
+                )}
               </div>
             </CardHeader>
             <CardContent>

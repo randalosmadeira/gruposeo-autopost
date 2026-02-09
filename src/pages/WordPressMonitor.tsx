@@ -417,7 +417,7 @@ export default function WordPressMonitor() {
                           }}
                         >
                           <Download className="w-4 h-4 mr-2" />
-                          Baixar Plugin v2.2.1
+                          Baixar Plugin v3.1.0
                         </Button>
                         <Button 
                           variant="ghost" 
