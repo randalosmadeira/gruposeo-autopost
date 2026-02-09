@@ -22,7 +22,26 @@ export function useArticles(projectId?: string) {
       let query = supabase
         .from('articles')
         .select(`
-          *,
+          id,
+          keyword,
+          title,
+          status,
+          type,
+          slug,
+          excerpt,
+          featured_image_url,
+          seo_score,
+          word_count,
+          project_id,
+          published_at,
+          published_url,
+          scheduled_at,
+          secondary_keywords,
+          config,
+          error_message,
+          created_at,
+          updated_at,
+          user_id,
           projects (
             id,
             name,
