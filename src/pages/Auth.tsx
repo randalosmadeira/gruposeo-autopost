@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +11,7 @@ import { Sparkles, Loader2 } from 'lucide-react';
 
 export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
+  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Login form state
@@ -39,10 +41,19 @@ export default function Auth() {
     try {
       await signIn(loginEmail, loginPassword);
     } catch (error) {
-      // Show more descriptive error for network issues
-      if (error instanceof Error && error.message.includes('Failed to fetch')) {
-        console.error('Network error during login:', error);
-      }
+      const message = error instanceof Error ? error.message : 'Erro desconhecido';
+      const isNetwork =
+        message.includes('Failed to fetch') ||
+        message.toLowerCase().includes('timeout') ||
+        message.toLowerCase().includes('network');
+
+      toast({
+        title: isNetwork ? 'Sem conexão com o backend' : 'Erro ao entrar',
+        description: isNetwork
+          ? 'Não conseguimos conectar agora. Verifique sua internet/rede (VPN, firewall, adblock) e tente novamente.'
+          : message,
+        variant: 'destructive',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -54,10 +65,19 @@ export default function Auth() {
     try {
       await signUp(signupEmail, signupPassword, signupName);
     } catch (error) {
-      // Show more descriptive error for network issues
-      if (error instanceof Error && error.message.includes('Failed to fetch')) {
-        console.error('Network error during signup:', error);
-      }
+      const message = error instanceof Error ? error.message : 'Erro desconhecido';
+      const isNetwork =
+        message.includes('Failed to fetch') ||
+        message.toLowerCase().includes('timeout') ||
+        message.toLowerCase().includes('network');
+
+      toast({
+        title: isNetwork ? 'Sem conexão com o backend' : 'Erro ao criar conta',
+        description: isNetwork
+          ? 'Não conseguimos conectar agora. Verifique sua internet/rede (VPN, firewall, adblock) e tente novamente.'
+          : message,
+        variant: 'destructive',
+      });
     } finally {
       setIsSubmitting(false);
     }
