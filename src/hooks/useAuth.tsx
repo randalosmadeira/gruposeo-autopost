@@ -21,34 +21,65 @@ const withRetry = async <T,>(
   baseDelay: number = 1000
 ): Promise<T> => {
   let lastError: Error | null = null;
-  
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error instanceof Error ? error : new Error('Unknown error');
-      
+
       // Don't retry for auth errors (wrong credentials, etc.)
-      if (lastError.message.includes('Invalid login') || 
-          lastError.message.includes('Email not confirmed') ||
-          lastError.message.includes('invalid_credentials')) {
+      if (
+        lastError.message.includes('Invalid login') ||
+        lastError.message.includes('Email not confirmed') ||
+        lastError.message.includes('invalid_credentials')
+      ) {
         throw lastError;
       }
-      
-      // Only retry on network errors
-      if (lastError.message.includes('Failed to fetch') || 
-          lastError.message.includes('NetworkError') ||
-          lastError.message.includes('ECONNREFUSED')) {
+
+      // Only retry on transient connectivity errors
+      const isTransient =
+        lastError.name === 'TimeoutError' ||
+        lastError.message.toLowerCase().includes('timeout') ||
+        lastError.message.includes('Failed to fetch') ||
+        lastError.message.includes('NetworkError') ||
+        lastError.message.includes('ECONNREFUSED');
+
+      if (isTransient) {
         const delay = baseDelay * Math.pow(2, attempt);
-        // Retry with exponential backoff
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise((resolve) => setTimeout(resolve, delay));
       } else {
         throw lastError;
       }
     }
   }
-  
+
   throw lastError || new Error('Max retries exceeded');
+};
+
+class TimeoutError extends Error {
+  constructor(message = 'Tempo limite ao conectar. Tente novamente.') {
+    super(message);
+    this.name = 'TimeoutError';
+  }
+}
+
+const withTimeout = async <T,>(
+  promise: Promise<T>,
+  ms: number = 12000,
+  message?: string
+): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new TimeoutError(message)), ms);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -59,17 +90,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-    
+
     // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (mounted) {
-          setSession(session);
-          setUser(session?.user ?? null);
-          setLoading(false);
-        }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
       }
-    );
+    });
 
     // THEN check for existing session with timeout fallback
     const sessionTimeout = setTimeout(() => {
@@ -79,7 +110,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }, 10000); // 10 second timeout
 
-    supabase.auth.getSession()
+    supabase.auth
+      .getSession()
       .then(({ data: { session } }) => {
         if (mounted) {
           clearTimeout(sessionTimeout);
@@ -103,49 +135,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [loading]);
 
-  const signUp = useCallback(async (email: string, password: string, fullName?: string) => {
-    const result = await withRetry(async () => {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: window.location.origin,
-          data: {
-            full_name: fullName,
-          },
-        },
+  const signUp = useCallback(
+    async (email: string, password: string, fullName?: string) => {
+      const result = await withRetry(async () => {
+        const { error } = await withTimeout(
+          supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              emailRedirectTo: window.location.origin,
+              data: {
+                full_name: fullName,
+              },
+            },
+          }),
+          12000
+        );
+
+        if (error) throw error;
+        return true;
       });
 
-      if (error) throw error;
-      return true;
-    });
+      if (result) {
+        toast({
+          title: 'Conta criada com sucesso!',
+          description: 'Você já pode começar a usar o ContentFactory.',
+        });
+      }
+    },
+    [toast]
+  );
 
-    if (result) {
-      toast({
-        title: 'Conta criada com sucesso!',
-        description: 'Você já pode começar a usar o ContentFactory.',
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      const result = await withRetry(async () => {
+        const { error } = await withTimeout(
+          supabase.auth.signInWithPassword({
+            email,
+            password,
+          }),
+          12000
+        );
+
+        if (error) throw error;
+        return true;
       });
-    }
-  }, [toast]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const result = await withRetry(async () => {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-      return true;
-    });
-
-    if (result) {
-      toast({
-        title: 'Bem-vindo de volta!',
-        description: 'Login realizado com sucesso.',
-      });
-    }
-  }, [toast]);
+      if (result) {
+        toast({
+          title: 'Bem-vindo de volta!',
+          description: 'Login realizado com sucesso.',
+        });
+      }
+    },
+    [toast]
+  );
 
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
