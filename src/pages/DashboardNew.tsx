@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useArticles } from '@/hooks/useArticles';
@@ -183,6 +183,19 @@ export default function DashboardNew() {
     String(articlesError?.message || projectsError?.message).toLowerCase().includes('network')
   );
 
+  // Timeout to avoid infinite loading when backend is down
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+  const isStillLoading = articlesLoading || projectsLoading;
+  
+  useEffect(() => {
+    if (!isStillLoading) {
+      setLoadingTimedOut(false);
+      return;
+    }
+    const timer = setTimeout(() => setLoadingTimedOut(true), 8000);
+    return () => clearTimeout(timer);
+  }, [isStillLoading]);
+
   // Calculate stats
   const dashboardStats = useMemo(() => {
     if (!articles) return { total: 0, thisWeek: 0, thisMonth: 0, published: 0 };
@@ -220,13 +233,15 @@ export default function DashboardNew() {
     });
   }, [projects, articles]);
 
-  if (articlesLoading || projectsLoading) {
+  if (isStillLoading && !loadingTimedOut) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
+
+  const showErrorBanner = hasConnectionError || loadingTimedOut;
 
   return (
     <div className="min-h-screen bg-background">
@@ -264,17 +279,21 @@ export default function DashboardNew() {
 
       <div className="p-6 space-y-6">
         {/* Connection Error Banner */}
-        {hasConnectionError && (
+        {showErrorBanner && (
           <Alert variant="destructive" className="border-destructive/30 bg-destructive/5">
             <AlertCircle className="h-5 w-5" />
             <AlertTitle className="text-base">
-              {isCorsError ? 'Problema de conexão com o servidor' : 'Erro ao carregar dados'}
+              {loadingTimedOut && !hasConnectionError
+                ? 'Servidor demorando para responder'
+                : isCorsError ? 'Problema de conexão com o servidor' : 'Erro ao carregar dados'}
             </AlertTitle>
             <AlertDescription className="mt-1 space-y-2">
               <p>
-                {isCorsError
-                  ? 'O servidor pode estar reiniciando ou temporariamente indisponível. Isso geralmente se resolve em alguns segundos.'
-                  : 'Não foi possível carregar seus dados. Verifique sua conexão e tente novamente.'}
+                {loadingTimedOut && !hasConnectionError
+                  ? 'O servidor está demorando mais do que o esperado. Pode estar reiniciando ou em manutenção.'
+                  : isCorsError
+                    ? 'O servidor pode estar reiniciando ou temporariamente indisponível. Isso geralmente se resolve em alguns segundos.'
+                    : 'Não foi possível carregar seus dados. Verifique sua conexão e tente novamente.'}
               </p>
               <Button
                 variant="outline"
