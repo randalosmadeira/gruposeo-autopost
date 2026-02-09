@@ -240,14 +240,11 @@ export function useInternalLinking(projectId: string | null) {
           try {
             // FunctionsHttpError has context.json() that contains the actual error body
             const errorBody = await syncResponse.error.context.json();
-            console.log('Edge function error body:', errorBody);
             errorMsg = errorBody?.error || errorBody?.message || syncResponse.error.message;
           } catch (parseErr) {
-            console.log('Failed to parse error body:', parseErr);
             // Try to get text if JSON parsing fails
             try {
               const errorText = await syncResponse.error.context.text();
-              console.log('Edge function error text:', errorText);
               // Try to parse the text as JSON
               const parsed = JSON.parse(errorText);
               errorMsg = parsed?.error || parsed?.message || errorText;
@@ -261,13 +258,6 @@ export function useInternalLinking(projectId: string | null) {
       } else if (syncResponse.data?.error) {
         errorMsg = syncResponse.data.error;
       }
-      
-      // Debug log
-      console.log('Sync response:', { 
-        hasError: !!syncResponse.error, 
-        errorMsg, 
-        data: syncResponse.data 
-      });
       
       if (errorMsg) {
         // Try to parse structured error from edge function

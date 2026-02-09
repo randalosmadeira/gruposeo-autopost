@@ -60,9 +60,8 @@ export function useArticles(projectId?: string) {
           table: 'articles',
           filter: `user_id=eq.${user.id}`,
         },
-        (payload) => {
-          console.log('Realtime article update:', payload.eventType);
-          // Invalidate queries to refetch data
+        () => {
+          // Invalidate queries to refetch data on realtime update
           queryClient.invalidateQueries({ queryKey: ['articles'] });
         }
       )

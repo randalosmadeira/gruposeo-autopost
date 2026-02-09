@@ -224,7 +224,7 @@ export function useBulkGeneration() {
             anchor: s.anchor_text,
             url: s.url,
           }));
-          console.log(`Found ${internalLinks.length} internal links for ${job.keyword.keyword}`);
+          // Internal links found for keyword
         }
       } catch (linkError) {
         console.warn('Failed to fetch internal links:', linkError);
