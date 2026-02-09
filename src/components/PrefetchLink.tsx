@@ -3,7 +3,7 @@ import { useCallback } from 'react';
 
 // Map routes to their lazy-loaded modules
 const routeModules: Record<string, () => Promise<unknown>> = {
-  '/': () => import('@/pages/Dashboard'),
+  '/': () => import('@/pages/DashboardNew'),
   '/articles': () => import('@/pages/ArticlesList'),
   '/articles/new': () => import('@/pages/ArticleTypeSelection'),
   '/articles/bulk': () => import('@/pages/ArticleTypeSelection'),
