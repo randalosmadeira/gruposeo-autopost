@@ -34,6 +34,7 @@ import { format, subDays, isToday, isThisWeek, isThisMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import logoSeo from '@/assets/logo-grupo-seo.png';
 import { WordPressHealthCard } from '@/components/dashboard/WordPressHealthCard';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 // Quick action card component
 function QuickActionCard({ 
@@ -171,9 +172,16 @@ function RecentContentItem({
 export default function DashboardNew() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { articles, stats, isLoading: articlesLoading } = useArticles();
-  const { projects, isLoading: projectsLoading } = useProjects();
+  const { articles, stats, isLoading: articlesLoading, error: articlesError } = useArticles();
+  const { projects, isLoading: projectsLoading, error: projectsError } = useProjects();
   const { agents, activeAgentsCount, totalArticles: agentArticles } = useNewsAgents();
+
+  const hasConnectionError = !!(articlesError || projectsError);
+  const isCorsError = hasConnectionError && (
+    String(articlesError?.message || projectsError?.message).toLowerCase().includes('fetch') ||
+    String(articlesError?.message || projectsError?.message).toLowerCase().includes('cors') ||
+    String(articlesError?.message || projectsError?.message).toLowerCase().includes('network')
+  );
 
   // Calculate stats
   const dashboardStats = useMemo(() => {
@@ -255,6 +263,32 @@ export default function DashboardNew() {
       </header>
 
       <div className="p-6 space-y-6">
+        {/* Connection Error Banner */}
+        {hasConnectionError && (
+          <Alert variant="destructive" className="border-destructive/30 bg-destructive/5">
+            <AlertCircle className="h-5 w-5" />
+            <AlertTitle className="text-base">
+              {isCorsError ? 'Problema de conexão com o servidor' : 'Erro ao carregar dados'}
+            </AlertTitle>
+            <AlertDescription className="mt-1 space-y-2">
+              <p>
+                {isCorsError
+                  ? 'O servidor pode estar reiniciando ou temporariamente indisponível. Isso geralmente se resolve em alguns segundos.'
+                  : 'Não foi possível carregar seus dados. Verifique sua conexão e tente novamente.'}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.location.reload()}
+                className="mt-2"
+              >
+                <Loader2 className="w-4 h-4 mr-2" />
+                Recarregar página
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
