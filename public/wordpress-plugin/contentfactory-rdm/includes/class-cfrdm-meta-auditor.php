@@ -240,6 +240,18 @@ class CFRDM_Meta_Auditor {
             if (!empty($seo_meta) && class_exists('CFRDM_SEO')) {
                 CFRDM_SEO::set_meta($post->ID, $seo_meta);
             }
+            
+            // Notify search engines about the update via IndexNow
+            if (($result['meta_fixed'] || $result['og_fixed']) && class_exists('CFRDM_IndexNow')) {
+                $permalink = get_permalink($post->ID);
+                if ($permalink) {
+                    CFRDM_IndexNow::get_instance()->submit_indexnow($permalink);
+                    CFRDM_Logger::info('meta_auditor', 'IndexNow notificado após correção de meta', array(
+                        'post_id' => $post->ID,
+                        'url' => $permalink,
+                    ), $post->ID);
+                }
+            }
         }
         
         // Mark as audited
