@@ -192,7 +192,7 @@ export default function DashboardNew() {
       setLoadingTimedOut(false);
       return;
     }
-    const timer = setTimeout(() => setLoadingTimedOut(true), 8000);
+    const timer = setTimeout(() => setLoadingTimedOut(true), 15000);
     return () => clearTimeout(timer);
   }, [isStillLoading]);
 
