@@ -89,25 +89,6 @@ export function improveContentStructure(content: string): string {
 }
 
 /**
- * Complete content preprocessing pipeline.
- * Removes code block markers, improves structure, then sanitizes.
- */
-export function preprocessContent(content: string): string {
-  if (!content) return '';
-  
-  // Step 1: Remove code block markers
-  let processed = removeCodeBlockMarkers(content);
-  
-  // Step 2: Improve structure
-  processed = improveContentStructure(processed);
-  
-  // Step 3: Sanitize
-  processed = sanitizeHTML(processed);
-  
-  return processed;
-}
-
-/**
  * Sanitizes HTML content to prevent XSS attacks.
  * Allows only safe HTML tags and attributes commonly used in article content.
  */
@@ -139,26 +120,5 @@ export function sanitizeHTML(html: string): string {
     WHOLE_DOCUMENT: false,
     RETURN_DOM: false,
     RETURN_DOM_FRAGMENT: false,
-  });
-}
-
-/**
- * Sanitizes HTML content with stricter rules for display-only contexts.
- * More restrictive than sanitizeHTML - removes all potentially dangerous elements.
- */
-export function sanitizeHTMLStrict(html: string): string {
-  // First remove any code block markers
-  let cleanedHtml = removeCodeBlockMarkers(html);
-  
-  return DOMPurify.sanitize(cleanedHtml, {
-    ALLOWED_TAGS: [
-      'p', 'br', 'strong', 'em', 'b', 'i',
-      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-      'ul', 'ol', 'li',
-      'blockquote', 'code', 'pre',
-      'span', 'div',
-    ],
-    ALLOWED_ATTR: ['class'],
-    ALLOW_DATA_ATTR: false,
   });
 }

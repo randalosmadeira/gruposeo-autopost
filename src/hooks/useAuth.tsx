@@ -40,7 +40,7 @@ const withRetry = async <T,>(
           lastError.message.includes('NetworkError') ||
           lastError.message.includes('ECONNREFUSED')) {
         const delay = baseDelay * Math.pow(2, attempt);
-        console.log(`Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`);
+        // Retry with exponential backoff
         await new Promise(resolve => setTimeout(resolve, delay));
       } else {
         throw lastError;
