@@ -7,11 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Sparkles, Loader2, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { useBackendHealth } from '@/hooks/useBackendHealth';
 
 export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
   const { toast } = useToast();
+  const { status: backendStatus, latency, recheck } = useBackendHealth(20000);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Login form state
@@ -96,6 +98,26 @@ export default function Auth() {
           <CardDescription>
             Plataforma interna de geração de conteúdo SEO
           </CardDescription>
+
+          {/* Health Check Indicator */}
+          <button
+            onClick={recheck}
+            className={`inline-flex items-center gap-1.5 mx-auto mt-2 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              backendStatus === 'online'
+                ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                : backendStatus === 'offline'
+                ? 'bg-destructive/10 text-destructive cursor-pointer hover:bg-destructive/20'
+                : 'bg-muted text-muted-foreground'
+            }`}
+            title="Clique para verificar novamente"
+          >
+            {backendStatus === 'checking' && <RefreshCw className="w-3 h-3 animate-spin" />}
+            {backendStatus === 'online' && <Wifi className="w-3 h-3" />}
+            {backendStatus === 'offline' && <WifiOff className="w-3 h-3" />}
+            {backendStatus === 'checking' && 'Verificando backend…'}
+            {backendStatus === 'online' && `Backend online${latency ? ` (${latency}ms)` : ''}`}
+            {backendStatus === 'offline' && 'Backend offline — clique para retry'}
+          </button>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="login" className="w-full">
