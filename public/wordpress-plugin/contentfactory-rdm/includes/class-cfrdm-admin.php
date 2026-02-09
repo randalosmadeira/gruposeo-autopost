@@ -901,6 +901,16 @@ class CFRDM_Admin {
             update_option('cfrdm_auto_update_enabled', isset($_POST['cfrdm_auto_update_enabled']));
             update_option('cfrdm_update_notification_email', sanitize_email($_POST['cfrdm_update_notification_email'] ?? get_option('admin_email')));
             
+            // v3.1.0 - Module toggles
+            update_option('cfrdm_meta_auditor_enabled', isset($_POST['cfrdm_meta_auditor_enabled']));
+            update_option('cfrdm_meta_auditor_og_enabled', isset($_POST['cfrdm_meta_auditor_og_enabled']));
+            update_option('cfrdm_indexnow_enabled', isset($_POST['cfrdm_indexnow_enabled']));
+            update_option('cfrdm_llms_txt_enabled', isset($_POST['cfrdm_llms_txt_enabled']));
+            update_option('cfrdm_sitemap_optimizer_enabled', isset($_POST['cfrdm_sitemap_optimizer_enabled']));
+            update_option('cfrdm_news_sitemap_enabled', isset($_POST['cfrdm_news_sitemap_enabled']));
+            update_option('cfrdm_post_duplicator_enabled', isset($_POST['cfrdm_post_duplicator_enabled']));
+            update_option('cfrdm_ai_robots_txt_enabled', isset($_POST['cfrdm_ai_robots_txt_enabled']));
+            
             echo '<div class="notice notice-success"><p>' . __('Configurações salvas com sucesso!', 'contentfactory-rdm') . '</p></div>';
         }
         
@@ -1398,6 +1408,108 @@ class CFRDM_Admin {
                             </table>
                         </div>
                         <?php endif; ?>
+                    </div>
+                </div>
+                
+                <!-- v3.1.0 - SEO Discovery & Automation Modules -->
+                <div class="cfrdm-card">
+                    <div class="cfrdm-card-header">
+                        <h2>
+                            <span class="dashicons dashicons-search"></span>
+                            <?php _e('Módulos v3.1.0 – SEO Discovery & Automação', 'contentfactory-rdm'); ?>
+                        </h2>
+                    </div>
+                    <div class="cfrdm-card-body">
+                        <p class="description" style="margin-bottom:15px;">
+                            <?php _e('Ative ou desative individualmente cada módulo de SEO e descoberta por buscadores e IAs.', 'contentfactory-rdm'); ?>
+                        </p>
+                        <table class="form-table">
+                            <tr>
+                                <th><label for="cfrdm_meta_auditor_enabled"><?php _e('Meta Auditor IA', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="cfrdm_meta_auditor_enabled" id="cfrdm_meta_auditor_enabled" value="1" 
+                                            <?php checked(get_option('cfrdm_meta_auditor_enabled', true)); ?> />
+                                        <?php _e('Auditoria automática de meta descriptions a cada 6 horas', 'contentfactory-rdm'); ?>
+                                    </label>
+                                    <p class="description"><?php _e('Verifica e corrige meta descriptions ausentes ou curtas usando IA.', 'contentfactory-rdm'); ?></p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="cfrdm_meta_auditor_og_enabled"><?php _e('Open Graph / Twitter Cards', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="cfrdm_meta_auditor_og_enabled" id="cfrdm_meta_auditor_og_enabled" value="1" 
+                                            <?php checked(get_option('cfrdm_meta_auditor_og_enabled', true)); ?> />
+                                        <?php _e('Auto-preencher og:title, og:description e twitter:card', 'contentfactory-rdm'); ?>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="cfrdm_indexnow_enabled"><?php _e('IndexNow', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="cfrdm_indexnow_enabled" id="cfrdm_indexnow_enabled" value="1" 
+                                            <?php checked(get_option('cfrdm_indexnow_enabled', true)); ?> />
+                                        <?php _e('Notificar Google, Bing e Yandex instantaneamente ao publicar/atualizar', 'contentfactory-rdm'); ?>
+                                    </label>
+                                    <?php $indexnow_key = get_option('cfrdm_indexnow_key', ''); ?>
+                                    <?php if ($indexnow_key): ?>
+                                    <p class="description"><?php printf(__('IndexNow Key: %s', 'contentfactory-rdm'), '<code>' . esc_html(substr($indexnow_key, 0, 12)) . '...</code>'); ?></p>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="cfrdm_llms_txt_enabled"><?php _e('Descoberta por IA (llms.txt)', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="cfrdm_llms_txt_enabled" id="cfrdm_llms_txt_enabled" value="1" 
+                                            <?php checked(get_option('cfrdm_llms_txt_enabled', true)); ?> />
+                                        <?php _e('Expor /llms.txt e headers AI-friendly para ChatGPT, Claude e Gemini', 'contentfactory-rdm'); ?>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="cfrdm_sitemap_optimizer_enabled"><?php _e('Sitemap Optimizer', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="cfrdm_sitemap_optimizer_enabled" id="cfrdm_sitemap_optimizer_enabled" value="1" 
+                                            <?php checked(get_option('cfrdm_sitemap_optimizer_enabled', true)); ?> />
+                                        <?php _e('Gerar sitemap com prioridades dinâmicas e frequências otimizadas', 'contentfactory-rdm'); ?>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="cfrdm_news_sitemap_enabled"><?php _e('News Sitemap', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="cfrdm_news_sitemap_enabled" id="cfrdm_news_sitemap_enabled" value="1" 
+                                            <?php checked(get_option('cfrdm_news_sitemap_enabled', true)); ?> />
+                                        <?php _e('Gerar sitemap de notícias para Google News (últimas 48h)', 'contentfactory-rdm'); ?>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="cfrdm_post_duplicator_enabled"><?php _e('Duplicador de Posts', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="cfrdm_post_duplicator_enabled" id="cfrdm_post_duplicator_enabled" value="1" 
+                                            <?php checked(get_option('cfrdm_post_duplicator_enabled', true)); ?> />
+                                        <?php _e('Botão para clonar posts/páginas (individual e em lote)', 'contentfactory-rdm'); ?>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="cfrdm_ai_robots_txt_enabled"><?php _e('robots.txt para IA', 'contentfactory-rdm'); ?></label></th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="cfrdm_ai_robots_txt_enabled" id="cfrdm_ai_robots_txt_enabled" value="1" 
+                                            <?php checked(get_option('cfrdm_ai_robots_txt_enabled', true)); ?> />
+                                        <?php _e('Adicionar regras no robots.txt para permitir crawlers de IA (GPTBot, Claude-Web, etc.)', 'contentfactory-rdm'); ?>
+                                    </label>
+                                </td>
+                            </tr>
+                        </table>
                     </div>
                 </div>
                 
