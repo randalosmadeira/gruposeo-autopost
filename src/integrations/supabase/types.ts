@@ -887,6 +887,74 @@ export type Database = {
           },
         ]
       }
+      seo_agent_runs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          details: Json | null
+          error_message: string | null
+          id: string
+          indexing_submitted: number | null
+          links_applied: number | null
+          links_suggested: number | null
+          meta_issues_fixed: number | null
+          meta_issues_found: number | null
+          project_id: string | null
+          run_type: string
+          sitemap_updated: boolean | null
+          started_at: string
+          status: string
+          summary: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          details?: Json | null
+          error_message?: string | null
+          id?: string
+          indexing_submitted?: number | null
+          links_applied?: number | null
+          links_suggested?: number | null
+          meta_issues_fixed?: number | null
+          meta_issues_found?: number | null
+          project_id?: string | null
+          run_type?: string
+          sitemap_updated?: boolean | null
+          started_at?: string
+          status?: string
+          summary?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          details?: Json | null
+          error_message?: string | null
+          id?: string
+          indexing_submitted?: number | null
+          links_applied?: number | null
+          links_suggested?: number | null
+          meta_issues_fixed?: number | null
+          meta_issues_found?: number | null
+          project_id?: string | null
+          run_type?: string
+          sitemap_updated?: boolean | null
+          started_at?: string
+          status?: string
+          summary?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seo_agent_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       token_usage_logs: {
         Row: {
           article_id: string | null
