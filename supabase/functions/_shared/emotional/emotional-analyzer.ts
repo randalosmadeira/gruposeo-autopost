@@ -1,415 +1,414 @@
 /**
- * ANALISADOR DE TOM EMOCIONAL
- * ContentFactory RDM - Grupo SEO Marketing
+ * EMOTIONAL ANALYZER
+ * Analisador de Tom Emocional para Notícias
  * 
- * Analisa o conteúdo da notícia e identifica o gatilho emocional predominante
- * usando análise de palavras-chave (rápida) e IA (profunda).
+ * GrupoSEO AutoPost - ContentFactory RDM v2.0
+ * 
+ * Este módulo detecta automaticamente o gatilho emocional de uma notícia
+ * usando análise por keywords (rápida/gratuita) e/ou IA (profunda).
  */
 
-import type { 
-  EmotionalTrigger, 
-  EmotionalAnalysis,
-} from './emotional-triggers-config.ts';
 import {
-  EMOTIONAL_TRIGGER_CONFIG,
+  EmotionalTrigger,
+  EmotionalAnalysis,
   TRIGGER_KEYWORDS,
-  getSuggestedIntensity
+  EMOTIONAL_TRIGGER_CONFIG,
+  getAllTriggers,
 } from './emotional-triggers-config.ts';
 
-// Importar função de chamada de IA do projeto
-// import { callAI } from './gemini.ts';
+// ============================================================================
+// TIPOS
+// ============================================================================
 
-/**
- * Analisa o conteúdo e identifica o gatilho emocional predominante
- * Usa análise híbrida: keywords (rápido) + IA (quando necessário)
- */
-export async function analyzeEmotionalTone(
-  title: string,
-  content: string,
-  sourceName?: string,
-  callAI?: (messages: Array<{role: string; content: string}>, options?: any) => Promise<string>
-): Promise<EmotionalAnalysis> {
+interface AnalyzerOptions {
+  /** Usar apenas análise por keywords (sem IA) */
+  keywordsOnly?: boolean;
   
-  // Pré-análise por palavras-chave (rápida e sem custo)
-  const preAnalysis = quickKeywordAnalysis(title, content);
+  /** Confiança mínima para aceitar resultado de keywords (0-100) */
+  minKeywordConfidence?: number;
   
-  // Se confiança alta na pré-análise (>85%), usar diretamente
-  if (preAnalysis.confidence > 0.85) {
-    console.log(`[EmotionalAnalyzer] High confidence keyword analysis: ${preAnalysis.primaryTrigger} (${preAnalysis.confidence})`);
-    return preAnalysis;
-  }
+  /** Função para chamar IA (opcional) */
+  callAI?: (messages: Array<{ role: string; content: string }>) => Promise<string>;
   
-  // Se não há função de IA disponível, retornar pré-análise
-  if (!callAI) {
-    console.log(`[EmotionalAnalyzer] No AI function provided, using keyword analysis`);
-    return preAnalysis;
-  }
-  
-  // Análise profunda com IA para casos de baixa confiança
-  try {
-    console.log(`[EmotionalAnalyzer] Running deep AI analysis...`);
-    const aiAnalysis = await deepAIAnalysis(title, content, sourceName, callAI);
-    
-    // Combinar resultados: IA tem precedência mas considera keywords
-    return mergeAnalysis(preAnalysis, aiAnalysis);
-    
-  } catch (error) {
-    console.error('[EmotionalAnalyzer] AI analysis failed, using keyword analysis:', error);
-    return preAnalysis; // Fallback para pré-análise
-  }
+  /** Gatilho forçado (override manual) */
+  forceTrigger?: EmotionalTrigger;
 }
 
+interface ContentToAnalyze {
+  title: string;
+  content: string;
+  sourceName?: string;
+}
+
+// ============================================================================
+// ANÁLISE POR KEYWORDS (RÁPIDA)
+// ============================================================================
+
 /**
- * Análise rápida por palavras-chave
- * Sem custo de API, ideal para triagem inicial
+ * Analisa o tom emocional usando apenas palavras-chave
+ * Retorna análise com confiança baseada em matches encontrados
  */
-export function quickKeywordAnalysis(title: string, content: string): EmotionalAnalysis {
-  const fullText = `${title} ${content}`.toLowerCase();
+export function quickKeywordAnalysis(
+  content: ContentToAnalyze
+): EmotionalAnalysis {
+  const title = content.title.toLowerCase();
+  const body = content.content.toLowerCase();
+  const fullText = `${title} ${body}`;
   
-  // Inicializar scores para todos os gatilhos
-  const triggerScores: Record<EmotionalTrigger, number> = {
-    serious: 0, 
-    humor: 0, 
-    concern: 0, 
-    outrage: 0, 
-    anguish: 0,
-    sarcasm: 0, 
-    satire: 0, 
-    happiness: 0, 
-    celebration: 0, 
-    doubt: 0, 
-    mystery: 0
-  };
+  // Contagem de matches por gatilho
+  const triggerScores: Record<EmotionalTrigger, number> = {} as Record<EmotionalTrigger, number>;
+  const keywordsFound: string[] = [];
   
-  const matchedKeywords: string[] = [];
+  // Inicializa scores
+  getAllTriggers().forEach(trigger => {
+    triggerScores[trigger] = 0;
+  });
   
-  // Calcular scores baseado em palavras-chave
-  for (const [keyword, triggers] of Object.entries(TRIGGER_KEYWORDS)) {
-    // Verificar se keyword existe no texto
+  // Analisa keywords globais
+  Object.entries(TRIGGER_KEYWORDS).forEach(([keyword, triggers]) => {
     const keywordLower = keyword.toLowerCase();
-    const regex = new RegExp(`\\b${escapeRegex(keywordLower)}\\b`, 'gi');
-    const matches = fullText.match(regex);
     
-    if (matches && matches.length > 0) {
-      matchedKeywords.push(keyword);
-      
-      // Aplicar peso por posição e frequência
-      const inTitle = title.toLowerCase().includes(keywordLower);
-      const frequency = matches.length;
-      
-      triggers.forEach((trigger, index) => {
-        // Primeiro trigger na lista tem peso maior
-        const positionWeight = 2 - (index * 0.5);
-        // Keyword no título tem peso extra
-        const titleBonus = inTitle ? 1.5 : 1;
-        // Frequência adiciona peso (max 2x)
-        const frequencyBonus = Math.min(2, 1 + (frequency - 1) * 0.2);
-        
-        triggerScores[trigger] += positionWeight * titleBonus * frequencyBonus;
+    // Peso maior para título (3x) vs corpo (1x)
+    const titleMatches = (title.match(new RegExp(keywordLower, 'g')) || []).length;
+    const bodyMatches = (body.match(new RegExp(keywordLower, 'g')) || []).length;
+    
+    const score = (titleMatches * 3) + bodyMatches;
+    
+    if (score > 0) {
+      keywordsFound.push(keyword);
+      triggers.forEach(trigger => {
+        triggerScores[trigger] += score;
       });
     }
+  });
+  
+  // Analisa keywords específicas de cada gatilho
+  getAllTriggers().forEach(trigger => {
+    const config = EMOTIONAL_TRIGGER_CONFIG[trigger];
+    
+    // Headlines (peso 2x)
+    config.headlines.forEach(headline => {
+      const headlineLower = headline.toLowerCase();
+      if (title.includes(headlineLower)) {
+        triggerScores[trigger] += 2;
+        if (!keywordsFound.includes(headline)) {
+          keywordsFound.push(headline);
+        }
+      }
+    });
+    
+    // Body keywords (peso 1x)
+    config.bodyKeywords.forEach(keyword => {
+      const keywordLower = keyword.toLowerCase();
+      if (body.includes(keywordLower)) {
+        triggerScores[trigger] += 1;
+      }
+    });
+  });
+  
+  // Ordena gatilhos por score
+  const sortedTriggers = Object.entries(triggerScores)
+    .sort(([, a], [, b]) => b - a)
+    .map(([trigger]) => trigger as EmotionalTrigger);
+  
+  const primaryTrigger = sortedTriggers[0];
+  const primaryScore = triggerScores[primaryTrigger];
+  const secondaryTrigger = sortedTriggers[1];
+  const secondaryScore = triggerScores[secondaryTrigger];
+  
+  // Calcula confiança baseada na diferença entre primeiro e segundo
+  let confidence = 50; // Base
+  
+  if (primaryScore > 0) {
+    // Aumenta confiança se houver grande diferença
+    const scoreDiff = primaryScore - secondaryScore;
+    confidence = Math.min(95, 50 + (scoreDiff * 10) + (primaryScore * 5));
   }
   
-  // Encontrar trigger com maior score
-  let primaryTrigger: EmotionalTrigger = 'serious'; // Default
-  let maxScore = 0;
-  
-  for (const [trigger, score] of Object.entries(triggerScores)) {
-    if (score > maxScore) {
-      maxScore = score;
-      primaryTrigger = trigger as EmotionalTrigger;
-    }
+  // Determina intensidade emocional
+  let emotionalIntensity: 'low' | 'medium' | 'high' = 'low';
+  if (primaryScore >= 10) {
+    emotionalIntensity = 'high';
+  } else if (primaryScore >= 5) {
+    emotionalIntensity = 'medium';
   }
   
-  // Calcular confiança baseada na diferença de scores
-  const sortedScores = Object.values(triggerScores).sort((a, b) => b - a);
-  const scoreDiff = sortedScores[0] - (sortedScores[1] || 0);
-  
-  // Confiança baseada em:
-  // 1. Diferença entre primeiro e segundo lugar
-  // 2. Número de keywords matched
-  // 3. Score absoluto do vencedor
-  let confidence = 0.5; // Base
-  
-  if (maxScore > 0) {
-    confidence += Math.min(0.3, scoreDiff * 0.1);          // Diferença
-    confidence += Math.min(0.1, matchedKeywords.length * 0.02); // Quantidade
-    confidence += Math.min(0.1, maxScore * 0.03);          // Score absoluto
+  // Se nenhum match, retorna 'serious' como padrão seguro
+  if (primaryScore === 0) {
+    return {
+      primaryTrigger: 'serious',
+      confidence: 30,
+      secondaryTriggers: [],
+      emotionalIntensity: 'low',
+      keywordsFound: [],
+      analysisMethod: 'keywords'
+    };
   }
   
-  confidence = Math.min(0.95, confidence); // Cap em 95%
-  
-  // Triggers secundários (scores > 0 e diferentes do primário)
-  const secondaryTriggers = Object.entries(triggerScores)
-    .filter(([t, s]) => s > 0 && t !== primaryTrigger)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 2)
-    .map(([t]) => t as EmotionalTrigger);
-  
-  // Obter configuração do trigger vencedor
-  const config = EMOTIONAL_TRIGGER_CONFIG[primaryTrigger];
+  // Gatilhos secundários (score > 0 e pelo menos 30% do primário)
+  const secondaryTriggers = sortedTriggers
+    .slice(1)
+    .filter(t => triggerScores[t] > 0 && triggerScores[t] >= primaryScore * 0.3)
+    .slice(0, 2);
   
   return {
     primaryTrigger,
     confidence,
     secondaryTriggers,
-    suggestedStyle: config.suggestedStyle,
-    toneKeywords: matchedKeywords.slice(0, 5),
-    emotionalIntensity: getSuggestedIntensity(primaryTrigger),
-    reasoning: `Análise de keywords: ${matchedKeywords.length} palavras encontradas. Score: ${maxScore.toFixed(2)}`
+    emotionalIntensity,
+    keywordsFound,
+    analysisMethod: 'keywords'
   };
 }
 
+// ============================================================================
+// ANÁLISE PROFUNDA COM IA
+// ============================================================================
+
 /**
- * Análise profunda usando IA
- * Mais precisa mas com custo de API
+ * Prompt para análise de tom emocional via IA
  */
-async function deepAIAnalysis(
-  title: string,
-  content: string,
-  sourceName: string | undefined,
-  callAI: (messages: Array<{role: string; content: string}>, options?: any) => Promise<string>
-): Promise<EmotionalAnalysis> {
-  
-  const triggerDescriptions = Object.entries(EMOTIONAL_TRIGGER_CONFIG)
-    .map(([id, config], index) => `${index + 1}. **${id}** - ${config.description}`)
-    .join('\n');
-  
-  const prompt = `
-Você é um especialista em análise de tom emocional para jornalismo e marketing de conteúdo.
-
-Analise o seguinte conteúdo e identifique o GATILHO EMOCIONAL predominante:
-
-**TÍTULO:** ${title}
-**FONTE:** ${sourceName || 'Não informada'}
-**CONTEÚDO (primeiros 1500 caracteres):**
-${content.substring(0, 1500)}
-
----
+function buildEmotionalAnalysisPrompt(content: ContentToAnalyze): string {
+  return `
+Analise o tom emocional dominante desta notícia e classifique em UM dos 11 gatilhos:
 
 ## GATILHOS DISPONÍVEIS:
+1. **serious** - Tom grave, factual, informativo (notícias de impacto, decisões judiciais)
+2. **humor** - Situações engraçadas, virais, memes, gafes
+3. **concern** - Alertas, riscos, ameaças, situações preocupantes
+4. **outrage** - Escândalos, corrupção, injustiças, indignação
+5. **anguish** - Tragédias, perdas, sofrimento, luto
+6. **sarcasm** - Ironias, contradições, hipocrisia
+7. **satire** - Crítica social/política através do humor
+8. **happiness** - Boas notícias, conquistas, vitórias pessoais
+9. **celebration** - Eventos festivos, aniversários, marcos históricos
+10. **doubt** - Investigações em andamento, especulações, incertezas
+11. **mystery** - Casos sem resposta, enigmas, desaparecimentos
 
-${triggerDescriptions}
+## NOTÍCIA PARA ANÁLISE:
 
----
+**Título:** ${content.title}
+
+**Conteúdo:**
+${content.content.substring(0, 2000)}${content.content.length > 2000 ? '...' : ''}
+
+${content.sourceName ? `**Fonte:** ${content.sourceName}` : ''}
 
 ## INSTRUÇÕES:
+1. Analise o tom PREDOMINANTE da notícia
+2. Considere o impacto emocional que a notícia causa no leitor
+3. Se houver elementos de múltiplos tons, escolha o MAIS FORTE
 
-1. Analise o tom geral do conteúdo
-2. Identifique palavras e expressões que indicam emoção
-3. Considere o contexto da notícia
-4. Escolha o gatilho que MELHOR representa o tom predominante
-
-## RETORNE APENAS JSON (sem markdown, sem explicações antes ou depois):
-
+## RESPOSTA (JSON APENAS):
+\`\`\`json
 {
-  "primaryTrigger": "código_do_gatilho",
-  "confidence": 0.0 a 1.0,
+  "primaryTrigger": "código do gatilho principal",
+  "confidence": 0-100,
   "secondaryTriggers": ["gatilho2", "gatilho3"],
-  "emotionalIntensity": "low" ou "medium" ou "high",
-  "toneKeywords": ["palavra1", "palavra2", "palavra3"],
-  "reasoning": "Breve explicação do porquê (máx 100 caracteres)"
+  "emotionalIntensity": "low|medium|high",
+  "reasoning": "Explicação em 1 linha"
 }
+\`\`\`
 `;
-
-  const response = await callAI([
-    { role: 'user', content: prompt }
-  ], { maxTokens: 500, temperature: 0.3 });
-  
-  // Extrair JSON da resposta
-  const jsonMatch = response.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error('AI response does not contain valid JSON');
-  }
-  
-  const parsed = JSON.parse(jsonMatch[0]);
-  
-  // Validar e normalizar resposta
-  const validTrigger = validateTrigger(parsed.primaryTrigger);
-  const config = EMOTIONAL_TRIGGER_CONFIG[validTrigger];
-  
-  return {
-    primaryTrigger: validTrigger,
-    confidence: Math.max(0, Math.min(1, parsed.confidence || 0.7)),
-    secondaryTriggers: (parsed.secondaryTriggers || [])
-      .map(validateTrigger)
-      .filter((t: EmotionalTrigger) => t !== validTrigger)
-      .slice(0, 2),
-    suggestedStyle: config.suggestedStyle,
-    toneKeywords: parsed.toneKeywords || [],
-    emotionalIntensity: validateIntensity(parsed.emotionalIntensity),
-    reasoning: parsed.reasoning || 'Análise por IA'
-  };
 }
 
 /**
- * Combina análise de keywords com análise de IA
+ * Analisa o tom emocional usando IA
+ */
+export async function deepAIAnalysis(
+  content: ContentToAnalyze,
+  callAI: (messages: Array<{ role: string; content: string }>) => Promise<string>
+): Promise<EmotionalAnalysis> {
+  try {
+    const prompt = buildEmotionalAnalysisPrompt(content);
+    
+    const response = await callAI([
+      { role: 'system', content: 'Você é um especialista em análise de sentimentos e tons jornalísticos. Responda apenas em JSON.' },
+      { role: 'user', content: prompt }
+    ]);
+    
+    // Extrai JSON da resposta
+    const jsonMatch = response.match(/\{[\s\S]*?\}/);
+    if (!jsonMatch) {
+      throw new Error('No JSON found in response');
+    }
+    
+    const parsed = JSON.parse(jsonMatch[0]);
+    
+    // Valida gatilho
+    const validTriggers = getAllTriggers();
+    const primaryTrigger = validTriggers.includes(parsed.primaryTrigger) 
+      ? parsed.primaryTrigger 
+      : 'serious';
+    
+    const secondaryTriggers = (parsed.secondaryTriggers || [])
+      .filter((t: string) => validTriggers.includes(t as EmotionalTrigger))
+      .slice(0, 2);
+    
+    return {
+      primaryTrigger,
+      confidence: Math.min(100, Math.max(0, parsed.confidence || 70)),
+      secondaryTriggers,
+      emotionalIntensity: ['low', 'medium', 'high'].includes(parsed.emotionalIntensity) 
+        ? parsed.emotionalIntensity 
+        : 'medium',
+      keywordsFound: [],
+      analysisMethod: 'ai'
+    };
+  } catch (error) {
+    console.error('AI analysis failed:', error);
+    
+    // Fallback para análise por keywords
+    return {
+      ...quickKeywordAnalysis(content),
+      analysisMethod: 'keywords'
+    };
+  }
+}
+
+// ============================================================================
+// ANÁLISE HÍBRIDA (RECOMENDADA)
+// ============================================================================
+
+/**
+ * Combina análise por keywords com IA para máxima precisão
+ * - Se keywords tiver alta confiança (>85%), usa direto
+ * - Se confiança baixa, chama IA para refinar
+ */
+export async function analyzeEmotionalTone(
+  content: ContentToAnalyze,
+  options: AnalyzerOptions = {}
+): Promise<EmotionalAnalysis> {
+  // Override manual
+  if (options.forceTrigger) {
+    return {
+      primaryTrigger: options.forceTrigger,
+      confidence: 100,
+      secondaryTriggers: [],
+      emotionalIntensity: 'medium',
+      keywordsFound: [],
+      analysisMethod: 'keywords'
+    };
+  }
+  
+  // Análise rápida por keywords
+  const keywordAnalysis = quickKeywordAnalysis(content);
+  
+  // Se apenas keywords ou alta confiança, retorna direto
+  const minConfidence = options.minKeywordConfidence || 85;
+  if (options.keywordsOnly || keywordAnalysis.confidence >= minConfidence) {
+    return keywordAnalysis;
+  }
+  
+  // Se tiver função de IA, faz análise profunda
+  if (options.callAI) {
+    const aiAnalysis = await deepAIAnalysis(content, options.callAI);
+    
+    // Combina resultados (híbrido)
+    return mergeAnalysis(keywordAnalysis, aiAnalysis);
+  }
+  
+  // Sem IA disponível, retorna análise por keywords
+  return keywordAnalysis;
+}
+
+/**
+ * Combina análises de keywords e IA
  */
 function mergeAnalysis(
-  keywordAnalysis: EmotionalAnalysis,
-  aiAnalysis: EmotionalAnalysis
+  keywords: EmotionalAnalysis,
+  ai: EmotionalAnalysis
 ): EmotionalAnalysis {
-  
   // Se ambos concordam, alta confiança
-  if (keywordAnalysis.primaryTrigger === aiAnalysis.primaryTrigger) {
+  if (keywords.primaryTrigger === ai.primaryTrigger) {
     return {
-      ...aiAnalysis,
-      confidence: Math.min(0.98, aiAnalysis.confidence + 0.1),
-      toneKeywords: [...new Set([...aiAnalysis.toneKeywords, ...keywordAnalysis.toneKeywords])].slice(0, 5),
-      reasoning: `Análise confirmada por keywords e IA: ${aiAnalysis.primaryTrigger}`
+      primaryTrigger: ai.primaryTrigger,
+      confidence: Math.min(98, Math.max(keywords.confidence, ai.confidence) + 10),
+      secondaryTriggers: [...new Set([...keywords.secondaryTriggers, ...ai.secondaryTriggers])].slice(0, 2),
+      emotionalIntensity: ai.emotionalIntensity,
+      keywordsFound: keywords.keywordsFound,
+      analysisMethod: 'hybrid'
     };
   }
   
-  // Se IA tem alta confiança, usar IA
-  if (aiAnalysis.confidence > 0.8) {
+  // Se discordam, prioriza IA se tiver alta confiança
+  if (ai.confidence >= 80) {
     return {
-      ...aiAnalysis,
-      secondaryTriggers: [
-        keywordAnalysis.primaryTrigger, 
-        ...aiAnalysis.secondaryTriggers
-      ].slice(0, 2),
-      toneKeywords: [...new Set([...aiAnalysis.toneKeywords, ...keywordAnalysis.toneKeywords])].slice(0, 5),
+      ...ai,
+      secondaryTriggers: [keywords.primaryTrigger, ...ai.secondaryTriggers].slice(0, 2),
+      keywordsFound: keywords.keywordsFound,
+      analysisMethod: 'hybrid'
     };
   }
   
-  // Se keywords tem alta confiança, usar keywords
-  if (keywordAnalysis.confidence > 0.75) {
+  // Prioriza keywords se IA tiver baixa confiança
+  if (keywords.confidence >= 70) {
     return {
-      ...keywordAnalysis,
-      secondaryTriggers: [
-        aiAnalysis.primaryTrigger,
-        ...keywordAnalysis.secondaryTriggers
-      ].slice(0, 2),
+      ...keywords,
+      secondaryTriggers: [ai.primaryTrigger, ...keywords.secondaryTriggers].slice(0, 2),
+      analysisMethod: 'hybrid'
     };
   }
   
-  // Caso de incerteza: usar IA com confiança reduzida
+  // Caso duvidoso, usa IA
   return {
-    ...aiAnalysis,
-    confidence: Math.max(0.5, aiAnalysis.confidence - 0.1),
-    secondaryTriggers: [
-      keywordAnalysis.primaryTrigger,
-      ...aiAnalysis.secondaryTriggers
-    ].slice(0, 2),
-    reasoning: `Análise incerta - IA: ${aiAnalysis.primaryTrigger}, Keywords: ${keywordAnalysis.primaryTrigger}`
+    ...ai,
+    confidence: Math.max(ai.confidence, keywords.confidence),
+    keywordsFound: keywords.keywordsFound,
+    analysisMethod: 'hybrid'
   };
 }
 
-/**
- * Valida se o trigger é válido
- */
-function validateTrigger(trigger: string): EmotionalTrigger {
-  const validTriggers: EmotionalTrigger[] = [
-    'serious', 'humor', 'concern', 'outrage', 'anguish',
-    'sarcasm', 'satire', 'happiness', 'celebration', 'doubt', 'mystery'
-  ];
-  
-  const normalized = trigger?.toLowerCase()?.trim();
-  
-  if (validTriggers.includes(normalized as EmotionalTrigger)) {
-    return normalized as EmotionalTrigger;
-  }
-  
-  // Mapeamento de termos alternativos
-  const alternativeMap: Record<string, EmotionalTrigger> = {
-    'sério': 'serious',
-    'serio': 'serious',
-    'grave': 'serious',
-    'engraçado': 'humor',
-    'engraçado': 'humor',
-    'comico': 'humor',
-    'preocupação': 'concern',
-    'preocupacao': 'concern',
-    'alerta': 'concern',
-    'revolta': 'outrage',
-    'indignação': 'outrage',
-    'indignacao': 'outrage',
-    'escândalo': 'outrage',
-    'escandalo': 'outrage',
-    'angústia': 'anguish',
-    'angustia': 'anguish',
-    'tristeza': 'anguish',
-    'ironia': 'sarcasm',
-    'satírico': 'satire',
-    'satirico': 'satire',
-    'crítica': 'satire',
-    'critica': 'satire',
-    'alegria': 'happiness',
-    'feliz': 'happiness',
-    'vitória': 'happiness',
-    'vitoria': 'happiness',
-    'comemoração': 'celebration',
-    'comemoracao': 'celebration',
-    'festa': 'celebration',
-    'incerteza': 'doubt',
-    'dúvida': 'doubt',
-    'duvida': 'doubt',
-    'mistério': 'mystery',
-    'misterio': 'mystery',
-    'enigma': 'mystery',
-  };
-  
-  return alternativeMap[normalized] || 'serious';
-}
+// ============================================================================
+// ANÁLISE EM LOTE
+// ============================================================================
 
 /**
- * Valida intensidade emocional
- */
-function validateIntensity(intensity: string): 'low' | 'medium' | 'high' {
-  const normalized = intensity?.toLowerCase()?.trim();
-  
-  if (['low', 'medium', 'high'].includes(normalized)) {
-    return normalized as 'low' | 'medium' | 'high';
-  }
-  
-  // Mapeamento de termos alternativos
-  const alternativeMap: Record<string, 'low' | 'medium' | 'high'> = {
-    'baixa': 'low',
-    'baixo': 'low',
-    'média': 'medium',
-    'medio': 'medium',
-    'média': 'medium',
-    'alta': 'high',
-    'alto': 'high',
-  };
-  
-  return alternativeMap[normalized] || 'medium';
-}
-
-/**
- * Escapa caracteres especiais para regex
- */
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Analisa múltiplos conteúdos em batch
- * Útil para processamento em lote de feeds RSS
+ * Analisa múltiplas notícias (útil para processamento de feeds RSS)
  */
 export async function analyzeEmotionalToneBatch(
-  items: Array<{ title: string; content: string; sourceName?: string }>,
-  callAI?: (messages: Array<{role: string; content: string}>, options?: any) => Promise<string>
+  contents: ContentToAnalyze[],
+  options: AnalyzerOptions = {}
 ): Promise<EmotionalAnalysis[]> {
+  // Análise por keywords é rápida, pode fazer em paralelo
+  const results = await Promise.all(
+    contents.map(content => analyzeEmotionalTone(content, {
+      ...options,
+      // Para lotes, usa apenas keywords para economia
+      keywordsOnly: options.keywordsOnly !== false,
+    }))
+  );
   
-  // Para batch, usar apenas keyword analysis para eficiência
-  return items.map(item => quickKeywordAnalysis(item.title, item.content));
+  return results;
+}
+
+// ============================================================================
+// UTILITÁRIOS
+// ============================================================================
+
+/**
+ * Valida se uma string é um gatilho válido
+ */
+export function isValidTrigger(trigger: string): trigger is EmotionalTrigger {
+  return getAllTriggers().includes(trigger as EmotionalTrigger);
 }
 
 /**
- * Retorna estatísticas sobre a distribuição de gatilhos em um conjunto de conteúdos
+ * Obtém gatilho padrão para fallback
  */
-export function getEmotionalDistribution(
-  analyses: EmotionalAnalysis[]
-): Record<EmotionalTrigger, number> {
-  const distribution: Record<EmotionalTrigger, number> = {
-    serious: 0, humor: 0, concern: 0, outrage: 0, anguish: 0,
-    sarcasm: 0, satire: 0, happiness: 0, celebration: 0, doubt: 0, mystery: 0
+export function getDefaultTrigger(): EmotionalTrigger {
+  return 'serious';
+}
+
+/**
+ * Converte análise para log simplificado
+ */
+export function analysisToLog(analysis: EmotionalAnalysis): Record<string, unknown> {
+  return {
+    trigger: analysis.primaryTrigger,
+    confidence: analysis.confidence,
+    intensity: analysis.emotionalIntensity,
+    method: analysis.analysisMethod,
+    keywords: analysis.keywordsFound.length,
   };
-  
-  for (const analysis of analyses) {
-    distribution[analysis.primaryTrigger]++;
-  }
-  
-  return distribution;
 }

@@ -238,7 +238,7 @@ Deno.serve(async (req) => {
     log.info("emotional_image_processing", { niche });
     
     const emotionalSystem = createEmotionalImageSystem({
-      callAI: async (msgs, opts) => callAI(msgs, opts),
+      callAI: async (msgs) => callAI(msgs),
       generateImage: async (prompt, opts) => generateGeminiImage(prompt, { aspectRatio: opts?.aspectRatio || "16:9" }),
       defaultAspectRatio: '16:9',
       allowOriginalImageReuse: true,
@@ -318,14 +318,14 @@ Deno.serve(async (req) => {
           attempt: imageAttempt,
           trigger: emotionalResult.emotionalAnalysis.primaryTrigger,
           confidence: emotionalResult.emotionalAnalysis.confidence,
-          action: emotionalResult.imageDecision.action,
-          source: emotionalResult.source,
+          action: emotionalResult.decision.action,
+          source: emotionalResult.imageSource,
         });
         
         emotionalTrigger = emotionalResult.emotionalAnalysis.primaryTrigger;
         emotionalConfidence = emotionalResult.emotionalAnalysis.confidence;
-        imageStyle = emotionalResult.style || emotionalResult.imageDecision.style;
-        imageSource = emotionalResult.source || 'generated';
+        imageStyle = emotionalResult.decision.style;
+        imageSource = emotionalResult.imageSource || 'generated';
         imageAltText = emotionalResult.altText || '';
         lastEmotionalResult = emotionalResult;
         if (emotionalResult.success && emotionalResult.imageData) {
@@ -407,8 +407,9 @@ Deno.serve(async (req) => {
             confidence: emotionalConfidence,
             secondaryTriggers: lastEmotionalResult?.emotionalAnalysis?.secondaryTriggers || [],
             intensity: lastEmotionalResult?.emotionalAnalysis?.emotionalIntensity || 'medium',
-            reasoning: lastEmotionalResult?.emotionalAnalysis?.reasoning || '',
+            method: lastEmotionalResult?.emotionalAnalysis?.analysisMethod || 'keywords',
           },
+          image_disclaimer: lastEmotionalResult?.disclaimer || null,
         },
       })
       .select()
@@ -460,12 +461,13 @@ Deno.serve(async (req) => {
         emotional: {
           trigger: emotionalTrigger,
           confidence: emotionalConfidence,
-          secondaryTriggers: emotionalResult.emotionalAnalysis.secondaryTriggers,
-          intensity: emotionalResult.emotionalAnalysis.emotionalIntensity,
+          secondaryTriggers: lastEmotionalResult?.emotionalAnalysis?.secondaryTriggers || [],
+          intensity: lastEmotionalResult?.emotionalAnalysis?.emotionalIntensity || 'medium',
           style: imageStyle,
           source: imageSource,
-          decision: emotionalResult.imageDecision.action,
-          reason: emotionalResult.imageDecision.reason,
+          decision: lastEmotionalResult?.decision?.action || 'generate_new',
+          reason: lastEmotionalResult?.decision?.reason || 'N/A',
+          disclaimer: lastEmotionalResult?.disclaimer || null,
         },
         request_id: requestId,
       }),

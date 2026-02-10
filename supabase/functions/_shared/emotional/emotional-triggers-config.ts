@@ -1,636 +1,726 @@
 /**
- * SISTEMA DE GATILHOS EMOCIONAIS PARA GERAÇÃO DE IMAGENS
- * ContentFactory RDM - Grupo SEO Marketing
+ * EMOTIONAL TRIGGERS CONFIGURATION
+ * Sistema de Gatilhos Emocionais para Geração de Imagens
  * 
- * Este módulo define os gatilhos emocionais e configurações
- * para geração de imagens caricatura/conceituais baseadas no tom da notícia.
+ * GrupoSEO AutoPost - ContentFactory RDM v2.0
+ * 
+ * Este módulo define os 11 gatilhos emocionais e suas configurações
+ * para decisão inteligente entre reutilizar imagem original ou criar caricatura.
  */
 
-// ============================================
+// ============================================================================
 // TIPOS E INTERFACES
-// ============================================
+// ============================================================================
 
 export type EmotionalTrigger = 
-  | 'serious'      // Sério - notícias graves, decisões judiciais, mortes
-  | 'humor'        // Humor - fatos curiosos, gafes, situações cômicas
-  | 'concern'      // Preocupação - alertas, riscos, ameaças
-  | 'outrage'      // Revolta/Indignação - injustiças, escândalos, corrupção
-  | 'anguish'      // Angústia - tragédias, perdas, crises humanitárias
-  | 'sarcasm'      // Sarcasmo - ironias políticas, contradições
-  | 'satire'       // Sátira - crítica social e política através do humor
-  | 'happiness'    // Felicidade - conquistas, vitórias, boas notícias
-  | 'celebration'  // Comemoração - eventos festivos, marcos históricos
-  | 'doubt'        // Dúvidas/Incertezas - especulações, teorias
-  | 'mystery';     // Mistério - casos sem resposta, enigmas
+  | 'serious' 
+  | 'humor' 
+  | 'concern' 
+  | 'outrage' 
+  | 'anguish' 
+  | 'sarcasm' 
+  | 'satire' 
+  | 'happiness' 
+  | 'celebration' 
+  | 'doubt' 
+  | 'mystery';
 
 export type ImageStyle = 
-  | 'photorealistic'  // Fotografia realista
-  | 'caricature'      // Caricatura editorial
-  | 'cartoon'         // Cartoon estilizado
-  | 'conceptual'      // Arte conceitual
-  | 'dramatic';       // Fotografia dramática
+  | 'photorealistic_documentary'
+  | 'photorealistic_dramatic'
+  | 'photorealistic_melancholic'
+  | 'photorealistic_vibrant'
+  | 'photorealistic_festive'
+  | 'caricature_colorful'
+  | 'caricature_bold'
+  | 'caricature_ironic'
+  | 'editorial_cartoon'
+  | 'conceptual_abstract'
+  | 'noir_enigmatic';
+
+export type ImageAction = 
+  | 'reuse_original'
+  | 'create_caricature'
+  | 'generate_new'
+  | 'create_conceptual';
+
+export interface TriggerConfig {
+  code: EmotionalTrigger;
+  label: string;
+  labelPtBr: string;
+  emoji: string;
+  description: string;
+  
+  // Visual configuration
+  suggestedStyle: ImageStyle;
+  colorPalette: string[];
+  visualElements: string[];
+  
+  // Image decision rules
+  reuseOriginal: boolean | 'optional';
+  createCaricature: boolean | 'optional';
+  
+  // Prompt modifiers
+  promptModifiers: string;
+  negativePrompts: string[];
+  
+  // Detection keywords (Portuguese)
+  headlines: string[];
+  bodyKeywords: string[];
+  
+  // Text tone
+  vocabularyTone: string;
+  ctaStyle: string;
+}
 
 export interface EmotionalAnalysis {
   primaryTrigger: EmotionalTrigger;
-  confidence: number;                     // 0-1
+  confidence: number; // 0-100
   secondaryTriggers: EmotionalTrigger[];
-  suggestedStyle: ImageStyle;
-  toneKeywords: string[];
   emotionalIntensity: 'low' | 'medium' | 'high';
-  reasoning?: string;
+  keywordsFound: string[];
+  analysisMethod: 'keywords' | 'ai' | 'hybrid';
 }
 
 export interface ImageDecision {
-  action: 'reuse_original' | 'create_caricature' | 'create_conceptual' | 'generate_new';
+  action: ImageAction;
   reason: string;
-  originalImageUrl?: string;
+  triggerUsed: EmotionalTrigger;
   style: ImageStyle;
-  trigger: EmotionalTrigger;
+  shouldIncludeDisclaimer: boolean;
 }
 
 export interface CaricaturePrompt {
   basePrompt: string;
-  styleModifiers: string[];
-  emotionalElements: string[];
-  colorPalette: string[];
+  styleModifiers: string;
+  emotionalElements: string;
+  colorPalette: string;
   composition: string;
   restrictions: string[];
 }
 
-export interface TriggerConfig {
-  label: string;
-  labelPtBr: string;
-  description: string;
-  suggestedStyle: ImageStyle;
-  colorPalette: string[];
-  visualElements: string[];
-  promptModifiers: string[];
-  headlines: string[];           // Palavras típicas em manchetes
-  vocabularyTone: string[];      // Tom do vocabulário
-  ctaStyle: string;              // Estilo de CTA apropriado
-  negativePrompts: string[];     // O que evitar na imagem
-}
-
-// ============================================
-// CONFIGURAÇÃO COMPLETA DOS GATILHOS
-// ============================================
+// ============================================================================
+// CONFIGURAÇÃO DOS 11 GATILHOS EMOCIONAIS
+// ============================================================================
 
 export const EMOTIONAL_TRIGGER_CONFIG: Record<EmotionalTrigger, TriggerConfig> = {
   
+  // ---------------------------------------------------------------------------
+  // 1. SÉRIO - Notícias graves, factuais, informativas
+  // ---------------------------------------------------------------------------
   serious: {
+    code: 'serious',
     label: 'Serious',
     labelPtBr: 'Sério',
-    description: 'Notícias graves, decisões importantes, falecimentos, questões sensíveis',
-    suggestedStyle: 'photorealistic',
+    emoji: '📰',
+    description: 'Tom grave, factual, informativo. Notícias de impacto sem sensacionalismo.',
+    
+    suggestedStyle: 'photorealistic_documentary',
     colorPalette: ['#2C3E50', '#34495E', '#7F8C8D', '#BDC3C7', '#ECF0F1'],
     visualElements: [
-      'composição sóbria e equilibrada',
-      'iluminação natural neutra',
-      'fundo limpo e profissional',
-      'sem elementos decorativos extravagantes',
-      'foco central no assunto principal',
-      'atmosfera de respeito e gravidade'
+      'Iluminação sóbria e equilibrada',
+      'Composição clássica jornalística',
+      'Sem exageros ou dramatização',
+      'Foco em fatos, não emoções'
     ],
-    promptModifiers: [
-      'fotografia jornalística profissional',
-      'estilo documental de alta qualidade',
-      'tons neutros e sóbrios',
-      'composição respeitosa e equilibrada',
-      'iluminação natural suave',
-      'sem elementos que distraiam'
-    ],
+    
+    reuseOriginal: true,
+    createCaricature: false,
+    
+    promptModifiers: 'Tom documental, fotojornalismo profissional, sem sensacionalismo, respeito ao tema, iluminação neutra',
+    negativePrompts: ['cartoon', 'humor', 'cores vibrantes', 'exagero', 'caricatura', 'meme'],
+    
     headlines: [
-      'morre', 'falece', 'morte', 'óbito', 'decide', 'determina', 
-      'condena', 'proíbe', 'anuncia', 'confirma', 'oficializa',
-      'sentença', 'julgamento', 'tribunal', 'supremo'
+      'morre', 'falece', 'óbito', 'morte de', 'tribunal', 'decisão judicial',
+      'condenado', 'julgamento', 'sentença', 'absolvido', 'preso', 'prisão',
+      'lei', 'projeto de lei', 'votação', 'aprovado', 'sancionado', 'vetado',
+      'ministro', 'presidente', 'governador', 'prefeito', 'secretário'
     ],
-    vocabularyTone: ['formal', 'respeitoso', 'objetivo', 'preciso', 'sóbrio'],
-    ctaStyle: 'Saiba mais sobre este importante acontecimento',
-    negativePrompts: [
-      'humor', 'cores vibrantes', 'elementos cartoon', 
-      'exagero', 'sarcasmo', 'ironia visual'
-    ]
+    bodyKeywords: [
+      'tribunal', 'justiça', 'processo', 'audiência', 'recurso', 'apelação',
+      'constituição', 'lei', 'decreto', 'portaria', 'resolução', 'norma',
+      'oficial', 'declarou', 'afirmou', 'informou', 'comunicou', 'anunciou'
+    ],
+    
+    vocabularyTone: 'Formal, objetivo, imparcial. Verbos no pretérito. Citações diretas.',
+    ctaStyle: 'Informativo: "Acompanhe as atualizações", "Saiba mais sobre o caso"'
   },
 
+  // ---------------------------------------------------------------------------
+  // 2. HUMOR - Situações engraçadas, virais, memes
+  // ---------------------------------------------------------------------------
   humor: {
+    code: 'humor',
     label: 'Humor',
     labelPtBr: 'Humor',
-    description: 'Fatos curiosos, gafes, situações cômicas, virais engraçados',
-    suggestedStyle: 'caricature',
-    colorPalette: ['#F39C12', '#E74C3C', '#3498DB', '#2ECC71', '#9B59B6', '#FF6B6B'],
+    emoji: '😄',
+    description: 'Situações engraçadas, virais, memes. Gafes e trapalhadas.',
+    
+    suggestedStyle: 'caricature_colorful',
+    colorPalette: ['#F39C12', '#E74C3C', '#3498DB', '#2ECC71', '#9B59B6'],
     visualElements: [
-      'exagero de expressões faciais',
-      'proporções distorcidas humorísticas',
-      'elementos cartoon coloridos',
-      'cores vibrantes e saturadas',
-      'composição dinâmica e divertida',
-      'elementos de surpresa visual'
+      'Expressões faciais exageradas',
+      'Cores saturadas e vibrantes',
+      'Proporções distorcidas humorísticas',
+      'Elementos de surpresa visual'
     ],
-    promptModifiers: [
-      'caricatura editorial cômica de alta qualidade',
-      'estilo cartoon humorístico brasileiro',
-      'expressões exageradas e engraçadas',
-      'cores vivas e alegres',
-      'elementos de humor visual inteligente',
-      'proporções exageradas para efeito cômico'
-    ],
+    
+    reuseOriginal: false,
+    createCaricature: true,
+    
+    promptModifiers: 'Caricatura cômica estilo charge brasileira, expressões exageradas e divertidas, cores vibrantes saturadas, estilo cartoon moderno, atmosfera leve e bem-humorada',
+    negativePrompts: ['fotorealismo', 'sério', 'sóbrio', 'rosto realista', 'triste', 'dramático', 'sombrio'],
+    
     headlines: [
-      'hilário', 'inacreditável', 'bizarro', 'curioso', 'gafe', 
-      'viraliza', 'meme', 'inesperado', 'surpreende', 'trapalhada',
-      'confusão', 'engano', 'troca'
+      'viral', 'meme', 'hilário', 'risada', 'gafe', 'trapalhada', 'bizarro',
+      'inusitado', 'curioso', 'engraçado', 'divertido', 'zoeira', 'piada',
+      'treta', 'confusão', 'climão', 'saia justa', 'vergonha alheia'
     ],
-    vocabularyTone: ['leve', 'descontraído', 'irônico', 'bem-humorado', 'espirituoso'],
-    ctaStyle: 'Você não vai acreditar no que aconteceu!',
-    negativePrompts: [
-      'tom sério', 'cores escuras', 'atmosfera pesada',
-      'realismo fotográfico', 'composição rígida'
-    ]
+    bodyKeywords: [
+      'rir', 'gargalhada', 'cômico', 'engraçado', 'piada', 'humor',
+      'meme', 'viral', 'compartilhado', 'bombou', 'explodiu', 'viralizou',
+      'internautas', 'redes sociais', 'twitter', 'tiktok'
+    ],
+    
+    vocabularyTone: 'Leve, informal, coloquial. Gírias e expressões populares.',
+    ctaStyle: 'Divertido: "Confira e divirta-se!", "Veja o vídeo completo"'
   },
 
+  // ---------------------------------------------------------------------------
+  // 3. PREOCUPAÇÃO - Alertas, riscos, ameaças
+  // ---------------------------------------------------------------------------
   concern: {
+    code: 'concern',
     label: 'Concern',
     labelPtBr: 'Preocupação',
-    description: 'Alertas de segurança, riscos à saúde, ameaças, avisos importantes',
-    suggestedStyle: 'dramatic',
-    colorPalette: ['#E67E22', '#D35400', '#C0392B', '#7F8C8D', '#2C3E50', '#F39C12'],
+    emoji: '⚠️',
+    description: 'Alertas, riscos, ameaças. Situações que demandam atenção.',
+    
+    suggestedStyle: 'photorealistic_dramatic',
+    colorPalette: ['#E67E22', '#D35400', '#C0392B', '#2C3E50', '#7F8C8D'],
     visualElements: [
-      'iluminação dramática com sombras marcantes',
-      'tons quentes de alerta (laranja/amarelo)',
-      'composição que transmite tensão',
-      'foco em elementos de risco ou perigo',
-      'atmosfera de urgência',
-      'elementos simbólicos de atenção'
+      'Iluminação dramática com contraste',
+      'Cores de alerta (laranja, vermelho)',
+      'Composição que transmite tensão',
+      'Elementos visuais de urgência'
     ],
-    promptModifiers: [
-      'fotografia dramática de alerta',
-      'iluminação que transmite urgência',
-      'tons de aviso predominantes (laranja/amarelo)',
-      'composição tensa e impactante',
-      'atmosfera de preocupação genuína',
-      'elementos que chamam atenção para o risco'
-    ],
+    
+    reuseOriginal: true,
+    createCaricature: false,
+    
+    promptModifiers: 'Fotografia dramática, tensão visual, urgência, iluminação contrastante, cores de alerta, atmosfera de seriedade',
+    negativePrompts: ['cartoon', 'humor', 'cores suaves', 'paz', 'tranquilidade', 'caricatura'],
+    
     headlines: [
-      'alerta', 'risco', 'perigo', 'ameaça', 'cuidado', 'aviso',
-      'preocupa', 'pode causar', 'evite', 'atenção', 'urgente',
-      'emergência', 'crise', 'colapso'
+      'alerta', 'risco', 'perigo', 'ameaça', 'cuidado', 'atenção', 'urgente',
+      'emergência', 'grave', 'crítico', 'preocupante', 'alarmante', 'sério',
+      'pode causar', 'evite', 'não faça', 'fique atento'
     ],
-    vocabularyTone: ['urgente', 'cauteloso', 'preventivo', 'informativo', 'direto'],
-    ctaStyle: 'Proteja-se: veja o que você precisa saber',
-    negativePrompts: [
-      'alegria', 'celebração', 'cores festivas',
-      'atmosfera relaxada', 'elementos de humor'
-    ]
+    bodyKeywords: [
+      'alerta', 'aviso', 'comunicado', 'orientação', 'recomendação',
+      'risco', 'perigo', 'ameaça', 'vulnerabilidade', 'exposição',
+      'precaução', 'prevenção', 'cuidado', 'atenção', 'vigilância'
+    ],
+    
+    vocabularyTone: 'Urgente mas não alarmista. Objetivo e direto. Foco em ação.',
+    ctaStyle: 'Orientativo: "Proteja-se agora", "Tome as medidas necessárias"'
   },
 
+  // ---------------------------------------------------------------------------
+  // 4. REVOLTA/INDIGNAÇÃO - Escândalos, corrupção, injustiças
+  // ---------------------------------------------------------------------------
   outrage: {
+    code: 'outrage',
     label: 'Outrage',
-    labelPtBr: 'Revolta / Indignação',
-    description: 'Injustiças, escândalos de corrupção, abusos de poder, fraudes',
-    suggestedStyle: 'caricature',
-    colorPalette: ['#C0392B', '#E74C3C', '#2C3E50', '#1A1A2E', '#FF6B6B', '#8B0000'],
+    labelPtBr: 'Revolta/Indignação',
+    emoji: '😡',
+    description: 'Escândalos, corrupção, injustiças. Situações que geram indignação.',
+    
+    suggestedStyle: 'caricature_bold',
+    colorPalette: ['#C0392B', '#E74C3C', '#922B21', '#2C3E50', '#1A1A1A'],
     visualElements: [
-      'caricatura com exagero dramático',
-      'expressões de indignação ou ganância',
-      'elementos simbólicos de injustiça ou corrupção',
-      'vermelho como cor dominante',
-      'contraste forte entre luz e sombra',
-      'símbolos de poder corrupto'
+      'Expressão de culpa ou arrogância exagerada',
+      'Símbolos de corrupção (notas, malas, cofres)',
+      'Contraste forte com vermelho dominante',
+      'Composição dramática e contundente'
     ],
-    promptModifiers: [
-      'caricatura política editorial contundente',
-      'estilo de charge jornalística indignada',
-      'cores fortes com vermelho dominante',
-      'expressões de revolta ou ganância exageradas',
-      'símbolos visuais de corrupção ou injustiça',
-      'composição dramática e impactante'
-    ],
+    
+    reuseOriginal: false,
+    createCaricature: true,
+    
+    promptModifiers: 'Caricatura política contundente estilo charge editorial, símbolos de corrupção visíveis, vermelho dominante, expressão que transmite a gravidade do escândalo, sem identificar rosto real',
+    negativePrompts: ['foto realista', 'rosto identificável', 'celebração', 'humor leve', 'cores alegres'],
+    
     headlines: [
-      'escândalo', 'corrupção', 'absurdo', 'vergonha', 'denuncia',
-      'acusa', 'fraude', 'desvio', 'propina', 'irregular',
-      'abuso', 'crime', 'prisão', 'investigação'
+      'escândalo', 'corrupção', 'desvio', 'fraude', 'propina', 'roubo',
+      'absurdo', 'vergonha', 'indignação', 'revolta', 'inadmissível',
+      'desviou', 'roubou', 'fraudou', 'superfaturamento', 'nepotismo'
     ],
-    vocabularyTone: ['contundente', 'crítico', 'denunciativo', 'enfático', 'indignado'],
-    ctaStyle: 'Entenda o escândalo que revolta o país',
-    negativePrompts: [
-      'tom neutro', 'cores pastéis', 'atmosfera calma',
-      'celebração', 'felicidade', 'otimismo'
-    ]
+    bodyKeywords: [
+      'escândalo', 'corrupção', 'desvio', 'fraude', 'propina', 'suborno',
+      'lavagem', 'enriquecimento', 'ilícito', 'irregular', 'ilegal',
+      'MP', 'PF', 'investigação', 'operação', 'denúncia', 'delação'
+    ],
+    
+    vocabularyTone: 'Indignado mas factual. Destaque para valores e irregularidades.',
+    ctaStyle: 'Mobilizador: "Compartilhe para que todos saibam", "Exija transparência"'
   },
 
+  // ---------------------------------------------------------------------------
+  // 5. ANGÚSTIA - Tragédias, perdas, sofrimento
+  // ---------------------------------------------------------------------------
   anguish: {
+    code: 'anguish',
     label: 'Anguish',
     labelPtBr: 'Angústia',
-    description: 'Tragédias, perdas humanas, crises humanitárias, desastres naturais',
-    suggestedStyle: 'dramatic',
-    colorPalette: ['#2C3E50', '#34495E', '#5D6D7E', '#85929E', '#AEB6BF', '#1A1A2E'],
+    emoji: '😢',
+    description: 'Tragédias, perdas, sofrimento. Eventos que causam dor coletiva.',
+    
+    suggestedStyle: 'photorealistic_melancholic',
+    colorPalette: ['#2C3E50', '#34495E', '#5D6D7E', '#85929E', '#ABB2B9'],
     visualElements: [
-      'tons frios e melancólicos (azul/cinza)',
-      'iluminação suave e difusa',
-      'composição que transmite vazio ou perda',
-      'expressões de tristeza ou contemplação',
-      'atmosfera reflexiva e respeitosa',
-      'elementos que sugerem ausência'
+      'Tons frios e dessaturados',
+      'Desfoque suave (bokeh melancólico)',
+      'Silhuetas e sombras',
+      'Composição que transmite solidão/vazio'
     ],
-    promptModifiers: [
-      'fotografia emocional dramática',
-      'tons frios predominantes (azul/cinza)',
-      'iluminação melancólica e suave',
-      'composição contemplativa',
-      'atmosfera de luto ou tristeza respeitosa',
-      'sem exploração sensacionalista'
-    ],
+    
+    reuseOriginal: true,
+    createCaricature: false,
+    
+    promptModifiers: 'Fotografia respeitosa e sóbria, tons frios e dessaturados, sem exploração do sofrimento, composição que transmite respeito às vítimas, iluminação suave e melancólica',
+    negativePrompts: ['cores vibrantes', 'humor', 'celebração', 'rostos em close', 'sangue', 'violência gráfica', 'caricatura'],
+    
     headlines: [
-      'tragédia', 'vítimas', 'luto', 'desastre', 'crise', 'drama',
-      'sofrimento', 'mortos', 'feridos', 'destruição', 'colapso',
-      'perdas', 'catástrofe', 'calamidade'
+      'tragédia', 'perda', 'luto', 'vítimas', 'desastre', 'acidente fatal',
+      'desabamento', 'incêndio', 'afogamento', 'atropelamento', 'queda',
+      'morreram', 'faleceram', 'perderam a vida', 'encontrados mortos'
     ],
-    vocabularyTone: ['empático', 'respeitoso', 'solidário', 'sensível', 'cuidadoso'],
-    ctaStyle: 'Saiba como ajudar as vítimas',
-    negativePrompts: [
-      'humor', 'cores vibrantes', 'celebração',
-      'sensacionalismo', 'exploração do sofrimento'
-    ]
+    bodyKeywords: [
+      'tragédia', 'vítima', 'óbito', 'falecimento', 'luto', 'velório',
+      'enterro', 'sepultamento', 'homenagem', 'consternação', 'comoção',
+      'solidariedade', 'família', 'amigos', 'comunidade', 'dor'
+    ],
+    
+    vocabularyTone: 'Respeitoso, sóbrio, empático. Foco nas vítimas, não no sensacionalismo.',
+    ctaStyle: 'Solidário: "Nossos sentimentos às famílias", "Acesse canais de ajuda"'
   },
 
+  // ---------------------------------------------------------------------------
+  // 6. SARCASMO - Ironias, contradições, hipocrisia
+  // ---------------------------------------------------------------------------
   sarcasm: {
+    code: 'sarcasm',
     label: 'Sarcasm',
     labelPtBr: 'Sarcasmo',
-    description: 'Ironias políticas, contradições evidentes, hipocrisia exposta',
-    suggestedStyle: 'caricature',
-    colorPalette: ['#9B59B6', '#8E44AD', '#3498DB', '#E74C3C', '#F39C12', '#2C3E50'],
+    emoji: '😏',
+    description: 'Ironias, contradições, hipocrisia. Situações que pedem ironia fina.',
+    
+    suggestedStyle: 'caricature_ironic',
+    colorPalette: ['#9B59B6', '#8E44AD', '#3498DB', '#2980B9', '#1ABC9C'],
     visualElements: [
-      'caricatura com ironia visual clara',
-      'elementos de contradição lado a lado',
-      'expressões cínicas ou debochadas',
-      'símbolos de hipocrisia',
-      'composição que expõe absurdos',
-      'justaposição de elementos contraditórios'
+      'Expressão irônica/sarcástica',
+      'Elementos visuais contraditórios',
+      'Sutileza humorística inteligente',
+      'Composição que destaca a ironia'
     ],
-    promptModifiers: [
-      'caricatura editorial sarcástica inteligente',
-      'estilo irônico e cínico de charge',
-      'elementos visuais que expõem contradições',
-      'expressões de deboche visual sutil',
-      'símbolos de hipocrisia política',
-      'composição que destaca o absurdo'
-    ],
+    
+    reuseOriginal: false,
+    createCaricature: true,
+    
+    promptModifiers: 'Caricatura irônica e inteligente, expressão sarcástica sutil, elementos visuais que mostram contradição, cores frias com toques de destaque, estilo editorial sofisticado',
+    negativePrompts: ['foto séria', 'documentário', 'literal', 'humor escrachado', 'ofensivo'],
+    
     headlines: [
-      'ironia', 'contradição', 'promete mas', 'diz uma coisa',
-      'ao contrário', 'enquanto isso', 'hipócrita', 'mentira',
-      'fake', 'desmente', 'nega'
+      'ironia', 'contradição', 'hipocrisia', 'incoerência', 'cinismo',
+      'depois de dizer que', 'apesar de ter', 'mesmo tendo', 'curiosamente',
+      'contraditoriamente', 'ironicamente', 'para variar'
     ],
-    vocabularyTone: ['irônico', 'cínico', 'perspicaz', 'mordaz', 'sagaz'],
-    ctaStyle: 'A ironia que ninguém esperava ver',
-    negativePrompts: [
-      'tom sério', 'neutralidade', 'sem opinião',
-      'realismo puro', 'composição conservadora'
-    ]
+    bodyKeywords: [
+      'ironia', 'irônico', 'contraditório', 'hipócrita', 'incoerente',
+      'antes disse', 'agora faz', 'mudou de posição', 'virou a casaca',
+      'dois pesos', 'duas medidas', 'quando convém'
+    ],
+    
+    vocabularyTone: 'Irônico mas elegante. Sutileza intelectual. Sem baixaria.',
+    ctaStyle: 'Provocativo: "Entenda a contradição", "Compare as declarações"'
   },
 
+  // ---------------------------------------------------------------------------
+  // 7. SÁTIRAS - Crítica social/política através do humor
+  // ---------------------------------------------------------------------------
   satire: {
+    code: 'satire',
     label: 'Satire',
     labelPtBr: 'Sátira',
-    description: 'Crítica social e política inteligente através do humor',
-    suggestedStyle: 'cartoon',
-    colorPalette: ['#2ECC71', '#3498DB', '#E74C3C', '#F39C12', '#9B59B6', '#1ABC9C'],
+    emoji: '🎭',
+    description: 'Crítica social ou política através do humor inteligente.',
+    
+    suggestedStyle: 'editorial_cartoon',
+    colorPalette: ['#2ECC71', '#27AE60', '#E74C3C', '#F39C12', '#3498DB'],
     visualElements: [
-      'estilo editorial de charge clássica',
-      'símbolos políticos exagerados',
-      'metáforas visuais claras e inteligentes',
-      'elementos de crítica social',
-      'composição de revista ou jornal',
-      'estilo de cartunista político'
+      'Estilo charge de jornal brasileiro',
+      'Símbolos políticos/sociais reconhecíveis',
+      'Exagero característico de charge',
+      'Crítica visual inteligente'
     ],
-    promptModifiers: [
-      'charge política editorial de alta qualidade',
-      'estilo de cartunista de jornal renomado',
-      'metáforas visuais de crítica social',
-      'símbolos políticos estilizados',
-      'composição de sátira clássica brasileira',
-      'estilo inteligente e perspicaz'
-    ],
+    
+    reuseOriginal: false,
+    createCaricature: true,
+    
+    promptModifiers: 'Charge editorial estilo brasileiro (Angeli, Laerte, Jaguar), crítica visual inteligente e bem-humorada, símbolos políticos reconhecíveis, sem rosto identificável de pessoa real, humor sofisticado',
+    negativePrompts: ['foto realista', 'rosto real identificável', 'neutro', 'ofensivo', 'agressivo'],
+    
     headlines: [
-      'enquanto isso', 'governo', 'político', 'eleição',
-      'decisão polêmica', 'congresso', 'senado', 'câmara',
-      'ministro', 'presidente', 'oposição'
+      'político', 'governo', 'congresso', 'presidente', 'ministro', 'eleição',
+      'votação', 'partido', 'campanha', 'promessa', 'discurso', 'palanque',
+      'brasília', 'planalto', 'câmara', 'senado'
     ],
-    vocabularyTone: ['satírico', 'crítico', 'perspicaz', 'inteligente', 'provocativo'],
-    ctaStyle: 'A charge que resume a situação política',
-    negativePrompts: [
-      'realismo', 'neutralidade', 'sem opinião',
-      'tom institucional', 'propaganda'
-    ]
+    bodyKeywords: [
+      'político', 'política', 'governo', 'oposição', 'base aliada',
+      'deputado', 'senador', 'vereador', 'prefeito', 'governador',
+      'eleitor', 'eleição', 'urna', 'voto', 'mandato', 'reeleição'
+    ],
+    
+    vocabularyTone: 'Crítico mas bem-humorado. Inteligente, não agressivo.',
+    ctaStyle: 'Reflexivo: "O que você acha?", "Deixe sua opinião"'
   },
 
+  // ---------------------------------------------------------------------------
+  // 8. FELICIDADE - Boas notícias, conquistas, vitórias
+  // ---------------------------------------------------------------------------
   happiness: {
+    code: 'happiness',
     label: 'Happiness',
     labelPtBr: 'Felicidade',
-    description: 'Conquistas pessoais e coletivas, vitórias, boas notícias, superação',
-    suggestedStyle: 'photorealistic',
-    colorPalette: ['#F1C40F', '#F39C12', '#E67E22', '#27AE60', '#3498DB', '#FF6B6B'],
+    emoji: '😊',
+    description: 'Boas notícias, conquistas pessoais, vitórias. Momentos positivos.',
+    
+    suggestedStyle: 'photorealistic_vibrant',
+    colorPalette: ['#F1C40F', '#F39C12', '#27AE60', '#3498DB', '#E74C3C'],
     visualElements: [
-      'iluminação brilhante e otimista',
-      'cores quentes e vibrantes',
-      'expressões genuínas de alegria',
-      'composição expansiva e aberta',
-      'elementos de sucesso e conquista',
-      'atmosfera de celebração contida'
+      'Cores quentes e vibrantes',
+      'Iluminação natural e alegre',
+      'Sorrisos e expressões de alegria',
+      'Composição dinâmica e positiva'
     ],
-    promptModifiers: [
-      'fotografia vibrante e otimista',
-      'iluminação dourada de sucesso',
-      'cores quentes e alegres',
-      'expressões de vitória e felicidade',
-      'atmosfera de conquista',
-      'composição que transmite realização'
-    ],
+    
+    reuseOriginal: 'optional',
+    createCaricature: false,
+    
+    promptModifiers: 'Fotografia vibrante e alegre, cores quentes e saturadas, iluminação natural brilhante, atmosfera de celebração e conquista, energia positiva e inspiradora',
+    negativePrompts: ['sombrio', 'frio', 'triste', 'cinza', 'dessaturado', 'melancólico'],
+    
     headlines: [
-      'conquista', 'vitória', 'sucesso', 'aprovado', 'recorde',
-      'histórico', 'inédito', 'supera', 'alcança', 'ganha',
-      'vence', 'campeão', 'medalha'
+      'vitória', 'conquista', 'sucesso', 'aprovado', 'ganhou', 'campeão',
+      'recorde', 'primeiro lugar', 'medalha', 'troféu', 'prêmio', 'homenagem',
+      'superou', 'alcançou', 'realizou', 'conseguiu', 'venceu'
     ],
-    vocabularyTone: ['otimista', 'entusiasmado', 'comemorativo', 'positivo', 'inspirador'],
-    ctaStyle: 'Celebre essa conquista histórica!',
-    negativePrompts: [
-      'tom sério', 'cores frias', 'atmosfera melancólica',
-      'crítica', 'negatividade'
-    ]
+    bodyKeywords: [
+      'vitória', 'conquista', 'sucesso', 'aprovação', 'premiação',
+      'reconhecimento', 'destaque', 'excelência', 'mérito', 'esforço',
+      'dedicação', 'perseverança', 'sonho', 'realização', 'objetivo'
+    ],
+    
+    vocabularyTone: 'Celebratório, inspirador, motivacional. Energia positiva.',
+    ctaStyle: 'Inspirador: "Parabéns!", "Que história inspiradora!"'
   },
 
+  // ---------------------------------------------------------------------------
+  // 9. COMEMORAÇÃO - Eventos, aniversários, marcos históricos
+  // ---------------------------------------------------------------------------
   celebration: {
+    code: 'celebration',
     label: 'Celebration',
     labelPtBr: 'Comemoração',
-    description: 'Eventos festivos, aniversários, marcos históricos, celebrações coletivas',
-    suggestedStyle: 'photorealistic',
-    colorPalette: ['#F1C40F', '#E74C3C', '#3498DB', '#2ECC71', '#9B59B6', '#FF69B4'],
+    emoji: '🎉',
+    description: 'Eventos festivos, aniversários, marcos históricos, inaugurações.',
+    
+    suggestedStyle: 'photorealistic_festive',
+    colorPalette: ['#F1C40F', '#E74C3C', '#9B59B6', '#3498DB', '#2ECC71', '#E67E22'],
     visualElements: [
-      'elementos festivos (confetes, balões)',
-      'cores vibrantes e festivas',
-      'iluminação de celebração',
-      'composição alegre e dinâmica',
-      'símbolos de festa e união',
-      'atmosfera de comemoração coletiva'
+      'Cores festivas múltiplas',
+      'Confetes, balões, bandeiras',
+      'Multidão alegre',
+      'Atmosfera de festa'
     ],
-    promptModifiers: [
-      'fotografia de celebração festiva',
-      'elementos de festa coloridos',
-      'confetes e decoração comemorativa',
-      'atmosfera de alegria coletiva',
-      'iluminação vibrante de evento',
-      'composição que transmite união'
-    ],
+    
+    reuseOriginal: 'optional',
+    createCaricature: false,
+    
+    promptModifiers: 'Fotografia festiva e colorida, atmosfera de celebração coletiva, múltiplas cores vibrantes, elementos festivos (confetes, bandeiras), iluminação alegre e brilhante',
+    negativePrompts: ['sóbrio', 'cinza', 'solitário', 'triste', 'minimalista', 'frio'],
+    
     headlines: [
-      'comemora', 'aniversário', 'marca', 'celebra', 'festeja',
-      'homenagem', 'jubileu', 'centenário', 'feriado', 'evento',
-      'festa', 'carnaval', 'réveillon'
+      'celebra', 'comemora', 'aniversário', 'inauguração', 'festa', 'marco',
+      'histórico', 'jubileu', 'centenário', 'evento', 'festival', 'carnaval',
+      'réveillon', 'natal', 'páscoa'
     ],
-    vocabularyTone: ['festivo', 'alegre', 'comemorativo', 'entusiasmado', 'vibrante'],
-    ctaStyle: 'Participe dessa celebração histórica!',
-    negativePrompts: [
-      'tom sério', 'cores escuras', 'melancolia',
-      'crítica', 'atmosfera pesada'
-    ]
+    bodyKeywords: [
+      'celebração', 'comemoração', 'festa', 'evento', 'festividade',
+      'aniversário', 'inauguração', 'abertura', 'lançamento', 'estreia',
+      'convidados', 'público', 'participantes', 'presentes'
+    ],
+    
+    vocabularyTone: 'Festivo, alegre, contagiante. Destaque para a ocasião.',
+    ctaStyle: 'Convidativo: "Participe!", "Não perca!", "Venha celebrar!"'
   },
 
+  // ---------------------------------------------------------------------------
+  // 10. DÚVIDAS/INCERTEZAS - Investigações, teorias, especulações
+  // ---------------------------------------------------------------------------
   doubt: {
+    code: 'doubt',
     label: 'Doubt',
-    labelPtBr: 'Dúvidas / Incertezas',
-    description: 'Especulações, teorias, investigações em andamento, questões em aberto',
-    suggestedStyle: 'conceptual',
-    colorPalette: ['#7F8C8D', '#95A5A6', '#BDC3C7', '#34495E', '#2C3E50', '#5D6D7E'],
+    labelPtBr: 'Dúvidas/Incertezas',
+    emoji: '🤔',
+    description: 'Investigações em andamento, teorias, especulações, questões em aberto.',
+    
+    suggestedStyle: 'conceptual_abstract',
+    colorPalette: ['#7F8C8D', '#95A5A6', '#BDC3C7', '#2C3E50', '#34495E'],
     visualElements: [
-      'elementos de interrogação visual',
-      'composição ambígua e reflexiva',
-      'tons neutros e indefinidos',
-      'sombras parciais estratégicas',
-      'foco suave em algumas áreas',
-      'elementos que sugerem questionamento'
+      'Elementos abstratos e nebulosos',
+      'Pontos de interrogação sutis',
+      'Composição que sugere incerteza',
+      'Transições e sobreposições'
     ],
-    promptModifiers: [
-      'arte conceitual de questionamento',
-      'elementos visuais de dúvida e reflexão',
-      'composição ambígua e aberta',
-      'tons neutros de incerteza',
-      'símbolos de interrogação sutis',
-      'atmosfera de investigação'
-    ],
+    
+    reuseOriginal: false,
+    createCaricature: 'optional',
+    
+    promptModifiers: 'Arte conceitual abstrata, elementos que sugerem incerteza e questionamento, composição enigmática com camadas, cores neutras com acentos sutis, atmosfera de mistério intelectual',
+    negativePrompts: ['definido', 'claro', 'literal', 'fotojornalismo', 'certeza', 'conclusivo'],
+    
     headlines: [
-      'pode ser', 'será que', 'investiga', 'suspeita', 'apura',
-      'dúvidas', 'incerto', 'não confirmado', 'possível',
-      'especula', 'teoria', 'hipótese'
+      'investiga', 'apura', 'suspeita', 'será que', 'rumores', 'especulação',
+      'mistério', 'incerto', 'indefinido', 'pode ser', 'talvez', 'possível',
+      'hipótese', 'teoria', 'ainda não se sabe'
     ],
-    vocabularyTone: ['cauteloso', 'questionador', 'analítico', 'ponderado', 'reflexivo'],
-    ctaStyle: 'Entenda os fatos e tire suas conclusões',
-    negativePrompts: [
-      'certeza', 'afirmação categórica', 'cores vibrantes',
-      'composição fechada', 'conclusões'
-    ]
+    bodyKeywords: [
+      'investigação', 'apuração', 'suspeita', 'dúvida', 'incerteza',
+      'especulação', 'rumor', 'boato', 'hipótese', 'teoria',
+      'possibilidade', 'análise', 'averiguação', 'perícia'
+    ],
+    
+    vocabularyTone: 'Questionador, analítico, cuidadoso. Evitar afirmações categóricas.',
+    ctaStyle: 'Investigativo: "Acompanhe a apuração", "O que você acha?"'
   },
 
+  // ---------------------------------------------------------------------------
+  // 11. MISTÉRIO - Casos sem resposta, enigmas, desaparecimentos
+  // ---------------------------------------------------------------------------
   mystery: {
+    code: 'mystery',
     label: 'Mystery',
     labelPtBr: 'Mistério',
-    description: 'Casos sem resposta, enigmas, desaparecimentos, fenômenos inexplicados',
-    suggestedStyle: 'conceptual',
-    colorPalette: ['#1A1A2E', '#16213E', '#0F3460', '#533483', '#2C2C54', '#3D3D6B'],
+    emoji: '🔮',
+    description: 'Casos sem resposta, enigmas não resolvidos, desaparecimentos misteriosos.',
+    
+    suggestedStyle: 'noir_enigmatic',
+    colorPalette: ['#1A1A2E', '#16213E', '#0F3460', '#533483', '#2C3E50'],
     visualElements: [
-      'sombras profundas e misteriosas',
-      'elementos parcialmente ocultos',
-      'silhuetas enigmáticas',
-      'névoa ou blur intencional',
-      'composição que esconde mais do que revela',
-      'atmosfera noir ou de suspense'
+      'Sombras densas e profundas',
+      'Silhuetas e figuras parciais',
+      'Elementos ocultos ou sugeridos',
+      'Atmosfera noir e enigmática'
     ],
-    promptModifiers: [
-      'arte conceitual de mistério profundo',
-      'sombras e silhuetas enigmáticas',
-      'elementos parcialmente revelados',
-      'atmosfera de suspense noir',
-      'composição que sugere o oculto',
-      'tons escuros e misteriosos'
-    ],
+    
+    reuseOriginal: false,
+    createCaricature: false,
+    
+    promptModifiers: 'Arte noir enigmática, sombras densas e misteriosas, elementos parcialmente visíveis, atmosfera de suspense e mistério, composição que esconde mais do que revela, sem rostos identificáveis',
+    negativePrompts: ['claro', 'iluminado', 'literal', 'rosto visível', 'explicativo', 'óbvio'],
+    
     headlines: [
-      'mistério', 'enigma', 'desaparece', 'sem explicação',
-      'ninguém sabe', 'caso', 'inexplicável', 'estranho',
-      'desconhecido', 'oculto', 'secreto'
+      'desapareceu', 'sem explicação', 'inexplicável', 'nunca encontrado',
+      'caso arquivado', 'mistério', 'enigma', 'sem solução', 'anos depois',
+      'caso não resolvido', 'polícia não sabe', 'ninguém viu'
     ],
-    vocabularyTone: ['intrigante', 'misterioso', 'investigativo', 'suspense', 'enigmático'],
-    ctaStyle: 'O mistério que ainda não tem resposta',
-    negativePrompts: [
-      'clareza', 'cores vibrantes', 'alegria',
-      'explicação clara', 'certeza'
-    ]
+    bodyKeywords: [
+      'mistério', 'enigma', 'desaparecimento', 'caso', 'investigação',
+      'pistas', 'vestígios', 'testemunhas', 'sem resposta', 'arquivado',
+      'reabertura', 'cold case', 'inconclusivo', 'inexplicado'
+    ],
+    
+    vocabularyTone: 'Intrigante, cativante, suspensivo. Criar interesse sem sensacionalismo.',
+    ctaStyle: 'Enigmático: "O mistério continua", "E você, o que acha que aconteceu?"'
   }
 };
 
-// ============================================
-// MAPEAMENTO DE PALAVRAS-CHAVE PARA GATILHOS
-// ============================================
+// ============================================================================
+// MAPEAMENTO DE KEYWORDS PARA GATILHOS
+// ============================================================================
 
 export const TRIGGER_KEYWORDS: Record<string, EmotionalTrigger[]> = {
-  // Sério / Morte
+  // Morte/Óbito → serious ou anguish
   'morre': ['serious', 'anguish'],
+  'morreu': ['serious', 'anguish'],
+  'morreram': ['anguish'],
   'falece': ['serious', 'anguish'],
-  'morte': ['serious', 'anguish'],
+  'faleceu': ['serious', 'anguish'],
   'óbito': ['serious', 'anguish'],
-  'falecimento': ['serious', 'anguish'],
-  'luto': ['anguish', 'serious'],
-  'velório': ['serious', 'anguish'],
-  'funeral': ['serious', 'anguish'],
+  'morte': ['serious', 'anguish'],
   
-  // Sério / Justiça
-  'condena': ['serious', 'outrage'],
-  'prisão': ['serious', 'outrage'],
-  'sentença': ['serious'],
+  // Tragédias → anguish
+  'tragédia': ['anguish'],
+  'trágico': ['anguish'],
+  'desastre': ['anguish'],
+  'catástrofe': ['anguish'],
+  'vítimas': ['anguish', 'concern'],
+  'acidente': ['anguish', 'concern'],
+  'incêndio': ['anguish', 'concern'],
+  'desabamento': ['anguish'],
+  
+  // Justiça → serious
   'tribunal': ['serious'],
-  'supremo': ['serious'],
-  'stf': ['serious', 'satire'],
-  'stj': ['serious'],
-  'justiça': ['serious'],
   'julgamento': ['serious'],
+  'sentença': ['serious'],
+  'condenado': ['serious'],
+  'absolvido': ['serious'],
+  'preso': ['serious'],
+  'prisão': ['serious'],
+  'STF': ['serious'],
+  'STJ': ['serious'],
   
-  // Humor
+  // Corrupção → outrage
+  'escândalo': ['outrage'],
+  'corrupção': ['outrage'],
+  'desvio': ['outrage'],
+  'fraude': ['outrage'],
+  'propina': ['outrage'],
+  'roubo': ['outrage'],
+  'superfaturamento': ['outrage'],
+  'nepotismo': ['outrage'],
+  'lavagem': ['outrage'],
+  
+  // Humor → humor
+  'viral': ['humor'],
+  'meme': ['humor'],
   'hilário': ['humor'],
-  'bizarro': ['humor', 'mystery'],
-  'inacreditável': ['humor', 'outrage'],
-  'viraliza': ['humor', 'happiness'],
-  'meme': ['humor', 'satire'],
-  'gafe': ['humor', 'sarcasm'],
+  'gafe': ['humor'],
   'trapalhada': ['humor'],
-  'confusão': ['humor', 'concern'],
+  'bizarro': ['humor'],
+  'inusitado': ['humor'],
   'engraçado': ['humor'],
+  'zoeira': ['humor'],
   
-  // Preocupação / Alerta
+  // Alerta → concern
   'alerta': ['concern'],
   'risco': ['concern'],
-  'perigo': ['concern', 'anguish'],
-  'ameaça': ['concern', 'outrage'],
+  'perigo': ['concern'],
+  'ameaça': ['concern'],
+  'urgente': ['concern'],
+  'emergência': ['concern'],
   'cuidado': ['concern'],
-  'urgente': ['concern', 'serious'],
-  'emergência': ['concern', 'anguish'],
-  'crise': ['concern', 'anguish'],
-  'colapso': ['concern', 'anguish'],
   
-  // Revolta / Escândalo
-  'escândalo': ['outrage'],
-  'corrupção': ['outrage', 'satire'],
-  'fraude': ['outrage'],
-  'absurdo': ['outrage', 'sarcasm'],
-  'vergonha': ['outrage'],
-  'denúncia': ['outrage', 'serious'],
-  'propina': ['outrage'],
-  'desvio': ['outrage'],
-  'irregular': ['outrage', 'concern'],
-  'abuso': ['outrage', 'anguish'],
+  // Ironia → sarcasm
+  'ironia': ['sarcasm'],
+  'contradição': ['sarcasm'],
+  'hipocrisia': ['sarcasm'],
+  'incoerência': ['sarcasm'],
+  'ironicamente': ['sarcasm'],
   
-  // Tragédia / Angústia
-  'tragédia': ['anguish'],
-  'vítimas': ['anguish', 'concern'],
-  'desastre': ['anguish', 'concern'],
-  'catástrofe': ['anguish'],
-  'sofrimento': ['anguish'],
-  'destruição': ['anguish', 'concern'],
+  // Política → satire
+  'político': ['satire', 'serious'],
+  'deputado': ['satire', 'serious'],
+  'senador': ['satire', 'serious'],
+  'congresso': ['satire', 'serious'],
+  'eleição': ['satire', 'serious'],
+  'campanha': ['satire'],
   
-  // Felicidade / Vitória
+  // Vitória → happiness
   'vitória': ['happiness', 'celebration'],
   'conquista': ['happiness'],
-  'recorde': ['happiness', 'celebration'],
   'sucesso': ['happiness'],
   'aprovado': ['happiness'],
   'campeão': ['happiness', 'celebration'],
+  'recorde': ['happiness'],
   'medalha': ['happiness', 'celebration'],
-  'ouro': ['happiness', 'celebration'],
   
-  // Celebração
-  'comemora': ['celebration'],
+  // Festa → celebration
   'celebra': ['celebration'],
-  'festa': ['celebration'],
+  'comemora': ['celebration'],
   'aniversário': ['celebration'],
-  'jubileu': ['celebration'],
-  'carnaval': ['celebration', 'humor'],
+  'inauguração': ['celebration'],
+  'festival': ['celebration'],
+  'carnaval': ['celebration'],
   
-  // Ironia / Sarcasmo
-  'ironia': ['sarcasm'],
-  'contradição': ['sarcasm'],
-  'hipócrita': ['sarcasm', 'outrage'],
-  'mentira': ['sarcasm', 'outrage'],
-  'fake': ['sarcasm', 'outrage'],
-  'desmente': ['sarcasm'],
-  
-  // Sátira / Política
-  'enquanto isso': ['satire', 'sarcasm'],
-  'político': ['satire', 'serious'],
-  'governo': ['satire', 'serious'],
-  'congresso': ['satire', 'serious'],
-  'deputado': ['satire', 'serious'],
-  'senador': ['satire', 'serious'],
-  
-  // Mistério
-  'mistério': ['mystery'],
-  'enigma': ['mystery'],
-  'desaparece': ['mystery', 'anguish'],
-  'desaparecido': ['mystery', 'anguish'],
-  'inexplicável': ['mystery'],
-  'estranho': ['mystery', 'humor'],
-  'oculto': ['mystery'],
-  'secreto': ['mystery'],
-  
-  // Dúvida / Incerteza
-  'investiga': ['doubt', 'mystery'],
+  // Investigação → doubt
+  'investiga': ['doubt'],
+  'apura': ['doubt'],
   'suspeita': ['doubt'],
-  'incerto': ['doubt'],
-  'não confirmado': ['doubt'],
-  'possível': ['doubt'],
-  'especula': ['doubt'],
-  'teoria': ['doubt', 'mystery'],
+  'rumores': ['doubt'],
+  'especulação': ['doubt'],
   'hipótese': ['doubt'],
+  
+  // Mistério → mystery
+  'desapareceu': ['mystery'],
+  'desaparecimento': ['mystery'],
+  'sem explicação': ['mystery'],
+  'inexplicável': ['mystery'],
+  'enigma': ['mystery'],
+  'caso arquivado': ['mystery'],
+  'nunca encontrado': ['mystery'],
 };
 
-// ============================================
+// ============================================================================
 // FUNÇÕES UTILITÁRIAS
-// ============================================
+// ============================================================================
 
 /**
- * Retorna a configuração de um gatilho específico
+ * Obtém a configuração de um gatilho específico
  */
 export function getTriggerConfig(trigger: EmotionalTrigger): TriggerConfig {
   return EMOTIONAL_TRIGGER_CONFIG[trigger];
 }
 
 /**
- * Retorna todos os gatilhos disponíveis com labels
+ * Obtém todos os gatilhos disponíveis
  */
-export function getAllTriggers(): Array<{ id: EmotionalTrigger; label: string; labelPtBr: string }> {
-  return Object.entries(EMOTIONAL_TRIGGER_CONFIG).map(([id, config]) => ({
-    id: id as EmotionalTrigger,
-    label: config.label,
-    labelPtBr: config.labelPtBr,
-  }));
+export function getAllTriggers(): EmotionalTrigger[] {
+  return Object.keys(EMOTIONAL_TRIGGER_CONFIG) as EmotionalTrigger[];
 }
 
 /**
- * Verifica se um gatilho deve usar caricatura
+ * Verifica se um gatilho deve criar caricatura
  */
 export function shouldUseCaricature(trigger: EmotionalTrigger): boolean {
-  const style = EMOTIONAL_TRIGGER_CONFIG[trigger].suggestedStyle;
-  return style === 'caricature' || style === 'cartoon';
+  const config = getTriggerConfig(trigger);
+  return config.createCaricature === true;
 }
 
 /**
- * Retorna gatilhos que permitem reutilização de imagem original
+ * Verifica se um gatilho pode reutilizar a imagem original
  */
 export function canReuseOriginalImage(trigger: EmotionalTrigger): boolean {
-  return ['serious', 'anguish', 'concern'].includes(trigger);
+  const config = getTriggerConfig(trigger);
+  return config.reuseOriginal === true || config.reuseOriginal === 'optional';
 }
 
 /**
- * Retorna a intensidade emocional sugerida para um gatilho
+ * Obtém o estilo de imagem sugerido para um gatilho
  */
-export function getSuggestedIntensity(trigger: EmotionalTrigger): 'low' | 'medium' | 'high' {
-  const highIntensity: EmotionalTrigger[] = ['outrage', 'anguish', 'celebration'];
-  const lowIntensity: EmotionalTrigger[] = ['doubt', 'serious'];
-  
-  if (highIntensity.includes(trigger)) return 'high';
-  if (lowIntensity.includes(trigger)) return 'low';
-  return 'medium';
+export function getSuggestedStyle(trigger: EmotionalTrigger): ImageStyle {
+  return getTriggerConfig(trigger).suggestedStyle;
+}
+
+/**
+ * Obtém a paleta de cores para um gatilho
+ */
+export function getColorPalette(trigger: EmotionalTrigger): string[] {
+  return getTriggerConfig(trigger).colorPalette;
+}
+
+/**
+ * Obtém as opções de gatilhos para UI (select/dropdown)
+ */
+export function getTriggerOptions(): Array<{ value: EmotionalTrigger; label: string; emoji: string }> {
+  return getAllTriggers().map(trigger => {
+    const config = getTriggerConfig(trigger);
+    return {
+      value: trigger,
+      label: config.labelPtBr,
+      emoji: config.emoji
+    };
+  });
 }

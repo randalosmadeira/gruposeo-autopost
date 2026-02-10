@@ -143,7 +143,7 @@ export function EmotionalTriggerBadge({ trigger, confidence, compact = false, cl
       <Icon className={cn('shrink-0', compact ? 'w-3 h-3' : 'w-3.5 h-3.5')} />
       {config.label}
       {confidence != null && !compact && (
-        <span className="opacity-70 text-[10px] ml-0.5">{Math.round(confidence * 100)}%</span>
+        <span className="opacity-70 text-[10px] ml-0.5">{Math.round(confidence > 1 ? confidence : confidence * 100)}%</span>
       )}
     </Badge>
   );

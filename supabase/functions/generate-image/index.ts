@@ -131,13 +131,16 @@ Deno.serve(async (req) => {
     let imageResult: { imageData: string; mimeType: string } | null = null;
     let imagePrompt = '';
     let emotionalData: any = null;
+    let provider = 'auto';
+    let openaiQuality = 'hd';
+    let emotionalData: any = null;
     
     if (body.emotionalTrigger || body.forceCaricature) {
       // Use emotional image system
       log.info("emotional_mode", { trigger: body.emotionalTrigger, forceCaricature: body.forceCaricature });
       
       const emotionalSystem = createEmotionalImageSystem({
-        callAI: async (msgs, opts) => callAI(msgs, opts),
+        callAI: async (msgs) => callAI(msgs),
         generateImage: async (prompt, opts) => generateGeminiImage(prompt, { aspectRatio: opts?.aspectRatio || "16:9" }),
         defaultAspectRatio: body.aspectRatio || '16:9',
         allowOriginalImageReuse: false,
@@ -147,22 +150,23 @@ Deno.serve(async (req) => {
         title: body.title,
         content: body.content || body.context || body.title,
         sourceName: body.sourceName,
-        forceTrigger: body.emotionalTrigger,
+        emotionalTrigger: body.emotionalTrigger,
         forceCaricature: body.forceCaricature,
         niche: body.segment,
-        aspectRatio: body.aspectRatio,
+        aspectRatio: body.aspectRatio as '16:9' | '1:1' | '4:3',
       });
       
       emotionalData = {
         trigger: emotionalResult.emotionalAnalysis.primaryTrigger,
         confidence: emotionalResult.emotionalAnalysis.confidence,
-        style: emotionalResult.style,
-        decision: emotionalResult.imageDecision.action,
+        style: emotionalResult.decision.style,
+        decision: emotionalResult.decision.action,
+        disclaimer: emotionalResult.disclaimer || null,
       };
       
       if (emotionalResult.success && emotionalResult.imageData) {
-        imageResult = { imageData: emotionalResult.imageData, mimeType: emotionalResult.mimeType || 'image/png' };
-        imagePrompt = emotionalResult.promptUsed || '';
+        imageResult = { imageData: emotionalResult.imageData, mimeType: 'image/png' };
+        imagePrompt = emotionalResult.prompt || '';
       }
     }
     
@@ -180,8 +184,8 @@ Deno.serve(async (req) => {
           ? 'gemini'
           : undefined;
 
-      const provider = requestedProvider || derivedProvider || 'auto';
-      const openaiQuality =
+      provider = requestedProvider || derivedProvider || 'auto';
+      openaiQuality =
         requestedModel === 'dall-e-3-standard' || requestedQuality === 'standard'
           ? 'standard'
           : 'hd';
