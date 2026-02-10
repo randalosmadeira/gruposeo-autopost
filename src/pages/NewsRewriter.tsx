@@ -42,6 +42,7 @@ import { useProjects } from '@/hooks/useProjects';
 import { useUrlAnalysis } from '@/hooks/useUrlAnalysis';
 import { cn } from '@/lib/utils';
 import { RSSNewsImporter, type RSSItem, AutoAuditPanel, RepostHistory, RSSScheduler, MonitoredPortalsManager } from '@/components/news-rewriter';
+import { EmotionalTriggerSelector, type EmotionalTrigger } from '@/components/shared/EmotionalTriggerBadge';
 import { FeedMonitorDashboard, ContentPerformanceAnalytics } from '@/components/feed-monitor';
 
 // Niche options with icons
@@ -99,6 +100,7 @@ export default function NewsRewriter() {
   const [mainTab, setMainTab] = useState<'new' | 'history' | 'schedule' | 'monitor' | 'analytics' | 'portals'>('new');
   const [autoPublish, setAutoPublish] = useState(false);
   const [showAISuggestions, setShowAISuggestions] = useState(false);
+  const [emotionalTriggerOverride, setEmotionalTriggerOverride] = useState<EmotionalTrigger | null>(null);
 
   // Get current project info for AI analysis
   const currentProject = projects?.find(p => p.id === projectId);
@@ -235,6 +237,7 @@ export default function NewsRewriter() {
       projectId: projectId && projectId !== 'none' ? projectId : undefined,
       language: 'pt-BR',
       autoPublish: autoPublish && projectId && projectId !== 'none',
+      emotionalTriggerOverride: emotionalTriggerOverride || undefined,
     });
 
     if (result) {
@@ -969,6 +972,30 @@ export default function NewsRewriter() {
                           onCheckedChange={setAutoPublish}
                         />
                       </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Emotional Trigger Override */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      Gatilho Emocional
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      A IA detecta automaticamente. Selecione para forçar um tom específico na imagem.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <EmotionalTriggerSelector
+                      value={emotionalTriggerOverride}
+                      onChange={setEmotionalTriggerOverride}
+                    />
+                    {emotionalTriggerOverride && (
+                      <p className="text-xs text-primary mt-2">
+                        ✓ Override manual: <strong>{emotionalTriggerOverride}</strong>
+                      </p>
                     )}
                   </CardContent>
                 </Card>

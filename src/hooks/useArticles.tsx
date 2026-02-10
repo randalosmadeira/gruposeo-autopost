@@ -39,6 +39,8 @@ export function useArticles(projectId?: string) {
           secondary_keywords,
           config,
           error_message,
+          emotional_trigger,
+          emotional_confidence,
           created_at,
           updated_at,
           user_id,

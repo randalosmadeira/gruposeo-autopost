@@ -6,9 +6,11 @@
  * usando análise de palavras-chave (rápida) e IA (profunda).
  */
 
-import { 
+import type { 
   EmotionalTrigger, 
-  EmotionalAnalysis, 
+  EmotionalAnalysis,
+} from './emotional-triggers-config.ts';
+import {
   EMOTIONAL_TRIGGER_CONFIG,
   TRIGGER_KEYWORDS,
   getSuggestedIntensity
