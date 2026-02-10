@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
 
@@ -12,7 +12,7 @@ const corsHeaders = {
 // Webhook secret for validation (should be set as environment variable)
 const WEBHOOK_SECRET = Deno.env.get("WEBHOOK_SECRET") || "default-secret";
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const requestId = createRequestId();
   const log = createLogger(FUNCTION_NAME, requestId);
   const startTime = Date.now();

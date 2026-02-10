@@ -2,12 +2,14 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { 
   Send, Bot, User, Sparkles, Loader2, Trash2, 
-  Lightbulb, Target, FileText, Link 
+  Target, FileText, Link, Search, AlertTriangle,
+  Shield, RefreshCw, Globe
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -17,22 +19,37 @@ interface Message {
   timestamp: Date;
 }
 
+interface ProjectContext {
+  id: string;
+  name: string;
+  domain: string;
+  wordpress_url: string | null;
+  is_connected: boolean;
+  seo_plugin: string | null;
+}
+
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 
 const quickActions = [
   { label: 'Sugerir palavras-chave', icon: Target, prompt: 'Sugira 10 palavras-chave de cauda longa para o nicho de ' },
   { label: 'Criar título SEO', icon: Sparkles, prompt: 'Crie 5 títulos otimizados para SEO sobre ' },
   { label: 'Gerar outline', icon: FileText, prompt: 'Crie uma estrutura completa de artigo SEO sobre ' },
-  { label: 'Dicas de linkagem', icon: Link, prompt: 'Quais estratégias de link building interno posso usar para ' },
+  { label: 'Auditoria SEO completa', icon: Search, prompt: 'Como funciona o Agente SEO Autônomo? Ele já rodou auditoria nos meus projetos WordPress? Mostre o que foi encontrado e corrigido.' },
+  { label: 'Links quebrados e 404', icon: AlertTriangle, prompt: 'Como o AI Auto-Fix do plugin detecta e corrige automaticamente links quebrados (404), FAQs duplicadas e URLs em duplicidade nos meus sites WordPress?' },
+  { label: 'Backlinks e linkagem interna', icon: Link, prompt: 'Como funciona o motor de linkagem interna inteligente? Ele já criou backlinks entre meus artigos automaticamente? Onde vejo os resultados?' },
+  { label: 'Meta tags e SEO On-Page', icon: Shield, prompt: 'Como o AI Meta Auditor do plugin audita e corrige titles, meta descriptions, Open Graph tags e Twitter Cards automaticamente?' },
+  { label: 'Diagnóstico WordPress', icon: RefreshCw, prompt: 'Quais módulos do plugin ContentFactory RDM estão ativos nos meus sites? Como verificar o diagnóstico e saúde de cada projeto?' },
 ];
 
 async function streamChat({
   messages,
+  context,
   onDelta,
   onDone,
   onError,
 }: {
   messages: Array<{ role: string; content: string }>;
+  context?: { projects: ProjectContext[]; articleCount?: number };
   onDelta: (text: string) => void;
   onDone: () => void;
   onError: (error: string) => void;
@@ -43,7 +60,7 @@ async function streamChat({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
     },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, context }),
   });
 
   if (!resp.ok) {
@@ -114,7 +131,6 @@ async function streamChat({
 }
 
 function renderMarkdown(text: string) {
-  // Simple markdown rendering
   return text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
@@ -131,9 +147,12 @@ export default function AIChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [projects, setProjects] = useState<ProjectContext[]>([]);
+  const [articleCount, setArticleCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -146,6 +165,28 @@ export default function AIChat() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
+
+  // Load user's projects and article count for AI context
+  useEffect(() => {
+    const loadContext = async () => {
+      if (!user) return;
+      
+      const [projectsRes, articlesRes] = await Promise.all([
+        supabase
+          .from('projects')
+          .select('id, name, domain, wordpress_url, is_connected, seo_plugin')
+          .eq('user_id', user.id),
+        supabase
+          .from('articles')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id),
+      ]);
+
+      if (projectsRes.data) setProjects(projectsRes.data);
+      if (articlesRes.count !== null) setArticleCount(articlesRes.count);
+    };
+    loadContext();
+  }, [user]);
 
   const sendMessage = async (text?: string) => {
     const messageText = text || input.trim();
@@ -163,6 +204,7 @@ export default function AIChat() {
     try {
       await streamChat({
         messages: allMessages,
+        context: { projects, articleCount },
         onDelta: (chunk) => {
           assistantSoFar += chunk;
           setMessages(prev => {
@@ -210,11 +252,19 @@ export default function AIChat() {
             <p className="text-xs text-muted-foreground">SEO, conteúdo e estratégia</p>
           </div>
         </div>
-        {messages.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={clearChat} className="text-muted-foreground">
-            <Trash2 className="w-4 h-4 mr-1" /> Limpar
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {projects.length > 0 && (
+            <Badge variant="outline" className="text-xs gap-1">
+              <Globe className="w-3 h-3" />
+              {projects.length} projeto{projects.length > 1 ? 's' : ''}
+            </Badge>
+          )}
+          {messages.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={clearChat} className="text-muted-foreground">
+              <Trash2 className="w-4 h-4 mr-1" /> Limpar
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Chat Area */}
@@ -228,8 +278,14 @@ export default function AIChat() {
               <div>
                 <h2 className="text-lg font-semibold text-foreground">Como posso ajudar?</h2>
                 <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                  Sou seu assistente especializado em SEO e marketing de conteúdo. Pergunte qualquer coisa!
+                  Sou seu assistente especializado em SEO, conteúdo e automação WordPress.
+                  Conheço todas as funcionalidades da plataforma e do plugin.
                 </p>
+                {projects.length > 0 && (
+                  <p className="text-xs text-primary mt-2">
+                    📋 {projects.length} projeto{projects.length > 1 ? 's' : ''} conectado{projects.length > 1 ? 's' : ''} • {articleCount} artigo{articleCount !== 1 ? 's' : ''}
+                  </p>
+                )}
               </div>
 
               {/* Quick Actions */}
@@ -308,7 +364,7 @@ export default function AIChat() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Digite sua mensagem..."
+              placeholder="Pergunte sobre SEO, plugin WordPress, auditorias, linkagem interna..."
               className="min-h-[44px] max-h-[120px] resize-none border-border/50 bg-background"
               rows={1}
               disabled={isLoading}
@@ -323,7 +379,7 @@ export default function AIChat() {
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
-            Powered by Lovable AI · Respostas podem conter imprecisões
+            Powered by Lovable AI · Conhece todas as funcionalidades da plataforma e plugin WordPress
           </p>
         </div>
       </Card>

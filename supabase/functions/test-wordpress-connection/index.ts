@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
 import { createLogger, createRequestId } from "../_shared/logger.ts";
 
 const FUNCTION_NAME = "test-wordpress-connection";
@@ -91,7 +91,7 @@ async function discoverWordPressPath(baseUrl: string): Promise<{ found: boolean;
   return { found: false, path: "", wpJsonUrl: "" };
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const requestId = createRequestId();
   const log = createLogger(FUNCTION_NAME, requestId);
   const startTime = Date.now();

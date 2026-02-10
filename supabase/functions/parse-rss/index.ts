@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
 import { createLogger, createRequestId } from "../_shared/logger.ts";
 
 const FUNCTION_NAME = "parse-rss";
@@ -151,7 +151,7 @@ async function fetchRSSFeed(feedUrl: string): Promise<RSSFeed> {
   return parseRSSXML(xmlText, feedUrl);
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const requestId = createRequestId();
   const log = createLogger(FUNCTION_NAME, requestId);
   const startTime = Date.now();
