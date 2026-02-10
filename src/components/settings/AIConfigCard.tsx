@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { Sparkles, Eye, EyeOff, ExternalLink, Infinity, Loader2, Check, X } from 'lucide-react';
+import { Sparkles, Eye, EyeOff, ExternalLink, Infinity, Loader2, Check, X, Search, Brain } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const VALIDATE_AI_KEY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-ai-key`;
@@ -24,9 +24,10 @@ interface AIConfigCardProps {
   settings: {
     byok_enabled?: boolean;
     ai_provider?: string;
-    // API keys are no longer exposed - only boolean flags
     has_gemini_key?: boolean;
     has_openai_key?: boolean;
+    has_anthropic_key?: boolean;
+    has_serper_key?: boolean;
     title_model?: string;
     content_model?: string;
     image_model?: string;
@@ -73,26 +74,34 @@ const TIMEZONES = [
 export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) {
   const { toast } = useToast();
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showAnthropicKey, setShowAnthropicKey] = useState(false);
+  const [showSerperKey, setShowSerperKey] = useState(false);
   const [byokEnabled, setByokEnabled] = useState(settings?.byok_enabled ?? false);
   const [aiProvider, setAiProvider] = useState(settings?.ai_provider ?? 'gemini');
-  // New API key input - never pre-filled with existing key for security
   const [newApiKey, setNewApiKey] = useState('');
+  const [newAnthropicKey, setNewAnthropicKey] = useState('');
+  const [newSerperKey, setNewSerperKey] = useState('');
   const [titleModel, setTitleModel] = useState(settings?.title_model ?? 'gemini-3-pro-preview');
   const [contentModel, setContentModel] = useState(settings?.content_model ?? 'gemini-3-pro-preview');
   const [imageModel, setImageModel] = useState(settings?.image_model ?? 'gemini-3-pro-image-preview');
   const [timezone, setTimezone] = useState(settings?.timezone ?? 'America/Sao_Paulo');
   const [isTesting, setIsTesting] = useState(false);
+  const [isTestingAnthropic, setIsTestingAnthropic] = useState(false);
+  const [isTestingSerper, setIsTestingSerper] = useState(false);
 
   const models = aiProvider === 'gemini' ? GEMINI_MODELS : OPENAI_MODELS;
   const imageModels = aiProvider === 'gemini' ? GEMINI_IMAGE_MODELS : OPENAI_IMAGE_MODELS;
   
-  // Check if the current provider has a key configured
   const hasCurrentProviderKey = aiProvider === 'gemini' 
     ? settings?.has_gemini_key 
     : settings?.has_openai_key;
 
-  const integrationsConfigured = (settings?.has_openai_key ? 1 : 0) + (settings?.has_gemini_key ? 1 : 0);
-  const integrationsProgress = (integrationsConfigured / 2) * 100;
+  const integrationsConfigured = 
+    (settings?.has_openai_key ? 1 : 0) + 
+    (settings?.has_gemini_key ? 1 : 0) + 
+    (settings?.has_anthropic_key ? 1 : 0) + 
+    (settings?.has_serper_key ? 1 : 0);
+  const integrationsProgress = (integrationsConfigured / 4) * 100;
 
   const handleProviderChange = (provider: string) => {
     setAiProvider(provider);
@@ -158,19 +167,14 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
           description: `${data.message || 'Conexão estabelecida.'} Salvando...`,
         });
 
-        // Auto-save key so status updates immediately
-        const updates: Record<string, unknown> =
-          aiProvider === 'gemini'
-            ? { gemini_api_key: newApiKey }
-            : { openai_api_key: newApiKey };
-
-        await onSave(updates);
+        const keyMap: Record<string, string> = {
+          gemini: 'gemini_api_key',
+          openai: 'openai_api_key',
+        };
+        await onSave({ [keyMap[aiProvider]]: newApiKey });
         setNewApiKey('');
 
-        toast({
-          title: 'Chave salva!',
-          description: 'Status atualizado com sucesso.',
-        });
+        toast({ title: 'Chave salva!', description: 'Status atualizado com sucesso.' });
       } else {
         toast({
           title: 'Chave inválida',
@@ -189,6 +193,43 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
     }
   };
 
+  const handleTestExtraKey = async (provider: 'anthropic' | 'serper', key: string, setLoading: (v: boolean) => void, clearKey: () => void) => {
+    if (!key) {
+      toast({ title: 'Chave não informada', variant: 'destructive' });
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        toast({ title: 'Sessão expirada', variant: 'destructive' });
+        return;
+      }
+      const resp = await fetch(VALIDATE_AI_KEY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ provider, apiKey: key }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        toast({ title: 'Falha ao validar', description: data?.error || `Erro ${resp.status}`, variant: 'destructive' });
+        return;
+      }
+      if (data?.valid) {
+        const dbKey = provider === 'anthropic' ? 'anthropic_api_key' : 'serper_api_key';
+        await onSave({ [dbKey]: key });
+        clearKey();
+        toast({ title: '✓ Chave validada e salva!', description: data.message });
+      } else {
+        toast({ title: 'Chave inválida', description: data?.message, variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Erro de conexão', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSave = async () => {
     const updates: Record<string, unknown> = {
       byok_enabled: byokEnabled,
@@ -199,27 +240,26 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
       timezone,
     };
 
-    // Only include API key in update if a new one was provided
     if (newApiKey) {
-      if (aiProvider === 'gemini') {
-        updates.gemini_api_key = newApiKey;
-      } else {
-        updates.openai_api_key = newApiKey;
-      }
+      updates[aiProvider === 'gemini' ? 'gemini_api_key' : 'openai_api_key'] = newApiKey;
     }
+    if (newAnthropicKey) updates.anthropic_api_key = newAnthropicKey;
+    if (newSerperKey) updates.serper_api_key = newSerperKey;
 
     await onSave(updates);
-    setNewApiKey(''); // Clear after save
+    setNewApiKey('');
+    setNewAnthropicKey('');
+    setNewSerperKey('');
   };
 
   const handleRemoveApiKey = async () => {
-    const updates: Record<string, unknown> = {};
-    if (aiProvider === 'gemini') {
-      updates.gemini_api_key = null;
-    } else {
-      updates.openai_api_key = null;
-    }
-    await onSave(updates);
+    const key = aiProvider === 'gemini' ? 'gemini_api_key' : 'openai_api_key';
+    await onSave({ [key]: null });
+  };
+
+  const handleRemoveExtraKey = async (provider: 'anthropic' | 'serper') => {
+    const key = provider === 'anthropic' ? 'anthropic_api_key' : 'serper_api_key';
+    await onSave({ [key]: null });
   };
 
   return (
@@ -305,13 +345,25 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Saúde das integrações</span>
                   <span className="text-xs text-muted-foreground">
-                    {(settings?.has_openai_key ? 1 : 0) + (settings?.has_gemini_key ? 1 : 0)}/2 configuradas
+                    {integrationsConfigured}/4 configuradas
                   </span>
                 </div>
                 <Progress value={integrationsProgress} />
-                <p className="text-xs text-muted-foreground">
-                  Estimativa por artigo: 2 chamadas de texto (título + conteúdo) + 1 chamada de imagem (se habilitada no gerador).
-                </p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {[
+                    { label: 'Gemini', active: settings?.has_gemini_key },
+                    { label: 'OpenAI', active: settings?.has_openai_key },
+                    { label: 'Claude', active: settings?.has_anthropic_key },
+                    { label: 'Serper', active: settings?.has_serper_key },
+                  ].map(({ label, active }) => (
+                    <Badge key={label} className={`text-xs ${active 
+                      ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' 
+                      : 'bg-red-500/15 text-red-500 border-red-500/30'}`}>
+                      {active ? <Check className="w-3 h-3 mr-1" /> : <X className="w-3 h-3 mr-1" />}
+                      {label}
+                    </Badge>
+                  ))}
+                </div>
               </div>
 
               {/* Current key status */}
@@ -393,6 +445,112 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
                   Ao testar com sucesso, salvamos a chave automaticamente e o status será atualizado.
                 </p>
               </div>
+            </div>
+
+            {/* Anthropic (Claude) Key */}
+            <div className="p-4 bg-muted/30 rounded-lg border space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Brain className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium">Anthropic (Claude)</span>
+                  {settings?.has_anthropic_key ? (
+                    <Badge className="text-xs bg-emerald-500/15 text-emerald-600 border-emerald-500/30">
+                      <Check className="w-3 h-3 mr-1" /> Ativa
+                    </Badge>
+                  ) : (
+                    <Badge className="text-xs bg-red-500/15 text-red-500 border-red-500/30">
+                      <X className="w-3 h-3 mr-1" /> Não configurada
+                    </Badge>
+                  )}
+                </div>
+                {settings?.has_anthropic_key && (
+                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"
+                    onClick={() => handleRemoveExtraKey('anthropic')}>
+                    Remover
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Usado pelo pipeline de agentes para edição e conteúdo jurídico/saúde. Modelo: Claude 3.5 Sonnet.
+              </p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type={showAnthropicKey ? 'text' : 'password'}
+                    value={newAnthropicKey}
+                    onChange={(e) => setNewAnthropicKey(e.target.value)}
+                    placeholder="sk-ant-..."
+                    className="font-mono pr-10"
+                  />
+                  <Button type="button" variant="ghost" size="icon"
+                    className="absolute right-0 top-0 h-full"
+                    onClick={() => setShowAnthropicKey(!showAnthropicKey)}>
+                    {showAnthropicKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </Button>
+                </div>
+                <Button variant="outline" 
+                  onClick={() => handleTestExtraKey('anthropic', newAnthropicKey, setIsTestingAnthropic, () => setNewAnthropicKey(''))}
+                  disabled={isTestingAnthropic || !newAnthropicKey}>
+                  {isTestingAnthropic ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Testar'}
+                </Button>
+              </div>
+              <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer"
+                className="text-xs text-primary hover:underline flex items-center gap-1">
+                <ExternalLink className="w-3 h-3" /> Obter chave na Anthropic
+              </a>
+            </div>
+
+            {/* Serper Key */}
+            <div className="p-4 bg-muted/30 rounded-lg border space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Search className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium">Serper (Pesquisa Google)</span>
+                  {settings?.has_serper_key ? (
+                    <Badge className="text-xs bg-emerald-500/15 text-emerald-600 border-emerald-500/30">
+                      <Check className="w-3 h-3 mr-1" /> Ativa
+                    </Badge>
+                  ) : (
+                    <Badge className="text-xs bg-red-500/15 text-red-500 border-red-500/30">
+                      <X className="w-3 h-3 mr-1" /> Não configurada
+                    </Badge>
+                  )}
+                </div>
+                {settings?.has_serper_key && (
+                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"
+                    onClick={() => handleRemoveExtraKey('serper')}>
+                    Remover
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Pesquisa de palavras-chave, análise de concorrência e enriquecimento de conteúdo SEO.
+              </p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type={showSerperKey ? 'text' : 'password'}
+                    value={newSerperKey}
+                    onChange={(e) => setNewSerperKey(e.target.value)}
+                    placeholder="Sua chave Serper..."
+                    className="font-mono pr-10"
+                  />
+                  <Button type="button" variant="ghost" size="icon"
+                    className="absolute right-0 top-0 h-full"
+                    onClick={() => setShowSerperKey(!showSerperKey)}>
+                    {showSerperKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </Button>
+                </div>
+                <Button variant="outline"
+                  onClick={() => handleTestExtraKey('serper', newSerperKey, setIsTestingSerper, () => setNewSerperKey(''))}
+                  disabled={isTestingSerper || !newSerperKey}>
+                  {isTestingSerper ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Testar'}
+                </Button>
+              </div>
+              <a href="https://serper.dev/api-key" target="_blank" rel="noopener noreferrer"
+                className="text-xs text-primary hover:underline flex items-center gap-1">
+                <ExternalLink className="w-3 h-3" /> Obter chave no Serper
+              </a>
             </div>
 
             {/* Model Selection */}

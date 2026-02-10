@@ -9,7 +9,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-type Provider = "openai" | "gemini";
+type Provider = "openai" | "gemini" | "anthropic" | "serper";
 
 interface Body {
   provider: Provider;
@@ -40,6 +40,39 @@ async function validateGemini(apiKey: string): Promise<{ valid: boolean; message
 
   const text = await resp.text().catch(() => "");
   return { valid: false, message: `Gemini retornou ${resp.status}${text ? `: ${text.slice(0, 200)}` : ""}` };
+}
+
+async function validateAnthropic(apiKey: string): Promise<{ valid: boolean; message: string }> {
+  const resp = await fetch("https://api.anthropic.com/v1/models", {
+    method: "GET",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+  });
+
+  if (resp.ok) return { valid: true, message: "Conexão com Anthropic (Claude) OK" };
+  if (resp.status === 401) return { valid: false, message: "Chave Anthropic inválida/expirada" };
+
+  const text = await resp.text().catch(() => "");
+  return { valid: false, message: `Anthropic retornou ${resp.status}${text ? `: ${text.slice(0, 200)}` : ""}` };
+}
+
+async function validateSerper(apiKey: string): Promise<{ valid: boolean; message: string }> {
+  const resp = await fetch("https://google.serper.dev/search", {
+    method: "POST",
+    headers: {
+      "X-API-KEY": apiKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ q: "test", num: 1 }),
+  });
+
+  if (resp.ok) return { valid: true, message: "Conexão com Serper OK" };
+  if (resp.status === 401 || resp.status === 403) return { valid: false, message: "Chave Serper inválida/sem permissão" };
+
+  const text = await resp.text().catch(() => "");
+  return { valid: false, message: `Serper retornou ${resp.status}${text ? `: ${text.slice(0, 200)}` : ""}` };
 }
 
 serve(async (req) => {
@@ -84,8 +117,8 @@ serve(async (req) => {
     const provider = body?.provider;
     const apiKey = (body?.apiKey || "").trim();
 
-    if (!provider || (provider !== "openai" && provider !== "gemini")) {
-      return new Response(JSON.stringify({ valid: false, error: "Provider inválido", request_id: requestId }), {
+    if (!provider || !["openai", "gemini", "anthropic", "serper"].includes(provider)) {
+      return new Response(JSON.stringify({ valid: false, error: "Provider inválido. Use: openai, gemini, anthropic ou serper", request_id: requestId }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -98,7 +131,13 @@ serve(async (req) => {
       });
     }
 
-    const result = provider === "openai" ? await validateOpenAI(apiKey) : await validateGemini(apiKey);
+    const validators: Record<Provider, (k: string) => Promise<{ valid: boolean; message: string }>> = {
+      openai: validateOpenAI,
+      gemini: validateGemini,
+      anthropic: validateAnthropic,
+      serper: validateSerper,
+    };
+    const result = await validators[provider](apiKey);
 
     log.info("validation_result", { provider, valid: result.valid });
     log.requestEnd(200, Date.now() - startTime);
