@@ -57,14 +57,12 @@ export function useSettings() {
     mutationFn: async (updates: Omit<UserSettingsUpdate, 'user_id'>) => {
       if (!user) throw new Error('User not authenticated');
       
-      // Use upsert to avoid race conditions between check + insert/update
-      // This handles both new and existing settings in a single atomic operation
+      // Always use update - the row is guaranteed to exist via handle_new_user trigger.
+      // We cannot use upsert because RLS blocks SELECT on this table (uses safe view instead).
       const { error } = await supabase
         .from('user_settings')
-        .upsert(
-          { user_id: user.id, ...updates },
-          { onConflict: 'user_id' }
-        );
+        .update(updates)
+        .eq('user_id', user.id);
       
       if (error) throw error;
       return { user_id: user.id, ...updates };
