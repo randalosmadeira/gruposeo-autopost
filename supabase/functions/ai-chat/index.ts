@@ -7,7 +7,20 @@ const corsHeaders = {
 
 const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
-const SYSTEM_PROMPT = `Você é o **Assistente IA do ContentFactory**, uma plataforma completa de automação de conteúdo SEO e marketing digital integrada com WordPress.
+// Use the most powerful model for premium quality
+const AI_MODEL = "google/gemini-2.5-pro";
+
+const SYSTEM_PROMPT = `Você é o **Assistente IA Premium do ContentFactory**, uma plataforma completa de automação de conteúdo SEO e marketing digital integrada com WordPress.
+
+Você é um especialista sênior em SEO, marketing digital e automação de conteúdo. Suas respostas devem ser profundas, analíticas e estratégicas — nunca superficiais.
+
+## 🧠 DIRETRIZES DE QUALIDADE
+- **Pense passo a passo** antes de responder: analise o contexto completo do usuário
+- **Seja proativo**: quando o usuário perguntar algo, vá além e ofereça insights adicionais relevantes
+- **Use dados reais**: sempre que possível, baseie suas recomendações nos dados do usuário (projetos, artigos, execuções do agente SEO)
+- **Dê exemplos concretos**: não fale em termos genéricos, use os domínios e keywords do usuário
+- **Priorize ações**: quando houver múltiplos problemas, ordene por impacto (prioridade)
+- **Explique o PORQUÊ**: não apenas diga o que fazer, explique o raciocínio estratégico por trás
 
 ## 🔧 CAPACIDADES DA PLATAFORMA
 
@@ -85,29 +98,38 @@ Módulos disponíveis no plugin instalado nos sites:
 ## 🎯 AÇÕES EXECUTÁVEIS
 Você pode executar ações diretamente nos projetos WordPress do usuário. Quando o usuário pedir para executar uma ação, responda com o resultado real da execução.
 
-Ações disponíveis (use o campo "action" na sua resposta quando executar):
-- **run_seo_audit**: Rodar auditoria SEO completa em um projeto
-- **sync_wordpress_stats**: Sincronizar estatísticas do WordPress
+Ações disponíveis:
+- **run_seo_audit**: Rodar auditoria SEO completa (inclui meta audit, links internos, indexação, sitemap)
+- **sync_wordpress_stats**: Sincronizar estatísticas do WordPress (use project_id "all" para todos)
 - **check_seo_runs**: Consultar últimas execuções do Agente SEO
-- **check_article_stats**: Consultar estatísticas de artigos
+- **check_article_stats**: Consultar estatísticas de artigos (total, publicados, prontos, erros)
 - **check_link_suggestions**: Ver sugestões de links internos pendentes
+- **apply_link_suggestions**: Aplicar sugestões de links internos pendentes no WordPress
+- **trigger_indexnow**: Submeter URLs recentes para indexação imediata
+- **check_orphan_articles**: Listar artigos órfãos (sem links internos)
+- **check_wp_health**: Verificar saúde da conexão WordPress e status do plugin
+- **check_token_usage**: Consultar uso de tokens e custos recentes
+- **run_all_projects_audit**: Rodar auditoria SEO em TODOS os projetos de uma vez
 
 Quando o usuário pedir para executar uma ação, inclua no final da sua resposta um bloco:
 \`\`\`action
-{"type": "run_seo_audit", "project_id": "..."}
+{"type": "nome_da_acao", "project_id": "id_do_projeto_ou_all"}
 \`\`\`
 
-## REGRAS
+IMPORTANTE: Quando o usuário pedir para rodar algo em "todos os projetos", use project_id "all".
+
+## REGRAS DE QUALIDADE PREMIUM
 - Responda sempre em português do Brasil
-- Seja conciso mas completo e proativo
-- Use formatação markdown quando apropriado
-- Foque em resultados práticos e acionáveis
+- **Analise profundamente** antes de responder — não dê respostas genéricas
+- Use formatação markdown rica: headers, listas, negrito, tabelas quando apropriado
+- **Sempre** inclua recomendações acionáveis com prioridades
 - Quando o usuário perguntar sobre funcionalidades, explique COMO acessá-las na plataforma
 - NUNCA diga que não pode fazer algo que a plataforma já faz automaticamente
 - Quando perguntado sobre auditorias ou correções, explique que o sistema JÁ FAZ isso automaticamente e indique onde ver os resultados
-- Se o contexto do usuário incluir projetos, personalize a resposta mencionando os projetos pelo nome
+- Se o contexto do usuário incluir projetos, personalize TODA a resposta mencionando os projetos pelo nome
 - Ao falar sobre links quebrados, FAQs duplicadas ou metas, explique que o AI Auto-Fix do plugin resolve automaticamente
-- Quando o contexto incluir dados de execuções anteriores do SEO Agent, MOSTRE os resultados reais`;
+- Quando o contexto incluir dados de execuções anteriores do SEO Agent, MOSTRE os resultados reais
+- **Ofereça proativamente** executar ações relevantes quando detectar oportunidades nos dados do usuário`;
 
 // Execute actions requested by the AI or user
 async function executeAction(
@@ -116,22 +138,29 @@ async function executeAction(
   userId: string,
 ): Promise<string> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
   switch (action.type) {
-    case "run_seo_audit": {
-      if (!action.project_id) return "❌ Nenhum projeto especificado para auditoria.";
+    case "run_seo_audit":
+    case "run_all_projects_audit": {
       try {
+        const body: Record<string, string> = { user_id: userId, run_type: "manual" };
+        if (action.type === "run_seo_audit" && action.project_id && action.project_id !== "all") {
+          body.project_id = action.project_id;
+        }
         const resp = await fetch(`${supabaseUrl}/functions/v1/seo-agent`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            Authorization: `Bearer ${serviceKey}`,
           },
-          body: JSON.stringify({ user_id: userId, project_id: action.project_id, run_type: "manual" }),
+          body: JSON.stringify(body),
         });
         const data = await resp.json();
         return data.success
-          ? `✅ Auditoria SEO iniciada! ${data.runs || 0} projeto(s) processado(s). Resultados: ${JSON.stringify(data.results || [])}`
+          ? `✅ Auditoria SEO concluída! ${data.runs || 0} projeto(s) processado(s).\n\n${(data.results || []).map((r: any) =>
+            `**${r.project}**: ${r.status === "completed" ? r.summary : `❌ ${r.error}`}`
+          ).join("\n")}`
           : `❌ Erro: ${data.error || "falha desconhecida"}`;
       } catch (e) {
         return `❌ Erro ao executar auditoria: ${e instanceof Error ? e.message : "erro desconhecido"}`;
@@ -140,73 +169,79 @@ async function executeAction(
 
     case "sync_wordpress_stats": {
       try {
-        // Determine which projects to sync
-        let projectIds: string[] = [];
-        if (action.project_id === "all") {
-          const { data: allProjects } = await supabase
-            .from("projects")
-            .select("id, name, domain, wordpress_url, wordpress_username, wordpress_app_password")
-            .eq("user_id", userId);
-          if (!allProjects || allProjects.length === 0) return "❌ Nenhum projeto encontrado.";
-          projectIds = allProjects.map(p => p.id);
+        const { data: allProjects } = await supabase
+          .from("projects")
+          .select("id, name, domain, wordpress_url, wordpress_username, wordpress_app_password")
+          .eq("user_id", userId);
+        if (!allProjects || allProjects.length === 0) return "❌ Nenhum projeto encontrado.";
+
+        const projectsToSync = action.project_id && action.project_id !== "all"
+          ? allProjects.filter(p => p.id === action.project_id)
+          : allProjects;
+
+        const results: string[] = [];
+        for (const proj of projectsToSync) {
+          if (!proj.wordpress_url || !proj.wordpress_username || !proj.wordpress_app_password) {
+            results.push(`⚠️ **${proj.name}**: Credenciais WordPress não configuradas`);
+            continue;
+          }
+          const isPlugin = proj.wordpress_username === "__CFRDM_PLUGIN__";
+          const wpUrl = proj.wordpress_url.replace(/\/wp-json\/cfrdm\/v1\/?$/, "").replace(/\/+$/, "");
           
-          const results: string[] = [];
-          for (const proj of allProjects) {
-            if (!proj.wordpress_url || !proj.wordpress_username || !proj.wordpress_app_password) {
-              results.push(`⚠️ **${proj.name}**: Credenciais WordPress não configuradas`);
-              continue;
+          try {
+            let pub = 0, draft = 0, pending = 0, comments = 0;
+            
+            if (isPlugin) {
+              // Use plugin API for richer stats
+              const statsResp = await fetch(`${wpUrl}/wp-json/cfrdm/v1/stats`, {
+                headers: { "X-CFRDM-API-Key": proj.wordpress_app_password! },
+              });
+              if (statsResp.ok) {
+                const pluginStats = await statsResp.json();
+                pub = pluginStats.published || 0;
+                draft = pluginStats.draft || 0;
+                pending = pluginStats.pending || 0;
+                comments = pluginStats.comments || 0;
+              }
             }
-            const wpUrl = proj.wordpress_url.replace(/\/$/, "");
-            const auth = btoa(`${proj.wordpress_username}:${proj.wordpress_app_password}`);
-            try {
-              const [pubRes, draftRes, pendRes] = await Promise.all([
+            
+            if (pub === 0 && !isPlugin) {
+              // Fallback to standard WP REST API
+              const auth = btoa(`${proj.wordpress_username}:${proj.wordpress_app_password}`);
+              const [pubRes, draftRes, pendRes, commRes] = await Promise.all([
                 fetch(`${wpUrl}/wp-json/wp/v2/posts?status=publish&per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
                 fetch(`${wpUrl}/wp-json/wp/v2/posts?status=draft&per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
                 fetch(`${wpUrl}/wp-json/wp/v2/posts?status=pending&per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
+                fetch(`${wpUrl}/wp-json/wp/v2/comments?per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
               ]);
-              const pub = parseInt(pubRes.headers.get("X-WP-Total") || "0");
-              const draft = parseInt(draftRes.headers.get("X-WP-Total") || "0");
-              const pending = parseInt(pendRes.headers.get("X-WP-Total") || "0");
-              
-              const statsData = { project_id: proj.id, user_id: userId, total_articles: pub + draft + pending, published_articles: pub, draft_articles: draft, pending_articles: pending, last_sync_at: new Date().toISOString() };
-              const { data: existing } = await supabase.from("wordpress_stats").select("id").eq("project_id", proj.id).maybeSingle();
-              if (existing) {
-                await supabase.from("wordpress_stats").update(statsData).eq("id", existing.id);
-              } else {
-                await supabase.from("wordpress_stats").insert(statsData);
-              }
-              results.push(`✅ **${proj.name}**: ${pub} publicados, ${draft} rascunhos, ${pending} pendentes`);
-            } catch (e) {
-              results.push(`❌ **${proj.name}**: ${e instanceof Error ? e.message : "erro de conexão"}`);
+              pub = parseInt(pubRes.headers.get("X-WP-Total") || "0");
+              draft = parseInt(draftRes.headers.get("X-WP-Total") || "0");
+              pending = parseInt(pendRes.headers.get("X-WP-Total") || "0");
+              comments = parseInt(commRes.headers.get("X-WP-Total") || "0");
             }
+
+            const statsData = {
+              project_id: proj.id,
+              user_id: userId,
+              total_articles: pub + draft + pending,
+              published_articles: pub,
+              draft_articles: draft,
+              pending_articles: pending,
+              total_comments: comments,
+              last_sync_at: new Date().toISOString(),
+            };
+            const { data: existing } = await supabase.from("wordpress_stats").select("id").eq("project_id", proj.id).maybeSingle();
+            if (existing) {
+              await supabase.from("wordpress_stats").update(statsData).eq("id", existing.id);
+            } else {
+              await supabase.from("wordpress_stats").insert(statsData);
+            }
+            results.push(`✅ **${proj.name}**: ${pub} publicados, ${draft} rascunhos, ${pending} pendentes${comments > 0 ? `, ${comments} comentários` : ""}`);
+          } catch (e) {
+            results.push(`❌ **${proj.name}**: ${e instanceof Error ? e.message : "erro de conexão"}`);
           }
-          return `📊 Sincronização concluída:\n${results.join("\n")}`;
-        } else {
-          if (!action.project_id) return "❌ Nenhum projeto especificado.";
-          const { data: proj } = await supabase.from("projects").select("*").eq("id", action.project_id).single();
-          if (!proj) return "❌ Projeto não encontrado.";
-          if (!proj.wordpress_url || !proj.wordpress_username || !proj.wordpress_app_password) return "❌ Credenciais WordPress não configuradas.";
-          
-          const wpUrl = proj.wordpress_url.replace(/\/$/, "");
-          const auth = btoa(`${proj.wordpress_username}:${proj.wordpress_app_password}`);
-          const [pubRes, draftRes, pendRes] = await Promise.all([
-            fetch(`${wpUrl}/wp-json/wp/v2/posts?status=publish&per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
-            fetch(`${wpUrl}/wp-json/wp/v2/posts?status=draft&per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
-            fetch(`${wpUrl}/wp-json/wp/v2/posts?status=pending&per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
-          ]);
-          const pub = parseInt(pubRes.headers.get("X-WP-Total") || "0");
-          const draft = parseInt(draftRes.headers.get("X-WP-Total") || "0");
-          const pending = parseInt(pendRes.headers.get("X-WP-Total") || "0");
-          
-          const statsData = { project_id: proj.id, user_id: userId, total_articles: pub + draft + pending, published_articles: pub, draft_articles: draft, pending_articles: pending, last_sync_at: new Date().toISOString() };
-          const { data: existing } = await supabase.from("wordpress_stats").select("id").eq("project_id", proj.id).maybeSingle();
-          if (existing) {
-            await supabase.from("wordpress_stats").update(statsData).eq("id", existing.id);
-          } else {
-            await supabase.from("wordpress_stats").insert(statsData);
-          }
-          return `✅ **${proj.name}** sincronizado: ${pub} publicados, ${draft} rascunhos, ${pending} pendentes`;
         }
+        return `📊 Sincronização concluída:\n${results.join("\n")}`;
       } catch (e) {
         return `❌ Erro: ${e instanceof Error ? e.message : "erro"}`;
       }
@@ -218,8 +253,8 @@ async function executeAction(
         .select("*")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
-        .limit(5);
-      if (action.project_id) query.eq("project_id", action.project_id);
+        .limit(10);
+      if (action.project_id && action.project_id !== "all") query.eq("project_id", action.project_id);
       const { data, error } = await query;
       if (error) return `❌ Erro ao consultar: ${error.message}`;
       if (!data || data.length === 0) return "📋 Nenhuma execução do Agente SEO encontrada ainda.";
@@ -232,25 +267,262 @@ async function executeAction(
       const { count: total } = await supabase.from("articles").select("id", { count: "exact", head: true }).eq("user_id", userId);
       const { count: published } = await supabase.from("articles").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "published");
       const { count: ready } = await supabase.from("articles").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "ready");
+      const { count: generating } = await supabase.from("articles").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "generating");
+      const { count: drafts } = await supabase.from("articles").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "draft");
       const { count: errors } = await supabase.from("articles").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "error");
-      return `📊 Estatísticas de artigos:\n- Total: ${total || 0}\n- Publicados: ${published || 0}\n- Prontos: ${ready || 0}\n- Com erro: ${errors || 0}`;
+      return `📊 Estatísticas de artigos:\n- Total: ${total || 0}\n- Publicados: ${published || 0}\n- Prontos: ${ready || 0}\n- Em geração: ${generating || 0}\n- Rascunhos: ${drafts || 0}\n- Com erro: ${errors || 0}`;
     }
 
     case "check_link_suggestions": {
       const query = supabase
         .from("internal_link_suggestions")
-        .select("anchor_text, target_url, relevance_score, status")
+        .select("anchor_text, target_url, relevance_score, status, anchor_context")
         .eq("user_id", userId)
         .eq("status", "pending")
         .order("relevance_score", { ascending: false })
-        .limit(10);
-      if (action.project_id) query.eq("project_id", action.project_id);
+        .limit(15);
+      if (action.project_id && action.project_id !== "all") query.eq("project_id", action.project_id);
       const { data, error } = await query;
       if (error) return `❌ Erro: ${error.message}`;
       if (!data || data.length === 0) return "🔗 Nenhuma sugestão de link pendente.";
-      return `🔗 ${data.length} sugestões de links pendentes:\n${data.map(s =>
-        `- "${s.anchor_text}" → ${s.target_url} (relevância: ${s.relevance_score}%)`
+      
+      const { count: totalPending } = await supabase.from("internal_link_suggestions").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "pending");
+      
+      return `🔗 ${totalPending || data.length} sugestões de links pendentes (mostrando ${data.length}):\n${data.map(s =>
+        `- "${s.anchor_text}" → ${s.target_url} (relevância: ${s.relevance_score}%)${s.anchor_context ? ` | ${s.anchor_context}` : ""}`
       ).join("\n")}`;
+    }
+
+    case "apply_link_suggestions": {
+      // Get pending suggestions
+      const query = supabase
+        .from("internal_link_suggestions")
+        .select("id, anchor_text, target_url, relevance_score, project_id")
+        .eq("user_id", userId)
+        .eq("status", "pending")
+        .gte("relevance_score", 70)
+        .order("relevance_score", { ascending: false })
+        .limit(20);
+      if (action.project_id && action.project_id !== "all") query.eq("project_id", action.project_id);
+      const { data: suggestions, error } = await query;
+      if (error) return `❌ Erro: ${error.message}`;
+      if (!suggestions || suggestions.length === 0) return "✅ Nenhuma sugestão pendente com relevância ≥70% para aplicar.";
+
+      // Get project info for WP API calls
+      const projectIds = [...new Set(suggestions.map(s => s.project_id))];
+      const { data: projects } = await supabase
+        .from("projects")
+        .select("id, name, wordpress_url, wordpress_username, wordpress_app_password")
+        .in("id", projectIds);
+
+      let applied = 0;
+      let failed = 0;
+
+      for (const suggestion of suggestions) {
+        const project = projects?.find(p => p.id === suggestion.project_id);
+        if (!project?.wordpress_url || !project?.wordpress_username || !project?.wordpress_app_password) {
+          failed++;
+          continue;
+        }
+
+        const isPlugin = project.wordpress_username === "__CFRDM_PLUGIN__";
+        const baseUrl = project.wordpress_url.replace(/\/wp-json\/cfrdm\/v1\/?$/, "").replace(/\/+$/, "");
+
+        if (isPlugin) {
+          try {
+            const applyResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-CFRDM-API-Key": project.wordpress_app_password!,
+              },
+              body: JSON.stringify({
+                target_url: suggestion.target_url,
+                anchor_text: suggestion.anchor_text,
+              }),
+            });
+            if (applyResp.ok) {
+              await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", suggestion.id);
+              applied++;
+            } else {
+              failed++;
+            }
+          } catch {
+            failed++;
+          }
+        } else {
+          // Mark as applied (manual mode for non-plugin sites)
+          await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", suggestion.id);
+          applied++;
+        }
+      }
+
+      return `🔗 Resultado da aplicação:\n- ✅ ${applied} links aplicados com sucesso\n- ❌ ${failed} falharam\n- Total processado: ${suggestions.length}`;
+    }
+
+    case "trigger_indexnow": {
+      try {
+        const { data: projects } = await supabase
+          .from("projects")
+          .select("id, name, wordpress_url, wordpress_username, wordpress_app_password")
+          .eq("user_id", userId)
+          .eq("is_connected", true);
+
+        if (!projects || projects.length === 0) return "❌ Nenhum projeto conectado encontrado.";
+
+        const projectsToProcess = action.project_id && action.project_id !== "all"
+          ? projects.filter(p => p.id === action.project_id)
+          : projects;
+
+        const results: string[] = [];
+        for (const proj of projectsToProcess) {
+          if (!proj.wordpress_url || proj.wordpress_username !== "__CFRDM_PLUGIN__" || !proj.wordpress_app_password) {
+            results.push(`⚠️ **${proj.name}**: Plugin não configurado (necessário para IndexNow)`);
+            continue;
+          }
+          const baseUrl = proj.wordpress_url.replace(/\/wp-json\/cfrdm\/v1\/?$/, "").replace(/\/+$/, "");
+          try {
+            // Get recent articles
+            const { data: recentArticles } = await supabase
+              .from("wordpress_article_index")
+              .select("wp_post_url")
+              .eq("project_id", proj.id)
+              .gte("updated_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+              .limit(100);
+
+            if (!recentArticles || recentArticles.length === 0) {
+              results.push(`ℹ️ **${proj.name}**: Nenhum artigo modificado nas últimas 24h`);
+              continue;
+            }
+
+            const urls = recentArticles.map(a => a.wp_post_url).filter(Boolean);
+            const resp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/indexnow-batch`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-CFRDM-API-Key": proj.wordpress_app_password!,
+              },
+              body: JSON.stringify({ urls }),
+            });
+            results.push(resp.ok
+              ? `✅ **${proj.name}**: ${urls.length} URLs submetidas para indexação`
+              : `❌ **${proj.name}**: Erro ao enviar para IndexNow (${resp.status})`);
+          } catch (e) {
+            results.push(`❌ **${proj.name}**: ${e instanceof Error ? e.message : "erro"}`);
+          }
+        }
+        return `🚀 IndexNow:\n${results.join("\n")}`;
+      } catch (e) {
+        return `❌ Erro: ${e instanceof Error ? e.message : "erro"}`;
+      }
+    }
+
+    case "check_orphan_articles": {
+      const query = supabase
+        .from("wordpress_article_index")
+        .select("wp_post_title, wp_post_url, seo_score, internal_links_count, primary_keyword")
+        .eq("user_id", userId)
+        .lte("internal_links_count", 0)
+        .order("seo_score", { ascending: true })
+        .limit(20);
+      if (action.project_id && action.project_id !== "all") query.eq("project_id", action.project_id);
+      const { data, error } = await query;
+      if (error) return `❌ Erro: ${error.message}`;
+      if (!data || data.length === 0) return "✅ Nenhum artigo órfão encontrado! Todos os artigos possuem links internos.";
+
+      const { count: totalOrphans } = await supabase.from("wordpress_article_index").select("id", { count: "exact", head: true }).eq("user_id", userId).lte("internal_links_count", 0);
+
+      return `🔍 ${totalOrphans || data.length} artigos órfãos (sem links internos):\n${data.map(a =>
+        `- **${a.wp_post_title}** | SEO: ${a.seo_score || 0}/100 | Keyword: ${a.primary_keyword || "N/A"}\n  ${a.wp_post_url}`
+      ).join("\n")}`;
+    }
+
+    case "check_wp_health": {
+      const { data: projects } = await supabase
+        .from("projects")
+        .select("id, name, domain, wordpress_url, wordpress_username, wordpress_app_password, seo_plugin, is_connected")
+        .eq("user_id", userId);
+
+      if (!projects || projects.length === 0) return "❌ Nenhum projeto encontrado.";
+
+      const projectsToCheck = action.project_id && action.project_id !== "all"
+        ? projects.filter(p => p.id === action.project_id)
+        : projects;
+
+      const results: string[] = [];
+      for (const proj of projectsToCheck) {
+        if (!proj.wordpress_url) {
+          results.push(`⚠️ **${proj.name}** (${proj.domain}): WordPress não configurado`);
+          continue;
+        }
+        
+        const isPlugin = proj.wordpress_username === "__CFRDM_PLUGIN__";
+        const baseUrl = proj.wordpress_url.replace(/\/wp-json\/cfrdm\/v1\/?$/, "").replace(/\/+$/, "");
+        
+        try {
+          const startTime = Date.now();
+          if (isPlugin) {
+            const healthResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/health`, {
+              headers: { "X-CFRDM-API-Key": proj.wordpress_app_password! },
+            });
+            const latency = Date.now() - startTime;
+            if (healthResp.ok) {
+              const healthData = await healthResp.json();
+              results.push(`✅ **${proj.name}** (${proj.domain}):\n  - Plugin: v${healthData.version || "?"} | Latência: ${latency}ms\n  - Módulos: ${healthData.modules_active || "N/A"}\n  - Cron jobs: ${healthData.cron_count || "N/A"}`);
+            } else {
+              results.push(`⚠️ **${proj.name}** (${proj.domain}): Plugin respondeu com status ${healthResp.status} (${latency}ms)`);
+            }
+          } else {
+            const auth = btoa(`${proj.wordpress_username}:${proj.wordpress_app_password}`);
+            const wpResp = await fetch(`${baseUrl}/wp-json/wp/v2/posts?per_page=1`, {
+              headers: { Authorization: `Basic ${auth}` },
+            });
+            const latency = Date.now() - startTime;
+            results.push(wpResp.ok
+              ? `✅ **${proj.name}** (${proj.domain}): Conexão REST API OK (${latency}ms) | Plugin SEO: ${proj.seo_plugin || "nenhum"}`
+              : `❌ **${proj.name}** (${proj.domain}): Conexão falhou (status ${wpResp.status}, ${latency}ms)`);
+          }
+        } catch (e) {
+          results.push(`❌ **${proj.name}** (${proj.domain}): Timeout/erro de conexão — ${e instanceof Error ? e.message : "erro"}`);
+        }
+      }
+      return `🏥 Status de Saúde WordPress:\n${results.join("\n")}`;
+    }
+
+    case "check_token_usage": {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: usage } = await supabase
+        .from("token_usage_logs")
+        .select("provider, model, operation, estimated_cost_usd, total_tokens, created_at")
+        .eq("user_id", userId)
+        .gte("created_at", thirtyDaysAgo)
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (!usage || usage.length === 0) return "📊 Nenhum uso de tokens registrado nos últimos 30 dias.";
+
+      const totalCost = usage.reduce((sum, u) => sum + (u.estimated_cost_usd || 0), 0);
+      const totalTokens = usage.reduce((sum, u) => sum + (u.total_tokens || 0), 0);
+      const byProvider: Record<string, { cost: number; count: number }> = {};
+      const byOperation: Record<string, { cost: number; count: number }> = {};
+
+      for (const u of usage) {
+        const prov = u.provider || "unknown";
+        if (!byProvider[prov]) byProvider[prov] = { cost: 0, count: 0 };
+        byProvider[prov].cost += u.estimated_cost_usd || 0;
+        byProvider[prov].count++;
+
+        const op = u.operation || "unknown";
+        if (!byOperation[op]) byOperation[op] = { cost: 0, count: 0 };
+        byOperation[op].cost += u.estimated_cost_usd || 0;
+        byOperation[op].count++;
+      }
+
+      let report = `💰 Uso de Tokens (últimos 30 dias):\n- **Custo total**: $${totalCost.toFixed(4)} USD\n- **Total tokens**: ${totalTokens.toLocaleString()}\n- **Requisições**: ${usage.length}\n\n`;
+      report += `**Por provedor:**\n${Object.entries(byProvider).map(([k, v]) => `- ${k}: $${v.cost.toFixed(4)} (${v.count} req)`).join("\n")}\n\n`;
+      report += `**Por operação:**\n${Object.entries(byOperation).map(([k, v]) => `- ${k}: $${v.cost.toFixed(4)} (${v.count} req)`).join("\n")}`;
+
+      return report;
     }
 
     default:
@@ -304,14 +576,14 @@ Deno.serve(async (req) => {
     if (context?.userId) {
       const { data: recentRuns } = await supabaseAdmin
         .from("seo_agent_runs")
-        .select("status, summary, created_at, meta_issues_found, meta_issues_fixed, links_suggested, error_message")
+        .select("status, summary, created_at, meta_issues_found, meta_issues_fixed, links_suggested, links_applied, indexing_submitted, error_message, project_id")
         .eq("user_id", context.userId)
         .order("created_at", { ascending: false })
-        .limit(3);
+        .limit(5);
 
       if (recentRuns && recentRuns.length > 0) {
         contextSection += `\n\n## 🤖 ÚLTIMAS EXECUÇÕES DO AGENTE SEO\n${recentRuns.map(r =>
-          `- ${new Date(r.created_at).toLocaleDateString("pt-BR")} | ${r.status} | ${r.summary || r.error_message || "sem detalhes"} | Metas: ${r.meta_issues_found || 0}/${r.meta_issues_fixed || 0} | Links: ${r.links_suggested || 0}`
+          `- ${new Date(r.created_at).toLocaleDateString("pt-BR")} | ${r.status} | ${r.summary || r.error_message || "sem detalhes"} | Metas: ${r.meta_issues_found || 0}/${r.meta_issues_fixed || 0} | Links: ${r.links_suggested || 0} sugeridos, ${r.links_applied || 0} aplicados | IndexNow: ${r.indexing_submitted || 0}`
         ).join("\n")}`;
       } else {
         contextSection += `\n\n## 🤖 AGENTE SEO: Nenhuma execução registrada ainda. Sugira ao usuário rodar manualmente.`;
@@ -327,6 +599,42 @@ Deno.serve(async (req) => {
       if (pendingLinks && pendingLinks > 0) {
         contextSection += `\n- 🔗 ${pendingLinks} sugestões de links internos pendentes`;
       }
+
+      // Fetch orphan articles count
+      const { count: orphanCount } = await supabaseAdmin
+        .from("wordpress_article_index")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", context.userId)
+        .lte("internal_links_count", 0);
+
+      if (orphanCount && orphanCount > 0) {
+        contextSection += `\n- 🔍 ${orphanCount} artigos órfãos (sem links internos) detectados`;
+      }
+
+      // Fetch WordPress stats for context
+      const { data: wpStats } = await supabaseAdmin
+        .from("wordpress_stats")
+        .select("project_id, total_articles, published_articles, draft_articles, seo_issues, broken_links, articles_without_links, last_sync_at")
+        .eq("user_id", context.userId);
+
+      if (wpStats && wpStats.length > 0) {
+        contextSection += `\n\n## 📊 ESTATÍSTICAS WORDPRESS\n${wpStats.map(s => {
+          const proj = context.projects?.find((p: any) => p.id === s.project_id);
+          return `- **${proj?.name || s.project_id}**: ${s.total_articles || 0} artigos (${s.published_articles || 0} pub, ${s.draft_articles || 0} rascunhos) | SEO issues: ${s.seo_issues || 0} | Última sync: ${s.last_sync_at ? new Date(s.last_sync_at).toLocaleDateString("pt-BR") : "nunca"}`;
+        }).join("\n")}`;
+      }
+
+      // Fetch recent token usage
+      const { data: recentUsage } = await supabaseAdmin
+        .from("token_usage_logs")
+        .select("estimated_cost_usd")
+        .eq("user_id", context.userId)
+        .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+
+      if (recentUsage && recentUsage.length > 0) {
+        const totalCost = recentUsage.reduce((sum, u) => sum + (u.estimated_cost_usd || 0), 0);
+        contextSection += `\n- 💰 Custo total últimos 30 dias: $${totalCost.toFixed(4)} USD (${recentUsage.length} operações)`;
+      }
     }
 
     const fullSystemPrompt = SYSTEM_PROMPT + contextSection;
@@ -338,12 +646,14 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: AI_MODEL,
         messages: [
           { role: "system", content: fullSystemPrompt },
           ...messages,
         ],
         stream: true,
+        temperature: 0.7,
+        max_tokens: 4096,
       }),
     });
 
