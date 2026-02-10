@@ -186,11 +186,14 @@ export type Database = {
           content: string | null
           created_at: string
           emotional_confidence: number | null
+          emotional_intensity: string | null
           emotional_trigger: string | null
           error_message: string | null
           excerpt: string | null
           featured_image_url: string | null
           id: string
+          image_disclaimer: string | null
+          image_prompt: string | null
           image_source: string | null
           image_style: string | null
           keyword: string
@@ -213,11 +216,14 @@ export type Database = {
           content?: string | null
           created_at?: string
           emotional_confidence?: number | null
+          emotional_intensity?: string | null
           emotional_trigger?: string | null
           error_message?: string | null
           excerpt?: string | null
           featured_image_url?: string | null
           id?: string
+          image_disclaimer?: string | null
+          image_prompt?: string | null
           image_source?: string | null
           image_style?: string | null
           keyword: string
@@ -240,11 +246,14 @@ export type Database = {
           content?: string | null
           created_at?: string
           emotional_confidence?: number | null
+          emotional_intensity?: string | null
           emotional_trigger?: string | null
           error_message?: string | null
           excerpt?: string | null
           featured_image_url?: string | null
           id?: string
+          image_disclaimer?: string | null
+          image_prompt?: string | null
           image_source?: string | null
           image_style?: string | null
           keyword?: string
@@ -301,6 +310,39 @@ export type Database = {
           metadata?: Json | null
           title?: string
           type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      emotional_trigger_configs: {
+        Row: {
+          created_at: string | null
+          custom_color_palette: string[] | null
+          custom_prompt: string | null
+          id: string
+          is_active: boolean | null
+          trigger_code: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          custom_color_palette?: string[] | null
+          custom_prompt?: string | null
+          id?: string
+          is_active?: boolean | null
+          trigger_code: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          custom_color_palette?: string[] | null
+          custom_prompt?: string | null
+          id?: string
+          is_active?: boolean | null
+          trigger_code?: string
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: []
@@ -1335,6 +1377,20 @@ export type Database = {
       }
     }
     Views: {
+      emotional_trigger_stats: {
+        Row: {
+          avg_confidence: number | null
+          caricature_count: number | null
+          emotional_trigger: string | null
+          first_article: string | null
+          image_source: string | null
+          last_article: string | null
+          reused_count: number | null
+          total_articles: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
       token_usage_summary: {
         Row: {
           date: string | null
