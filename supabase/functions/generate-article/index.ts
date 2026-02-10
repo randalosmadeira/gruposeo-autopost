@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
 import { buildAdvancedSEOPrompt, type PromptConfig } from "../_shared/seo-prompt-builder.ts";
 import { callAIStream, resolveModel } from "../_shared/gemini.ts";
+import { runAgentPipeline, type AgentPipelineConfig } from "../_shared/agents/agent-pipeline.ts";
+import { mapSegmentToSector } from "../_shared/sector-config.ts";
 
 const FUNCTION_NAME = "generate-article";
 
@@ -20,40 +22,34 @@ interface ArticleConfig {
   pointOfView: string;
   language: string;
   type: 'blog' | 'sales';
-  // Content type and segment (new advanced fields)
   contentType?: 'how-to' | 'listicle' | 'pillar' | 'comparative' | 'opinion' | 'news';
   segment?: 'legal' | 'health' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'education' | 'general';
   goal?: 'inform' | 'convert' | 'educate' | 'engage';
   intentType?: 'informational' | 'navigational' | 'transactional' | 'commercial';
-  // Company data for sales pages
   companyName?: string;
   companyPhone?: string;
   companyAddress?: string;
-  // Sales-specific
   targetAudience?: string;
   painPoints?: string;
   differentials?: string;
   ctaObjective?: string;
   additionalInfo?: string;
-  // Content elements
   includeFaq: boolean;
   faqCount: number;
   includeTable: boolean;
   includeList: boolean;
   includeConclusion: boolean;
   includeMetaDescription?: boolean;
-  // SEO options
   seoOptimization: boolean;
   humanizeContent?: boolean;
   realtimeData?: boolean;
-  // Custom instructions (legacy support)
   customInstructions?: string;
-  // Internal links
   internalLinks?: Array<{ anchor: string; url: string }>;
-  // Sources context
   sourcesContext?: string;
-  // AI Model selection
   aiModel?: string;
+  // NEW: Agent pipeline flag and sector selection
+  useAgentPipeline?: boolean;
+  sectorType?: string;
 }
 
 // Word count ranges - supports both legacy and new values
@@ -235,19 +231,73 @@ serve(async (req) => {
 
     const { config } = await req.json() as { config: ArticleConfig };
 
+    // ====== CHECK IF AGENT PIPELINE SHOULD BE USED ======
+    const sectorType = config.sectorType || config.segment;
+    const shouldUseAgentPipeline = config.useAgentPipeline && sectorType && mapSegmentToSector(sectorType);
+
+    if (shouldUseAgentPipeline) {
+      log.info("using_agent_pipeline", { sector: sectorType, keyword: config.keyword });
+
+      // Parse secondary keywords
+      let secondaryKeywords: string[] = [];
+      if (config.secondaryKeywords) {
+        secondaryKeywords = typeof config.secondaryKeywords === 'string'
+          ? config.secondaryKeywords.split(',').map(k => k.trim()).filter(Boolean)
+          : Array.isArray(config.secondaryKeywords) ? config.secondaryKeywords : [];
+      }
+
+      const pipelineConfig: AgentPipelineConfig = {
+        keyword: config.keyword,
+        title: config.title,
+        secondaryKeywords,
+        sector: sectorType!,
+        language: config.language || 'Português Brasileiro',
+        tone: config.tone || 'profissional',
+        pointOfView: config.pointOfView || 'voce',
+        wordCount: config.wordCount || 'medium',
+        contentType: config.contentType,
+        goal: config.goal,
+        intentType: config.intentType,
+        companyName: config.companyName,
+        companyPhone: config.companyPhone,
+        companyAddress: config.companyAddress,
+        differentials: config.differentials,
+        targetAudience: config.targetAudience,
+        painPoints: config.painPoints,
+        ctaObjective: config.ctaObjective,
+        includeFaq: config.includeFaq ?? true,
+        faqCount: config.faqCount || 5,
+        includeTable: config.includeTable ?? false,
+        includeList: config.includeList ?? true,
+        includeConclusion: config.includeConclusion ?? true,
+        internalLinks: config.internalLinks,
+        useAgentPipeline: true,
+      };
+
+      const result = await runAgentPipeline(pipelineConfig);
+      
+      log.info("agent_pipeline_complete", { providersUsed: result.providersUsed });
+      log.requestEnd(200, Date.now() - startTime);
+
+      // Return as SSE-compatible stream (single chunk)
+      const sseData = `data: ${JSON.stringify({ choices: [{ delta: { content: result.content } }] })}\n\ndata: [DONE]\n\n`;
+      return new Response(sseData, {
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+      });
+    }
+
+    // ====== STANDARD FLOW (existing) ======
     // Determine which prompt system to use
     let systemPrompt: string;
     let userPrompt: string;
 
     if (hasAdvancedConfig(config)) {
-      // Use new advanced SEO prompt system
       const promptConfig = buildPromptConfig(config);
       const prompts = buildAdvancedSEOPrompt(promptConfig);
       systemPrompt = prompts.system;
       userPrompt = prompts.user;
       log.info("using_advanced_prompt", { segment: config.segment, contentType: config.contentType });
     } else {
-      // Fallback to legacy prompt for backward compatibility
       systemPrompt = buildLegacySystemPrompt(config);
       userPrompt = `Escreva um artigo completo e otimizado para SEO sobre: "${config.keyword}"
 
@@ -263,18 +313,15 @@ Comece agora:`;
       log.info("using_legacy_prompt", { keyword: config.keyword });
     }
 
-    // Resolve model based on config
     const modelAlias = config.aiModel || "flash";
     const model = resolveModel(modelAlias);
 
     log.info("stream_started", { 
-      model, 
-      keyword: config.keyword,
+      model, keyword: config.keyword,
       segment: config.segment || 'general',
       useAdvanced: hasAdvancedConfig(config)
     });
 
-    // Call OpenAI (primary) with streaming, Gemini fallback
     const streamResponse = await callAIStream(
       [
         { role: "system", content: systemPrompt },
@@ -283,7 +330,6 @@ Comece agora:`;
       { maxTokens: 8000 }
     );
 
-    // Return the streaming response with CORS headers
     return new Response(streamResponse.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
