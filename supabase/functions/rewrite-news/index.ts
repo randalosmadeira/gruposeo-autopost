@@ -234,7 +234,7 @@ serve(async (req) => {
       log.warn("low_originality", { score: complianceCheck.originalityScore });
     }
 
-    // Generate featured image using emotional trigger system
+    // Generate featured image using emotional trigger system with retry
     log.info("emotional_image_processing", { niche });
     
     const emotionalSystem = createEmotionalImageSystem({
@@ -244,48 +244,122 @@ serve(async (req) => {
       allowOriginalImageReuse: true,
     });
     
-    const emotionalResult = await emotionalSystem.processNewsImage({
-      title: parsed.seo?.metaTitle || metaTitle || sourceName,
-      content: parsed.content?.html || sourceContent,
-      sourceName: sourceName,
-      sourceUrl: sourceUrl,
-      originalImageUrl: parsed.image?.originalUrl,
-      niche: niche,
-    });
+    // Validate SEO limits - with fallback generation if missing
+    let metaTitle = (parsed.seo?.metaTitle || '').substring(0, 60);
+    let metaDescription = (parsed.seo?.metaDescription || '').substring(0, 160);
     
-    log.info("emotional_analysis_result", {
-      trigger: emotionalResult.emotionalAnalysis.primaryTrigger,
-      confidence: emotionalResult.emotionalAnalysis.confidence,
-      action: emotionalResult.imageDecision.action,
-      style: emotionalResult.imageDecision.style,
-      source: emotionalResult.source,
-      processingTime: emotionalResult.processingTime,
-    });
+    // RETRY: Generate title if missing
+    const MAX_RETRIES = 3;
     
-    // Use emotional image or fallback to standard generation
-    let featuredImage: string | null = null;
-    let emotionalTrigger = emotionalResult.emotionalAnalysis.primaryTrigger;
-    let emotionalConfidence = emotionalResult.emotionalAnalysis.confidence;
-    let imageStyle = emotionalResult.style || emotionalResult.imageDecision.style;
-    let imageSource = emotionalResult.source || 'generated';
-    let imageAltText = emotionalResult.altText || '';
-    
-    if (emotionalResult.success && emotionalResult.imageData) {
-      featuredImage = emotionalResult.imageData;
-      log.info("emotional_image_used", { trigger: emotionalTrigger, style: imageStyle });
-    } else {
-      // Fallback to standard image generation
-      log.info("fallback_to_standard_image", { reason: emotionalResult.error });
-      const imagePrompt = parsed.image?.prompt || NICHE_IMAGE_PROMPTS[niche] || NICHE_IMAGE_PROMPTS['geral'];
-      const fullImagePrompt = `${imagePrompt} Topic: "${parsed.seo?.metaTitle || sourceName}"`;
-      const imageResult = await generateGeminiImage(fullImagePrompt, { aspectRatio: "16:9" });
-      featuredImage = imageResult?.imageData || null;
-      imageSource = 'generated';
+    if (!metaTitle || metaTitle.length < 10) {
+      log.warn("missing_title_retrying", { originalTitle: metaTitle });
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const titlePrompt = `Gere um título SEO otimizado (max 60 chars) em português para um artigo sobre: "${keyword || sourceName}"\nNiche: ${niche}\nRetorne APENAS o título, sem aspas, sem explicações.`;
+          const titleResponse = await callAI([{ role: "user", content: titlePrompt }], { maxTokens: 100 });
+          const newTitle = titleResponse.trim().replace(/^["']|["']$/g, '').substring(0, 60);
+          if (newTitle.length >= 10) {
+            metaTitle = newTitle;
+            log.info("title_generated_retry", { attempt, title: metaTitle });
+            break;
+          }
+        } catch (e) {
+          log.warn("title_retry_failed", { attempt, error: e instanceof Error ? e.message : 'unknown' });
+          if (attempt === MAX_RETRIES) {
+            metaTitle = `${keyword || sourceName} - Análise Completa`.substring(0, 60);
+          }
+        }
+      }
     }
-
-    // Validate SEO limits
-    const metaTitle = (parsed.seo?.metaTitle || '').substring(0, 60);
-    const metaDescription = (parsed.seo?.metaDescription || '').substring(0, 160);
+    
+    // RETRY: Generate meta description if missing
+    if (!metaDescription || metaDescription.length < 50) {
+      log.warn("missing_meta_retrying", { originalMeta: metaDescription });
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const metaPrompt = `Gere uma meta description SEO (max 155 chars) em português para: "${metaTitle}"\nRetorne APENAS a description, sem aspas.`;
+          const metaResponse = await callAI([{ role: "user", content: metaPrompt }], { maxTokens: 200 });
+          const newMeta = metaResponse.trim().replace(/^["']|["']$/g, '').substring(0, 160);
+          if (newMeta.length >= 50) {
+            metaDescription = newMeta;
+            log.info("meta_generated_retry", { attempt, metaLength: metaDescription.length });
+            break;
+          }
+        } catch (e) {
+          log.warn("meta_retry_failed", { attempt, error: e instanceof Error ? e.message : 'unknown' });
+          if (attempt === MAX_RETRIES) {
+            metaDescription = `Análise completa sobre ${keyword || sourceName}. Leia agora e entenda os impactos.`.substring(0, 160);
+          }
+        }
+      }
+    }
+    
+    // IMAGE GENERATION with retry (up to 3 attempts)
+    let featuredImage: string | null = null;
+    let emotionalTrigger = 'neutral' as string;
+    let emotionalConfidence = 0.5;
+    let imageStyle = 'default' as string;
+    let imageSource = 'generated' as string;
+    let imageAltText = '';
+    let lastEmotionalResult: any = null;
+    
+    for (let imageAttempt = 1; imageAttempt <= MAX_RETRIES; imageAttempt++) {
+      try {
+        const emotionalResult = await emotionalSystem.processNewsImage({
+          title: metaTitle || sourceName,
+          content: parsed.content?.html || sourceContent,
+          sourceName: sourceName,
+          sourceUrl: sourceUrl,
+          originalImageUrl: parsed.image?.originalUrl,
+          niche: niche,
+        });
+        
+        log.info("emotional_analysis_result", {
+          attempt: imageAttempt,
+          trigger: emotionalResult.emotionalAnalysis.primaryTrigger,
+          confidence: emotionalResult.emotionalAnalysis.confidence,
+          action: emotionalResult.imageDecision.action,
+          source: emotionalResult.source,
+        });
+        
+        emotionalTrigger = emotionalResult.emotionalAnalysis.primaryTrigger;
+        emotionalConfidence = emotionalResult.emotionalAnalysis.confidence;
+        imageStyle = emotionalResult.style || emotionalResult.imageDecision.style;
+        imageSource = emotionalResult.source || 'generated';
+        imageAltText = emotionalResult.altText || '';
+        lastEmotionalResult = emotionalResult;
+        if (emotionalResult.success && emotionalResult.imageData) {
+          featuredImage = emotionalResult.imageData;
+          log.info("image_generated_success", { attempt: imageAttempt, trigger: emotionalTrigger });
+          break;
+        } else {
+          // Fallback to standard image generation
+          log.info("fallback_standard_image", { attempt: imageAttempt, reason: emotionalResult.error });
+          const imagePrompt = parsed.image?.prompt || NICHE_IMAGE_PROMPTS[niche] || NICHE_IMAGE_PROMPTS['geral'];
+          const fullImagePrompt = `${imagePrompt} Topic: "${metaTitle || sourceName}"`;
+          const imageResult = await generateGeminiImage(fullImagePrompt, { aspectRatio: "16:9" });
+          if (imageResult?.imageData) {
+            featuredImage = imageResult.imageData;
+            imageSource = 'generated';
+            log.info("fallback_image_success", { attempt: imageAttempt });
+            break;
+          }
+        }
+      } catch (imgError) {
+        log.warn("image_generation_attempt_failed", { 
+          attempt: imageAttempt, 
+          error: imgError instanceof Error ? imgError.message : 'unknown' 
+        });
+        if (imageAttempt < MAX_RETRIES) {
+          // Wait before retry (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 2000 * imageAttempt));
+        }
+      }
+    }
+    
+    if (!featuredImage) {
+      log.warn("image_generation_all_retries_failed", { maxRetries: MAX_RETRIES });
+    }
 
     // Save article to database with full structured data including emotional metadata
     const { data: article, error: dbError } = await supabaseAdmin
@@ -300,7 +374,7 @@ serve(async (req) => {
         slug: parsed.seo?.slug || '',
         featured_image_url: featuredImage,
         type: "blog",
-        status: "draft",
+        status: featuredImage && metaTitle && metaDescription ? "ready" : "draft",
         word_count: parsed.content?.wordCount || parsed.content?.html?.split(/\s+/).length || 0,
         emotional_trigger: emotionalTrigger,
         emotional_confidence: emotionalConfidence,
@@ -325,12 +399,15 @@ serve(async (req) => {
           image_alt_text: imageAltText || parsed.image?.altText || '',
           reading_time: parsed.content?.readingTime || '',
           monetization: parsed.monetization || null,
+          has_image: !!featuredImage,
+          has_meta_title: !!metaTitle && metaTitle.length >= 10,
+          has_meta_description: !!metaDescription && metaDescription.length >= 50,
           emotional_analysis: {
             trigger: emotionalTrigger,
             confidence: emotionalConfidence,
-            secondaryTriggers: emotionalResult.emotionalAnalysis.secondaryTriggers,
-            intensity: emotionalResult.emotionalAnalysis.emotionalIntensity,
-            reasoning: emotionalResult.emotionalAnalysis.reasoning,
+            secondaryTriggers: lastEmotionalResult?.emotionalAnalysis?.secondaryTriggers || [],
+            intensity: lastEmotionalResult?.emotionalAnalysis?.emotionalIntensity || 'medium',
+            reasoning: lastEmotionalResult?.emotionalAnalysis?.reasoning || '',
           },
         },
       })
@@ -347,10 +424,10 @@ serve(async (req) => {
       originalityScore: complianceCheck.originalityScore,
       qualityScore: parsed.internal?.qualityScore,
       wordCount: parsed.content?.wordCount,
-      readingTime: parsed.content?.readingTime,
+      hasImage: !!featuredImage,
+      hasTitle: !!metaTitle,
+      hasMeta: !!metaDescription,
       emotionalTrigger,
-      emotionalConfidence,
-      imageStyle,
       imageSource,
     });
     log.requestEnd(200, Date.now() - startTime);

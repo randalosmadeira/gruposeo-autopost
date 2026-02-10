@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -528,7 +529,45 @@ export function MonitoredPortalsManager() {
   const { projects } = useProjects();
 
   const activePortals = portals.filter(p => p.is_active);
-  const totalArticles = portals.reduce((sum, p) => sum + (p.articles_generated || 0), 0);
+  
+  // Fetch real article counts from articles table
+  const [realArticleCounts, setRealArticleCounts] = useState<Record<string, number>>({});
+  
+  useEffect(() => {
+    const fetchCounts = async () => {
+      if (!portals.length) return;
+      const portalNames = portals.map(p => p.portal_name);
+      
+      const { data } = await supabase
+        .from('articles')
+        .select('config')
+        .eq('config->>type', 'rewrite');
+      
+      if (data) {
+        const counts: Record<string, number> = {};
+        data.forEach((article: any) => {
+          const sourceName = article.config?.source_name;
+          if (sourceName && portalNames.includes(sourceName)) {
+            counts[sourceName] = (counts[sourceName] || 0) + 1;
+          }
+        });
+        setRealArticleCounts(counts);
+      }
+    };
+    fetchCounts();
+
+    // Realtime updates
+    const channel = supabase
+      .channel('portal-articles-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'articles' }, () => {
+        fetchCounts();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [portals]);
+
+  const totalArticles = Object.values(realArticleCounts).reduce((sum, c) => sum + c, 0);
 
   return (
     <div className="space-y-6">
