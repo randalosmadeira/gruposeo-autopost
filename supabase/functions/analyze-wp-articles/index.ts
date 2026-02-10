@@ -496,159 +496,195 @@ Deno.serve(async (req) => {
 
     switch (action) {
       case "sync": {
-        // Sync articles from WordPress
-        let inputArticles: ArticleData[] = [];
-        let usedFallbackMode = false;
-        let fallbackReason: string | undefined;
+        // Sync articles from WordPress using SSE streaming to prevent timeout
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          async start(controller) {
+            const sendEvent = (data: any) => {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+            };
 
-        if (Array.isArray(articles)) {
-          inputArticles = articles as ArticleData[];
-        } else {
-          // No articles provided: fetch directly from WordPress (backend-side, avoids browser CORS)
-          const wpUrl = project.wordpress_url || "";
-          if (!wpUrl) {
-            return new Response(
-              JSON.stringify({ error: "wordpress_url não configurada no projeto" }),
-              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
+            try {
+              let inputArticles: ArticleData[] = [];
+              let usedFallbackMode = false;
+              let fallbackReason: string | undefined;
 
-          const fetchResult = await fetchWordPressArticlesForIndexing({
-            wordpressUrl: wpUrl,
-            wordpressUsername: (project as any).wordpress_username ?? null,
-            wordpressAppPassword: (project as any).wordpress_app_password ?? null,
-            useFallback,
-          });
-          
-          inputArticles = fetchResult.articles;
-          usedFallbackMode = fetchResult.usedFallback;
-          fallbackReason = fetchResult.fallbackReason;
-        }
-        if (!inputArticles.length) {
-          return new Response(
-            JSON.stringify({ success: true, results: { synced: 0, analyzed: 0, errors: 0, skipped: 0 }, message: "Nenhum artigo encontrado para indexação" }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+              sendEvent({ phase: 'fetching', message: 'Buscando artigos do WordPress...' });
 
-        const results = {
-          total: inputArticles.length,
-          synced: 0,
-          analyzed: 0,
-          analyzedWithAI: 0,
-          analyzedBasic: 0,
-          errors: 0,
-          skipped: 0,
-        };
-        
-        // Track if AI credits are exhausted
-        let aiCreditsExhausted = false;
-        let consecutiveAIErrors = 0;
-        const MAX_AI_ERRORS = 3;
+              if (Array.isArray(articles)) {
+                inputArticles = articles as ArticleData[];
+              } else {
+                const wpUrl = project.wordpress_url || "";
+                if (!wpUrl) {
+                  sendEvent({ error: "wordpress_url não configurada no projeto" });
+                  controller.close();
+                  return;
+                }
 
-        console.log(`Starting sync for ${inputArticles.length} articles...`);
+                const fetchResult = await fetchWordPressArticlesForIndexing({
+                  wordpressUrl: wpUrl,
+                  wordpressUsername: (project as any).wordpress_username ?? null,
+                  wordpressAppPassword: (project as any).wordpress_app_password ?? null,
+                  useFallback,
+                });
+                
+                inputArticles = fetchResult.articles;
+                usedFallbackMode = fetchResult.usedFallback;
+                fallbackReason = fetchResult.fallbackReason;
+              }
 
-        for (const article of inputArticles as ArticleData[]) {
-          try {
-            const contentHash = generateContentHash(article.content);
-            const links = countLinks(article.content, effectiveSiteUrl);
+              if (!inputArticles.length) {
+                sendEvent({ done: true, success: true, results: { synced: 0, analyzed: 0, errors: 0, skipped: 0 }, message: "Nenhum artigo encontrado para indexação" });
+                controller.close();
+                return;
+              }
 
-            // Check if article exists and has changed
-            const { data: existing } = await supabase
-              .from("wordpress_article_index")
-              .select("id, content_hash")
-              .eq("project_id", project_id)
-              .eq("wp_post_id", article.wp_post_id)
-              .single();
+              sendEvent({ phase: 'analyzing', total: inputArticles.length, message: `${inputArticles.length} artigos encontrados. Iniciando análise...` });
 
-            if (!fullSync && existing && existing.content_hash === contentHash) {
-              results.skipped++;
-              continue;
-            }
+              const results = {
+                total: inputArticles.length,
+                synced: 0,
+                analyzed: 0,
+                analyzedWithAI: 0,
+                analyzedBasic: 0,
+                errors: 0,
+                skipped: 0,
+              };
+              
+              let aiCreditsExhausted = false;
+              let consecutiveAIErrors = 0;
+              const MAX_AI_ERRORS = 3;
+              let progressCounter = 0;
 
-            // Analyze with AI (with automatic fallback when credits exhausted)
-            // Use AI only if credits not exhausted and not too many consecutive errors
-            const shouldTryAI = !aiCreditsExhausted && consecutiveAIErrors < MAX_AI_ERRORS;
-            
-            const analysisResult = await analyzeArticle(article, shouldTryAI);
-            const analysis = analysisResult.result;
-            
-            // Update AI status based on result
-            if (analysisResult.creditsExhausted) {
-              aiCreditsExhausted = true;
-              console.log("AI credits exhausted, all remaining articles will use basic analysis");
-            }
-            
-            if (analysisResult.usedAI) {
-              consecutiveAIErrors = 0;
-              results.analyzedWithAI++;
-            } else {
-              results.analyzedBasic++;
-            }
-            
-            results.analyzed++;
+              console.log(`Starting sync for ${inputArticles.length} articles...`);
 
-            // Upsert article index
-            const { error: upsertError } = await supabase
-              .from("wordpress_article_index")
-              .upsert({
-                user_id: user.id,
-                project_id: project_id,
-                wp_post_id: article.wp_post_id,
-                wp_post_url: article.wp_post_url,
-                wp_post_slug: article.wp_post_slug,
-                wp_post_title: article.wp_post_title,
-                wp_post_type: article.wp_post_type || 'post',
-                wp_post_status: article.wp_post_status || 'publish',
-                wp_categories: article.wp_categories || [],
-                wp_tags: article.wp_tags || [],
-                primary_keyword: analysis.primary_keyword,
-                secondary_keywords: analysis.secondary_keywords,
-                topic_cluster: analysis.topic_cluster,
-                semantic_summary: analysis.semantic_summary,
-                content_hash: contentHash,
-                word_count: article.word_count || article.content.split(/\s+/).length,
-                internal_links_count: links.internal,
-                external_links_count: links.external,
-                seo_score: analysis.seo_score,
-                linkability_score: analysis.linkability_score,
-                last_wp_modified_at: article.last_wp_modified_at,
-                last_analyzed_at: new Date().toISOString(),
-                sync_status: 'synced',
-              }, {
-                onConflict: 'project_id,wp_post_id',
+              // Process articles in batches of 10 for better throughput
+              const BATCH_SIZE = 10;
+              for (let i = 0; i < inputArticles.length; i += BATCH_SIZE) {
+                const batch = inputArticles.slice(i, i + BATCH_SIZE);
+                
+                // Process batch concurrently (but without AI to avoid rate limits)
+                const batchPromises = batch.map(async (article) => {
+                  try {
+                    const contentHash = generateContentHash(article.content);
+                    const links = countLinks(article.content, effectiveSiteUrl);
+
+                    const { data: existing } = await supabase
+                      .from("wordpress_article_index")
+                      .select("id, content_hash")
+                      .eq("project_id", project_id)
+                      .eq("wp_post_id", article.wp_post_id)
+                      .single();
+
+                    if (!fullSync && existing && existing.content_hash === contentHash) {
+                      results.skipped++;
+                      return;
+                    }
+
+                    const shouldTryAI = !aiCreditsExhausted && consecutiveAIErrors < MAX_AI_ERRORS;
+                    const analysisResult = await analyzeArticle(article, shouldTryAI);
+                    const analysis = analysisResult.result;
+                    
+                    if (analysisResult.creditsExhausted) {
+                      aiCreditsExhausted = true;
+                    }
+                    
+                    if (analysisResult.usedAI) {
+                      consecutiveAIErrors = 0;
+                      results.analyzedWithAI++;
+                    } else {
+                      results.analyzedBasic++;
+                    }
+                    
+                    results.analyzed++;
+
+                    const { error: upsertError } = await supabase
+                      .from("wordpress_article_index")
+                      .upsert({
+                        user_id: user.id,
+                        project_id: project_id,
+                        wp_post_id: article.wp_post_id,
+                        wp_post_url: article.wp_post_url,
+                        wp_post_slug: article.wp_post_slug,
+                        wp_post_title: article.wp_post_title,
+                        wp_post_type: article.wp_post_type || 'post',
+                        wp_post_status: article.wp_post_status || 'publish',
+                        wp_categories: article.wp_categories || [],
+                        wp_tags: article.wp_tags || [],
+                        primary_keyword: analysis.primary_keyword,
+                        secondary_keywords: analysis.secondary_keywords,
+                        topic_cluster: analysis.topic_cluster,
+                        semantic_summary: analysis.semantic_summary,
+                        content_hash: contentHash,
+                        word_count: article.word_count || article.content.split(/\s+/).length,
+                        internal_links_count: links.internal,
+                        external_links_count: links.external,
+                        seo_score: analysis.seo_score,
+                        linkability_score: analysis.linkability_score,
+                        last_wp_modified_at: article.last_wp_modified_at,
+                        last_analyzed_at: new Date().toISOString(),
+                        sync_status: 'synced',
+                      }, {
+                        onConflict: 'project_id,wp_post_id',
+                      });
+
+                    if (upsertError) {
+                      console.error("Upsert error:", upsertError);
+                      results.errors++;
+                    } else {
+                      results.synced++;
+                    }
+                  } catch (e) {
+                    console.error("Article processing error:", e);
+                    results.errors++;
+                  }
+                });
+
+                await Promise.all(batchPromises);
+                progressCounter += batch.length;
+
+                // Send progress every batch
+                sendEvent({
+                  phase: 'analyzing',
+                  progress: progressCounter,
+                  total: inputArticles.length,
+                  synced: results.synced,
+                  skipped: results.skipped,
+                  errors: results.errors,
+                  analyzed: results.analyzed,
+                });
+              }
+              
+              console.log(`Sync completed: ${results.synced} synced, ${results.analyzedWithAI} with AI, ${results.analyzedBasic} basic, ${results.skipped} skipped, ${results.errors} errors`);
+
+              sendEvent({
+                done: true,
+                success: true, 
+                results,
+                usedFallback: usedFallbackMode,
+                fallbackReason,
+                aiStatus: aiCreditsExhausted ? 'credits_exhausted' : 'ok',
+                message: aiCreditsExhausted 
+                  ? `Sincronização concluída. ${results.analyzedWithAI} com IA, ${results.analyzedBasic} análise básica.`
+                  : `Sincronização concluída. ${results.synced} artigos indexados.`,
               });
-
-            if (upsertError) {
-              console.error("Upsert error:", upsertError);
-              results.errors++;
-            } else {
-              results.synced++;
+            } catch (e: any) {
+              console.error("Sync error:", e);
+              sendEvent({ error: e.message || 'Erro durante sincronização' });
+            } finally {
+              controller.close();
             }
+          },
+        });
 
-            // Small delay to avoid rate limiting (shorter for basic analysis)
-            await new Promise(r => setTimeout(r, analysisResult.usedAI ? 150 : 50));
-          } catch (e) {
-            console.error("Article processing error:", e);
-            results.errors++;
-          }
-        }
-        
-        console.log(`Sync completed: ${results.synced} synced, ${results.analyzedWithAI} with AI, ${results.analyzedBasic} basic, ${results.skipped} skipped, ${results.errors} errors`);
-
-        return new Response(
-          JSON.stringify({ 
-            success: true, 
-            results,
-            usedFallback: usedFallbackMode,
-            fallbackReason,
-            aiStatus: aiCreditsExhausted ? 'credits_exhausted' : 'ok',
-            message: aiCreditsExhausted 
-              ? `Sincronização concluída. ${results.analyzedWithAI} artigos analisados com IA, ${results.analyzedBasic} com análise básica (créditos de IA esgotados).`
-              : `Sincronização concluída com sucesso. ${results.synced} artigos indexados.`,
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(stream, {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+          },
+        });
       }
 
       case "generate_clusters": {

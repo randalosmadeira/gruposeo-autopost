@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { FunctionsHttpError } from '@supabase/supabase-js';
+
 import { useToast } from '@/hooks/use-toast';
 import type { SyncProgress, SyncLogEntry } from '@/components/internal-linking/SyncProgressPanel';
 
@@ -222,86 +222,120 @@ export function useInternalLinking(projectId: string | null) {
 
       setSyncProgress(prev => ({ ...prev, phase: 'fetching' }));
 
-      const syncResponse = await supabase.functions.invoke('analyze-wp-articles', {
-        body: {
+      // Use raw fetch with SSE streaming to avoid timeout
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      
+      if (!accessToken) {
+        throw new Error('Sessão expirada. Faça login novamente.');
+      }
+
+      const syncResp = await fetch(`${supabaseUrl}/functions/v1/analyze-wp-articles`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({
           action: 'sync',
           project_id: projectId,
           full_sync: fullSync,
           use_fallback: useFallback,
-        },
+        }),
       });
 
-      // Check for error in the response (both SDK error and response body error)
-      let errorMsg = '';
-      
-      if (syncResponse.error) {
-        // Try to extract error message from FunctionsHttpError context
-        if (syncResponse.error instanceof FunctionsHttpError) {
-          try {
-            // FunctionsHttpError has context.json() that contains the actual error body
-            const errorBody = await syncResponse.error.context.json();
-            errorMsg = errorBody?.error || errorBody?.message || syncResponse.error.message;
-          } catch (parseErr) {
-            // Try to get text if JSON parsing fails
-            try {
-              const errorText = await syncResponse.error.context.text();
-              // Try to parse the text as JSON
-              const parsed = JSON.parse(errorText);
-              errorMsg = parsed?.error || parsed?.message || errorText;
-            } catch {
-              errorMsg = syncResponse.error.message;
-            }
-          }
-        } else {
-          errorMsg = syncResponse.error.message || 'Erro desconhecido';
-        }
-      } else if (syncResponse.data?.error) {
-        errorMsg = syncResponse.data.error;
-      }
-      
-      if (errorMsg) {
-        // Try to parse structured error from edge function
-        let structuredError: { code?: string; message?: string; canUseFallback?: boolean; instructions?: string } | null = null;
+      if (!syncResp.ok) {
+        const errorText = await syncResp.text().catch(() => 'Erro desconhecido');
+        let errorMsg = errorText;
         try {
-          structuredError = JSON.parse(errorMsg);
-        } catch {
-          // Not a JSON error, continue with string matching
+          const parsed = JSON.parse(errorText);
+          errorMsg = parsed?.error || parsed?.message || errorText;
+        } catch {}
+        
+        // Check for plugin not found
+        try {
+          const structuredError = JSON.parse(errorMsg);
+          if (structuredError?.code === 'PLUGIN_NOT_FOUND') {
+            setSyncState(prev => ({ ...prev, pluginNotFound: true }));
+            throw new Error(structuredError.instructions || structuredError.message || 'Plugin não encontrado');
+          }
+        } catch (e) {
+          if (e instanceof Error && e.message.includes('Plugin')) throw e;
         }
-        
-        if (structuredError?.code === 'PLUGIN_NOT_FOUND') {
-          setSyncState(prev => ({ ...prev, pluginNotFound: true }));
-          throw new Error(structuredError.instructions || structuredError.message || 'Plugin não encontrado');
-        }
-        
-        // Check for common connection/plugin issues (legacy string matching)
-        const isPluginNotFound = errorMsg.includes('rest_no_route') || 
-                                  errorMsg.includes('Nenhuma rota') ||
-                                  errorMsg.includes('Falha ao buscar lista de artigos no plugin') ||
-                                  errorMsg.includes('plugin ContentFactory não está instalado') ||
-                                  (errorMsg.includes('404') && (errorMsg.includes('plugin') || errorMsg.includes('cfrdm')));
-        const isPluginError = errorMsg.includes('Falha ao buscar') || 
-                               errorMsg.includes('Falha ao exportar');
-        const isConnectionError = errorMsg.includes('fetch') || 
-                                   errorMsg.includes('network') || 
-                                   errorMsg.includes('CORS') ||
-                                   errorMsg.includes('Failed to fetch');
-        
+
+        const isPluginNotFound = errorMsg.includes('rest_no_route') || errorMsg.includes('plugin ContentFactory não está instalado');
         if (isPluginNotFound) {
-          // Mark that plugin was not found so UI can show installation guide
           setSyncState(prev => ({ ...prev, pluginNotFound: true }));
-          throw new Error('Plugin não encontrado: O plugin ContentFactory não está instalado ou ativo. Instale o plugin ou reconfigure o projeto com credenciais de Application Password.');
-        }
-        if (isPluginError || isConnectionError) {
-          throw new Error('Erro de conexão: Verifique se o plugin ContentFactory está instalado e ativado no WordPress, e se a API Key está configurada corretamente.');
+          throw new Error('Plugin não encontrado: O plugin ContentFactory não está instalado ou ativo.');
         }
         throw new Error(errorMsg);
       }
 
-      const results = syncResponse.data?.results || { synced: 0, analyzed: 0, errors: 0, skipped: 0, total: 0, analyzedWithAI: 0, analyzedBasic: 0 };
-      const usedFallback = syncResponse.data?.usedFallback || false;
-      const fallbackReason = syncResponse.data?.fallbackReason;
-      const aiStatus = syncResponse.data?.aiStatus;
-      const serverMessage = syncResponse.data?.message;
+      // Parse SSE stream
+      const reader = syncResp.body?.getReader();
+      const decoder = new TextDecoder();
+      let results = { synced: 0, analyzed: 0, errors: 0, skipped: 0, total: 0, analyzedWithAI: 0, analyzedBasic: 0 };
+      let usedFallbackResult = false;
+      let fallbackReasonResult: string | undefined;
+      let aiStatus = 'ok';
+      let syncError = '';
+      let textBuffer = '';
+
+      if (reader) {
+        let done = false;
+        while (!done) {
+          const { value, done: streamDone } = await reader.read();
+          done = streamDone;
+          if (value) {
+            textBuffer += decoder.decode(value, { stream: true });
+            const lines = textBuffer.split('\n');
+            textBuffer = lines.pop() || '';
+            
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              try {
+                const event = JSON.parse(line.slice(6));
+                
+                if (event.error) {
+                  syncError = event.error;
+                  continue;
+                }
+                
+                if (event.phase === 'fetching') {
+                  addLog('info', event.message || 'Buscando artigos...');
+                } else if (event.phase === 'analyzing') {
+                  setSyncProgress(prev => ({
+                    ...prev,
+                    phase: 'analyzing',
+                    total: event.total || prev.total,
+                    fetched: event.progress || prev.fetched,
+                    analyzed: event.analyzed || prev.analyzed,
+                    indexed: event.synced || prev.indexed,
+                    skipped: event.skipped || prev.skipped,
+                    errors: event.errors || prev.errors,
+                  }));
+                }
+                
+                if (event.done) {
+                  results = event.results || results;
+                  usedFallbackResult = event.usedFallback || false;
+                  fallbackReasonResult = event.fallbackReason;
+                  aiStatus = event.aiStatus || 'ok';
+                }
+              } catch {}
+            }
+          }
+        }
+      }
+
+      if (syncError) {
+        throw new Error(syncError);
+      }
+
+      const usedFallback = usedFallbackResult;
+      const fallbackReason = fallbackReasonResult;
       
       // Update sync state
       setSyncState(prev => ({
@@ -363,7 +397,7 @@ export function useInternalLinking(projectId: string | null) {
 
       toast({
         title: 'Sincronização concluída!',
-        description: serverMessage || `${results.synced} artigos sincronizados, ${results.analyzed} analisados.${fallbackInfo}`,
+        description: `${results.synced} artigos sincronizados, ${results.analyzed} analisados.${fallbackInfo}`,
       });
     } catch (error) {
       console.error('Error triggering sync:', error);
