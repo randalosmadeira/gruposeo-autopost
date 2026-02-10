@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '3.1.0';
-const PLUGIN_LAST_UPDATE = '2026-02-09';
+const PLUGIN_VERSION = '3.2.0';
+const PLUGIN_LAST_UPDATE = '2026-02-10';
 
 const features = [
   {
@@ -91,6 +91,20 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '3.2.0',
+    date: '2026-02-10',
+    type: 'major' as const,
+    changes: [
+      { type: 'feature', text: 'Sistema de notificações automáticas no dashboard para artigos gerados por cron' },
+      { type: 'feature', text: 'Monitoramento de portais com scraping HTML e RSS integrado' },
+      { type: 'feature', text: 'Reescrita automática com score de originalidade (95%+)' },
+      { type: 'feature', text: 'Painel de diagnóstico com reparo de tabelas via AJAX fallback' },
+      { type: 'improvement', text: 'Integração em tempo real: portal monitoring → rewrite → publish → notify' },
+      { type: 'improvement', text: 'Notificações com badge de não-lidas e link direto ao editor' },
+      { type: 'improvement', text: 'Sincronização de WordPress Stats otimizada com upsert' },
+    ],
+  },
   {
     version: '3.1.0',
     date: '2026-02-09',

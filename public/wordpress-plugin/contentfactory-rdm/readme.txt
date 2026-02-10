@@ -4,7 +4,7 @@ Tags: content, seo, articles, automation, ai, image-optimization, indexing, inde
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.1.0
+Stable tag: 3.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -153,6 +153,15 @@ Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject s
 * Upload de mídia via API
 * Logs de atividade
 
+= 3.2.0 =
+* **NOVO**: Notificações automáticas no dashboard para artigos gerados por cron
+* **NOVO**: Monitoramento de portais com scraping HTML e RSS integrado
+* **NOVO**: Reescrita automática com score de originalidade (95%+)
+* **NOVO**: Painel de diagnóstico com reparo de tabelas via AJAX fallback
+* **INTEGRAÇÃO**: Pipeline completo: portal monitoring → rewrite → publish → notify
+* **MELHORADO**: Notificações com badge de não-lidas e link direto ao editor
+* **MELHORADO**: Sincronização de WordPress Stats otimizada com upsert
+
 = 3.1.0 =
 * **NOVO**: Auditor de Meta Descriptions com IA (cron a cada 6h)
 * **NOVO**: IndexNow - notificação automática ao Bing/Google/Yandex
@@ -180,6 +189,9 @@ Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject s
 * **NOVO**: AI Content Enhancer
 
 == Upgrade Notice ==
+
+= 3.2.0 =
+Notificações automáticas, monitoramento de portais com reescrita IA e pipeline completo de automação. Recomendado para todos os usuários.
 
 = 3.1.0 =
 Atualização major com Meta Auditor IA, IndexNow, llms.txt, Duplicador de Posts, Sitemap Optimizer e sistema de atualização segura com rollback automático.
