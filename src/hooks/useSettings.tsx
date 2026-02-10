@@ -57,38 +57,17 @@ export function useSettings() {
     mutationFn: async (updates: Omit<UserSettingsUpdate, 'user_id'>) => {
       if (!user) throw new Error('User not authenticated');
       
-      // Check if settings exist using the safe view (RLS allows reading from view, not table)
-      const { data: existing } = await supabase
-        .from('user_settings_safe')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      // Use upsert to avoid race conditions between check + insert/update
+      // This handles both new and existing settings in a single atomic operation
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert(
+          { user_id: user.id, ...updates },
+          { onConflict: 'user_id' }
+        );
       
-      let result;
-      
-      if (existing) {
-        // Update existing settings
-        // Use upsert instead of update to handle potential RLS edge cases
-        const { error } = await supabase
-          .from('user_settings')
-          .update(updates)
-          .eq('user_id', user.id);
-        
-        if (error) throw error;
-        // Don't try to select after update - RLS blocks SELECT on this table
-        result = { ...existing, ...updates };
-      } else {
-        // Insert new settings
-        const { error } = await supabase
-          .from('user_settings')
-          .insert({ user_id: user.id, ...updates });
-        
-        if (error) throw error;
-        // Don't try to select after insert - RLS blocks SELECT on this table
-        result = { user_id: user.id, ...updates };
-      }
-      
-      return result;
+      if (error) throw error;
+      return { user_id: user.id, ...updates };
     },
     onSuccess: () => {
       // Invalidate both the general key and the user-scoped key
