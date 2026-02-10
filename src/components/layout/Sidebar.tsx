@@ -20,6 +20,7 @@ import {
   Activity,
   ChevronDown,
   FileText,
+  MessageSquare,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -51,6 +52,7 @@ const navGroups: NavGroup[] = [
       { label: 'Painel', icon: LayoutDashboard, href: '/' },
       { label: 'Calendário', icon: Calendar, href: '/calendar', badge: 'Novo', badgeVariant: 'orange', iconColor: '#10B981' },
       { label: 'Academia', icon: GraduationCap, href: '/academia' },
+      { label: 'Chat IA', icon: MessageSquare, href: '/ai-chat', badge: 'Novo', badgeVariant: 'orange', iconColor: '#8B5CF6' },
     ],
   },
   {
