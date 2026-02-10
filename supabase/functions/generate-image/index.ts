@@ -1,8 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
-import { generateGeminiImage } from "../_shared/gemini.ts";
+import { generateGeminiImage, callAI } from "../_shared/gemini.ts";
 import { createTokenLogger } from "../_shared/token-logger.ts";
+import { createEmotionalImageSystem } from "../_shared/emotional/emotional-image-system.ts";
+import type { EmotionalTrigger } from "../_shared/emotional/emotional-triggers-config.ts";
 
 const FUNCTION_NAME = "generate-image";
 
@@ -19,11 +21,14 @@ interface ImageRequest {
   style?: 'photorealistic' | 'illustration' | 'abstract';
   aspectRatio?: '16:9' | '1:1' | '4:3';
   quality?: 'standard' | 'high';
-  // Optional provider/model override
   provider?: 'openai' | 'gemini' | 'auto';
   model?: string;
-  // Optional article ID for linking usage logs
   articleId?: string;
+  // Emotional trigger support
+  emotionalTrigger?: EmotionalTrigger;
+  forceCaricature?: boolean;
+  content?: string;
+  sourceName?: string;
 }
 
 // Mapping segment to visual context
@@ -122,49 +127,87 @@ serve(async (req) => {
       );
     }
 
-    // Build the image prompt
-    const imagePrompt = buildImagePrompt(body);
+    // Check if emotional trigger mode is requested
+    let imageResult: { imageData: string; mimeType: string } | null = null;
+    let imagePrompt = '';
+    let emotionalData: any = null;
+    
+    if (body.emotionalTrigger || body.forceCaricature) {
+      // Use emotional image system
+      log.info("emotional_mode", { trigger: body.emotionalTrigger, forceCaricature: body.forceCaricature });
+      
+      const emotionalSystem = createEmotionalImageSystem({
+        callAI: async (msgs, opts) => callAI(msgs, opts),
+        generateImage: async (prompt, opts) => generateGeminiImage(prompt, { aspectRatio: opts?.aspectRatio || "16:9" }),
+        defaultAspectRatio: body.aspectRatio || '16:9',
+        allowOriginalImageReuse: false,
+      });
+      
+      const emotionalResult = await emotionalSystem.processNewsImage({
+        title: body.title,
+        content: body.content || body.context || body.title,
+        sourceName: body.sourceName,
+        forceTrigger: body.emotionalTrigger,
+        forceCaricature: body.forceCaricature,
+        niche: body.segment,
+        aspectRatio: body.aspectRatio,
+      });
+      
+      emotionalData = {
+        trigger: emotionalResult.emotionalAnalysis.primaryTrigger,
+        confidence: emotionalResult.emotionalAnalysis.confidence,
+        style: emotionalResult.style,
+        decision: emotionalResult.imageDecision.action,
+      };
+      
+      if (emotionalResult.success && emotionalResult.imageData) {
+        imageResult = { imageData: emotionalResult.imageData, mimeType: emotionalResult.mimeType || 'image/png' };
+        imagePrompt = emotionalResult.promptUsed || '';
+      }
+    }
+    
+    // Standard generation if emotional didn't produce result
+    if (!imageResult) {
+      imagePrompt = buildImagePrompt(body);
+      
+      const requestedModel = body.model;
+      const requestedProvider = body.provider;
+      const requestedQuality = body.quality;
 
-    // Resolve provider/model overrides
-    const requestedModel = body.model;
-    const requestedProvider = body.provider;
-    const requestedQuality = body.quality;
+      const derivedProvider = requestedModel?.startsWith('dall-e')
+        ? 'openai'
+        : requestedModel?.startsWith('gemini')
+          ? 'gemini'
+          : undefined;
 
-    const derivedProvider = requestedModel?.startsWith('dall-e')
-      ? 'openai'
-      : requestedModel?.startsWith('gemini')
-        ? 'gemini'
-        : undefined;
+      const provider = requestedProvider || derivedProvider || 'auto';
+      const openaiQuality =
+        requestedModel === 'dall-e-3-standard' || requestedQuality === 'standard'
+          ? 'standard'
+          : 'hd';
 
-    const provider = requestedProvider || derivedProvider || 'auto';
-    const openaiQuality =
-      requestedModel === 'dall-e-3-standard' || requestedQuality === 'standard'
-        ? 'standard'
-        : 'hd';
+      log.info("generating_image", { 
+        title: body.title,
+        segment: body.segment || 'general',
+        style: body.style || 'photorealistic',
+        provider,
+        model: requestedModel,
+        openaiQuality: provider === 'openai' ? openaiQuality : undefined,
+      });
 
-    log.info("generating_image", { 
-      title: body.title,
-      segment: body.segment || 'general',
-      style: body.style || 'photorealistic',
-      provider,
-      model: requestedModel,
-      openaiQuality: provider === 'openai' ? openaiQuality : undefined,
-    });
+      const aspectRatioMap: Record<string, "16:9" | "1:1" | "4:3" | "3:4" | "9:16"> = {
+        "16:9": "16:9",
+        "1:1": "1:1",
+        "4:3": "4:3",
+      };
+      const geminiAspectRatio = aspectRatioMap[body.aspectRatio || "16:9"] || "16:9";
 
-    // Map aspect ratio to Gemini format
-    const aspectRatioMap: Record<string, "16:9" | "1:1" | "4:3" | "3:4" | "9:16"> = {
-      "16:9": "16:9",
-      "1:1": "1:1",
-      "4:3": "4:3",
-    };
-    const geminiAspectRatio = aspectRatioMap[body.aspectRatio || "16:9"] || "16:9";
-
-    // Generate image (OpenAI primary, Gemini fallback), with optional provider override
-    const imageResult = await generateGeminiImage(imagePrompt, {
-      aspectRatio: geminiAspectRatio,
-      provider,
-      openaiQuality,
-    });
+      imageResult = await generateGeminiImage(imagePrompt, {
+        aspectRatio: geminiAspectRatio,
+        provider,
+        openaiQuality,
+      });
+    }
 
     if (!imageResult) {
       log.error("no_image_generated", {});
@@ -211,7 +254,9 @@ serve(async (req) => {
     }
 
     // Generate alt text and metadata
-    const altText = `Imagem ilustrativa: ${body.title}`;
+    const altText = emotionalData 
+      ? `${emotionalData.style === 'caricature' ? 'Caricatura editorial' : 'Imagem ilustrativa'}: ${body.title}`
+      : `Imagem ilustrativa: ${body.title}`;
     const imageTitle = body.title.slice(0, 100);
 
     log.requestEnd(200, Date.now() - startTime);
@@ -225,6 +270,7 @@ serve(async (req) => {
         prompt: imagePrompt,
         model: "gemini-2.0-flash-exp",
         request_id: requestId,
+        ...(emotionalData && { emotional: emotionalData }),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

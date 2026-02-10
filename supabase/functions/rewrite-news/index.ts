@@ -10,6 +10,7 @@ import {
   type JournalisticRewriteRequest,
   type JournalisticRewriteResponse 
 } from "./prompts.ts";
+import { createEmotionalImageSystem } from "../_shared/emotional/emotional-image-system.ts";
 
 const FUNCTION_NAME = "rewrite-news";
 
@@ -233,19 +234,60 @@ serve(async (req) => {
       log.warn("low_originality", { score: complianceCheck.originalityScore });
     }
 
-    // Generate featured image using niche-specific prompt or AI-generated prompt
-    log.info("generating_image", { niche });
-    const imagePrompt = parsed.image?.prompt || NICHE_IMAGE_PROMPTS[niche] || NICHE_IMAGE_PROMPTS['geral'];
-    const fullImagePrompt = `${imagePrompt} Topic: "${parsed.seo?.metaTitle || sourceName}"`;
+    // Generate featured image using emotional trigger system
+    log.info("emotional_image_processing", { niche });
     
-    const imageResult = await generateGeminiImage(fullImagePrompt, { aspectRatio: "16:9" });
-    const featuredImage = imageResult?.imageData || null;
+    const emotionalSystem = createEmotionalImageSystem({
+      callAI: async (msgs, opts) => callAI(msgs, opts),
+      generateImage: async (prompt, opts) => generateGeminiImage(prompt, { aspectRatio: opts?.aspectRatio || "16:9" }),
+      defaultAspectRatio: '16:9',
+      allowOriginalImageReuse: true,
+    });
+    
+    const emotionalResult = await emotionalSystem.processNewsImage({
+      title: parsed.seo?.metaTitle || metaTitle || sourceName,
+      content: parsed.content?.html || sourceContent,
+      sourceName: sourceName,
+      sourceUrl: sourceUrl,
+      originalImageUrl: parsed.image?.originalUrl,
+      niche: niche,
+    });
+    
+    log.info("emotional_analysis_result", {
+      trigger: emotionalResult.emotionalAnalysis.primaryTrigger,
+      confidence: emotionalResult.emotionalAnalysis.confidence,
+      action: emotionalResult.imageDecision.action,
+      style: emotionalResult.imageDecision.style,
+      source: emotionalResult.source,
+      processingTime: emotionalResult.processingTime,
+    });
+    
+    // Use emotional image or fallback to standard generation
+    let featuredImage: string | null = null;
+    let emotionalTrigger = emotionalResult.emotionalAnalysis.primaryTrigger;
+    let emotionalConfidence = emotionalResult.emotionalAnalysis.confidence;
+    let imageStyle = emotionalResult.style || emotionalResult.imageDecision.style;
+    let imageSource = emotionalResult.source || 'generated';
+    let imageAltText = emotionalResult.altText || '';
+    
+    if (emotionalResult.success && emotionalResult.imageData) {
+      featuredImage = emotionalResult.imageData;
+      log.info("emotional_image_used", { trigger: emotionalTrigger, style: imageStyle });
+    } else {
+      // Fallback to standard image generation
+      log.info("fallback_to_standard_image", { reason: emotionalResult.error });
+      const imagePrompt = parsed.image?.prompt || NICHE_IMAGE_PROMPTS[niche] || NICHE_IMAGE_PROMPTS['geral'];
+      const fullImagePrompt = `${imagePrompt} Topic: "${parsed.seo?.metaTitle || sourceName}"`;
+      const imageResult = await generateGeminiImage(fullImagePrompt, { aspectRatio: "16:9" });
+      featuredImage = imageResult?.imageData || null;
+      imageSource = 'generated';
+    }
 
     // Validate SEO limits
     const metaTitle = (parsed.seo?.metaTitle || '').substring(0, 60);
     const metaDescription = (parsed.seo?.metaDescription || '').substring(0, 160);
 
-    // Save article to database with full structured data
+    // Save article to database with full structured data including emotional metadata
     const { data: article, error: dbError } = await supabaseAdmin
       .from("articles")
       .insert({
@@ -260,6 +302,10 @@ serve(async (req) => {
         type: "blog",
         status: "draft",
         word_count: parsed.content?.wordCount || parsed.content?.html?.split(/\s+/).length || 0,
+        emotional_trigger: emotionalTrigger,
+        emotional_confidence: emotionalConfidence,
+        image_style: imageStyle,
+        image_source: imageSource,
         config: {
           type: "rewrite",
           source_url: sourceUrl,
@@ -276,9 +322,16 @@ serve(async (req) => {
           tags: parsed.internal?.tags || [],
           keywords: parsed.seo?.keywords || [],
           focus_keyword: parsed.seo?.focusKeyword || keyword,
-          image_alt_text: parsed.image?.altText || '',
+          image_alt_text: imageAltText || parsed.image?.altText || '',
           reading_time: parsed.content?.readingTime || '',
           monetization: parsed.monetization || null,
+          emotional_analysis: {
+            trigger: emotionalTrigger,
+            confidence: emotionalConfidence,
+            secondaryTriggers: emotionalResult.emotionalAnalysis.secondaryTriggers,
+            intensity: emotionalResult.emotionalAnalysis.emotionalIntensity,
+            reasoning: emotionalResult.emotionalAnalysis.reasoning,
+          },
         },
       })
       .select()
@@ -295,6 +348,10 @@ serve(async (req) => {
       qualityScore: parsed.internal?.qualityScore,
       wordCount: parsed.content?.wordCount,
       readingTime: parsed.content?.readingTime,
+      emotionalTrigger,
+      emotionalConfidence,
+      imageStyle,
+      imageSource,
     });
     log.requestEnd(200, Date.now() - startTime);
 
@@ -316,8 +373,23 @@ serve(async (req) => {
           niche: niche,
           tags: parsed.internal?.tags,
           keywords: parsed.seo?.keywords,
+          emotional_trigger: emotionalTrigger,
+          emotional_confidence: emotionalConfidence,
+          image_style: imageStyle,
+          image_source: imageSource,
+          image_alt_text: imageAltText,
         },
         compliance: complianceCheck,
+        emotional: {
+          trigger: emotionalTrigger,
+          confidence: emotionalConfidence,
+          secondaryTriggers: emotionalResult.emotionalAnalysis.secondaryTriggers,
+          intensity: emotionalResult.emotionalAnalysis.emotionalIntensity,
+          style: imageStyle,
+          source: imageSource,
+          decision: emotionalResult.imageDecision.action,
+          reason: emotionalResult.imageDecision.reason,
+        },
         request_id: requestId,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
