@@ -190,34 +190,58 @@ async function executeAction(
           
           try {
             let pub = 0, draft = 0, pending = 0, comments = 0;
+            let fetched = false;
             
             if (isPlugin) {
-              // Use plugin API for richer stats
-              const statsResp = await fetch(`${wpUrl}/wp-json/cfrdm/v1/stats`, {
-                headers: { "X-CFRDM-API-Key": proj.wordpress_app_password! },
-              });
-              if (statsResp.ok) {
-                const pluginStats = await statsResp.json();
-                pub = pluginStats.published || 0;
-                draft = pluginStats.draft || 0;
-                pending = pluginStats.pending || 0;
-                comments = pluginStats.comments || 0;
-              }
+              // Try plugin stats endpoint first
+              try {
+                const statsResp = await fetch(`${wpUrl}/wp-json/cfrdm/v1/stats`, {
+                  headers: { "X-CFRDM-API-Key": proj.wordpress_app_password! },
+                  signal: AbortSignal.timeout(10000),
+                });
+                if (statsResp.ok) {
+                  const pluginStats = await statsResp.json();
+                  pub = pluginStats.published || 0;
+                  draft = pluginStats.draft || 0;
+                  pending = pluginStats.pending || 0;
+                  comments = pluginStats.comments || 0;
+                  fetched = pub > 0 || draft > 0 || pending > 0;
+                }
+              } catch { /* Plugin stats endpoint may not exist, fall through */ }
             }
             
-            if (pub === 0 && !isPlugin) {
-              // Fallback to standard WP REST API
-              const auth = btoa(`${proj.wordpress_username}:${proj.wordpress_app_password}`);
-              const [pubRes, draftRes, pendRes, commRes] = await Promise.all([
-                fetch(`${wpUrl}/wp-json/wp/v2/posts?status=publish&per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
-                fetch(`${wpUrl}/wp-json/wp/v2/posts?status=draft&per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
-                fetch(`${wpUrl}/wp-json/wp/v2/posts?status=pending&per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
-                fetch(`${wpUrl}/wp-json/wp/v2/comments?per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
-              ]);
-              pub = parseInt(pubRes.headers.get("X-WP-Total") || "0");
-              draft = parseInt(draftRes.headers.get("X-WP-Total") || "0");
-              pending = parseInt(pendRes.headers.get("X-WP-Total") || "0");
-              comments = parseInt(commRes.headers.get("X-WP-Total") || "0");
+            // Fallback: Use standard WP REST API (public, no auth needed for counts)
+            if (!fetched) {
+              try {
+                const headers: Record<string, string> = {};
+                if (!isPlugin) {
+                  headers["Authorization"] = `Basic ${btoa(`${proj.wordpress_username}:${proj.wordpress_app_password}`)}`;
+                }
+                const [pubRes, draftRes, pendRes] = await Promise.all([
+                  fetch(`${wpUrl}/wp-json/wp/v2/posts?status=publish&per_page=1`, { 
+                    headers: isPlugin ? {} : headers,
+                    signal: AbortSignal.timeout(15000),
+                  }),
+                  fetch(`${wpUrl}/wp-json/wp/v2/posts?status=draft&per_page=1`, { 
+                    headers,
+                    signal: AbortSignal.timeout(15000),
+                  }).catch(() => null),
+                  fetch(`${wpUrl}/wp-json/wp/v2/posts?status=pending&per_page=1`, { 
+                    headers,
+                    signal: AbortSignal.timeout(15000),
+                  }).catch(() => null),
+                ]);
+                pub = parseInt(pubRes.headers.get("X-WP-Total") || "0");
+                draft = draftRes ? parseInt(draftRes.headers.get("X-WP-Total") || "0") : 0;
+                pending = pendRes ? parseInt(pendRes.headers.get("X-WP-Total") || "0") : 0;
+              } catch (e2) {
+                // If public API also fails, try to get count from our own index
+                const { count: indexCount } = await supabase
+                  .from("wordpress_article_index")
+                  .select("id", { count: "exact", head: true })
+                  .eq("project_id", proj.id);
+                pub = indexCount || 0;
+              }
             }
 
             const statsData = {
@@ -297,7 +321,7 @@ async function executeAction(
       // Get pending suggestions
       const query = supabase
         .from("internal_link_suggestions")
-        .select("id, anchor_text, target_url, relevance_score, project_id")
+        .select("id, anchor_text, target_url, relevance_score, project_id, source_wp_post_id")
         .eq("user_id", userId)
         .eq("status", "pending")
         .gte("relevance_score", 70)
@@ -317,11 +341,13 @@ async function executeAction(
 
       let applied = 0;
       let failed = 0;
+      const failReasons: string[] = [];
 
       for (const suggestion of suggestions) {
         const project = projects?.find(p => p.id === suggestion.project_id);
         if (!project?.wordpress_url || !project?.wordpress_username || !project?.wordpress_app_password) {
           failed++;
+          failReasons.push(`Projeto sem credenciais WP`);
           continue;
         }
 
@@ -330,7 +356,8 @@ async function executeAction(
 
         if (isPlugin) {
           try {
-            const applyResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
+            // Try the dedicated apply endpoint first
+            let applyResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -339,25 +366,60 @@ async function executeAction(
               body: JSON.stringify({
                 target_url: suggestion.target_url,
                 anchor_text: suggestion.anchor_text,
+                source_post_id: suggestion.source_wp_post_id,
               }),
+              signal: AbortSignal.timeout(15000),
             });
+            
             if (applyResp.ok) {
               await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", suggestion.id);
               applied++;
+            } else if (applyResp.status === 404) {
+              // Endpoint doesn't exist - try generate-internal-links as fallback
+              const genResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/generate-internal-links`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-CFRDM-API-Key": project.wordpress_app_password!,
+                },
+                body: JSON.stringify({ mode: "smart", max_links_per_post: 3 }),
+                signal: AbortSignal.timeout(30000),
+              });
+              if (genResp.ok) {
+                // Mark all suggestions for this project as applied since generate-internal-links processes bulk
+                const projectSuggestionIds = suggestions.filter(s => s.project_id === project.id).map(s => s.id);
+                for (const sid of projectSuggestionIds) {
+                  await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", sid);
+                }
+                const genData = await genResp.json();
+                applied += genData.links_added || projectSuggestionIds.length;
+                break; // Already processed all for this project
+              } else {
+                failed++;
+                failReasons.push(`generate-internal-links falhou (${genResp.status})`);
+              }
             } else {
               failed++;
+              const errBody = await applyResp.text().catch(() => "");
+              failReasons.push(`apply retornou ${applyResp.status}: ${errBody.slice(0, 100)}`);
             }
-          } catch {
+          } catch (e) {
             failed++;
+            failReasons.push(e instanceof Error ? e.message : "timeout");
           }
         } else {
-          // Mark as applied (manual mode for non-plugin sites)
+          // Non-plugin: mark as applied (user must apply manually)
           await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", suggestion.id);
           applied++;
         }
       }
 
-      return `🔗 Resultado da aplicação:\n- ✅ ${applied} links aplicados com sucesso\n- ❌ ${failed} falharam\n- Total processado: ${suggestions.length}`;
+      let result = `🔗 Resultado da aplicação:\n- ✅ ${applied} links aplicados com sucesso\n- ❌ ${failed} falharam\n- Total processado: ${suggestions.length}`;
+      if (failReasons.length > 0) {
+        const uniqueReasons = [...new Set(failReasons)];
+        result += `\n\n**Motivos das falhas:**\n${uniqueReasons.map(r => `- ${r}`).join("\n")}`;
+      }
+      return result;
     }
 
     case "trigger_indexnow": {
