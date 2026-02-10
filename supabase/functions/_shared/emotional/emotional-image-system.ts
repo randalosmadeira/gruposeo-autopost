@@ -1,401 +1,454 @@
 /**
- * SISTEMA INTEGRADO DE GERAÇÃO DE IMAGENS EMOCIONAIS
- * ContentFactory RDM - Grupo SEO Marketing
+ * EMOTIONAL IMAGE SYSTEM
+ * Sistema Integrado de Imagens com Gatilhos Emocionais
  * 
- * Módulo principal que integra:
- * - Análise de tom emocional
- * - Decisão de ação de imagem
- * - Geração de prompts otimizados
- * - Integração com APIs de geração de imagem
+ * GrupoSEO AutoPost - ContentFactory RDM v2.0
+ * 
+ * Este módulo é o ponto de entrada principal para o sistema de imagens emocionais.
+ * Integra análise de tom, decisão de imagem e geração de prompts.
+ * 
+ * USO:
+ * ```typescript
+ * import { createEmotionalImageSystem } from '../_shared/emotional/emotional-image-system.ts';
+ * 
+ * const emotionalSystem = createEmotionalImageSystem({
+ *   callAI: callAI,
+ *   generateImage: generateGeminiImage,
+ * });
+ * 
+ * const result = await emotionalSystem.processNewsImage({
+ *   title: "Título da notícia",
+ *   content: "Conteúdo completo...",
+ *   originalImageUrl: "https://...",
+ * });
+ * ```
  */
 
-import type {
+import {
   EmotionalTrigger,
   EmotionalAnalysis,
   ImageDecision,
   ImageStyle,
-} from './emotional-triggers-config.ts';
-import {
-  EMOTIONAL_TRIGGER_CONFIG,
-  getAllTriggers,
-  shouldUseCaricature,
-  canReuseOriginalImage
+  getTriggerConfig,
 } from './emotional-triggers-config.ts';
 
 import {
   analyzeEmotionalTone,
   quickKeywordAnalysis,
-  analyzeEmotionalToneBatch
+  analysisToLog,
 } from './emotional-analyzer.ts';
 
 import {
   decideImageAction,
-  checkOriginalImageQuality,
-  buildEmotionalImagePrompt,
   generateFinalImagePrompt,
   generateStandardImagePrompt,
-  generateAltText
+  generateAltText,
+  generateDisclaimer,
+  checkOriginalImageQuality,
 } from './caricature-prompt-builder.ts';
 
-// ============================================
-// INTERFACE DE CONFIGURAÇÃO
-// ============================================
+// ============================================================================
+// TIPOS
+// ============================================================================
 
-export interface EmotionalImageConfig {
-  // Função de chamada de IA (injetada pelo projeto)
-  callAI?: (messages: Array<{role: string; content: string}>, options?: any) => Promise<string>;
+export interface EmotionalImageSystemConfig {
+  /** Função para chamar IA (Gemini/Claude) */
+  callAI?: (messages: Array<{ role: string; content: string }>) => Promise<string>;
   
-  // Função de geração de imagem (injetada pelo projeto)
-  generateImage?: (prompt: string, options?: any) => Promise<{ imageData: string; mimeType: string } | null>;
+  /** Função para gerar imagem */
+  generateImage: (
+    prompt: string, 
+    options?: { aspectRatio?: string }
+  ) => Promise<{ imageData: string; mimeType: string } | null>;
   
-  // Configurações
-  defaultAspectRatio?: string;
-  forceCaricature?: boolean;
+  /** Aspect ratio padrão */
+  defaultAspectRatio?: '16:9' | '1:1' | '4:3';
+  
+  /** Permitir reutilização de imagem original */
   allowOriginalImageReuse?: boolean;
-  minConfidenceForAI?: number;
+  
+  /** Confiança mínima para análise por keywords (0-100) */
+  minKeywordConfidence?: number;
 }
 
 export interface EmotionalImageRequest {
+  /** Título da notícia */
   title: string;
+  
+  /** Conteúdo completo da notícia */
   content: string;
+  
+  /** Nome do veículo de origem */
   sourceName?: string;
+  
+  /** URL da notícia original */
   sourceUrl?: string;
+  
+  /** URL da imagem original (para possível reutilização) */
   originalImageUrl?: string;
   
-  // Overrides manuais
-  forceTrigger?: EmotionalTrigger;
-  forceStyle?: ImageStyle;
+  /** Pessoas mencionadas (para evitar em caricaturas) */
+  persons?: string[];
+  
+  /** Nicho do conteúdo */
+  niche?: string;
+  
+  /** Forçar criação de caricatura */
   forceCaricature?: boolean;
   
-  // Contexto adicional
-  persons?: string[];    // Pessoas mencionadas
-  entities?: string[];   // Empresas, governos, etc.
-  niche?: string;        // Nicho do conteúdo
+  /** Forçar reutilização da imagem original */
+  forceOriginal?: boolean;
   
-  // Opções
-  aspectRatio?: string;
-  generateMultiple?: number;
+  /** Override manual do gatilho emocional */
+  emotionalTrigger?: EmotionalTrigger;
+  
+  /** Aspect ratio desejado */
+  aspectRatio?: '16:9' | '1:1' | '4:3';
 }
 
 export interface EmotionalImageResult {
+  /** Dados da imagem (base64 ou URL) */
+  imageData: string | null;
+  
+  /** Origem da imagem */
+  imageSource: 'original' | 'caricature' | 'generated' | 'conceptual';
+  
+  /** Análise emocional completa */
+  emotionalAnalysis: EmotionalAnalysis;
+  
+  /** Decisão tomada */
+  decision: ImageDecision;
+  
+  /** Prompt usado (se gerado) */
+  prompt?: string;
+  
+  /** Alt text SEO */
+  altText: string;
+  
+  /** Disclaimer (se aplicável) */
+  disclaimer?: string;
+  
+  /** Sucesso da operação */
   success: boolean;
   
-  // Análise
-  emotionalAnalysis: EmotionalAnalysis;
-  imageDecision: ImageDecision;
-  
-  // Imagem gerada
-  imageData?: string;
-  mimeType?: string;
-  altText?: string;
-  promptUsed?: string;
-  
-  // Metadados
-  processingTime?: number;
-  source?: 'original' | 'generated';
-  style?: ImageStyle;
-  
-  // Erros
+  /** Erro (se houver) */
   error?: string;
 }
 
-// ============================================
+// ============================================================================
 // CLASSE PRINCIPAL
-// ============================================
+// ============================================================================
 
 export class EmotionalImageSystem {
-  private config: EmotionalImageConfig;
+  private config: EmotionalImageSystemConfig;
   
-  constructor(config: EmotionalImageConfig = {}) {
+  constructor(config: EmotionalImageSystemConfig) {
     this.config = {
       defaultAspectRatio: '16:9',
       allowOriginalImageReuse: true,
-      minConfidenceForAI: 0.85,
-      ...config
+      minKeywordConfidence: 85,
+      ...config,
     };
   }
   
   /**
-   * Processa uma notícia e gera imagem emocional apropriada
+   * Processa uma notícia e retorna a imagem adequada
+   * Este é o método principal a ser usado
    */
-  async processNewsImage(request: EmotionalImageRequest): Promise<EmotionalImageResult> {
+  async processNewsImage(
+    request: EmotionalImageRequest
+  ): Promise<EmotionalImageResult> {
     const startTime = Date.now();
     
     try {
-      // 1. ANÁLISE DE TOM EMOCIONAL
-      let analysis: EmotionalAnalysis;
+      // 1. Análise de tom emocional
+      const emotionalAnalysis = await this.analyzeContent(request);
       
-      if (request.forceTrigger) {
-        // Usar gatilho forçado
-        analysis = {
-          primaryTrigger: request.forceTrigger,
-          confidence: 1.0,
-          secondaryTriggers: [],
-          suggestedStyle: EMOTIONAL_TRIGGER_CONFIG[request.forceTrigger].suggestedStyle,
-          toneKeywords: [],
-          emotionalIntensity: 'medium',
-          reasoning: 'Gatilho definido manualmente'
-        };
-      } else {
-        // Análise automática
-        analysis = await analyzeEmotionalTone(
-          request.title,
-          request.content,
-          request.sourceName,
-          this.config.callAI
-        );
-      }
+      console.log('[EmotionalImageSystem] Analysis:', analysisToLog(emotionalAnalysis));
       
-      console.log(`[EmotionalImage] Trigger: ${analysis.primaryTrigger} (${analysis.confidence})`);
+      // 2. Decisão de imagem
+      const decision = await decideImageAction({
+        emotionalAnalysis,
+        originalImageUrl: this.config.allowOriginalImageReuse 
+          ? request.originalImageUrl 
+          : undefined,
+        forceCaricature: request.forceCaricature,
+        forceOriginal: request.forceOriginal,
+        niche: request.niche,
+      });
       
-      // 2. VERIFICAR QUALIDADE DA IMAGEM ORIGINAL (se fornecida)
-      let hasHighQualityOriginal = false;
+      console.log('[EmotionalImageSystem] Decision:', decision.action, decision.reason);
       
-      if (request.originalImageUrl && this.config.allowOriginalImageReuse) {
-        const qualityCheck = await checkOriginalImageQuality(request.originalImageUrl);
-        hasHighQualityOriginal = qualityCheck.hasHighQuality;
-        console.log(`[EmotionalImage] Original image quality: ${hasHighQualityOriginal}`);
-      }
+      // 3. Executar ação
+      let imageData: string | null = null;
+      let imageSource: EmotionalImageResult['imageSource'] = 'generated';
+      let prompt: string | undefined;
       
-      // 3. DECISÃO DE AÇÃO
-      let imageDecision: ImageDecision;
-      
-      if (request.forceCaricature) {
-        imageDecision = {
-          action: 'create_caricature',
-          reason: 'Caricatura forçada pelo usuário',
-          style: 'caricature',
-          trigger: analysis.primaryTrigger
-        };
-      } else if (request.forceStyle) {
-        imageDecision = {
-          action: 'generate_new',
-          reason: 'Estilo forçado pelo usuário',
-          style: request.forceStyle,
-          trigger: analysis.primaryTrigger
-        };
-      } else {
-        imageDecision = decideImageAction(
-          analysis,
-          request.originalImageUrl,
-          hasHighQualityOriginal
-        );
-      }
-      
-      console.log(`[EmotionalImage] Decision: ${imageDecision.action} (${imageDecision.style})`);
-      
-      // 4. EXECUTAR AÇÃO
-      let imageData: string | undefined;
-      let mimeType: string | undefined;
-      let promptUsed: string | undefined;
-      let source: 'original' | 'generated' = 'generated';
-      
-      switch (imageDecision.action) {
+      switch (decision.action) {
         case 'reuse_original':
-          // Reutilizar imagem original
-          imageData = request.originalImageUrl;
-          source = 'original';
-          promptUsed = 'Imagem original reutilizada';
+          // Reutiliza imagem original
+          imageData = request.originalImageUrl || null;
+          imageSource = 'original';
           break;
           
         case 'create_caricature':
+          // Gera caricatura
+          prompt = generateFinalImagePrompt({
+            title: request.title,
+            emotionalAnalysis,
+            persons: request.persons,
+            niche: request.niche,
+            aspectRatio: request.aspectRatio || this.config.defaultAspectRatio,
+          });
+          
+          const caricatureResult = await this.config.generateImage(prompt, {
+            aspectRatio: request.aspectRatio || this.config.defaultAspectRatio,
+          });
+          
+          imageData = caricatureResult?.imageData || null;
+          imageSource = 'caricature';
+          break;
+          
         case 'create_conceptual':
-          // Criar imagem com prompt emocional elaborado
-          if (this.config.generateImage) {
-            const caricaturePrompt = buildEmotionalImagePrompt(
-              imageDecision.trigger,
-              request.title,
-              request.content.substring(0, 500),
-              {
-                persons: request.persons,
-                entities: request.entities,
-                forceCaricature: true,
-                aspectRatio: request.aspectRatio || this.config.defaultAspectRatio
-              }
-            );
-            
-            promptUsed = generateFinalImagePrompt(
-              caricaturePrompt,
-              request.aspectRatio || this.config.defaultAspectRatio
-            );
-            
-            const result = await this.config.generateImage(promptUsed, {
-              aspectRatio: request.aspectRatio || this.config.defaultAspectRatio
-            });
-            
-            if (result) {
-              imageData = result.imageData;
-              mimeType = result.mimeType;
-            }
-          }
+          // Gera arte conceitual
+          prompt = generateFinalImagePrompt({
+            title: request.title,
+            emotionalAnalysis,
+            persons: request.persons,
+            niche: request.niche,
+            aspectRatio: request.aspectRatio || this.config.defaultAspectRatio,
+          });
+          
+          const conceptualResult = await this.config.generateImage(prompt, {
+            aspectRatio: request.aspectRatio || this.config.defaultAspectRatio,
+          });
+          
+          imageData = conceptualResult?.imageData || null;
+          imageSource = 'conceptual';
           break;
           
         case 'generate_new':
         default:
-          // Gerar imagem padrão com tom emocional
-          if (this.config.generateImage) {
-            promptUsed = generateStandardImagePrompt(
-              imageDecision.trigger,
-              request.title,
-              request.aspectRatio || this.config.defaultAspectRatio
-            );
-            
-            const result = await this.config.generateImage(promptUsed, {
-              aspectRatio: request.aspectRatio || this.config.defaultAspectRatio
-            });
-            
-            if (result) {
-              imageData = result.imageData;
-              mimeType = result.mimeType;
-            }
-          }
+          // Gera nova imagem padrão
+          prompt = generateFinalImagePrompt({
+            title: request.title,
+            emotionalAnalysis,
+            persons: request.persons,
+            niche: request.niche,
+            aspectRatio: request.aspectRatio || this.config.defaultAspectRatio,
+          });
+          
+          const newResult = await this.config.generateImage(prompt, {
+            aspectRatio: request.aspectRatio || this.config.defaultAspectRatio,
+          });
+          
+          imageData = newResult?.imageData || null;
+          imageSource = 'generated';
           break;
       }
       
-      // 5. GERAR ALT TEXT
+      // 4. Gerar metadados
       const altText = generateAltText(
-        imageDecision.trigger,
         request.title,
-        imageDecision.style
+        emotionalAnalysis.primaryTrigger,
+        decision.action
       );
       
+      const disclaimer = decision.shouldIncludeDisclaimer 
+        ? generateDisclaimer(emotionalAnalysis.primaryTrigger)
+        : undefined;
+      
+      const duration = Date.now() - startTime;
+      console.log(`[EmotionalImageSystem] Completed in ${duration}ms`);
+      
       return {
-        success: !!imageData,
-        emotionalAnalysis: analysis,
-        imageDecision,
         imageData,
-        mimeType,
+        imageSource,
+        emotionalAnalysis,
+        decision,
+        prompt,
         altText,
-        promptUsed,
-        processingTime: Date.now() - startTime,
-        source,
-        style: imageDecision.style
+        disclaimer,
+        success: true,
       };
       
     } catch (error) {
-      console.error('[EmotionalImage] Error:', error);
+      console.error('[EmotionalImageSystem] Error:', error);
       
-      return {
-        success: false,
-        emotionalAnalysis: quickKeywordAnalysis(request.title, request.content),
-        imageDecision: {
-          action: 'generate_new',
-          reason: 'Fallback devido a erro',
-          style: 'photorealistic',
-          trigger: 'serious'
-        },
-        error: error instanceof Error ? error.message : 'Erro desconhecido',
-        processingTime: Date.now() - startTime
-      };
+      // Fallback: tenta gerar imagem padrão
+      try {
+        const fallbackPrompt = generateStandardImagePrompt(
+          request.title,
+          request.niche,
+          request.aspectRatio || this.config.defaultAspectRatio
+        );
+        
+        const fallbackResult = await this.config.generateImage(fallbackPrompt, {
+          aspectRatio: request.aspectRatio || this.config.defaultAspectRatio,
+        });
+        
+        return {
+          imageData: fallbackResult?.imageData || null,
+          imageSource: 'generated',
+          emotionalAnalysis: {
+            primaryTrigger: 'serious',
+            confidence: 50,
+            secondaryTriggers: [],
+            emotionalIntensity: 'medium',
+            keywordsFound: [],
+            analysisMethod: 'keywords',
+          },
+          decision: {
+            action: 'generate_new',
+            reason: 'Fallback after error',
+            triggerUsed: 'serious',
+            style: 'photorealistic_documentary',
+            shouldIncludeDisclaimer: false,
+          },
+          altText: `Imagem ilustrativa: ${request.title.substring(0, 100)}`,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      } catch (fallbackError) {
+        return {
+          imageData: null,
+          imageSource: 'generated',
+          emotionalAnalysis: {
+            primaryTrigger: 'serious',
+            confidence: 0,
+            secondaryTriggers: [],
+            emotionalIntensity: 'low',
+            keywordsFound: [],
+            analysisMethod: 'keywords',
+          },
+          decision: {
+            action: 'generate_new',
+            reason: 'Complete failure',
+            triggerUsed: 'serious',
+            style: 'photorealistic_documentary',
+            shouldIncludeDisclaimer: false,
+          },
+          altText: `Imagem: ${request.title.substring(0, 50)}`,
+          success: false,
+          error: 'Failed to generate any image',
+        };
+      }
     }
   }
   
   /**
-   * Análise rápida de tom emocional (sem geração de imagem)
+   * Analisa o conteúdo e retorna a análise emocional
    */
-  async analyzeOnly(
-    title: string, 
-    content: string, 
-    sourceName?: string
+  private async analyzeContent(
+    request: EmotionalImageRequest
   ): Promise<EmotionalAnalysis> {
-    return analyzeEmotionalTone(
-      title,
-      content,
-      sourceName,
-      this.config.callAI
+    // Override manual
+    if (request.emotionalTrigger) {
+      return {
+        primaryTrigger: request.emotionalTrigger,
+        confidence: 100,
+        secondaryTriggers: [],
+        emotionalIntensity: 'medium',
+        keywordsFound: [],
+        analysisMethod: 'keywords',
+      };
+    }
+    
+    // Análise automática
+    return await analyzeEmotionalTone(
+      {
+        title: request.title,
+        content: request.content,
+        sourceName: request.sourceName,
+      },
+      {
+        callAI: this.config.callAI,
+        minKeywordConfidence: this.config.minKeywordConfidence,
+      }
     );
   }
   
   /**
-   * Análise em batch (para feeds RSS)
+   * Apenas analisa o tom, sem gerar imagem
+   */
+  async analyzeOnly(
+    request: Pick<EmotionalImageRequest, 'title' | 'content' | 'sourceName' | 'emotionalTrigger'>
+  ): Promise<EmotionalAnalysis> {
+    return this.analyzeContent(request as EmotionalImageRequest);
+  }
+  
+  /**
+   * Analisa múltiplas notícias em lote
    */
   async analyzeBatch(
-    items: Array<{ title: string; content: string; sourceName?: string }>
+    requests: Array<Pick<EmotionalImageRequest, 'title' | 'content' | 'sourceName'>>
   ): Promise<EmotionalAnalysis[]> {
-    return analyzeEmotionalToneBatch(items, this.config.callAI);
+    // Usa apenas keywords para velocidade
+    return requests.map(req => quickKeywordAnalysis({
+      title: req.title,
+      content: req.content,
+      sourceName: req.sourceName,
+    }));
   }
   
   /**
-   * Gera apenas o prompt (sem chamar API de imagem)
+   * Gera apenas o prompt sem executar geração
    */
-  generatePromptOnly(
-    trigger: EmotionalTrigger,
-    title: string,
-    context: string,
-    options?: {
-      persons?: string[];
-      entities?: string[];
-      forceCaricature?: boolean;
-    }
-  ): string {
-    if (shouldUseCaricature(trigger) || options?.forceCaricature) {
-      const prompt = buildEmotionalImagePrompt(
-        trigger,
-        title,
-        context,
-        options
-      );
-      return generateFinalImagePrompt(prompt);
-    }
+  async generatePromptOnly(
+    request: EmotionalImageRequest
+  ): Promise<{ prompt: string; decision: ImageDecision }> {
+    const emotionalAnalysis = await this.analyzeContent(request);
     
-    return generateStandardImagePrompt(trigger, title);
-  }
-  
-  /**
-   * Retorna todos os gatilhos disponíveis
-   */
-  getAvailableTriggers() {
-    return getAllTriggers();
-  }
-  
-  /**
-   * Retorna configuração de um gatilho específico
-   */
-  getTriggerConfig(trigger: EmotionalTrigger) {
-    return EMOTIONAL_TRIGGER_CONFIG[trigger];
+    const decision = await decideImageAction({
+      emotionalAnalysis,
+      originalImageUrl: request.originalImageUrl,
+      forceCaricature: request.forceCaricature,
+      niche: request.niche,
+    });
+    
+    const prompt = generateFinalImagePrompt({
+      title: request.title,
+      emotionalAnalysis,
+      persons: request.persons,
+      niche: request.niche,
+      aspectRatio: request.aspectRatio || this.config.defaultAspectRatio,
+    });
+    
+    return { prompt, decision };
   }
 }
 
-// ============================================
+// ============================================================================
 // FACTORY FUNCTION
-// ============================================
+// ============================================================================
 
 /**
- * Cria instância do sistema de imagens emocionais
+ * Cria uma instância do sistema de imagens emocionais
  */
-export function createEmotionalImageSystem(config?: EmotionalImageConfig): EmotionalImageSystem {
+export function createEmotionalImageSystem(
+  config: EmotionalImageSystemConfig
+): EmotionalImageSystem {
   return new EmotionalImageSystem(config);
 }
 
-// ============================================
+// ============================================================================
 // EXPORTS
-// ============================================
+// ============================================================================
 
-export {
-  // Types
+// Re-export tipos principais para conveniência
+export type {
   EmotionalTrigger,
   EmotionalAnalysis,
   ImageDecision,
   ImageStyle,
-  
-  // Config
-  EMOTIONAL_TRIGGER_CONFIG,
-  
-  // Analyzer
-  analyzeEmotionalTone,
+};
+
+// Re-export funções utilitárias
+export {
+  getTriggerConfig,
   quickKeywordAnalysis,
-  analyzeEmotionalToneBatch,
-  
-  // Prompt Builder
-  decideImageAction,
-  checkOriginalImageQuality,
-  buildEmotionalImagePrompt,
-  generateFinalImagePrompt,
-  generateStandardImagePrompt,
+  analyzeEmotionalTone,
   generateAltText,
-  
-  // Utilities
-  getAllTriggers,
-  shouldUseCaricature,
-  canReuseOriginalImage
+  generateDisclaimer,
+  checkOriginalImageQuality,
 };

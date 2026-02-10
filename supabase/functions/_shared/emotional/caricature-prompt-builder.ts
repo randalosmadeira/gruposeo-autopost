@@ -1,565 +1,442 @@
 /**
- * GERADOR DE PROMPTS PARA CARICATURAS E IMAGENS EMOCIONAIS
- * ContentFactory RDM - Grupo SEO Marketing
+ * CARICATURE PROMPT BUILDER
+ * Construtor de Prompts para Caricaturas e Decisor de Imagem
  * 
- * Constrói prompts otimizados para geração de imagens baseadas
- * no gatilho emocional identificado na notícia.
+ * GrupoSEO AutoPost - ContentFactory RDM v2.0
+ * 
+ * Este módulo decide se deve reutilizar a imagem original ou criar nova,
+ * e gera prompts otimizados para cada tipo de gatilho emocional.
  */
 
-import type { 
-  EmotionalTrigger, 
+import {
+  EmotionalTrigger,
+  EmotionalAnalysis,
+  ImageDecision,
+  ImageAction,
   ImageStyle,
   CaricaturePrompt,
-  ImageDecision,
-  EmotionalAnalysis
-} from './emotional-triggers-config.ts';
-import {
-  EMOTIONAL_TRIGGER_CONFIG,
+  TriggerConfig,
+  getTriggerConfig,
+  shouldUseCaricature,
+  canReuseOriginalImage,
+  getSuggestedStyle,
+  getColorPalette,
 } from './emotional-triggers-config.ts';
 
-// ============================================
-// DECISOR DE AÇÃO DE IMAGEM
-// ============================================
+// ============================================================================
+// TIPOS
+// ============================================================================
 
-/**
- * Decide qual ação tomar com a imagem baseado na análise emocional
- */
-export function decideImageAction(
-  analysis: EmotionalAnalysis,
-  originalImageUrl?: string,
-  hasHighQualityOriginal: boolean = false
-): ImageDecision {
-  
-  const trigger = analysis.primaryTrigger;
-  
-  // REGRA 1: Notícias sérias com imagem de alta qualidade - REUTILIZAR
-  if (
-    trigger === 'serious' && 
-    originalImageUrl && 
-    hasHighQualityOriginal
-  ) {
-    return {
-      action: 'reuse_original',
-      reason: 'Notícia séria com imagem original de qualidade - manter autenticidade jornalística',
-      originalImageUrl,
-      style: 'photorealistic',
-      trigger,
-    };
-  }
-  
-  // REGRA 2: Anguish com imagem original - REUTILIZAR (respeito às vítimas)
-  if (
-    trigger === 'anguish' && 
-    originalImageUrl &&
-    hasHighQualityOriginal
-  ) {
-    return {
-      action: 'reuse_original',
-      reason: 'Notícia sensível sobre tragédia - manter imagem original por respeito',
-      originalImageUrl,
-      style: 'photorealistic',
-      trigger,
-    };
-  }
-  
-  // REGRA 3: Concern com imagem original - REUTILIZAR (credibilidade)
-  if (
-    trigger === 'concern' && 
-    originalImageUrl &&
-    hasHighQualityOriginal
-  ) {
-    return {
-      action: 'reuse_original',
-      reason: 'Alerta importante - manter imagem original para credibilidade',
-      originalImageUrl,
-      style: 'dramatic',
-      trigger,
-    };
-  }
-  
-  // REGRA 4: Humor, Sátira, Sarcasmo, Revolta - CRIAR CARICATURA
-  if (['humor', 'satire', 'sarcasm', 'outrage'].includes(trigger)) {
-    return {
-      action: 'create_caricature',
-      reason: `Gatilho ${trigger} detectado - criar caricatura editorial para maior engajamento e expressividade`,
-      style: trigger === 'satire' ? 'cartoon' : 'caricature',
-      trigger,
-    };
-  }
-  
-  // REGRA 5: Mistério, Dúvida - CRIAR IMAGEM CONCEITUAL
-  if (['mystery', 'doubt'].includes(trigger)) {
-    return {
-      action: 'create_conceptual',
-      reason: `Gatilho ${trigger} detectado - criar arte conceitual que sugere o desconhecido/incerto`,
-      style: 'conceptual',
-      trigger,
-    };
-  }
-  
-  // REGRA 6: Felicidade, Comemoração - GERAR IMAGEM VIBRANTE
-  if (['happiness', 'celebration'].includes(trigger)) {
-    return {
-      action: 'generate_new',
-      reason: `Gatilho ${trigger} - gerar imagem vibrante e otimista`,
-      style: 'photorealistic',
-      trigger,
-    };
-  }
-  
-  // REGRA DEFAULT: Demais casos - GERAR NOVA IMAGEM
-  return {
-    action: 'generate_new',
-    reason: 'Gerar imagem otimizada para o tom emocional identificado',
-    style: EMOTIONAL_TRIGGER_CONFIG[trigger].suggestedStyle,
-    trigger,
-  };
+export interface ImageDecisionInput {
+  emotionalAnalysis: EmotionalAnalysis;
+  originalImageUrl?: string;
+  forceCaricature?: boolean;
+  forceOriginal?: boolean;
+  niche?: string;
 }
 
+export interface PromptBuildInput {
+  title: string;
+  emotionalAnalysis: EmotionalAnalysis;
+  persons?: string[];
+  niche?: string;
+  aspectRatio?: '16:9' | '1:1' | '4:3';
+}
+
+// ============================================================================
+// DECISOR DE IMAGEM
+// ============================================================================
+
 /**
- * Verifica qualidade da imagem original via HEAD request
+ * Verifica se a URL da imagem original é válida e acessível
  */
 export async function checkOriginalImageQuality(
   imageUrl: string
-): Promise<{ hasHighQuality: boolean; contentLength: number; contentType: string }> {
+): Promise<{ valid: boolean; reason?: string }> {
   try {
-    const response = await fetch(imageUrl, { 
-      method: 'HEAD',
-      headers: {
-        'User-Agent': 'ContentFactory-RDM/1.0'
-      }
-    });
+    // Verifica se URL é válida
+    const url = new URL(imageUrl);
+    
+    // Verifica extensão
+    const validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+    const hasValidExtension = validExtensions.some(ext => 
+      url.pathname.toLowerCase().endsWith(ext)
+    );
+    
+    if (!hasValidExtension && !url.pathname.includes('/images/')) {
+      return { valid: false, reason: 'Invalid image extension' };
+    }
+    
+    // Tenta fazer HEAD request para verificar se imagem existe
+    const response = await fetch(imageUrl, { method: 'HEAD' });
     
     if (!response.ok) {
-      return { hasHighQuality: false, contentLength: 0, contentType: '' };
+      return { valid: false, reason: `HTTP ${response.status}` };
     }
     
-    const contentLength = parseInt(response.headers.get('content-length') || '0');
+    // Verifica content-type
     const contentType = response.headers.get('content-type') || '';
+    if (!contentType.startsWith('image/')) {
+      return { valid: false, reason: 'Not an image content-type' };
+    }
     
-    // Imagem com mais de 50KB e tipo válido provavelmente tem qualidade razoável
-    const isValidType = contentType.startsWith('image/');
-    const hasHighQuality = contentLength > 50000 && isValidType;
+    // Verifica tamanho mínimo (pelo menos 10KB para não ser placeholder)
+    const contentLength = parseInt(response.headers.get('content-length') || '0');
+    if (contentLength > 0 && contentLength < 10000) {
+      return { valid: false, reason: 'Image too small (probably placeholder)' };
+    }
     
-    return {
-      hasHighQuality,
-      contentLength,
-      contentType,
-    };
+    return { valid: true };
   } catch (error) {
-    console.error('[ImageQualityCheck] Error:', error);
-    return { hasHighQuality: false, contentLength: 0, contentType: '' };
+    return { 
+      valid: false, 
+      reason: error instanceof Error ? error.message : 'Unknown error' 
+    };
   }
 }
 
-// ============================================
-// GERADOR DE PROMPTS
-// ============================================
-
 /**
- * Constrói prompt otimizado para geração de imagem baseada no gatilho emocional
+ * Decide qual ação tomar com a imagem baseado no gatilho emocional
  */
-export function buildEmotionalImagePrompt(
-  trigger: EmotionalTrigger,
-  title: string,
-  context: string,
-  options?: {
-    persons?: string[];      // Nomes de pessoas mencionadas
-    entities?: string[];     // Entidades (empresas, governos)
-    forceCaricature?: boolean;
-    aspectRatio?: string;
+export async function decideImageAction(
+  input: ImageDecisionInput
+): Promise<ImageDecision> {
+  const { emotionalAnalysis, originalImageUrl, forceCaricature, forceOriginal, niche } = input;
+  const trigger = emotionalAnalysis.primaryTrigger;
+  const config = getTriggerConfig(trigger);
+  
+  // Override: Forçar caricatura
+  if (forceCaricature) {
+    return {
+      action: 'create_caricature',
+      reason: 'Caricature forced by user',
+      triggerUsed: trigger,
+      style: shouldUseCaricature(trigger) ? config.suggestedStyle : 'caricature_colorful',
+      shouldIncludeDisclaimer: true
+    };
   }
-): CaricaturePrompt {
   
-  const config = EMOTIONAL_TRIGGER_CONFIG[trigger];
+  // Override: Forçar imagem original
+  if (forceOriginal && originalImageUrl) {
+    return {
+      action: 'reuse_original',
+      reason: 'Original image forced by user',
+      triggerUsed: trigger,
+      style: 'photorealistic_documentary',
+      shouldIncludeDisclaimer: false
+    };
+  }
   
-  // Elementos emocionais baseados no gatilho
-  const emotionalElements = getEmotionalElements(trigger);
+  // REGRA 1: Gatilhos que DEVEM reutilizar imagem original (se disponível)
+  // serious, anguish - respeito ao tema
+  if (['serious', 'anguish'].includes(trigger)) {
+    if (originalImageUrl) {
+      const imageCheck = await checkOriginalImageQuality(originalImageUrl);
+      if (imageCheck.valid) {
+        return {
+          action: 'reuse_original',
+          reason: `Trigger "${trigger}" prefers original image for respect`,
+          triggerUsed: trigger,
+          style: config.suggestedStyle,
+          shouldIncludeDisclaimer: false
+        };
+      }
+    }
+    // Se não tem imagem ou falhou, gera nova com estilo sóbrio
+    return {
+      action: 'generate_new',
+      reason: `No valid original image for ${trigger}, generating respectful new image`,
+      triggerUsed: trigger,
+      style: config.suggestedStyle,
+      shouldIncludeDisclaimer: false
+    };
+  }
   
-  // Construir prompt base
-  const basePrompt = buildBasePrompt(
-    trigger, 
-    title, 
-    context, 
-    options?.persons, 
-    options?.entities
-  );
+  // REGRA 2: concern - prefere original se disponível
+  if (trigger === 'concern') {
+    if (originalImageUrl) {
+      const imageCheck = await checkOriginalImageQuality(originalImageUrl);
+      if (imageCheck.valid) {
+        return {
+          action: 'reuse_original',
+          reason: 'Concern trigger prefers original image for credibility',
+          triggerUsed: trigger,
+          style: config.suggestedStyle,
+          shouldIncludeDisclaimer: false
+        };
+      }
+    }
+    return {
+      action: 'generate_new',
+      reason: 'Generating dramatic image for concern trigger',
+      triggerUsed: trigger,
+      style: 'photorealistic_dramatic',
+      shouldIncludeDisclaimer: false
+    };
+  }
   
-  // Modificadores de estilo
-  const styleModifiers = [
-    ...config.promptModifiers,
-    getStyleModifier(trigger),
-  ];
+  // REGRA 3: Gatilhos que DEVEM criar caricatura
+  // humor, sarcasm, satire, outrage
+  if (['humor', 'sarcasm', 'satire', 'outrage'].includes(trigger)) {
+    return {
+      action: 'create_caricature',
+      reason: `Trigger "${trigger}" requires caricature for engagement`,
+      triggerUsed: trigger,
+      style: config.suggestedStyle,
+      shouldIncludeDisclaimer: true
+    };
+  }
   
-  // Composição
-  const composition = getComposition(trigger);
+  // REGRA 4: mystery e doubt - arte conceitual
+  if (['mystery', 'doubt'].includes(trigger)) {
+    return {
+      action: 'create_conceptual',
+      reason: `Trigger "${trigger}" requires conceptual/abstract art`,
+      triggerUsed: trigger,
+      style: config.suggestedStyle,
+      shouldIncludeDisclaimer: false
+    };
+  }
   
-  // Restrições importantes (sempre incluir)
-  const restrictions = buildRestrictions(trigger);
+  // REGRA 5: happiness e celebration - gerar nova vibrante
+  if (['happiness', 'celebration'].includes(trigger)) {
+    // Pode reutilizar se original for de qualidade
+    if (originalImageUrl) {
+      const imageCheck = await checkOriginalImageQuality(originalImageUrl);
+      if (imageCheck.valid) {
+        return {
+          action: 'reuse_original',
+          reason: 'Positive trigger can reuse quality original image',
+          triggerUsed: trigger,
+          style: config.suggestedStyle,
+          shouldIncludeDisclaimer: false
+        };
+      }
+    }
+    return {
+      action: 'generate_new',
+      reason: 'Generating vibrant image for positive trigger',
+      triggerUsed: trigger,
+      style: config.suggestedStyle,
+      shouldIncludeDisclaimer: false
+    };
+  }
   
+  // REGRA 6: Fallback - gerar nova com estilo do nicho
   return {
-    basePrompt,
-    styleModifiers,
-    emotionalElements,
-    colorPalette: config.colorPalette,
-    composition,
-    restrictions,
+    action: 'generate_new',
+    reason: 'Default: generating new image based on niche and trigger',
+    triggerUsed: trigger,
+    style: config.suggestedStyle,
+    shouldIncludeDisclaimer: false
   };
 }
 
-/**
- * Constrói o prompt base para a imagem
- */
-function buildBasePrompt(
-  trigger: EmotionalTrigger,
-  title: string,
-  context: string,
-  persons?: string[],
-  entities?: string[]
-): string {
-  const config = EMOTIONAL_TRIGGER_CONFIG[trigger];
-  
-  // Tipo de arte baseado no estilo sugerido
-  const artType: Record<ImageStyle, string> = {
-    'caricature': 'caricatura editorial de alta qualidade no estilo de charge de jornal brasileiro (como O Globo, Folha)',
-    'cartoon': 'ilustração cartoon estilizada para editorial, estilo moderno e colorido',
-    'conceptual': 'arte conceitual abstrata com elementos simbólicos e atmosfera sugestiva',
-    'dramatic': 'fotografia artística dramática com iluminação expressiva e impactante',
-    'photorealistic': 'fotografia profissional editorial de alta qualidade para mídia digital',
-  };
-  
-  // Elementos visuais principais
-  const visualDesc = config.visualElements.slice(0, 3).join(', ');
-  
-  let prompt = `Crie uma ${artType[config.suggestedStyle]} para ilustrar a seguinte notícia:
-
-## CONTEÚDO
-**Título:** "${title}"
-**Contexto:** ${context.substring(0, 400)}
-
-## DIREÇÃO VISUAL
-${visualDesc}
-
-## PALETA DE CORES
-Usar predominantemente: ${config.colorPalette.slice(0, 4).join(', ')}
-`;
-
-  // Adicionar elementos específicos para caricaturas
-  if (config.suggestedStyle === 'caricature' || config.suggestedStyle === 'cartoon') {
-    
-    if (persons && persons.length > 0) {
-      prompt += `
-## PERSONAGENS
-Representar de forma caricata GENÉRICA (NÃO retratos realistas de pessoas reais):
-${persons.slice(0, 2).map(p => `- Figura representando "${p}" com expressões exageradas apropriadas ao tom`).join('\n')}
-`;
-    }
-    
-    if (entities && entities.length > 0) {
-      prompt += `
-## ENTIDADES (representar simbolicamente)
-${entities.slice(0, 2).map(e => `- Símbolo ou elemento visual representando "${e}"`).join('\n')}
-`;
-    }
-    
-    // Adicionar instruções específicas de caricatura
-    prompt += `
-## ESTILO DE CARICATURA
-- Traços expressivos e dinâmicos
-- Proporções exageradas para efeito (cabeças maiores, expressões amplificadas)
-- Cores vibrantes e contrastantes
-- Elementos simbólicos que reforcem a mensagem
-- Estilo editorial brasileiro (Angeli, Laerte, Lailson)
-`;
-  }
-  
-  // Para arte conceitual (mistério/dúvida)
-  if (config.suggestedStyle === 'conceptual') {
-    prompt += `
-## ESTILO CONCEITUAL
-- Elementos abstratos que sugerem mais do que mostram
-- Uso criativo de sombras e luz
-- Símbolos sutis relacionados ao tema
-- Atmosfera que convida à reflexão
-- Composição que deixa espaço para interpretação
-`;
-  }
-  
-  return prompt;
-}
+// ============================================================================
+// CONSTRUTOR DE PROMPTS
+// ============================================================================
 
 /**
- * Retorna elementos emocionais específicos do gatilho
+ * Gera elementos visuais emocionais para o prompt
  */
-function getEmotionalElements(trigger: EmotionalTrigger): string[] {
-  const elements: Record<EmotionalTrigger, string[]> = {
-    serious: [
-      'Expressões neutras e compostas',
-      'Postura formal e respeitosa',
-      'Ambiente profissional ou institucional',
-      'Iluminação equilibrada sem drama excessivo'
-    ],
-    humor: [
-      'Expressões exageradas e cômicas (olhos arregalados, bocas abertas)',
-      'Elementos de surpresa visual inesperados',
-      'Proporções distorcidas para efeito cômico',
-      'Cores saturadas e alegres',
-      'Elementos cartoon que reforcem o humor'
-    ],
-    concern: [
-      'Expressões de apreensão e tensão',
-      'Elementos visuais de alerta (exclamações, símbolos de atenção)',
-      'Atmosfera tensa com iluminação dramática',
-      'Cores de aviso (laranja, amarelo intenso)',
-      'Composição que direciona atenção ao risco'
-    ],
-    outrage: [
-      'Expressões de indignação exageradas (raiva, desprezo)',
-      'Símbolos de corrupção (notas de dinheiro, malas)',
-      'Contraste dramático entre luz e sombra',
-      'Vermelho como cor emocional dominante',
-      'Elementos que expõem a injustiça'
-    ],
-    anguish: [
-      'Tons sombrios e melancólicos',
-      'Atmosfera contemplativa e respeitosa',
-      'Elementos que sugerem perda ou ausência',
-      'Iluminação suave e difusa',
-      'Composição com espaço vazio intencional'
-    ],
-    sarcasm: [
-      'Expressões de deboche ou desdém exageradas',
-      'Elementos contraditórios colocados lado a lado',
-      'Ironia visual clara e inteligente',
-      'Símbolos de hipocrisia ou falsidade',
-      'Composição que evidencia o absurdo'
-    ],
-    satire: [
-      'Símbolos políticos estilizados e reconhecíveis',
-      'Metáforas visuais claras e inteligentes',
-      'Elementos de crítica social perspicaz',
-      'Estilo clássico de charge política',
-      'Composição editorial de qualidade'
-    ],
-    happiness: [
-      'Expressões radiantes e genuínas de alegria',
-      'Cores vibrantes e quentes (dourado, laranja)',
-      'Elementos de celebração e vitória',
-      'Iluminação otimista e brilhante',
-      'Composição expansiva e aberta'
-    ],
-    celebration: [
-      'Elementos festivos (confetes, balões, fogos)',
-      'Cores vibrantes e festivas',
-      'Atmosfera de comemoração coletiva',
-      'Iluminação de evento especial',
-      'Composição dinâmica e alegre'
-    ],
-    doubt: [
-      'Elementos de interrogação visual sutis',
-      'Composição ambígua que sugere questionamento',
-      'Tons neutros e indefinidos',
-      'Sombras parciais estratégicas',
-      'Foco suave em algumas áreas'
-    ],
-    mystery: [
-      'Sombras profundas e enigmáticas',
-      'Silhuetas parcialmente reveladas',
-      'Elementos ocultos ou semi-visíveis',
-      'Atmosfera noir ou de suspense',
-      'Composição que esconde mais do que revela'
-    ]
+function getEmotionalElements(trigger: EmotionalTrigger): string {
+  const elements: Record<EmotionalTrigger, string> = {
+    serious: 'Composição equilibrada e profissional, iluminação neutra, tom jornalístico',
+    humor: 'Expressões exageradas e cômicas, elementos de surpresa visual, proporções distorcidas para efeito cômico',
+    concern: 'Iluminação dramática, cores de alerta (laranja/vermelho), tensão visual palpável',
+    outrage: 'Símbolos de corrupção (notas, malas), expressão culpada exagerada, contraste dramático luz/sombra',
+    anguish: 'Tons frios e dessaturados, silhuetas, composição que transmite vazio e perda',
+    sarcasm: 'Expressão irônica sutil, elementos visuais contraditórios, humor inteligente',
+    satire: 'Estilo charge de jornal, símbolos políticos reconhecíveis, exagero característico de cartoon editorial',
+    happiness: 'Cores quentes e vibrantes, iluminação natural brilhante, energia positiva e celebratória',
+    celebration: 'Múltiplas cores festivas, confetes, bandeiras, atmosfera de festa e alegria coletiva',
+    doubt: 'Elementos abstratos, nebulosidade, composição que sugere incerteza e questionamento',
+    mystery: 'Sombras enigmáticas, silhuetas parciais, elementos ocultos, atmosfera noir'
   };
   
   return elements[trigger] || elements.serious;
 }
 
 /**
- * Retorna modificador de estilo específico
+ * Constrói o prompt completo para geração de imagem emocional
  */
-function getStyleModifier(trigger: EmotionalTrigger): string {
-  const modifiers: Record<EmotionalTrigger, string> = {
-    serious: 'Fotojornalismo documental de alta qualidade, iluminação natural, composição jornalística',
-    humor: 'Cartoon expressivo brasileiro, cores saturadas, traços dinâmicos, exagero proposital',
-    concern: 'Iluminação dramática de alerta, tons quentes de aviso, tensão visual palpável',
-    outrage: 'Charge política contundente, vermelho dominante, expressões de indignação amplificadas',
-    anguish: 'Fotografia emocional em tons frios, atmosfera melancólica, luz difusa respeitosa',
-    sarcasm: 'Ironia visual inteligente, elementos contraditórios, deboche sutil ou evidente',
-    satire: 'Estilo de cartunista político clássico, metáforas visuais claras, crítica perspicaz',
-    happiness: 'Cores quentes e brilhantes, iluminação dourada otimista, energia de conquista',
-    celebration: 'Elementos festivos coloridos, atmosfera de evento, composição vibrante',
-    doubt: 'Composição reflexiva, elementos de questionamento, tons neutros indefinidos',
-    mystery: 'Atmosfera noir, sombras enigmáticas, elementos parcialmente ocultos'
-  };
+export function buildEmotionalImagePrompt(
+  input: PromptBuildInput
+): CaricaturePrompt {
+  const { title, emotionalAnalysis, persons = [], niche, aspectRatio = '16:9' } = input;
+  const trigger = emotionalAnalysis.primaryTrigger;
+  const config = getTriggerConfig(trigger);
   
-  return modifiers[trigger];
-}
-
-/**
- * Retorna descrição de composição para o gatilho
- */
-function getComposition(trigger: EmotionalTrigger): string {
-  const compositions: Record<EmotionalTrigger, string> = {
-    serious: 'Composição centralizada e equilibrada, regra dos terços, foco claro no sujeito principal',
-    humor: 'Composição dinâmica e assimétrica, ângulos inusitados, elementos de surpresa visual',
-    concern: 'Foco central intenso com elementos de tensão nas bordas, direcionamento do olhar',
-    outrage: 'Composição dramática com ângulo de baixo para cima (poder), símbolos de corrupção em destaque',
-    anguish: 'Composição que sugere vazio e ausência, espaço negativo intencional, contemplação',
-    sarcasm: 'Elementos contraditórios posicionados lado a lado para evidenciar a ironia',
-    satire: 'Composição clássica de charge política, símbolos e metáforas em posições estratégicas',
-    happiness: 'Composição expansiva e aberta, elementos ascendentes, energia positiva',
-    celebration: 'Composição festiva centralizada, elementos que sugerem movimento e alegria coletiva',
-    doubt: 'Composição ambígua com elementos parcialmente visíveis, foco suave',
-    mystery: 'Composição noir com sombras dominantes, revelação parcial, suspense visual'
-  };
+  // Base do prompt
+  let basePrompt = '';
   
-  return compositions[trigger];
-}
-
-/**
- * Constrói lista de restrições para o prompt
- */
-function buildRestrictions(trigger: EmotionalTrigger): string[] {
-  const baseRestrictions = [
-    'NÃO incluir texto, palavras ou letras na imagem',
-    'NÃO incluir logotipos ou marcas registradas',
-    'NÃO criar imagens com conteúdo sexualmente explícito ou violência gráfica',
-    'NÃO criar imagens que possam ser confundidas com fotografias reais de pessoas identificáveis',
+  // Determina tipo de imagem
+  if (shouldUseCaricature(trigger)) {
+    basePrompt = `Caricatura editorial ${config.labelPtBr.toLowerCase()} de alta qualidade estilo charge de jornal brasileiro`;
+  } else if (['mystery', 'doubt'].includes(trigger)) {
+    basePrompt = `Arte conceitual abstrata com elementos simbólicos`;
+  } else {
+    basePrompt = `Fotografia profissional editorial de alta qualidade`;
+  }
+  
+  // Modifiers de estilo
+  const styleModifiers = config.promptModifiers;
+  
+  // Elementos emocionais
+  const emotionalElements = getEmotionalElements(trigger);
+  
+  // Paleta de cores
+  const colorPalette = config.colorPalette.join(', ');
+  
+  // Composição
+  let composition = 'Composição equilibrada, regra dos terços';
+  if (['humor', 'outrage', 'sarcasm', 'satire'].includes(trigger)) {
+    composition = 'Composição dinâmica, ângulos inusitados, elementos de surpresa';
+  } else if (['mystery', 'doubt'].includes(trigger)) {
+    composition = 'Composição enigmática, elementos parcialmente visíveis, foco em sombras e ausência';
+  } else if (['anguish'].includes(trigger)) {
+    composition = 'Composição melancólica, espaços vazios, silhuetas distantes';
+  }
+  
+  // Restrições (o que NÃO incluir)
+  const restrictions: string[] = [
+    ...config.negativePrompts,
+    'texto na imagem',
+    'marca d\'água',
+    'logo',
   ];
   
-  // Restrições específicas por gatilho
-  const triggerRestrictions: Record<EmotionalTrigger, string[]> = {
-    serious: [
-      'Manter tom absolutamente respeitoso e sóbrio',
-      'Evitar qualquer elemento que possa parecer sensacionalista',
-    ],
-    humor: [
-      'Manter humor inteligente, evitar vulgaridade',
-      'Caricaturas devem ser genéricas, não retratos de pessoas reais',
-    ],
-    concern: [
-      'Não exagerar elementos de pânico',
-      'Manter foco informativo, não alarmista',
-    ],
-    outrage: [
-      'Figuras devem ser representações genéricas, não pessoas reais identificáveis',
-      'Crítica deve ser inteligente, não ofensiva',
-    ],
-    anguish: [
-      'Manter tom de respeito absoluto às vítimas',
-      'Não explorar sofrimento de forma sensacionalista',
-      'Evitar imagens perturbadoras ou traumatizantes',
-    ],
-    sarcasm: [
-      'Ironia deve ser inteligente, não agressiva',
-      'Evitar ataques pessoais diretos',
-    ],
-    satire: [
-      'Sátira deve ser perspicaz e bem elaborada',
-      'Evitar representações que possam ser consideradas difamatórias',
-    ],
-    happiness: [
-      'Evitar exagero artificial',
-      'Manter autenticidade nas expressões',
-    ],
-    celebration: [
-      'Evitar elementos que possam ser considerados exclusivos',
-      'Manter atmosfera de celebração inclusiva',
-    ],
-    doubt: [
-      'Não sugerir conclusões específicas',
-      'Manter abertura à interpretação',
-    ],
-    mystery: [
-      'Evitar elementos macabros ou perturbadores',
-      'Sugestão deve ser sutil, não explícita',
-    ],
-  };
+  // Se tiver pessoas mencionadas e for caricatura
+  if (shouldUseCaricature(trigger) && persons.length > 0) {
+    restrictions.push(
+      'NÃO criar rosto reconhecível de pessoa real',
+      'Usar figura genérica que representa a categoria/profissão',
+      'Evitar identificação direta'
+    );
+  }
   
-  return [...baseRestrictions, ...(triggerRestrictions[trigger] || [])];
+  return {
+    basePrompt,
+    styleModifiers,
+    emotionalElements,
+    colorPalette,
+    composition,
+    restrictions
+  };
 }
 
 /**
  * Gera o prompt final formatado para a API de geração de imagem
  */
 export function generateFinalImagePrompt(
-  caricaturePrompt: CaricaturePrompt,
-  aspectRatio: string = '16:9'
+  input: PromptBuildInput
 ): string {
-  return `${caricaturePrompt.basePrompt}
+  const { title, aspectRatio = '16:9' } = input;
+  const promptParts = buildEmotionalImagePrompt(input);
+  const trigger = input.emotionalAnalysis.primaryTrigger;
+  const config = getTriggerConfig(trigger);
+  
+  const prompt = `${promptParts.basePrompt}
 
-## DIREÇÃO ARTÍSTICA
-${caricaturePrompt.styleModifiers.map(m => `• ${m}`).join('\n')}
+TÍTULO/TEMA: "${title}"
 
-## ELEMENTOS EMOCIONAIS
-${caricaturePrompt.emotionalElements.map(e => `• ${e}`).join('\n')}
+DIREÇÃO VISUAL:
+${promptParts.styleModifiers}
 
-## PALETA DE CORES
-Cores principais: ${caricaturePrompt.colorPalette.slice(0, 4).join(', ')}
+ELEMENTOS EMOCIONAIS:
+${promptParts.emotionalElements}
 
-## COMPOSIÇÃO
-${caricaturePrompt.composition}
+PALETA DE CORES: ${promptParts.colorPalette}
 
-## RESTRIÇÕES OBRIGATÓRIAS
-${caricaturePrompt.restrictions.map(r => `⚠️ ${r}`).join('\n')}
+COMPOSIÇÃO: ${promptParts.composition}
 
-## ESPECIFICAÇÕES TÉCNICAS
-- Formato: ${aspectRatio} (landscape para web)
-- Resolução: Alta qualidade para publicação digital
-- Estilo: Profissional e polido
-- Adequado para blogs e redes sociais`;
+ESPECIFICAÇÕES TÉCNICAS:
+- Aspect ratio: ${aspectRatio}
+- Resolução: Alta definição
+- Sem texto na imagem
+- Sem marcas d'água
+
+RESTRIÇÕES IMPORTANTES:
+${promptParts.restrictions.map(r => `⚠️ ${r}`).join('\n')}
+
+Gere uma imagem única e impactante que transmita o tom emocional "${config.labelPtBr}" para este conteúdo jornalístico.`;
+
+  return prompt;
 }
 
 /**
- * Gera prompt simplificado para fallback (quando caricatura não é necessária)
+ * Gera prompt simplificado para imagens padrão (non-emotional)
  */
 export function generateStandardImagePrompt(
-  trigger: EmotionalTrigger,
   title: string,
+  niche: string = 'geral',
   aspectRatio: string = '16:9'
 ): string {
-  const config = EMOTIONAL_TRIGGER_CONFIG[trigger];
+  const nichePrompts: Record<string, string> = {
+    advocacia: 'ambiente jurídico profissional, martelo de juiz, documentos legais, tons marrom e dourado',
+    saude: 'ambiente médico moderno, equipamentos de saúde, tons azul e branco, atmosfera de confiança',
+    beleza: 'estética profissional, cuidados pessoais, tons suaves e elegantes, iluminação suave',
+    tecnologia: 'elementos digitais futuristas, circuitos, telas, tons azul neon e ciano',
+    marketing: 'gráficos de crescimento, métricas, design moderno, cores vibrantes',
+    geral: 'fotografia editorial profissional, composição equilibrada, iluminação natural'
+  };
   
-  return `Crie uma fotografia profissional de alta qualidade para ilustrar:
+  const nicheContext = nichePrompts[niche] || nichePrompts.geral;
+  
+  return `Fotografia profissional para artigo de blog.
 
-"${title}"
+TEMA: "${title}"
 
-## ESTILO
-${config.promptModifiers.slice(0, 3).join('. ')}.
+CONTEXTO VISUAL: ${nicheContext}
 
-## ELEMENTOS VISUAIS
-${config.visualElements.slice(0, 2).join('. ')}.
+ESPECIFICAÇÕES:
+- Aspect ratio: ${aspectRatio}
+- Estilo: Editorial moderno e profissional
+- Sem texto ou logotipos
+- Alta resolução
 
-## CORES
-Usar predominantemente: ${config.colorPalette.slice(0, 3).join(', ')}
+Gere uma imagem que represente visualmente o tema de forma profissional e atrativa.`;
+}
 
-## TÉCNICO
-- Formato: ${aspectRatio} landscape
-- Sem texto ou marcas d'água
-- Alta resolução para web
-- Estilo editorial profissional`;
+// ============================================================================
+// GERADOR DE ALT TEXT
+// ============================================================================
+
+/**
+ * Gera alt text SEO-optimizado para a imagem
+ */
+export function generateAltText(
+  title: string,
+  trigger: EmotionalTrigger,
+  action: ImageAction
+): string {
+  const config = getTriggerConfig(trigger);
+  
+  // Prefixo baseado na ação
+  let prefix = 'Imagem ilustrativa:';
+  
+  if (action === 'create_caricature') {
+    prefix = 'Caricatura:';
+  } else if (action === 'create_conceptual') {
+    prefix = 'Arte conceitual:';
+  } else if (action === 'reuse_original') {
+    prefix = 'Foto:';
+  }
+  
+  // Limita título a 100 caracteres
+  const shortTitle = title.length > 100 
+    ? title.substring(0, 97) + '...' 
+    : title;
+  
+  return `${prefix} ${shortTitle}`;
 }
 
 /**
- * Gera alt text otimizado para SEO baseado no gatilho
+ * Gera disclaimer para caricaturas
  */
-export function generateAltText(
-  trigger: EmotionalTrigger,
-  title: string,
-  imageStyle: ImageStyle
-): string {
-  const styleDescriptions: Record<ImageStyle, string> = {
-    photorealistic: 'Imagem ilustrativa',
-    caricature: 'Caricatura editorial',
-    cartoon: 'Ilustração cartoon',
-    conceptual: 'Arte conceitual',
-    dramatic: 'Fotografia dramática',
-  };
-  
-  const style = styleDescriptions[imageStyle];
-  
-  // Limitar título a ~100 caracteres para alt text
-  const shortTitle = title.length > 100 ? title.substring(0, 97) + '...' : title;
-  
-  return `${style}: ${shortTitle}`;
+export function generateDisclaimer(trigger: EmotionalTrigger): string {
+  if (['humor', 'sarcasm', 'satire', 'outrage'].includes(trigger)) {
+    return 'Esta imagem é uma representação artística/caricatura e não reflete a aparência real das pessoas envolvidas.';
+  }
+  return '';
 }
