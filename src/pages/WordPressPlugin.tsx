@@ -25,7 +25,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 
 const PLUGIN_VERSION = '3.2.0';
-const PLUGIN_LAST_UPDATE = '2026-02-10';
+const PLUGIN_LAST_UPDATE = '2026-02-10T18:30:00';
 
 const features = [
   {
@@ -434,7 +434,7 @@ export default function WordPressPluginPage() {
               v{PLUGIN_VERSION}
             </Badge>
             <span className="text-xs text-muted-foreground">
-              Atualizado em {new Date(PLUGIN_LAST_UPDATE).toLocaleDateString('pt-BR')}
+              Atualizado em {new Date(PLUGIN_LAST_UPDATE).toLocaleDateString('pt-BR')} às {new Date(PLUGIN_LAST_UPDATE).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
           <Button onClick={handleDownload} size="lg" disabled={isDownloading}>
