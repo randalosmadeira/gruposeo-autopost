@@ -34,6 +34,7 @@ import { format, subDays, isToday, isThisWeek, isThisMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import logoSeo from '@/assets/logo-grupo-seo.png';
 import { WordPressHealthCard } from '@/components/dashboard/WordPressHealthCard';
+import { CronNotificationsPanel } from '@/components/dashboard/CronNotificationsPanel';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 // Quick action card component
@@ -383,6 +384,9 @@ export default function DashboardNew() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Cron Notifications */}
+        <CronNotificationsPanel />
 
         {/* WordPress Health Status */}
         {projects && projects.some(p => p.wordpress_url) && (

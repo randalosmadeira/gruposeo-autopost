@@ -413,6 +413,25 @@ async function processPortal(
         if (rewriteResult?.articleId) {
           articlesCreated++;
           console.log(`✓ Created article: ${rewriteResult.articleId}`);
+          
+          // Create dashboard notification
+          try {
+            await supabase.from('cron_notifications').insert({
+              user_id: portal.user_id,
+              type: 'article_generated',
+              title: `Artigo gerado: ${article.title.substring(0, 80)}`,
+              message: `Novo artigo reescrito automaticamente do portal ${portal.portal_name} com ${rewriteResult.originalityScore || 95}% de originalidade.`,
+              metadata: {
+                article_id: rewriteResult.articleId,
+                portal_name: portal.portal_name,
+                portal_id: portal.id,
+                source_url: article.url,
+                originality_score: rewriteResult.originalityScore || 95,
+              }
+            });
+          } catch (notifErr) {
+            console.error('Notification insert error:', notifErr);
+          }
         }
         
         // Small delay to avoid overwhelming the AI
