@@ -1,10 +1,10 @@
 === ContentFactory RDM ===
 Contributors: gruposeomarketing
-Tags: content, seo, articles, automation, ai, image-optimization, indexing
+Tags: content, seo, articles, automation, ai, image-optimization, indexing, indexnow, llms, meta-auditor
 Requires at least: 5.8
-Tested up to: 6.7
+Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 2.6.2
+Stable tag: 3.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -153,16 +153,42 @@ Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject s
 * Upload de mídia via API
 * Logs de atividade
 
+= 3.1.0 =
+* **NOVO**: Auditor de Meta Descriptions com IA (cron a cada 6h)
+* **NOVO**: IndexNow - notificação automática ao Bing/Google/Yandex
+* **NOVO**: llms.txt + headers AI-friendly para ChatGPT/Claude/Gemini
+* **NOVO**: Duplicador de Posts/Páginas com ação em lote
+* **NOVO**: Exclusão em massa de posts selecionados
+* **NOVO**: News Sitemap para Google News
+* **NOVO**: Sitemap Optimizer com prioridades dinâmicas
+* **NOVO**: robots.txt otimizado para crawlers de IA
+* **NOVO**: Open Graph e Twitter Cards auto-preenchidos
+* **INTEGRAÇÃO**: Publicação → Meta Audit → IndexNow → llms.txt invalidação
+* **SEGURANÇA**: Pre-update checks (PHP, WP, disco, DB, erros recentes)
+* **SEGURANÇA**: Rollback automático em caso de falha na atualização
+
+= 3.0.2 =
+* **CORRIGIDO**: Ordem de registro de cron intervals
+* **CORRIGIDO**: Fallback para intervalos customizados
+* **CORRIGIDO**: Prevenção de fatal errors durante init
+
+= 3.0.0 =
+* **NOVO**: Integração Google Search Console via OAuth 2.0
+* **NOVO**: AI Auto-Fix para erros 404
+* **NOVO**: Ubersuggest Sync
+* **NOVO**: HTTPS Enforcer
+* **NOVO**: AI Content Enhancer
+
 == Upgrade Notice ==
+
+= 3.1.0 =
+Atualização major com Meta Auditor IA, IndexNow, llms.txt, Duplicador de Posts, Sitemap Optimizer e sistema de atualização segura com rollback automático.
+
+= 3.0.0 =
+Integração Google Search Console, AI Auto-Fix e novos módulos de SEO avançado. Faça backup antes de atualizar.
 
 = 2.2.0 =
 Nova versão com validador de schema JSON-LD, suporte a Product/Review schemas e integração com Google Rich Results Test.
-
-= 2.1.0 =
-Nova versão com indexação automática para Google/Bing e schema markup JSON-LD. Recomendado para todos os usuários.
-
-= 2.0.0 =
-Atualização importante com novas funcionalidades de otimização de imagens, links internos e logging avançado. Faça backup antes de atualizar.
 
 = 1.0.0 =
 Primeira versão do plugin.
