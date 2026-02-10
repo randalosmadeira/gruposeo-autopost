@@ -36,6 +36,7 @@ import logoSeo from '@/assets/logo-grupo-seo.png';
 import { WordPressHealthCard } from '@/components/dashboard/WordPressHealthCard';
 import { CronNotificationsPanel } from '@/components/dashboard/CronNotificationsPanel';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { SEOAgentPanel } from '@/components/dashboard/SEOAgentPanel';
 
 // Quick action card component
 function QuickActionCard({ 
@@ -384,6 +385,9 @@ export default function DashboardNew() {
             </div>
           </CardContent>
         </Card>
+
+        {/* SEO Agent Panel */}
+        <SEOAgentPanel />
 
         {/* Cron Notifications */}
         <CronNotificationsPanel />
