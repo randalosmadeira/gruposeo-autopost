@@ -185,10 +185,14 @@ export type Database = {
           config: Json | null
           content: string | null
           created_at: string
+          emotional_confidence: number | null
+          emotional_trigger: string | null
           error_message: string | null
           excerpt: string | null
           featured_image_url: string | null
           id: string
+          image_source: string | null
+          image_style: string | null
           keyword: string
           project_id: string | null
           published_at: string | null
@@ -208,10 +212,14 @@ export type Database = {
           config?: Json | null
           content?: string | null
           created_at?: string
+          emotional_confidence?: number | null
+          emotional_trigger?: string | null
           error_message?: string | null
           excerpt?: string | null
           featured_image_url?: string | null
           id?: string
+          image_source?: string | null
+          image_style?: string | null
           keyword: string
           project_id?: string | null
           published_at?: string | null
@@ -231,10 +239,14 @@ export type Database = {
           config?: Json | null
           content?: string | null
           created_at?: string
+          emotional_confidence?: number | null
+          emotional_trigger?: string | null
           error_message?: string | null
           excerpt?: string | null
           featured_image_url?: string | null
           id?: string
+          image_source?: string | null
+          image_style?: string | null
           keyword?: string
           project_id?: string | null
           published_at?: string | null
