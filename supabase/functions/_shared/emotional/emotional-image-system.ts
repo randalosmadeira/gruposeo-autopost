@@ -9,11 +9,13 @@
  * - Integração com APIs de geração de imagem
  */
 
-import {
+import type {
   EmotionalTrigger,
   EmotionalAnalysis,
   ImageDecision,
   ImageStyle,
+} from './emotional-triggers-config.ts';
+import {
   EMOTIONAL_TRIGGER_CONFIG,
   getAllTriggers,
   shouldUseCaricature,

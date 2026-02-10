@@ -14,6 +14,7 @@ export interface RewriteRequest {
   projectId?: string;
   internalLinks?: Array<{ anchor: string; url: string }>;
   autoPublish?: boolean;
+  emotionalTriggerOverride?: string;
 }
 
 export interface ComplianceCheck {
@@ -191,6 +192,7 @@ export function useNewsRewriter() {
             ...request,
             niche: request.niche || 'geral',
             articleLength: request.articleLength || 'medium',
+            emotionalTriggerOverride: request.emotionalTriggerOverride || undefined,
           }),
         }
       );

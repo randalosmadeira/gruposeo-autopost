@@ -19,6 +19,7 @@ import {
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { EmotionalTriggerBadge } from '@/components/shared/EmotionalTriggerBadge';
 
 interface RepostHistoryItem {
   id: string;
@@ -176,6 +177,10 @@ export function RepostHistory({ limit = 10, showRefresh = true, compact = false 
                             {item.config.originality_score}% original
                           </span>
                         )}
+                        <EmotionalTriggerBadge
+                          trigger={(item.config as any)?.emotional_trigger}
+                          compact
+                        />
                         {item.config?.auto_published && (
                           <Badge className="text-xs bg-success/20 text-success border-success/30">
                             Auto-publicado

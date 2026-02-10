@@ -6,13 +6,15 @@
  * no gatilho emocional identificado na notícia.
  */
 
-import { 
+import type { 
   EmotionalTrigger, 
   ImageStyle,
   CaricaturePrompt,
-  EMOTIONAL_TRIGGER_CONFIG,
   ImageDecision,
   EmotionalAnalysis
+} from './emotional-triggers-config.ts';
+import {
+  EMOTIONAL_TRIGGER_CONFIG,
 } from './emotional-triggers-config.ts';
 
 // ============================================

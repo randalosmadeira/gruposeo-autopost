@@ -66,6 +66,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BulkPublishModal } from '@/components/articles/BulkPublishModal';
+import { EmotionalTriggerBadge } from '@/components/shared/EmotionalTriggerBadge';
 
 // Status configuration with icons and colors
 const statusConfig: Record<string, { 
@@ -766,6 +767,13 @@ export default function ArticlesList() {
                               <p className="text-xs text-muted-foreground line-clamp-2">
                                 {article.excerpt}
                               </p>
+                            )}
+                            {article.emotional_trigger && (
+                              <EmotionalTriggerBadge
+                                trigger={article.emotional_trigger}
+                                confidence={article.emotional_confidence}
+                                compact
+                              />
                             )}
                           </div>
                         </TableCell>
