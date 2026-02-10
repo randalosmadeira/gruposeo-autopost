@@ -28,17 +28,23 @@ interface ProjectContext {
   seo_plugin: string | null;
 }
 
+interface ActionResult {
+  action: string;
+  result: string;
+}
+
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 
 const quickActions = [
   { label: 'Sugerir palavras-chave', icon: Target, prompt: 'Sugira 10 palavras-chave de cauda longa para o nicho de ' },
   { label: 'Criar título SEO', icon: Sparkles, prompt: 'Crie 5 títulos otimizados para SEO sobre ' },
   { label: 'Gerar outline', icon: FileText, prompt: 'Crie uma estrutura completa de artigo SEO sobre ' },
-  { label: 'Auditoria SEO completa', icon: Search, prompt: 'Como funciona o Agente SEO Autônomo? Ele já rodou auditoria nos meus projetos WordPress? Mostre o que foi encontrado e corrigido.' },
-  { label: 'Links quebrados e 404', icon: AlertTriangle, prompt: 'Como o AI Auto-Fix do plugin detecta e corrige automaticamente links quebrados (404), FAQs duplicadas e URLs em duplicidade nos meus sites WordPress?' },
-  { label: 'Backlinks e linkagem interna', icon: Link, prompt: 'Como funciona o motor de linkagem interna inteligente? Ele já criou backlinks entre meus artigos automaticamente? Onde vejo os resultados?' },
-  { label: 'Meta tags e SEO On-Page', icon: Shield, prompt: 'Como o AI Meta Auditor do plugin audita e corrige titles, meta descriptions, Open Graph tags e Twitter Cards automaticamente?' },
-  { label: 'Diagnóstico WordPress', icon: RefreshCw, prompt: 'Quais módulos do plugin ContentFactory RDM estão ativos nos meus sites? Como verificar o diagnóstico e saúde de cada projeto?' },
+  { label: 'Auditoria SEO completa', icon: Search, prompt: 'Execute uma auditoria SEO completa em todos os meus projetos WordPress agora e mostre os resultados reais.' },
+  { label: 'Links quebrados e 404', icon: AlertTriangle, prompt: 'Verifique os status das últimas correções de links quebrados, FAQs duplicadas e URLs em duplicidade.' },
+  { label: 'Backlinks e linkagem', icon: Link, prompt: 'Mostre as sugestões de links internos pendentes e quantos backlinks já foram criados entre meus artigos.' },
+  { label: 'Meta tags e SEO', icon: Shield, prompt: 'Quantas meta tags foram auditadas e corrigidas? Mostre os resultados reais das últimas execuções do Agente SEO.' },
+  { label: 'Sincronizar WordPress', icon: RefreshCw, prompt: 'Sincronize as estatísticas de todos os meus projetos WordPress e mostre os dados atualizados.' },
+  { label: 'Estatísticas de artigos', icon: Globe, prompt: 'Mostre estatísticas completas: artigos gerados, publicados, prontos e com erro.' },
 ];
 
 async function streamChat({
@@ -49,7 +55,7 @@ async function streamChat({
   onError,
 }: {
   messages: Array<{ role: string; content: string }>;
-  context?: { projects: ProjectContext[]; articleCount?: number };
+  context?: { projects: ProjectContext[]; articleCount?: number; userId?: string };
   onDelta: (text: string) => void;
   onDone: () => void;
   onError: (error: string) => void;
@@ -204,7 +210,7 @@ export default function AIChat() {
     try {
       await streamChat({
         messages: allMessages,
-        context: { projects, articleCount },
+        context: { projects, articleCount, userId: user?.id },
         onDelta: (chunk) => {
           assistantSoFar += chunk;
           setMessages(prev => {
@@ -215,7 +221,38 @@ export default function AIChat() {
             return [...prev, { role: 'assistant', content: assistantSoFar, timestamp: new Date() }];
           });
         },
-        onDone: () => setIsLoading(false),
+        onDone: async () => {
+          // Detect and execute action blocks from AI response
+          const actionMatch = assistantSoFar.match(/```action\s*\n?([\s\S]*?)\n?```/);
+          if (actionMatch) {
+            try {
+              const actionData = JSON.parse(actionMatch[1].trim());
+              const resp = await fetch(CHAT_URL, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+                },
+                body: JSON.stringify({
+                  executeActions: [actionData],
+                  context: { userId: user?.id },
+                }),
+              });
+              const result = await resp.json();
+              if (result.results?.[0]?.result) {
+                const actionResult = result.results[0].result;
+                setMessages(prev => [...prev, {
+                  role: 'assistant',
+                  content: `**⚡ Resultado da ação:**\n\n${actionResult}`,
+                  timestamp: new Date(),
+                }]);
+              }
+            } catch {
+              // Action parse failed, ignore
+            }
+          }
+          setIsLoading(false);
+        },
         onError: (error) => {
           setIsLoading(false);
           toast({ title: 'Erro', description: error, variant: 'destructive' });
