@@ -139,20 +139,74 @@ async function executeAction(
     }
 
     case "sync_wordpress_stats": {
-      if (!action.project_id) return "❌ Nenhum projeto especificado.";
       try {
-        const resp = await fetch(`${supabaseUrl}/functions/v1/sync-wordpress-stats`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          },
-          body: JSON.stringify({ projectId: action.project_id }),
-        });
-        const data = await resp.json();
-        return data.success
-          ? `✅ Estatísticas sincronizadas: ${JSON.stringify(data.stats || data)}`
-          : `❌ Erro: ${data.error || "falha"}`;
+        // Determine which projects to sync
+        let projectIds: string[] = [];
+        if (action.project_id === "all") {
+          const { data: allProjects } = await supabase
+            .from("projects")
+            .select("id, name, domain, wordpress_url, wordpress_username, wordpress_app_password")
+            .eq("user_id", userId);
+          if (!allProjects || allProjects.length === 0) return "❌ Nenhum projeto encontrado.";
+          projectIds = allProjects.map(p => p.id);
+          
+          const results: string[] = [];
+          for (const proj of allProjects) {
+            if (!proj.wordpress_url || !proj.wordpress_username || !proj.wordpress_app_password) {
+              results.push(`⚠️ **${proj.name}**: Credenciais WordPress não configuradas`);
+              continue;
+            }
+            const wpUrl = proj.wordpress_url.replace(/\/$/, "");
+            const auth = btoa(`${proj.wordpress_username}:${proj.wordpress_app_password}`);
+            try {
+              const [pubRes, draftRes, pendRes] = await Promise.all([
+                fetch(`${wpUrl}/wp-json/wp/v2/posts?status=publish&per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
+                fetch(`${wpUrl}/wp-json/wp/v2/posts?status=draft&per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
+                fetch(`${wpUrl}/wp-json/wp/v2/posts?status=pending&per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
+              ]);
+              const pub = parseInt(pubRes.headers.get("X-WP-Total") || "0");
+              const draft = parseInt(draftRes.headers.get("X-WP-Total") || "0");
+              const pending = parseInt(pendRes.headers.get("X-WP-Total") || "0");
+              
+              const statsData = { project_id: proj.id, user_id: userId, total_articles: pub + draft + pending, published_articles: pub, draft_articles: draft, pending_articles: pending, last_sync_at: new Date().toISOString() };
+              const { data: existing } = await supabase.from("wordpress_stats").select("id").eq("project_id", proj.id).maybeSingle();
+              if (existing) {
+                await supabase.from("wordpress_stats").update(statsData).eq("id", existing.id);
+              } else {
+                await supabase.from("wordpress_stats").insert(statsData);
+              }
+              results.push(`✅ **${proj.name}**: ${pub} publicados, ${draft} rascunhos, ${pending} pendentes`);
+            } catch (e) {
+              results.push(`❌ **${proj.name}**: ${e instanceof Error ? e.message : "erro de conexão"}`);
+            }
+          }
+          return `📊 Sincronização concluída:\n${results.join("\n")}`;
+        } else {
+          if (!action.project_id) return "❌ Nenhum projeto especificado.";
+          const { data: proj } = await supabase.from("projects").select("*").eq("id", action.project_id).single();
+          if (!proj) return "❌ Projeto não encontrado.";
+          if (!proj.wordpress_url || !proj.wordpress_username || !proj.wordpress_app_password) return "❌ Credenciais WordPress não configuradas.";
+          
+          const wpUrl = proj.wordpress_url.replace(/\/$/, "");
+          const auth = btoa(`${proj.wordpress_username}:${proj.wordpress_app_password}`);
+          const [pubRes, draftRes, pendRes] = await Promise.all([
+            fetch(`${wpUrl}/wp-json/wp/v2/posts?status=publish&per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
+            fetch(`${wpUrl}/wp-json/wp/v2/posts?status=draft&per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
+            fetch(`${wpUrl}/wp-json/wp/v2/posts?status=pending&per_page=1`, { headers: { Authorization: `Basic ${auth}` } }),
+          ]);
+          const pub = parseInt(pubRes.headers.get("X-WP-Total") || "0");
+          const draft = parseInt(draftRes.headers.get("X-WP-Total") || "0");
+          const pending = parseInt(pendRes.headers.get("X-WP-Total") || "0");
+          
+          const statsData = { project_id: proj.id, user_id: userId, total_articles: pub + draft + pending, published_articles: pub, draft_articles: draft, pending_articles: pending, last_sync_at: new Date().toISOString() };
+          const { data: existing } = await supabase.from("wordpress_stats").select("id").eq("project_id", proj.id).maybeSingle();
+          if (existing) {
+            await supabase.from("wordpress_stats").update(statsData).eq("id", existing.id);
+          } else {
+            await supabase.from("wordpress_stats").insert(statsData);
+          }
+          return `✅ **${proj.name}** sincronizado: ${pub} publicados, ${draft} rascunhos, ${pending} pendentes`;
+        }
       } catch (e) {
         return `❌ Erro: ${e instanceof Error ? e.message : "erro"}`;
       }
