@@ -359,8 +359,11 @@ export default function WordPressPluginPage() {
         { path: 'includes/class-cfrdm-llms-txt.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-llms-txt.php' },
         { path: 'includes/class-cfrdm-post-duplicator.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-post-duplicator.php' },
         { path: 'includes/class-cfrdm-sitemap-optimizer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-sitemap-optimizer.php' },
+        // Assets
         { path: 'assets/css/admin.css', url: '/wordpress-plugin/contentfactory-rdm/assets/css/admin.css' },
         { path: 'assets/js/admin.js', url: '/wordpress-plugin/contentfactory-rdm/assets/js/admin.js' },
+        // Version manifest
+        { path: 'version.json', url: '/wordpress-plugin/contentfactory-rdm/version.json' },
       ];
       
       // Fetch each file and add to zip
