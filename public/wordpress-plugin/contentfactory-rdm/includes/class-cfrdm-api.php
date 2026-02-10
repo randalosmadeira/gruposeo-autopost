@@ -361,6 +361,20 @@ class CFRDM_API {
             'callback' => array(__CLASS__, 'rollback_update'),
             'permission_callback' => array(__CLASS__, 'verify_admin'),
         ));
+        
+        // ===== Stats Endpoint (for Chat IA sync) =====
+        register_rest_route('cfrdm/v1', '/stats', array(
+            'methods' => 'GET',
+            'callback' => array(__CLASS__, 'get_stats'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // ===== Apply Internal Link Endpoint (for Chat IA) =====
+        register_rest_route('cfrdm/v1', '/apply-internal-link', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'apply_internal_link'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
     }
     
     public static function verify_api_key($request) {
@@ -2106,5 +2120,135 @@ class CFRDM_API {
                 'message' => $result['error'] ?? __('Erro ao executar rollback', 'contentfactory-rdm'),
             ), 500);
         }
+    }
+    
+    /**
+     * Get site statistics for Chat IA sync
+     */
+    public static function get_stats($request) {
+        $counts = wp_count_posts('post');
+        
+        $comments_count = wp_count_comments();
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'published' => isset($counts->publish) ? (int) $counts->publish : 0,
+            'draft' => isset($counts->draft) ? (int) $counts->draft : 0,
+            'pending' => isset($counts->pending) ? (int) $counts->pending : 0,
+            'private' => isset($counts->private) ? (int) $counts->private : 0,
+            'trash' => isset($counts->trash) ? (int) $counts->trash : 0,
+            'total' => (isset($counts->publish) ? (int) $counts->publish : 0) + 
+                       (isset($counts->draft) ? (int) $counts->draft : 0) + 
+                       (isset($counts->pending) ? (int) $counts->pending : 0),
+            'comments' => isset($comments_count->approved) ? (int) $comments_count->approved : 0,
+            'pages' => (int) wp_count_posts('page')->publish,
+        ), 200);
+    }
+    
+    /**
+     * Apply a single internal link to a post
+     */
+    public static function apply_internal_link($request) {
+        $params = $request->get_json_params();
+        $target_url = isset($params['target_url']) ? sanitize_url($params['target_url']) : '';
+        $anchor_text = isset($params['anchor_text']) ? sanitize_text_field($params['anchor_text']) : '';
+        $source_post_id = isset($params['source_post_id']) ? intval($params['source_post_id']) : 0;
+        
+        if (empty($target_url) || empty($anchor_text)) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => __('target_url e anchor_text são obrigatórios', 'contentfactory-rdm'),
+            ), 400);
+        }
+        
+        // If source_post_id is provided, apply to that specific post
+        if ($source_post_id > 0) {
+            $post = get_post($source_post_id);
+            if (!$post || $post->post_status !== 'publish') {
+                return new WP_REST_Response(array(
+                    'success' => false,
+                    'message' => __('Post não encontrado ou não publicado', 'contentfactory-rdm'),
+                ), 404);
+            }
+            
+            $result = self::insert_link_into_post($post, $anchor_text, $target_url);
+            
+            return new WP_REST_Response(array(
+                'success' => $result['inserted'],
+                'message' => $result['inserted'] 
+                    ? __('Link inserido com sucesso', 'contentfactory-rdm')
+                    : __('Texto âncora não encontrado no conteúdo do post', 'contentfactory-rdm'),
+                'post_id' => $source_post_id,
+            ), $result['inserted'] ? 200 : 422);
+        }
+        
+        // If no source_post_id, find the best matching post
+        $posts = get_posts(array(
+            'post_type' => 'post',
+            'post_status' => 'publish',
+            'posts_per_page' => 50,
+            'orderby' => 'modified',
+            'order' => 'DESC',
+        ));
+        
+        foreach ($posts as $post) {
+            // Skip if post already links to this URL
+            if (strpos($post->post_content, $target_url) !== false) {
+                continue;
+            }
+            
+            $result = self::insert_link_into_post($post, $anchor_text, $target_url);
+            if ($result['inserted']) {
+                return new WP_REST_Response(array(
+                    'success' => true,
+                    'message' => sprintf(
+                        __('Link inserido no post "%s"', 'contentfactory-rdm'),
+                        $post->post_title
+                    ),
+                    'post_id' => $post->ID,
+                ), 200);
+            }
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => false,
+            'message' => __('Nenhum post encontrado com o texto âncora especificado', 'contentfactory-rdm'),
+        ), 422);
+    }
+    
+    /**
+     * Helper: Insert a link into a post's content
+     */
+    private static function insert_link_into_post($post, $anchor_text, $target_url) {
+        $content = $post->post_content;
+        
+        // Search for anchor text that's not already inside a link
+        $pattern = '/(?<!<a [^>]*>)(\b' . preg_quote($anchor_text, '/') . '\b)(?![^<]*<\/a>)/iu';
+        
+        if (preg_match($pattern, $content, $matches, PREG_OFFSET_CAPTURE)) {
+            $match = $matches[1][0];
+            $offset = $matches[1][1];
+            
+            $link = '<a href="' . esc_url($target_url) . '" title="' . esc_attr($anchor_text) . '">' . $match . '</a>';
+            $new_content = substr_replace($content, $link, $offset, strlen($match));
+            
+            wp_update_post(array(
+                'ID' => $post->ID,
+                'post_content' => $new_content,
+            ));
+            
+            if (class_exists('CFRDM_Logger')) {
+                CFRDM_Logger::info(
+                    CFRDM_Logger::CATEGORY_SYNC,
+                    sprintf('Link interno aplicado via Chat IA: %s → %s', $anchor_text, $target_url),
+                    array('post_id' => $post->ID, 'anchor' => $anchor_text, 'url' => $target_url),
+                    $post->ID
+                );
+            }
+            
+            return array('inserted' => true);
+        }
+        
+        return array('inserted' => false);
     }
 }
