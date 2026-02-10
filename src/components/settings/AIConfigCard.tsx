@@ -263,20 +263,30 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="gemini" id="gemini" />
                   <Label htmlFor="gemini" className="cursor-pointer">Google Gemini</Label>
-                  {settings?.has_gemini_key && (
-                    <Badge variant="secondary" className="text-xs">
+                  {settings?.has_gemini_key ? (
+                    <Badge className="text-xs bg-emerald-500/15 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20">
                       <Check className="w-3 h-3 mr-1" />
-                      Configurado
+                      Ativa
+                    </Badge>
+                  ) : (
+                    <Badge className="text-xs bg-red-500/15 text-red-500 border-red-500/30 hover:bg-red-500/20">
+                      <X className="w-3 h-3 mr-1" />
+                      Não configurada
                     </Badge>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="openai" id="openai" />
                   <Label htmlFor="openai" className="cursor-pointer">OpenAI</Label>
-                  {settings?.has_openai_key && (
-                    <Badge variant="secondary" className="text-xs">
+                  {settings?.has_openai_key ? (
+                    <Badge className="text-xs bg-emerald-500/15 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20">
                       <Check className="w-3 h-3 mr-1" />
-                      Configurado
+                      Ativa
+                    </Badge>
+                  ) : (
+                    <Badge className="text-xs bg-red-500/15 text-red-500 border-red-500/30 hover:bg-red-500/20">
+                      <X className="w-3 h-3 mr-1" />
+                      Não configurada
                     </Badge>
                   )}
                 </div>
@@ -309,14 +319,14 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">Status da chave {aiProvider === 'gemini' ? 'Gemini' : 'OpenAI'}:</span>
                   {hasCurrentProviderKey ? (
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge className="text-xs bg-emerald-500/15 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20">
                       <Check className="w-3 h-3 mr-1" />
-                      Configurada
+                      ✅ Ativa
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="text-xs text-muted-foreground">
+                    <Badge className="text-xs bg-red-500/15 text-red-500 border-red-500/30 hover:bg-red-500/20">
                       <X className="w-3 h-3 mr-1" />
-                      Não configurada
+                      ❌ Não configurada
                     </Badge>
                   )}
                 </div>
