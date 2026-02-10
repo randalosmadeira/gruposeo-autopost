@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -88,6 +88,18 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
   const [isTesting, setIsTesting] = useState(false);
   const [isTestingAnthropic, setIsTestingAnthropic] = useState(false);
   const [isTestingSerper, setIsTestingSerper] = useState(false);
+
+  // Sync local state when settings load/change from the server
+  useEffect(() => {
+    if (settings) {
+      setByokEnabled(settings.byok_enabled ?? false);
+      setAiProvider(settings.ai_provider ?? 'gemini');
+      setTitleModel(settings.title_model ?? 'gemini-3-pro-preview');
+      setContentModel(settings.content_model ?? 'gemini-3-pro-preview');
+      setImageModel(settings.image_model ?? 'gemini-3-pro-image-preview');
+      setTimezone(settings.timezone ?? 'America/Sao_Paulo');
+    }
+  }, [settings]);
 
   const models = aiProvider === 'gemini' ? GEMINI_MODELS : OPENAI_MODELS;
   const imageModels = aiProvider === 'gemini' ? GEMINI_IMAGE_MODELS : OPENAI_IMAGE_MODELS;
