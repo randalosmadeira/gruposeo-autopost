@@ -220,7 +220,8 @@ export function SEOScorePanel({
               <div className="space-y-4">
                 <div className="text-center p-4 rounded-lg bg-muted/50">
                   <div className={`text-4xl font-bold ${
-                    readability.isEasyToRead ? 'text-green-600' : 'text-yellow-600'
+                    readability.fleschScore >= 70 ? 'text-green-600' : 
+                    readability.fleschScore >= 60 ? 'text-yellow-600' : 'text-red-600'
                   }`}>
                     {readability.fleschScore}
                   </div>
@@ -254,12 +255,20 @@ export function SEOScorePanel({
                   />
                 </div>
 
-                <div className="text-xs text-muted-foreground">
-                  <p className="font-medium mb-1">Escala Flesch:</p>
-                  <p>• 70-100: Fácil (recomendado)</p>
-                  <p>• 60-70: Médio</p>
-                  <p>• 0-60: Difícil</p>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p className="font-medium mb-1">Escala Flesch (mínimo: 60):</p>
+                  <p className="text-green-600">• 90-100: Muito Fácil (5º ano)</p>
+                  <p className="text-green-600">• 80-89: Fácil (6º ano)</p>
+                  <p className="text-green-500">• 70-79: Bastante Fácil (8º ano)</p>
+                  <p className="text-yellow-600">• 60-69: Padrão (8º-9º ano) ✓</p>
+                  <p className="text-red-600">• &lt;60: ❌ Reprovado — reescrever</p>
                 </div>
+                
+                {readability && readability.fleschScore < 60 && (
+                  <div className="p-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded text-xs text-red-700 dark:text-red-400">
+                    ⚠️ <strong>Score abaixo do mínimo (60).</strong> O conteúdo precisa ser reescrito com frases mais curtas e vocabulário mais simples.
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>

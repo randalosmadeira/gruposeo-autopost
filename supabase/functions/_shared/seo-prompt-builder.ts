@@ -541,9 +541,9 @@ function buildTechnicalRules(): string {
 - Use anchor text descritivo (NUNCA apenas "clique aqui")
 - Verifique se URLs são válidas e atuais
 
-### Formatação de Parágrafos (Mobile-First / Flesch 70-100):
+### Formatação de Parágrafos (Mobile-First / Flesch 60-100):
 - **Máximo**: 3 linhas por parágrafo (40-60 palavras)
-- **Máximo**: 15 palavras por frase (OBRIGATÓRIO para Flesch 70-100)
+- **Máximo**: 15 palavras por frase (OBRIGATÓRIO para Flesch mínimo 60)
 - **Uma ideia por parágrafo** — se mudou de assunto, mude de parágrafo
 - **Primeira frase**: Forte, declarativa, contém micro-tema
 - **Última frase**: Transição natural ou gancho para próxima seção
@@ -685,8 +685,18 @@ Você é um redator SEO sênior e especialista em link building com expertise em
 - Se não conseguir gerar uma boa, use: "Descubra tudo sobre [keyword]. Guia completo e atualizado com dicas práticas. Leia agora!"
 - VERIFICAR: se o campo META_DESCRIPTION está presente e tem entre 145-160 caracteres
 
-### REGRA 2 - LEGIBILIDADE FLESCH 70-100 (FÁCIL) - OBRIGATÓRIO
-- O conteúdo DEVE atingir score de legibilidade Flesch entre 70-100 (Fácil)
+### REGRA 2 - LEGIBILIDADE FLESCH 60-100 (MÍNIMO OBRIGATÓRIO: 60)
+
+📊 **Escala Flesch — NUNCA abaixo de 60:**
+| Score | Nível | Escolaridade |
+|-------|-------|-------------|
+| 90-100 | Muito Fácil | 5º ano — criança de 11 anos entende |
+| 80-89 | Fácil | 6º ano |
+| 70-79 | Bastante Fácil | 8º ano — maioria dos adultos |
+| 60-69 | Padrão | 8º-9º ano — ideal para conteúdo web |
+| < 60 | ❌ REPROVADO | Reescrever obrigatoriamente |
+
+- O conteúdo DEVE atingir score de legibilidade Flesch MÍNIMO 60 (ideal 70-100)
 - Sentenças curtas: MÁXIMO 15 palavras por sentença (NUNCA mais que 15)
 - Parágrafos curtos: MÁXIMO 3 linhas
 - Uma ideia por parágrafo — se mudou de assunto, mude de parágrafo
@@ -698,6 +708,7 @@ Você é um redator SEO sênior e especialista em link building com expertise em
 - Use "você" — não "o cidadão" ou "o contribuinte"
 - TESTE MENTAL: "Meu avô de 70 anos sem faculdade entende isso?" Se não, reescreva
 - Escreva como se estivesse explicando para um amigo no WhatsApp
+- Se o score final ficar abaixo de 60, REESCREVER até atingir o mínimo
 
 ### REGRA 3 - LINKS EXTERNOS (MÁXIMO 3 - FONTES OFICIAIS)
 - Inclua 2-3 links externos para fontes autoritativas (NUNCA mais de 3)
@@ -856,13 +867,14 @@ ${config.title ? `Título sugerido: "${config.title}" (ajuste para máximo 60 ca
 2. **TITLE_SEO**: A SEGUNDA LINHA deve ser:
    <!-- TITLE_SEO: [título de máximo 60 caracteres] -->
 
-3. **LEGIBILIDADE FÁCIL (Flesch 70-100)**:
+3. **LEGIBILIDADE FLESCH MÍNIMO 60 (ideal 70-100)**:
    - Cada frase deve ter NO MÁXIMO 15 palavras
    - Cada parágrafo deve ter NO MÁXIMO 3 linhas
    - Use APENAS palavras simples do dia-a-dia
    - PROIBIDO: orações subordinadas longas, vocabulário rebuscado
    - Se um termo é técnico, explique: "habeas corpus (pedido para soltar preso)"
    - Escreva como se falasse com um amigo de 14 anos
+   - Score abaixo de 60 = CONTEÚDO REPROVADO, reescrever
 
 4. **LINKS EXTERNOS (MÍNIMO 2)**: Inclua 2-3 links reais para fontes oficiais
    - Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto</a>

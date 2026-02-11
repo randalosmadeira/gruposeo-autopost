@@ -380,13 +380,15 @@ export function calculateReadability(text: string): ReadabilityResult {
   // Clamp between 0-100
   const normalizedScore = Math.max(0, Math.min(100, fleschScore));
   
-  // Determine level
+  // Determine level (full Flesch scale)
   let level: string;
-  if (normalizedScore >= 80) level = 'Muito Fácil';
-  else if (normalizedScore >= 70) level = 'Fácil';
-  else if (normalizedScore >= 60) level = 'Médio';
-  else if (normalizedScore >= 50) level = 'Difícil';
-  else level = 'Muito Difícil';
+  if (normalizedScore >= 90) level = 'Muito Fácil (5º ano)';
+  else if (normalizedScore >= 80) level = 'Fácil (6º ano)';
+  else if (normalizedScore >= 70) level = 'Bastante Fácil (8º ano)';
+  else if (normalizedScore >= 60) level = 'Padrão (8º-9º ano)';
+  else if (normalizedScore >= 50) level = 'Difícil ⚠️';
+  else if (normalizedScore >= 30) level = 'Muito Difícil ❌';
+  else level = 'Extremamente Difícil ❌';
   
   return {
     fleschScore: normalizedScore,
