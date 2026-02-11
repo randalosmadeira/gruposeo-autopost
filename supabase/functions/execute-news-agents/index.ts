@@ -1,6 +1,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
 
 const FUNCTION_NAME = "execute-news-agents";
 
@@ -8,8 +9,6 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 // Day name mapping for Brazilian Portuguese
 const DAY_NAMES: Record<number, string> = {
@@ -189,7 +188,7 @@ FORMATO DE SAÍDA (JSON):
 async function rewriteNewsItem(
   newsItem: NewsItem,
   agent: NewsAgent,
-  apiKey: string
+  _apiKey: string
 ): Promise<{
   title: string;
   content: string;
@@ -224,30 +223,12 @@ Se originalidade < 90%, reescreva novamente até atingir 90%+.
 Retorne o resultado em formato JSON conforme especificado.`;
 
   try {
-    const response = await fetch(AI_GATEWAY_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: MAA_SYSTEM_PROMPT },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      console.error('AI rewrite failed:', response.status);
-      return null;
-    }
-
-    const data = await response.json();
-    const rawContent = data.choices?.[0]?.message?.content || "";
+    const orchestrator = getOrchestrator();
+    const rawContent = await orchestrator.call('news_rewrite', [
+      { role: "system", content: MAA_SYSTEM_PROMPT },
+      { role: "user", content: userPrompt },
+    ], { maxTokens: 4096, temperature: 0.7 });
     
-    // Parse JSON from response
     const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     
@@ -262,7 +243,6 @@ Retorne o resultado em formato JSON conforme especificado.`;
         originality_score: parsed.originality_score || 0,
       };
     } catch {
-      // Try fixing common JSON issues
       let fixed = jsonMatch[0]
         .replace(/,\s*}/g, '}')
         .replace(/,\s*]/g, ']')
@@ -285,6 +265,12 @@ Retorne o resultado em formato JSON conforme especificado.`;
     console.error('Error rewriting news:', error);
     return null;
   }
+}
+
+async function generateImage(_prompt: string, _apiKey: string): Promise<string | null> {
+  // Image generation via BYOK not supported for gateway image models
+  // Return null - images will be skipped
+  return null;
 }
 
 async function generateImage(prompt: string, apiKey: string): Promise<string | null> {
@@ -324,10 +310,10 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const AI_API_KEY = "byok"; // Using AIOrchestrator BYOK keys
 
-    if (!AI_API_KEY) {
-      throw new Error("AI API key not configured");
+    if (!getOrchestrator().getAvailableProviders().length) {
+      throw new Error("Nenhuma chave de IA configurada (GEMINI_API_KEY ou OPENAI_API_KEY)");
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
