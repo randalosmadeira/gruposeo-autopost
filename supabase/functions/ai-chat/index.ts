@@ -1,14 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-
-// Use the most powerful model for premium quality
-const AI_MODEL = "google/gemini-2.5-pro";
 
 const SYSTEM_PROMPT = `Você é o **Assistente IA Premium do ContentFactory**, uma plataforma completa de automação de conteúdo SEO e marketing digital integrada com WordPress.
 
@@ -634,15 +630,20 @@ Deno.serve(async (req) => {
 
   try {
     const { messages, context, executeActions } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Verify at least one AI key is available
+    const orchestrator = getOrchestrator();
+    const availableProviders = orchestrator.getAvailableProviders();
+    if (availableProviders.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Nenhuma chave de IA configurada. Configure GEMINI_API_KEY ou OPENAI_API_KEY nas configurações." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // If executeActions is provided, run them and return results
     if (executeActions && Array.isArray(executeActions)) {
@@ -736,48 +737,33 @@ Deno.serve(async (req) => {
 
     const fullSystemPrompt = SYSTEM_PROMPT + contextSection;
 
-    const response = await fetch(AI_GATEWAY_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: AI_MODEL,
-        messages: [
-          { role: "system", content: fullSystemPrompt },
-          ...messages,
-        ],
-        stream: true,
-        temperature: 0.7,
-        max_tokens: 4096,
-      }),
-    });
+    // Use AIOrchestrator for streaming - prefers Gemini, falls back to OpenAI
+    const aiMessages = [
+      { role: "system" as const, content: fullSystemPrompt },
+      ...messages.map((m: any) => ({ role: m.role as "user" | "assistant" | "system", content: m.content })),
+    ];
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+    try {
+      const streamResponse = await orchestrator.callStream("strategy_planning", aiMessages, {
+        maxTokens: 4096,
+        temperature: 0.7,
+        preferredProvider: "gemini",
+      });
+
+      // Merge CORS headers with stream response
+      const responseHeaders = new Headers(streamResponse.headers);
+      for (const [key, value] of Object.entries(corsHeaders)) {
+        responseHeaders.set(key, value);
       }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Créditos insuficientes. Adicione créditos ao workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+
+      return new Response(streamResponse.body, { headers: responseHeaders });
+    } catch (aiError) {
+      console.error("AI streaming error:", aiError);
       return new Response(
-        JSON.stringify({ error: "Erro ao conectar com a IA" }),
+        JSON.stringify({ error: `Erro na IA: ${aiError instanceof Error ? aiError.message : "erro desconhecido"}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-    });
   } catch (error) {
     console.error("ai-chat error:", error);
     return new Response(
