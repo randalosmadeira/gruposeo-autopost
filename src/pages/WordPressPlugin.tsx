@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '3.2.0';
-const PLUGIN_LAST_UPDATE = '2026-02-10T18:30:00';
+const PLUGIN_VERSION = '3.2.1';
+const PLUGIN_LAST_UPDATE = '2026-02-11T10:00:00';
 
 const features = [
   {
@@ -91,6 +91,17 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '3.2.1',
+    date: '2026-02-11',
+    type: 'patch' as const,
+    changes: [
+      { type: 'fix', text: 'Linkagem interna agora usa fallback "Leia também" quando âncora exata não é encontrada' },
+      { type: 'fix', text: 'Regex Unicode-safe para matching de texto âncora com caracteres acentuados (à, é, ç, etc.)' },
+      { type: 'fix', text: 'Posts que já contêm link para a URL alvo retornam sucesso em vez de erro' },
+      { type: 'improvement', text: 'Pré-verificação com mb_stripos antes de regex para melhor performance' },
+    ],
+  },
   {
     version: '3.2.0',
     date: '2026-02-10',
