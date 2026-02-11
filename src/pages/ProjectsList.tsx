@@ -398,11 +398,13 @@ export default function ProjectsList() {
                     </SelectTrigger>
                     <SelectContent>
                       {wordpressSites.map((url) => (
-                        <SelectItem key={url} value={url}>
-                          <div className="flex items-center gap-2">
+                        <SelectItem key={url} value={url} className="max-w-full">
+                          <span className="flex items-center gap-2 min-w-0">
                             <Globe className="w-4 h-4 text-muted-foreground" />
-                            {url}
-                          </div>
+                            <span className="truncate" title={url}>
+                              {url}
+                            </span>
+                          </span>
                         </SelectItem>
                       ))}
                       {wordpressSites.length === 0 && (
