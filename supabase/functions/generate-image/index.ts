@@ -133,7 +133,6 @@ Deno.serve(async (req) => {
     let emotionalData: any = null;
     let provider = 'auto';
     let openaiQuality = 'hd';
-    let emotionalData: any = null;
     
     if (body.emotionalTrigger || body.forceCaricature) {
       // Use emotional image system
