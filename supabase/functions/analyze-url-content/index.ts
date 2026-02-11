@@ -328,14 +328,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get Gemini API key from environment (set via Supabase secrets)
-    const geminiKey = Deno.env.get("GEMINI_API_KEY");
+    // Get user's API key first (BYOK), fallback to environment
+    const { data: settings } = await supabase
+      .from("user_settings")
+      .select("gemini_api_key")
+      .eq("user_id", user.id)
+      .single();
+
+    const geminiKey = settings?.gemini_api_key || Deno.env.get("GEMINI_API_KEY");
 
     if (!geminiKey) {
-      console.error("GEMINI_API_KEY not found in environment");
+      console.error("No Gemini API key found (user or env)");
       return new Response(
-        JSON.stringify({ error: "Chave de API Gemini não configurada no servidor" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Chave de API Gemini não configurada. Configure em Configurações → Chaves de IA." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
