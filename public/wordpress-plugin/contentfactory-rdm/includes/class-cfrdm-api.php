@@ -2180,14 +2180,15 @@ class CFRDM_API {
                 ), 404);
             }
             
-            $result = self::insert_link_into_post($post, $anchor_text, $target_url);
+            $result = self::insert_link_into_post_flexible($post, $anchor_text, $target_url);
             
             return new WP_REST_Response(array(
                 'success' => $result['inserted'],
                 'message' => $result['inserted'] 
-                    ? __('Link inserido com sucesso', 'contentfactory-rdm')
+                    ? sprintf(__('Link inserido com sucesso (âncora: %s)', 'contentfactory-rdm'), $result['used_anchor'])
                     : __('Texto âncora não encontrado no conteúdo do post', 'contentfactory-rdm'),
                 'post_id' => $source_post_id,
+                'used_anchor' => $result['used_anchor'] ?? $anchor_text,
             ), $result['inserted'] ? 200 : 422);
         }
         
@@ -2195,7 +2196,7 @@ class CFRDM_API {
         $posts = get_posts(array(
             'post_type' => 'post',
             'post_status' => 'publish',
-            'posts_per_page' => 50,
+            'posts_per_page' => 100,
             'orderby' => 'modified',
             'order' => 'DESC',
         ));
@@ -2206,15 +2207,38 @@ class CFRDM_API {
                 continue;
             }
             
-            $result = self::insert_link_into_post($post, $anchor_text, $target_url);
+            $result = self::insert_link_into_post_flexible($post, $anchor_text, $target_url);
             if ($result['inserted']) {
                 return new WP_REST_Response(array(
                     'success' => true,
                     'message' => sprintf(
-                        __('Link inserido no post "%s"', 'contentfactory-rdm'),
+                        __('Link inserido no post "%s" (âncora: %s)', 'contentfactory-rdm'),
+                        $post->post_title,
+                        $result['used_anchor']
+                    ),
+                    'post_id' => $post->ID,
+                    'used_anchor' => $result['used_anchor'],
+                ), 200);
+            }
+        }
+        
+        // FALLBACK: If no exact/partial match, insert link at end of a relevant paragraph
+        // Find posts related to the target URL's topic by checking if target_url domain matches
+        foreach ($posts as $post) {
+            if (strpos($post->post_content, $target_url) !== false) continue;
+            
+            // Insert as a contextual "Leia também" link after the 3rd paragraph
+            $result = self::insert_link_as_suggestion($post, $anchor_text, $target_url);
+            if ($result['inserted']) {
+                return new WP_REST_Response(array(
+                    'success' => true,
+                    'message' => sprintf(
+                        __('Link inserido como sugestão de leitura no post "%s"', 'contentfactory-rdm'),
                         $post->post_title
                     ),
                     'post_id' => $post->ID,
+                    'used_anchor' => $anchor_text,
+                    'method' => 'read_also',
                 ), 200);
             }
         }
@@ -2226,7 +2250,52 @@ class CFRDM_API {
     }
     
     /**
-     * Helper: Insert a link into a post's content
+     * Helper: Insert a link flexibly - tries exact match, then partial, then keywords
+     */
+    private static function insert_link_into_post_flexible($post, $anchor_text, $target_url) {
+        $content = $post->post_content;
+        
+        // Strategy 1: Exact anchor text match
+        $result = self::insert_link_into_post($post, $anchor_text, $target_url);
+        if ($result['inserted']) {
+            return array('inserted' => true, 'used_anchor' => $anchor_text);
+        }
+        
+        // Strategy 2: Try partial match - use significant words (4+ chars) from anchor
+        $stop_words = array('de', 'da', 'do', 'das', 'dos', 'em', 'no', 'na', 'nos', 'nas', 'um', 'uma', 'para', 'com', 'por', 'que', 'como', 'mais', 'sobre', 'entre', 'seu', 'sua');
+        $words = preg_split('/\s+/', $anchor_text);
+        $significant = array_filter($words, function($w) use ($stop_words) {
+            return mb_strlen($w) >= 4 && !in_array(mb_strtolower($w), $stop_words);
+        });
+        
+        // Try 2-word combinations from significant words
+        $significant = array_values($significant);
+        if (count($significant) >= 2) {
+            for ($i = 0; $i < count($significant) - 1; $i++) {
+                $combo = $significant[$i] . ' ' . $significant[$i + 1];
+                $result = self::insert_link_into_post($post, $combo, $target_url);
+                if ($result['inserted']) {
+                    return array('inserted' => true, 'used_anchor' => $combo);
+                }
+            }
+        }
+        
+        // Strategy 3: Try each significant word alone (longest first)
+        usort($significant, function($a, $b) { return mb_strlen($b) - mb_strlen($a); });
+        foreach ($significant as $word) {
+            if (mb_strlen($word) >= 5) {
+                $result = self::insert_link_into_post($post, $word, $target_url);
+                if ($result['inserted']) {
+                    return array('inserted' => true, 'used_anchor' => $word);
+                }
+            }
+        }
+        
+        return array('inserted' => false, 'used_anchor' => $anchor_text);
+    }
+    
+    /**
+     * Helper: Insert a link into a post's content (exact match)
      */
     private static function insert_link_into_post($post, $anchor_text, $target_url) {
         $content = $post->post_content;
@@ -2249,7 +2318,7 @@ class CFRDM_API {
             if (class_exists('CFRDM_Logger')) {
                 CFRDM_Logger::info(
                     CFRDM_Logger::CATEGORY_SYNC,
-                    sprintf('Link interno aplicado via Chat IA: %s → %s', $anchor_text, $target_url),
+                    sprintf('Link interno aplicado: %s → %s', $anchor_text, $target_url),
                     array('post_id' => $post->ID, 'anchor' => $anchor_text, 'url' => $target_url),
                     $post->ID
                 );
@@ -2259,5 +2328,73 @@ class CFRDM_API {
         }
         
         return array('inserted' => false);
+    }
+    
+    /**
+     * Helper: Insert link as "Leia também" after 3rd paragraph
+     */
+    private static function insert_link_as_suggestion($post, $anchor_text, $target_url) {
+        $content = $post->post_content;
+        
+        // Don't add if already has too many "leia também" links
+        if (substr_count(strtolower($content), 'leia também') >= 3) {
+            return array('inserted' => false);
+        }
+        
+        // Don't add if already links to this URL
+        if (strpos($content, $target_url) !== false) {
+            return array('inserted' => false);
+        }
+        
+        // Find the 3rd closing </p> tag to insert after
+        $count = 0;
+        $insert_pos = false;
+        $offset = 0;
+        while (($pos = strpos($content, '</p>', $offset)) !== false) {
+            $count++;
+            $offset = $pos + 4;
+            if ($count === 3) {
+                $insert_pos = $pos + 4;
+                break;
+            }
+        }
+        
+        // Fallback: insert after 2nd </p> or 1st
+        if ($insert_pos === false && $count >= 1) {
+            $count2 = 0;
+            $offset2 = 0;
+            while (($pos2 = strpos($content, '</p>', $offset2)) !== false) {
+                $count2++;
+                $offset2 = $pos2 + 4;
+                if ($count2 === min($count, 2)) {
+                    $insert_pos = $pos2 + 4;
+                    break;
+                }
+            }
+        }
+        
+        if ($insert_pos === false) {
+            return array('inserted' => false);
+        }
+        
+        $link_html = "\n<p><strong>📖 Leia também:</strong> <a href=\"" . esc_url($target_url) . "\" title=\"" . esc_attr($anchor_text) . "\">" . esc_html($anchor_text) . "</a></p>\n";
+        
+        $new_content = substr_replace($content, $link_html, $insert_pos, 0);
+        
+        wp_update_post(array(
+            'ID' => $post->ID,
+            'post_content' => $new_content,
+        ));
+        
+        if (class_exists('CFRDM_Logger')) {
+            CFRDM_Logger::info(
+                CFRDM_Logger::CATEGORY_SYNC,
+                sprintf('Link "Leia também" inserido: %s → %s', $anchor_text, $target_url),
+                array('post_id' => $post->ID, 'anchor' => $anchor_text, 'url' => $target_url),
+                $post->ID
+            );
+        }
+        
+        return array('inserted' => true);
     }
 }

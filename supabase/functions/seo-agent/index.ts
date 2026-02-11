@@ -313,7 +313,7 @@ async function analyzeInternalLinks(
   // Find orphan articles (no internal links)
   const { data: orphans } = await supabase
     .from("wordpress_article_index")
-    .select("id, wp_post_title, wp_post_url, primary_keyword, topic_cluster, internal_links_count")
+    .select("id, wp_post_id, wp_post_title, wp_post_url, primary_keyword, topic_cluster, internal_links_count")
     .eq("project_id", project.id)
     .lte("internal_links_count", 0)
     .limit(30);
@@ -325,7 +325,7 @@ async function analyzeInternalLinks(
   // Get all articles for matching
   const { data: allArticles } = await supabase
     .from("wordpress_article_index")
-    .select("id, wp_post_title, wp_post_url, primary_keyword, topic_cluster, semantic_summary")
+    .select("id, wp_post_id, wp_post_title, wp_post_url, primary_keyword, topic_cluster, semantic_summary")
     .eq("project_id", project.id)
     .limit(200);
 
@@ -347,6 +347,12 @@ async function analyzeInternalLinks(
       const prompt = `Dado o artigo "${orphan.wp_post_title}" (keyword: ${orphan.primary_keyword || "N/A"}, cluster: ${orphan.topic_cluster || "N/A"}), 
 sugira os 3 melhores artigos para linkar PARA este artigo e os 3 melhores artigos para este artigo linkar.
 
+IMPORTANTE para anchor_text:
+- Use palavras que PROVAVELMENTE existem no conteúdo dos artigos fonte
+- Prefira termos genéricos do tema (ex: "direito trabalhista", "processo judicial") em vez de títulos completos
+- Use 2-4 palavras no máximo para o anchor
+- Evite frases longas ou muito específicas que podem não existir no texto
+
 ARTIGOS DISPONÍVEIS:
 ${articleList}
 
@@ -365,7 +371,7 @@ Retorne APENAS JSON:
         body: JSON.stringify({
           model: "google/gemini-2.5-flash-lite",
           messages: [
-            { role: "system", content: "Você é um especialista em SEO e linkagem interna. Responda APENAS com JSON." },
+            { role: "system", content: "Você é um especialista em SEO e linkagem interna. Gere anchor texts CURTOS (2-4 palavras) que provavelmente existem nos conteúdos dos artigos. Responda APENAS com JSON." },
             { role: "user", content: prompt },
           ],
           max_tokens: 500,
@@ -374,7 +380,7 @@ Retorne APENAS JSON:
       });
 
       if (!resp.ok) {
-        if (resp.status === 402 || resp.status === 429) break; // Stop on credit/rate issues
+        if (resp.status === 402 || resp.status === 429) break;
         continue;
       }
 
@@ -385,22 +391,31 @@ Retorne APENAS JSON:
         const jsonStr = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
         const suggestions = JSON.parse(jsonStr);
         
+        // Map source URLs to wp_post_ids for better apply targeting
+        const urlToArticle = new Map(allArticles.map(a => [a.wp_post_url, a]));
+        
         const allSuggestions = [
           ...(suggestions.links_to_this || []).map((s: any) => ({
             source_url: s.url,
             target_url: orphan.wp_post_url,
             anchor_text: s.anchor_text,
             relevance_score: s.relevance,
+            source_article: urlToArticle.get(s.url),
           })),
           ...(suggestions.links_from_this || []).map((s: any) => ({
             source_url: orphan.wp_post_url,
             target_url: s.url,
             anchor_text: s.anchor_text,
             relevance_score: s.relevance,
+            source_article: urlToArticle.get(orphan.wp_post_url),
           })),
         ];
 
         for (const suggestion of allSuggestions) {
+          // Find source article's wp_post_id for more reliable link application
+          const sourceArticle = suggestion.source_article || 
+            allArticles.find(a => a.wp_post_url === suggestion.source_url);
+          
           await supabase
             .from("internal_link_suggestions")
             .insert({
@@ -410,6 +425,7 @@ Retorne APENAS JSON:
               target_url: suggestion.target_url,
               relevance_score: suggestion.relevance_score || 70,
               status: "pending",
+              source_wp_post_id: sourceArticle?.wp_post_id || null,
               anchor_context: `Sugerido pelo Agente SEO para artigo: ${orphan.wp_post_title}`,
             });
           totalSuggested++;
