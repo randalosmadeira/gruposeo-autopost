@@ -508,17 +508,16 @@ Crie seção de Perguntas Frequentes com ${faqCount} perguntas:
 }
 
 function buildTechnicalRules(): string {
-  return `## 🚨 REGRAS TÉCNICAS RIGOROSAS
+  return `## 🚨 REGRAS TÉCNICAS RIGOROSAS (V4 — Madeira Sem Verniz)
 
 ### HTML Semântico:
 **✅ PERMITIDO**: 
-<p>, <h2>, <h3>, <h4>, <ul>, <ol>, <li>, <strong>, <em>, <a>, 
-<table>, <thead>, <tbody>, <tr>, <th>, <td>, <blockquote>, 
-<figure>, <figcaption>, <br>
+<p>, <h2>, <h3>, <h4>, <h5>, <h6>, <ul>, <ol>, <li>, <strong>, <em>, <a>, 
+<table>, <tr>, <th>, <td>, <blockquote>, <pre>, <code>, <br>
 
-**❌ PROIBIDO**: 
-<h1> (já existe externamente), <script>, <style>, <iframe>, 
-inline styles, classes CSS customizadas
+**❌ PROIBIDO (NUNCA USE)**: 
+<h1> (já existe externamente), <div>, <span>, <b>, <i>, 
+<script>, <style>, <iframe>, estilos inline (style="..."), classes CSS customizadas
 
 ### Capitalização de Títulos:
 \`\`\`
@@ -535,17 +534,28 @@ inline styles, classes CSS customizadas
 - Use anchor text descritivo (NUNCA apenas "clique aqui")
 - Verifique se URLs são válidas e atuais
 
-### Formatação de Parágrafos (Mobile-First):
-- **Máximo**: 4 linhas por parágrafo (50-80 palavras)
+### Formatação de Parágrafos (Mobile-First / Flesch 70-100):
+- **Máximo**: 3 linhas por parágrafo (40-60 palavras)
+- **Máximo**: 15 palavras por frase (OBRIGATÓRIO para Flesch 70-100)
+- **Uma ideia por parágrafo** — se mudou de assunto, mude de parágrafo
 - **Primeira frase**: Forte, declarativa, contém micro-tema
 - **Última frase**: Transição natural ou gancho para próxima seção
-- **Variação**: Alterne parágrafos curtos (2 linhas) com médios (4 linhas)
+- **Variação**: Alterne parágrafos curtos (2 linhas) com médios (3 linhas)
 - **Evite**: Parágrafos órfãos de 1 linha
+- **Teste mental**: "Meu avô de 70 anos sem faculdade entende isso?"
 
 ### Uso Estratégico de Negrito:
 - 1-2 termos por parágrafo em palavras-chave ou frases de impacto
 - NÃO abuse - use para destacar informações críticas
-- NÃO use negrito em frases inteiras`;
+- NÃO use negrito em frases inteiras
+
+### Formatação SEO Perfeita:
+- Zero espaços duplos entre palavras
+- Zero pontuação duplicada (.., !!, ??, ::)
+- Sem parágrafos vazios ou tags HTML vazias
+- Hierarquia correta: H2 > H3 > H4 (nunca pular níveis)
+- Máximo 6 subtítulos H2 por artigo (3-6 ideal)
+- Use H3 para aprofundamento (máximo 2-3 por H2)`;
 }
 
 function buildHumanizationRules(): string {
@@ -670,14 +680,17 @@ Você é um redator SEO sênior e especialista em link building com expertise em
 
 ### REGRA 2 - LEGIBILIDADE FLESCH 70-100 (FÁCIL) - OBRIGATÓRIO
 - O conteúdo DEVE atingir score de legibilidade Flesch entre 70-100 (Fácil)
-- Sentenças curtas: MÁXIMO 15-18 palavras por sentença em média
-- Parágrafos curtos: MÁXIMO 3-4 linhas
+- Sentenças curtas: MÁXIMO 15 palavras por sentença (NUNCA mais que 15)
+- Parágrafos curtos: MÁXIMO 3 linhas
+- Uma ideia por parágrafo — se mudou de assunto, mude de parágrafo
 - Vocabulário simples: use palavras do dia-a-dia, evite jargões técnicos
+- Palavras simples: "dívida" não "inadimplência", "decisão dos tribunais" não "jurisprudência"
 - Se usar termo técnico, SEMPRE explique entre parênteses: "habeas corpus (pedido para soltar alguém preso)"
 - PROIBIDO: frases longas com múltiplas orações subordinadas
-- PROIBIDO: vocabulário rebuscado, juridiquês, mediquês, marketinguês
-- TESTE MENTAL: "Um adolescente de 14 anos entenderia este texto?" Se não, reescreva mais simples
-- Escreva como se estivesse explicando para um amigo que não conhece o assunto
+- PROIBIDO: vocabulário rebuscado, juridiquês, mediquês, marketinguês, academiquês
+- Use "você" — não "o cidadão" ou "o contribuinte"
+- TESTE MENTAL: "Meu avô de 70 anos sem faculdade entende isso?" Se não, reescreva
+- Escreva como se estivesse explicando para um amigo no WhatsApp
 
 ### REGRA 3 - LINKS EXTERNOS OBRIGATÓRIOS (MÍNIMO 2)
 - SEMPRE inclua 2-3 links externos para fontes autoritativas
