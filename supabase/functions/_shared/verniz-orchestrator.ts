@@ -205,12 +205,29 @@ export function buildVernizDNASection(config: VernizConfig): string {
 
 ### Regras de Escrita OBRIGATÓRIAS:
 
+**🎯 LEGIBILIDADE FLESCH 70-100 (OBRIGATÓRIO):**
+- Sentenças de no MÁXIMO 15-18 palavras em média
+- Use palavras curtas e comuns (2-3 sílabas no máximo)
+- Um semi-analfabeto deve conseguir ler e entender o conteúdo
+- Score Flesch abaixo de 70 = REPROVAR e reescrever
+
 **LINGUAGEM DO DIA-A-DIA:**
 - ❌ "O jurisdicionado deve impetrar" → ✅ "Você precisa entrar com"
 - ❌ "A implementação do procedimento" → ✅ "Como fazer na prática"
 - ❌ "Outrossim, cumpre salientar" → ✅ "Além disso"
 - ❌ "Alavancar resultados" → ✅ "Aumentar vendas"
 - ❌ "Sinergia entre áreas" → ✅ "Trabalho em equipe"
+- ❌ "Paradigma" → ✅ "Modelo" ou "Padrão"
+- ❌ "Prerrogativa" → ✅ "Direito"
+- ❌ "Fulcral" → ✅ "Importante"
+
+**META-DESCRIPTION OBRIGATÓRIA:**
+- NUNCA entregar conteúdo sem meta-description
+- Sempre gerar <!-- META_DESCRIPTION: ... --> com 145-160 caracteres
+
+**LINKS EXTERNOS OBRIGATÓRIOS (mínimo 2):**
+- Sempre incluir 2-3 links para fontes oficiais (.gov, .edu, instituições)
+- Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto</a>
 
 **DESMITIFICAR O SISTEMA:**
 - Explique COMO funciona, não apenas O QUE é
