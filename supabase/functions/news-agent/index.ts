@@ -113,7 +113,21 @@ async function generateArticle(
   const systemPrompt = `Você é um jornalista profissional especializado em ${topic}. 
 Escreva artigos informativos, bem estruturados e otimizados para SEO.
 Use linguagem ${language === 'pt-BR' ? 'português brasileiro' : language}.
-Formato do artigo: ${promptTemplate === 'news_article' ? 'notícia jornalística' : 'artigo de blog'}.`;
+Formato do artigo: ${promptTemplate === 'news_article' ? 'notícia jornalística' : 'artigo de blog'}.
+
+🚨 REGRA INEGOCIÁVEL - LEGIBILIDADE FLESCH 60-100:
+| Score | Nível | Escolaridade |
+|-------|-------|-------------|
+| 90-100 | Muito Fácil | 5º ano — criança de 11 anos entende |
+| 70-80 | Bastante Fácil | 8º ano — maioria dos adultos |
+| 60-70 | Padrão | 8º-9º ano — ideal para conteúdo web |
+| < 60 | ❌ REPROVADO | Reescrever obrigatoriamente |
+
+- Sentenças curtas: MÁXIMO 15 palavras por sentença
+- Parágrafos curtos: MÁXIMO 3-4 linhas
+- Vocabulário SIMPLES: palavras do dia-a-dia
+- Se usar termo técnico, SEMPRE explique entre parênteses
+- Escreva como se explicasse para um amigo de 14 anos`;
 
   const userPrompt = `Baseado nesta notícia, escreva um artigo completo e original:
 
@@ -122,14 +136,16 @@ Fonte: ${newsItem.source}
 Resumo: ${newsItem.snippet}
 
 Instruções:
-1. Crie um título SEO-friendly único
+1. Crie um título SEO-friendly único (máx 60 chars)
 2. Escreva uma introdução envolvente
-3. Desenvolva o conteúdo em 3-5 parágrafos
-4. Adicione uma conclusão
-5. Use subtítulos H2 e H3 quando apropriado
-6. Não copie o texto original, reescreva com suas próprias palavras
+3. Desenvolva o conteúdo em 3-5 parágrafos (frases curtas, máx 15 palavras cada)
+4. Inclua seção FAQ com 3 perguntas
+5. Adicione uma conclusão com CTA
+6. Use subtítulos H2 e H3
+7. Não copie o texto original, reescreva com suas próprias palavras
+8. Linguagem simples: Flesch ≥ 60 OBRIGATÓRIO
 
-Formato de saída em Markdown.`;
+Formato de saída em HTML semântico.`;
 
   try {
     const content = await callGemini(
@@ -137,7 +153,7 @@ Formato de saída em Markdown.`;
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      { model: "flash", maxTokens: 2000 }
+      { model: "flash", maxTokens: 4000 }
     );
 
     return content || null;

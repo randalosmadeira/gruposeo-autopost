@@ -141,6 +141,20 @@ async function searchGoogleNews(topic: string, language: string, country: string
 // MAA System Prompt for journalistic rewriting (Lei 9.610/98 compliance)
 const MAA_SYSTEM_PROMPT = `Você é o Assistente MAA Pro, especializado em repostagem jornalística com compliance Lei 9.610/98 (Direitos Autorais).
 
+🚨 REGRA INEGOCIÁVEL - LEGIBILIDADE FLESCH 60-100:
+| Score | Nível | Escolaridade |
+|-------|-------|-------------|
+| 90-100 | Muito Fácil | 5º ano — criança de 11 anos entende |
+| 70-80 | Bastante Fácil | 8º ano — maioria dos adultos |
+| 60-70 | Padrão | 8º-9º ano — ideal para conteúdo web |
+| < 60 | ❌ REPROVADO | Reescrever obrigatoriamente |
+
+- Sentenças curtas: MÁXIMO 15 palavras por sentença
+- Parágrafos curtos: MÁXIMO 3-4 linhas
+- Vocabulário SIMPLES: palavras do dia-a-dia, evite jargões
+- Se usar termo técnico, SEMPRE explique entre parênteses
+- Escreva como se explicasse para um amigo de 14 anos
+
 DIRETRIZES DE COMPLIANCE:
 
 ✅ PERMITIDO:
@@ -148,6 +162,7 @@ DIRETRIZES DE COMPLIANCE:
 - Manter citações curtas (máx 2-3 frases) com aspas
 - Creditar fonte original (nome do veículo + link)
 - Adicionar análise, contexto ou opinião própria (40%+ do conteúdo)
+- REUTILIZAR imagem oficial do portal/fonte original quando disponível
 
 ❌ PROIBIDO:
 - Copiar/colar parágrafos inteiros
@@ -158,19 +173,17 @@ DIRETRIZES DE COMPLIANCE:
 TÉCNICA DE REESTRUTURAÇÃO:
 1. Identificar 3-5 pontos principais da notícia original
 2. Reescrever com estrutura TOTALMENTE diferente
-3. Adicionar:
-   - Contexto local/nacional
-   - Dados complementares relevantes
-   - Impacto prático para o leitor
-   - Análise técnica quando aplicável
+3. Adicionar: contexto local, dados complementares, impacto prático, análise técnica
 4. Inserir créditos no rodapé
 
 SEO 2026:
 - E-E-A-T (Experience, Expertise, Authority, Trust)
-- Parágrafos curtos (mobile-first, máx 4 linhas)
-- Flesch Reading Ease > 60
+- Parágrafos curtos (mobile-first, máx 3-4 linhas)
+- Flesch Reading Ease ≥ 60 (OBRIGATÓRIO)
 - Featured Snippets optimization
 - Estrutura: H1 (1x), H2 (3-5x), H3 (quando necessário)
+- FAQ obrigatório (3-5 perguntas)
+- SEMPRE gerar prompt de imagem para o artigo
 
 FORMATO DE SAÍDA (JSON):
 {
@@ -182,7 +195,8 @@ FORMATO DE SAÍDA (JSON):
   "credits": "Fonte: [Veículo] - [URL]",
   "originality_score": 95,
   "keywords": ["keyword1", "keyword2"],
-  "word_count": 1200
+  "word_count": 1200,
+  "image_prompt": "Prompt detalhado para gerar imagem destacada cinematic hyper-realistic"
 }`;
 
 async function rewriteNewsItem(
@@ -241,6 +255,7 @@ Retorne o resultado em formato JSON conforme especificado.`;
         slug: parsed.slug || "",
         credits: parsed.credits || `Fonte: ${newsItem.source}`,
         originality_score: parsed.originality_score || 0,
+        image_prompt: parsed.image_prompt || null,
       };
     } catch {
       let fixed = jsonMatch[0]
@@ -256,6 +271,7 @@ Retorne o resultado em formato JSON conforme especificado.`;
           slug: parsed.slug || "",
           credits: parsed.credits || `Fonte: ${newsItem.source}`,
           originality_score: parsed.originality_score || 0,
+          image_prompt: parsed.image_prompt || null,
         };
       } catch {
         return null;
@@ -267,34 +283,7 @@ Retorne o resultado em formato JSON conforme especificado.`;
   }
 }
 
-async function generateImage(_prompt: string, _apiKey: string): Promise<string | null> {
-  // Image generation via BYOK not supported for gateway image models
-  // Return null - images will be skipped
-  return null;
-}
-
-async function generateImage(prompt: string, apiKey: string): Promise<string | null> {
-  try {
-    const response = await fetch(AI_GATEWAY_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-pro-image-preview",
-        messages: [{ role: "user", content: prompt }],
-        modalities: ["image", "text"],
-      }),
-    });
-
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.choices?.[0]?.message?.images?.[0]?.image_url?.url || null;
-  } catch {
-    return null;
-  }
-}
+// Image generation now uses generate-image edge function (no more gateway dependency)
 
 Deno.serve(async (req) => {
   const requestId = createRequestId();
@@ -412,14 +401,12 @@ Deno.serve(async (req) => {
               continue;
             }
 
-            // Generate featured image if enabled
+            // ALWAYS generate image - use AI prompt from rewrite or default cinematic prompt
             let featuredImageUrl: string | null = null;
-            if (agent.image_generation === 'ai') {
-              const imagePrompt = `Professional news article featured image for: "${rewritten.title}". Modern, clean, journalistic style. 16:9 aspect ratio.`;
-              featuredImageUrl = await generateImage(imagePrompt, AI_API_KEY);
-            }
-
-            // Save article to database
+            const imagePrompt = rewritten.image_prompt 
+              || `Professional, cinematic, hyper-realistic editorial photo for news article: "${rewritten.title}". Shot with Canon EOS R5, 85mm lens, natural Golden Hour lighting, 8K resolution, 16:9 aspect ratio.`;
+            
+            // Save article first, then generate image via edge function
             const { data: article, error: articleError } = await supabase
               .from("articles")
               .insert({
@@ -430,9 +417,10 @@ Deno.serve(async (req) => {
                 content: rewritten.content,
                 excerpt: rewritten.excerpt,
                 slug: rewritten.slug,
-                featured_image_url: featuredImageUrl,
+                featured_image_url: null,
+                image_prompt: imagePrompt,
                 type: "blog",
-                status: agent.auto_publish ? "ready" : "draft",
+                status: "generating",
                 word_count: rewritten.content?.split(/\s+/).length || 0,
                 config: {
                   type: "news_agent",
@@ -445,6 +433,26 @@ Deno.serve(async (req) => {
               })
               .select()
               .single();
+
+            if (articleError) {
+              agentResult.errors.push(`DB error: ${articleError.message}`);
+              continue;
+            }
+
+            // Generate image via generate-image edge function
+            try {
+              await supabase.functions.invoke("generate-image", {
+                body: { articleId: article.id, prompt: imagePrompt },
+              });
+              log.info("image_generated_for_agent_article", { articleId: article.id });
+            } catch (imgErr) {
+              log.warn("image_generation_failed", { articleId: article.id, error: imgErr instanceof Error ? imgErr.message : 'unknown' });
+            }
+
+            // Update status to ready/draft
+            await supabase.from("articles").update({
+              status: agent.auto_publish ? "ready" : "draft",
+            }).eq("id", article.id);
 
             if (articleError) {
               agentResult.errors.push(`DB error: ${articleError.message}`);
