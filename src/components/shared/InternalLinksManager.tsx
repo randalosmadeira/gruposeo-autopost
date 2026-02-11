@@ -868,7 +868,7 @@ export function InternalLinksManager({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 overflow-hidden max-w-full">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
@@ -1263,7 +1263,7 @@ export function InternalLinksManager({
 
       {/* Suggested WordPress Articles */}
       {suggestedWpArticles.length > 0 && (
-        <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
+        <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 overflow-hidden">
           <div className="flex items-center gap-2 mb-2">
             <Globe className="w-4 h-4 text-blue-600" />
             <p className="text-sm font-medium text-blue-800">Sugestões do WordPress</p>
@@ -1274,21 +1274,21 @@ export function InternalLinksManager({
           <p className="text-xs text-blue-700 mb-3">
             Artigos indexados relacionados a "{keywordFilter || keyword}"
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5 max-w-full overflow-hidden">
             {suggestedWpArticles.map((article) => (
               <Badge
                 key={article.id}
                 variant="outline"
-                className="cursor-pointer hover:bg-blue-100 border-blue-300 text-blue-800 gap-1 max-w-[220px]"
+                className="cursor-pointer hover:bg-blue-100 border-blue-300 text-blue-800 gap-1 max-w-[200px] text-[11px] px-2 py-0.5 h-auto whitespace-nowrap"
                 onClick={() => handleAddSuggestedWp(article)}
               >
                 <Plus className="w-3 h-3 flex-shrink-0" />
-                <span className="truncate">
-                  {article.wp_post_title.slice(0, 40)}
-                  {article.wp_post_title.length > 40 && '...'}
+                <span className="truncate block max-w-[150px]">
+                  {article.wp_post_title.slice(0, 30)}
+                  {article.wp_post_title.length > 30 && '...'}
                 </span>
                 {article.linkability_score && article.linkability_score >= 70 && (
-                  <span className="text-green-600 text-xs ml-1">★</span>
+                  <span className="text-green-600 text-[10px] ml-0.5 flex-shrink-0">★</span>
                 )}
               </Badge>
             ))}
@@ -1298,7 +1298,7 @@ export function InternalLinksManager({
 
       {/* Suggested Local Articles (Fallback) */}
       {suggestedArticles.length > 0 && (
-        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 overflow-hidden">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="w-4 h-4 text-amber-600" />
             <p className="text-sm font-medium text-amber-800">Sugestões Locais</p>
@@ -1309,18 +1309,18 @@ export function InternalLinksManager({
           <p className="text-xs text-amber-700 mb-3">
             Artigos locais relacionados a "{keywordFilter || keyword}"
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5 max-w-full overflow-hidden">
             {suggestedArticles.map((article) => (
               <Badge
                 key={article.id}
                 variant="outline"
-                className="cursor-pointer hover:bg-amber-100 border-amber-300 text-amber-800 gap-1 max-w-[200px]"
+                className="cursor-pointer hover:bg-amber-100 border-amber-300 text-amber-800 gap-1 max-w-[180px] text-[11px] px-2 py-0.5 h-auto whitespace-nowrap"
                 onClick={() => handleAddSuggested(article)}
               >
                 <Plus className="w-3 h-3 flex-shrink-0" />
-                <span className="truncate">
-                  {(article.title || article.keyword).slice(0, 35)}
-                  {(article.title || article.keyword).length > 35 && '...'}
+                <span className="truncate block max-w-[130px]">
+                  {(article.title || article.keyword).slice(0, 30)}
+                  {(article.title || article.keyword).length > 30 && '...'}
                 </span>
               </Badge>
             ))}
