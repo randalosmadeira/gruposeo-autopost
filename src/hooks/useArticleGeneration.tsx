@@ -53,6 +53,16 @@ interface ArticleConfig {
     empresa_telefone?: string;
     empresa_endereco?: string;
     empresa_whatsapp?: string;
+    social_instagram?: string;
+    social_youtube?: string;
+    social_linkedin?: string;
+    social_twitter?: string;
+    social_tiktok?: string;
+    social_google_maps?: string;
+    social_linktree?: string;
+    cta_comunidade?: string;
+    cta_conclusao?: string;
+    cta_leads?: string;
   };
 }
 

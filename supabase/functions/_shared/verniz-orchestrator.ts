@@ -192,6 +192,16 @@ export interface VernizConfig {
   empresaTelefone?: string;
   empresaEndereco?: string;
   empresaWhatsapp?: string;
+  socialInstagram?: string;
+  socialYoutube?: string;
+  socialLinkedin?: string;
+  socialTwitter?: string;
+  socialTiktok?: string;
+  socialGoogleMaps?: string;
+  socialLinktree?: string;
+  ctaComunidade?: string;
+  ctaConclusao?: string;
+  ctaLeads?: string;
 }
 
 export function buildVernizDNASection(config: VernizConfig): string {
@@ -279,6 +289,44 @@ Na prática, isso significa que [consequência real para o leitor].
     if (config.empresaEndereco) section += `\n- **Endereço**: ${config.empresaEndereco}`;
   }
 
+  // Add social media links for Link Juice & SEO
+  const socialLinks: string[] = [];
+  if (config.socialInstagram) socialLinks.push(`Instagram: ${config.socialInstagram}`);
+  if (config.socialYoutube) socialLinks.push(`YouTube: ${config.socialYoutube}`);
+  if (config.socialLinkedin) socialLinks.push(`LinkedIn: ${config.socialLinkedin}`);
+  if (config.socialTwitter) socialLinks.push(`X/Twitter: ${config.socialTwitter}`);
+  if (config.socialTiktok) socialLinks.push(`TikTok: ${config.socialTiktok}`);
+  if (config.socialGoogleMaps) socialLinks.push(`Google Maps: ${config.socialGoogleMaps}`);
+  if (config.socialLinktree) socialLinks.push(`Links: ${config.socialLinktree}`);
+
+  if (socialLinks.length > 0) {
+    section += `\n\n### 📱 REDES SOCIAIS (inserir como Link Juice estratégico):`;
+    socialLinks.forEach(l => { section += `\n- ${l}`; });
+    section += `\n\n**REGRAS DE INSERÇÃO DE REDES SOCIAIS:**`;
+    section += `\n- Inserir 1-2 links sociais contextualmente relevantes ao longo do artigo`;
+    section += `\n- Usar como CTA de engajamento: "Acompanhe no Instagram", "Inscreva-se no canal"`;
+    section += `\n- Google Maps: usar em CTAs de contato/localização`;
+    section += `\n- Links agregadores: usar como CTA final "Veja todos os nossos canais"`;
+    section += `\n- Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora</a>`;
+  }
+
+  // Add CTA strategy
+  if (config.ctaComunidade || config.ctaConclusao || config.ctaLeads) {
+    section += `\n\n### 🎯 ESTRATÉGIA DE CTAs OBRIGATÓRIOS:`;
+    if (config.ctaComunidade) {
+      section += `\n\n**CTA COMUNIDADE** (inserir no meio do artigo, após seção de maior valor):`;
+      section += `\n"${config.ctaComunidade}"`;
+    }
+    if (config.ctaConclusao) {
+      section += `\n\n**CTA CONCLUSÃO** (inserir obrigatoriamente no fechamento):`;
+      section += `\n"${config.ctaConclusao}"`;
+    }
+    if (config.ctaLeads) {
+      section += `\n\n**CTA LEADS** (inserir após seções sobre erros comuns ou problemas frequentes):`;
+      section += `\n"${config.ctaLeads}"`;
+    }
+  }
+
   return section;
 }
 
@@ -301,6 +349,16 @@ export function orchestrate(
     empresa_telefone?: string;
     empresa_endereco?: string;
     empresa_whatsapp?: string;
+    social_instagram?: string;
+    social_youtube?: string;
+    social_linkedin?: string;
+    social_twitter?: string;
+    social_tiktok?: string;
+    social_google_maps?: string;
+    social_linktree?: string;
+    cta_comunidade?: string;
+    cta_conclusao?: string;
+    cta_leads?: string;
   }
 ): OrchestrationResult {
   const fullText = `${title} ${keyword}`;
@@ -332,6 +390,16 @@ export function orchestrate(
     empresaTelefone: projectConfig?.empresa_telefone,
     empresaEndereco: projectConfig?.empresa_endereco,
     empresaWhatsapp: projectConfig?.empresa_whatsapp,
+    socialInstagram: projectConfig?.social_instagram,
+    socialYoutube: projectConfig?.social_youtube,
+    socialLinkedin: projectConfig?.social_linkedin,
+    socialTwitter: projectConfig?.social_twitter,
+    socialTiktok: projectConfig?.social_tiktok,
+    socialGoogleMaps: projectConfig?.social_google_maps,
+    socialLinktree: projectConfig?.social_linktree,
+    ctaComunidade: projectConfig?.cta_comunidade,
+    ctaConclusao: projectConfig?.cta_conclusao,
+    ctaLeads: projectConfig?.cta_leads,
   });
 
   return { vernizSection, nichoDetectado, gatilho, angulo };

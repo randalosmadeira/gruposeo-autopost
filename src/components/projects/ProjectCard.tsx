@@ -110,6 +110,17 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
     empresa_telefone: (project as any).empresa_telefone || '',
     empresa_endereco: (project as any).empresa_endereco || '',
     empresa_whatsapp: (project as any).empresa_whatsapp || '',
+    // Social Media & CTAs
+    social_instagram: (project as any).social_instagram || '',
+    social_youtube: (project as any).social_youtube || '',
+    social_linkedin: (project as any).social_linkedin || '',
+    social_twitter: (project as any).social_twitter || '',
+    social_tiktok: (project as any).social_tiktok || '',
+    social_google_maps: (project as any).social_google_maps || '',
+    social_linktree: (project as any).social_linktree || '',
+    cta_comunidade: (project as any).cta_comunidade || '',
+    cta_conclusao: (project as any).cta_conclusao || '',
+    cta_leads: (project as any).cta_leads || '',
   });
 
   const hasCredentials = !!(
@@ -183,6 +194,17 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
       empresa_telefone: formData.empresa_telefone || null,
       empresa_endereco: formData.empresa_endereco || null,
       empresa_whatsapp: formData.empresa_whatsapp || null,
+      // Social Media & CTAs
+      social_instagram: formData.social_instagram || null,
+      social_youtube: formData.social_youtube || null,
+      social_linkedin: formData.social_linkedin || null,
+      social_twitter: formData.social_twitter || null,
+      social_tiktok: formData.social_tiktok || null,
+      social_google_maps: formData.social_google_maps || null,
+      social_linktree: formData.social_linktree || null,
+      cta_comunidade: formData.cta_comunidade || null,
+      cta_conclusao: formData.cta_conclusao || null,
+      cta_leads: formData.cta_leads || null,
     } as any);
     setIsEditOpen(false);
   };
@@ -472,6 +494,118 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
                   value={formData.empresa_endereco} 
                   onChange={(e) => setFormData({ ...formData, empresa_endereco: e.target.value })}
                 />
+              </div>
+            </div>
+
+            {/* Social Media Links */}
+            <div className="space-y-4 pt-4 border-t">
+              <h4 className="text-sm font-medium text-muted-foreground uppercase">📱 Redes Sociais & Link Juice</h4>
+              <p className="text-xs text-muted-foreground">
+                URLs usadas automaticamente em CTAs, artigos e estratégias de SEO.
+              </p>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Instagram</Label>
+                  <Input 
+                    placeholder="https://instagram.com/..."
+                    value={formData.social_instagram} 
+                    onChange={(e) => setFormData({ ...formData, social_instagram: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>YouTube</Label>
+                  <Input 
+                    placeholder="https://youtube.com/@..."
+                    value={formData.social_youtube} 
+                    onChange={(e) => setFormData({ ...formData, social_youtube: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>LinkedIn</Label>
+                  <Input 
+                    placeholder="https://linkedin.com/in/..."
+                    value={formData.social_linkedin} 
+                    onChange={(e) => setFormData({ ...formData, social_linkedin: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>X (Twitter)</Label>
+                  <Input 
+                    placeholder="https://x.com/..."
+                    value={formData.social_twitter} 
+                    onChange={(e) => setFormData({ ...formData, social_twitter: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>TikTok</Label>
+                  <Input 
+                    placeholder="https://tiktok.com/@..."
+                    value={formData.social_tiktok} 
+                    onChange={(e) => setFormData({ ...formData, social_tiktok: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Google Maps</Label>
+                  <Input 
+                    placeholder="https://maps.app.goo.gl/..."
+                    value={formData.social_google_maps} 
+                    onChange={(e) => setFormData({ ...formData, social_google_maps: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Link Aggregator (Linktree/Links)</Label>
+                <Input 
+                  placeholder="https://linktr.ee/... ou site.com/links"
+                  value={formData.social_linktree} 
+                  onChange={(e) => setFormData({ ...formData, social_linktree: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* CTA Strategy */}
+            <div className="space-y-4 pt-4 border-t">
+              <h4 className="text-sm font-medium text-muted-foreground uppercase">🎯 Estratégia de CTAs</h4>
+              <p className="text-xs text-muted-foreground">
+                CTAs personalizados inseridos automaticamente pela IA em todos os conteúdos gerados.
+              </p>
+
+              <div className="space-y-2">
+                <Label>CTA Comunidade</Label>
+                <Input 
+                  placeholder="Ex: Siga @rdmadvogados no Instagram para dicas diárias"
+                  value={formData.cta_comunidade} 
+                  onChange={(e) => setFormData({ ...formData, cta_comunidade: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">Usado no meio do artigo para engajamento social.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>CTA Conclusão / Fechamento</Label>
+                <Input 
+                  placeholder="Ex: Precisa de ajuda? Fale com nosso time no WhatsApp"
+                  value={formData.cta_conclusao} 
+                  onChange={(e) => setFormData({ ...formData, cta_conclusao: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">Usado no final do artigo para conversão.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>CTA Leads (após erros frequentes)</Label>
+                <Input 
+                  placeholder="Ex: Baixe nosso guia gratuito para evitar esses erros"
+                  value={formData.cta_leads} 
+                  onChange={(e) => setFormData({ ...formData, cta_leads: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">Usado após seções sobre erros comuns para captura de leads.</p>
               </div>
             </div>
           </div>
