@@ -97,75 +97,35 @@ Deno.serve(async (req) => {
 
       // === GENERATE ARTICLE TITLE ===
       case "generate-title": {
-        const selectedModel = model || "pro";
+        const selectedModel = model || "flash";
         
-        // FASE 1: Pesquisa de referências via conhecimento do modelo
-        const researchPrompt = `Você é um analista sênior de SEO e marketing digital. Sua missão é PESQUISAR e ANALISAR como os maiores portais, buscadores e IAs abordam o tema: "${prompt}"
+        const titlePrompt = `Você é um copywriter de elite especializado em SEO e CTR. Crie 8 títulos ÚNICOS e IRRESISTÍVEIS para um artigo sobre: "${prompt}"
 
-EXECUTE ESTA ANÁLISE PROFUNDA (use todo o seu conhecimento de treinamento):
-
-1. **RESULTADOS DE BUSCA**: Quais são os títulos que aparecem nas primeiras posições do Google, Bing e Yahoo para "${prompt}"? Liste pelo menos 10 títulos reais ou muito prováveis que rankeariam bem.
-
-2. **PADRÕES DE IA**: Como ChatGPT, Gemini, Claude e outras IAs tipicamente intitulam conteúdo sobre "${prompt}"? Quais expressões e estruturas elas favorecem?
-
-3. **PORTAIS DE REFERÊNCIA**: Quais títulos os maiores portais de notícias (G1, UOL, Folha, BBC, CNN, Forbes, etc.) e blogs especializados usariam para "${prompt}"?
-
-4. **TERMOS TRENDING**: Quais expressões, sinônimos e variações semânticas são mais pesquisadas relacionadas a "${prompt}"? Quais long-tails têm alto volume?
-
-5. **INTENÇÃO DE BUSCA**: Qual é a intenção predominante (informacional, transacional, navegacional) de quem pesquisa "${prompt}"?
-
-6. **GATILHOS EMOCIONAIS**: Quais emoções (medo, curiosidade, ganância, urgência, pertencimento) são mais eficazes para o nicho de "${prompt}"?
-
-Responda de forma estruturada e detalhada. Esta análise será usada para criar títulos de altíssimo CTR.`;
-
-        log.info("title_research_start", { keyword: prompt, model: selectedModel });
-        
-        const researchResponse = await callGemini(
-          [{ role: "user", content: researchPrompt }],
-          { model: selectedModel, maxTokens: 4096, temperature: 0.7 }
-        );
-
-        log.info("title_research_complete", { researchLength: researchResponse.length });
-
-        // FASE 2: Sintetizar títulos baseados na pesquisa
-        const synthesisPrompt = `Com base nesta PESQUISA REAL de mercado sobre "${prompt}":
-
----PESQUISA---
-${researchResponse}
----FIM DA PESQUISA---
-
-Agora, como um copywriter de elite que trabalha para as maiores agências do mundo, crie 8 títulos ÚNICOS e IRRESISTÍVEIS.
-
-REGRAS ABSOLUTAS:
-1. PROIBIDO: "Guia Completo", "Guia Definitivo", "Tudo que Você Precisa Saber", "O Guia [adjetivo]"
-2. PROIBIDO: Incluir ano (2025, 2026) exceto se o tema for inerentemente temporal
-3. PROIBIDO: Títulos genéricos que poderiam servir para qualquer tema
-4. OBRIGATÓRIO: Entre 45-65 caracteres cada
-5. OBRIGATÓRIO: Incluir "${prompt}" de forma natural e fluida
-6. OBRIGATÓRIO: Cada título deve usar uma técnica DIFERENTE
-
-TÉCNICAS AVANÇADAS (use pelo menos 6 diferentes):
-- Power words com números ímpares: "7 Segredos", "11 Erros Fatais"  
-- Open loops de curiosidade: "O Método Que... (e Por Que Funciona)"
-- Negative hooks: "Pare de...", "O Erro #1 em...", "Por Que Você Está Falhando em..."
-- Prova social implícita: "O Que 93% dos Especialistas Fazem com..."
-- Benefício quantificável: "Como Triplicar...", "Reduza 40% dos..."
-- Contraste/Ruptura: "Esqueça Tudo Sobre... | A Nova Abordagem"
-- Autoridade: "Segundo Harvard/MIT/Especialistas..."
-- Micro-compromisso: "Em 5 Minutos Você Vai Entender..."
-- FOMO: "O Que Seus Concorrentes Já Sabem Sobre..."
-- Padrão interrompido: Começar com verbo imperativo inesperado
-
-INSPIRAÇÃO DIRETA: Use os termos, expressões e padrões que a pesquisa revelou serem mais populares nos buscadores e IAs para "${prompt}".
+REGRAS:
+1. PROIBIDO: "Guia Completo", "Guia Definitivo", "Tudo que Você Precisa Saber"
+2. PROIBIDO: Títulos genéricos que serviriam para qualquer tema
+3. Entre 45-65 caracteres cada
+4. Incluir "${prompt}" de forma natural
+5. Cada título deve usar uma técnica DIFERENTE dentre:
+   - Números ímpares: "7 Segredos", "11 Erros"
+   - Curiosidade: "O Método Que... (e Por Que Funciona)"
+   - Negativo: "Pare de...", "O Erro #1 em..."
+   - Prova social: "O Que 93% dos Especialistas Fazem"
+   - Benefício: "Como Triplicar...", "Reduza 40%"
+   - Ruptura: "Esqueça Tudo Sobre..."
+   - Autoridade: "Segundo Especialistas..."
+   - FOMO: "O Que Seus Concorrentes Já Sabem"
 
 Retorne APENAS os 8 títulos, um por linha, numerados de 1 a 8. Sem explicações.`;
 
-        const synthesisResponse = await callGemini(
-          [{ role: "user", content: synthesisPrompt }],
-          { model: selectedModel, maxTokens: 2048, temperature: 0.95 }
+        log.info("title_generation_start", { keyword: prompt, model: selectedModel });
+        
+        const titleResponse = await callGemini(
+          [{ role: "user", content: titlePrompt }],
+          { model: selectedModel, maxTokens: 1024, temperature: 0.9 }
         );
 
-        const titles = synthesisResponse
+        const titles = titleResponse
           .split("\n")
           .filter((line: string) => line.trim())
           .map((line: string) => line.replace(/^\d+\.\s*/, "").replace(/\*\*/g, "").replace(/"/g, "").trim())
@@ -173,7 +133,7 @@ Retorne APENAS os 8 títulos, um por linha, numerados de 1 a 8. Sem explicaçõe
 
         log.info("titles_generated", { count: titles.length, keyword: prompt });
 
-        result = { titles, model: selectedModel, researchBased: true };
+        result = { titles, model: selectedModel };
         break;
       }
 
