@@ -61,9 +61,9 @@ const AI_PROVIDERS: Record<string, AIProvider[]> = {
     { name: 'openai', model: 'gpt-4o-mini', costPer1kTokens: 0.00015, maxTokens: 128000, strengths: ['precise'] },
   ],
   content_editing: [
+    { name: 'gemini', model: 'gemini-2.5-pro', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['large-context', 'cost-effective'] },
     { name: 'anthropic', model: 'claude-sonnet-4-5-20250929', costPer1kTokens: 0.003, maxTokens: 200000, strengths: ['nuanced', 'careful'] },
     { name: 'openai', model: 'gpt-4o', costPer1kTokens: 0.005, maxTokens: 128000, strengths: ['versatile'] },
-    { name: 'gemini', model: 'gemini-2.5-pro', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['large-context'] },
   ],
   content_review: [
     { name: 'gemini', model: 'gemini-2.0-flash', costPer1kTokens: 0.0001, maxTokens: 1000000, strengths: ['fast', 'analytical'] },
@@ -102,11 +102,19 @@ export class AIOrchestrator {
   private apiKeys: Record<string, string>;
 
   constructor() {
+    const openaiKey = Deno.env.get('OPENAI_API_KEY') || '';
+    // Validate: OpenAI keys start with "sk-", reject Gemini keys stored incorrectly
+    const validOpenaiKey = openaiKey.startsWith('sk-') ? openaiKey : '';
+    
     this.apiKeys = {
-      openai: Deno.env.get('OPENAI_API_KEY') || '',
+      openai: validOpenaiKey,
       anthropic: Deno.env.get('ANTHROPIC_API_KEY') || '',
       gemini: Deno.env.get('GEMINI_API_KEY') || '',
     };
+    
+    if (openaiKey && !validOpenaiKey) {
+      console.warn('[AIOrchestrator] OPENAI_API_KEY ignorada - não é uma chave OpenAI válida (deve começar com sk-)');
+    }
   }
 
   /** Override API keys with user-provided BYOK keys */

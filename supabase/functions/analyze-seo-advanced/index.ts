@@ -346,10 +346,17 @@ async function optimizeExistingContent(article: any, analysis: any, project: any
   if (project?.social_google_maps) socialLinks.push(`Google Maps: ${project.social_google_maps}`);
   if (project?.social_linktree) socialLinks.push(`Linktree: ${project.social_linktree}`);
 
-  const prompt = `Otimize este artigo corrigindo TODOS os problemas abaixo:
+  const prompt = `Reescreva COMPLETAMENTE este artigo para atingir Flesch Reading Ease >= 70.
 
-PROBLEMAS:
-- Flesch: ${analysis.flesch.score} (${analysis.flesch.passed ? "OK" : "REPROVADO"})
+## ESCALA FLESCH (OBRIGATÓRIA):
+- 90-100: Muito Fácil (5º ano) — ideal
+- 70-80: Bastante Fácil (8º ano) — mínimo aceitável
+- 60-70: Padrão (8º-9º ano) — tolerável
+- <60: REPROVADO — rejeitar e reescrever
+
+## PROBLEMAS DETECTADOS:
+- Flesch ATUAL: ${analysis.flesch.score} (${analysis.flesch.passed ? "OK" : "REPROVADO - REESCREVER TUDO"})
+- Média palavras/frase: ${analysis.flesch.avgWordsPerSentence || "N/A"} (máx 15)
 - H2s: ${analysis.structure.h2Count} (mín 5), H3s: ${analysis.structure.h3Count} (mín 3)
 - FAQ: ${analysis.structure.hasFAQ ? "OK" : "FALTANDO - ADICIONAR"}
 - CTA: ${analysis.structure.hasCTA ? "OK" : "FALTANDO - ADICIONAR 5 CTAs"}
@@ -358,27 +365,37 @@ PROBLEMAS:
 - Parágrafos longos: ${analysis.structure.longParagraphs}
 - Conclusão: ${analysis.structure.hasConclusion ? "OK" : "FALTANDO"}
 
-LINKS INTERNOS PARA INSERIR:
+## REGRAS DE REESCRITA PARA FLESCH ≥ 70:
+1. CADA frase deve ter NO MÁXIMO 15 palavras
+2. CADA parágrafo deve ter NO MÁXIMO 3-4 linhas
+3. Use palavras simples. Substitua: "implementar" → "fazer", "subsequentemente" → "depois", "neste contexto" → "aqui", "no que diz respeito" → "sobre"
+4. Voz ativa sempre. "O contrato foi assinado pelo cliente" → "O cliente assinou o contrato"
+5. Quebre frases compostas em frases simples separadas por ponto final
+6. Elimine orações subordinadas longas
+7. NÃO use jargão técnico sem explicar
+8. Prefira listas com bullets a parágrafos densos
+
+## LINKS INTERNOS PARA INSERIR (mín 10):
 ${internalLinksStr}
 
-${socialLinks.length > 0 ? `REDES SOCIAIS (citar nos CTAs):\n${socialLinks.join("\n")}` : ""}
+${socialLinks.length > 0 ? `## REDES SOCIAIS (citar nos CTAs):\n${socialLinks.join("\n")}` : ""}
 
+## DADOS DO ARTIGO:
 KEYWORD: ${article.keyword}
 TÍTULO ATUAL: ${article.title}
-CONTEÚDO HTML:
-${(article.content || "").substring(0, 12000)}
 
-REGRAS: Flesch >= 70, frases curtas (máx 15 palavras), parágrafos máx 3-4 linhas. Adicione links internos como <a href>. Adicione FAQ se faltando. Adicione 5 CTAs estratégicos. Adicione conclusão.
+## CONTEÚDO HTML A REESCREVER:
+${(article.content || "").substring(0, 12000)}
 
 RESPONDA APENAS COM JSON:
 {
-  "optimized_content": "HTML completo otimizado",
+  "optimized_content": "HTML completo reescrito com Flesch >= 70",
   "optimized_title": "título otimizado (50-70 chars)",
   "optimized_meta": "meta description (145-165 chars)"
 }`;
 
-  const aiContent = await orchestrator.call('seo_analysis', [
-    { role: 'system', content: "Você é um editor SEO que otimiza artigos em HTML. Responda APENAS com JSON válido. Mantenha o conteúdo semântico original, melhore estrutura, legibilidade e SEO. ADICIONE links internos, CTAs e FAQ que estejam faltando." },
+  const aiContent = await orchestrator.call('content_editing', [
+    { role: 'system', content: `Você é um editor especialista em legibilidade e SEO. Sua MISSÃO PRINCIPAL é reescrever o conteúdo para atingir Flesch Reading Ease >= 70. Use frases de NO MÁXIMO 15 palavras. Parágrafos de 3-4 linhas. Linguagem simples e direta (Madeira Sem Verniz). Mantenha o tema e informações, mas simplifique TODA a linguagem. ADICIONE links internos como tags <a href>, CTAs com redes sociais, FAQ e conclusão que estejam faltando. Responda APENAS com JSON válido.` },
     { role: 'user', content: prompt },
   ], { maxTokens: 16000, temperature: 0.3 });
 
