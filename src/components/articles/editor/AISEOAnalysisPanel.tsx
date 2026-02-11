@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Sparkles, AlertTriangle, CheckCircle2, XCircle, Copy, ArrowRight } from 'lucide-react';
+import { Loader2, Sparkles, AlertTriangle, CheckCircle2, XCircle, ArrowRight, Wand2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -16,6 +15,7 @@ interface AISEOAnalysisPanelProps {
   excerpt?: string;
   onApplyTitle?: (title: string) => void;
   onApplyMeta?: (meta: string) => void;
+  onApplyContent?: (content: string) => void;
   className?: string;
 }
 
@@ -41,12 +41,16 @@ interface AnalysisResult {
     content_tips?: string[];
     optimized_title?: string;
     optimized_meta?: string;
+    changes_made?: string[];
+    new_flesch_estimate?: number;
     error?: string;
   } | null;
+  optimized?: boolean;
 }
 
-export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt, onApplyTitle, onApplyMeta, className }: AISEOAnalysisPanelProps) {
+export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt, onApplyTitle, onApplyMeta, onApplyContent, className }: AISEOAnalysisPanelProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const { toast } = useToast();
 
@@ -56,16 +60,55 @@ export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt
       const { data, error } = await supabase.functions.invoke('analyze-seo-advanced', {
         body: { article_ids: [articleId] },
       });
-
       if (error) throw error;
       if (data?.results?.[0]) {
         setResult(data.results[0]);
         toast({ title: 'Análise concluída', description: `Score: ${data.results[0].score}/100` });
       }
-    } catch (e) {
+    } catch {
       toast({ title: 'Erro na análise', description: 'Tente novamente.', variant: 'destructive' });
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const runOptimization = async () => {
+    setIsOptimizing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('analyze-seo-advanced', {
+        body: { article_ids: [articleId], mode: 'optimize' },
+      });
+      if (error) throw error;
+      
+      const r = data?.results?.[0];
+      if (r) {
+        setResult(r);
+        
+        // Auto-apply optimized content to editor
+        if (r.optimized) {
+          // Fetch the updated article to get the new content
+          const { data: updated } = await supabase
+            .from('articles')
+            .select('title, content, excerpt')
+            .eq('id', articleId)
+            .single();
+          
+          if (updated) {
+            if (updated.content && onApplyContent) onApplyContent(updated.content);
+            if (updated.title && onApplyTitle) onApplyTitle(updated.title);
+            if (updated.excerpt && onApplyMeta) onApplyMeta(updated.excerpt);
+          }
+          
+          toast({
+            title: 'Artigo otimizado e salvo ✅',
+            description: `Score: ${r.score}/100. Conteúdo corrigido automaticamente.`,
+          });
+        }
+      }
+    } catch {
+      toast({ title: 'Erro na otimização', description: 'Tente novamente.', variant: 'destructive' });
+    } finally {
+      setIsOptimizing(false);
     }
   };
 
@@ -92,13 +135,17 @@ export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt
             Análise SEO IA Avançada
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-2">
           <p className="text-xs text-muted-foreground mb-3">
-            Análise completa com IA: Flesch, estrutura, keywords, meta tags, parágrafos e sugestões de otimização.
+            Análise completa com IA: Flesch, estrutura, keywords, meta tags, parágrafos e sugestões.
           </p>
-          <Button onClick={runAnalysis} disabled={isAnalyzing} className="w-full" size="sm">
+          <Button onClick={runAnalysis} disabled={isAnalyzing || isOptimizing} className="w-full" size="sm" variant="outline">
             {isAnalyzing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
-            {isAnalyzing ? 'Analisando...' : 'Executar Análise IA'}
+            {isAnalyzing ? 'Analisando...' : 'Analisar Artigo'}
+          </Button>
+          <Button onClick={runOptimization} disabled={isAnalyzing || isOptimizing} className="w-full" size="sm">
+            {isOptimizing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wand2 className="w-4 h-4 mr-2" />}
+            {isOptimizing ? 'Otimizando...' : 'Otimizar e Corrigir Automaticamente'}
           </Button>
         </CardContent>
       </Card>
@@ -128,6 +175,24 @@ export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* Optimized indicator */}
+        {result.optimized && (
+          <div className="p-2 rounded bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-xs text-green-700 dark:text-green-400 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>Artigo otimizado e salvo automaticamente</span>
+          </div>
+        )}
+
+        {/* Changes made by optimization */}
+        {ai?.changes_made && ai.changes_made.length > 0 && (
+          <div className="p-2 rounded bg-primary/5 border border-primary/20 text-xs space-y-1">
+            <p className="font-semibold text-primary">Correções aplicadas:</p>
+            {ai.changes_made.map((change, i) => (
+              <p key={i} className="text-muted-foreground pl-2">✓ {change}</p>
+            ))}
+          </div>
+        )}
+
         {/* Flesch */}
         <div className={`p-2 rounded text-xs ${analysis.flesch.passed ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800'} border`}>
           <div className="flex justify-between items-center">
@@ -156,10 +221,9 @@ export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt
         </div>
 
         {/* AI Suggestions */}
-        {ai && !ai.error && (
+        {ai && !ai.error && ai.improvements && (
           <ScrollArea className="h-[200px]">
             <div className="space-y-2">
-              {/* Critical Issues */}
               {ai.critical_issues && ai.critical_issues.length > 0 && (
                 <div className="space-y-1">
                   <p className="text-xs font-semibold text-red-600 flex items-center gap-1">
@@ -170,9 +234,7 @@ export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt
                   ))}
                 </div>
               )}
-
-              {/* Improvements */}
-              {ai.improvements && ai.improvements.length > 0 && (
+              {ai.improvements.length > 0 && (
                 <div className="space-y-1">
                   <p className="text-xs font-semibold">Melhorias Sugeridas</p>
                   {ai.improvements.map((imp, i) => (
@@ -188,17 +250,9 @@ export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt
                   ))}
                 </div>
               )}
-
-              {/* Tips */}
-              {ai.flesch_tips && ai.flesch_tips.length > 0 && (
-                <TipSection title="Dicas Flesch" tips={ai.flesch_tips} />
-              )}
-              {ai.seo_tips && ai.seo_tips.length > 0 && (
-                <TipSection title="Dicas SEO" tips={ai.seo_tips} />
-              )}
-              {ai.content_tips && ai.content_tips.length > 0 && (
-                <TipSection title="Dicas de Conteúdo" tips={ai.content_tips} />
-              )}
+              {ai.flesch_tips && ai.flesch_tips.length > 0 && <TipSection title="Dicas Flesch" tips={ai.flesch_tips} />}
+              {ai.seo_tips && ai.seo_tips.length > 0 && <TipSection title="Dicas SEO" tips={ai.seo_tips} />}
+              {ai.content_tips && ai.content_tips.length > 0 && <TipSection title="Dicas de Conteúdo" tips={ai.content_tips} />}
             </div>
           </ScrollArea>
         )}
@@ -223,11 +277,17 @@ export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt
           </div>
         )}
 
-        {/* Re-run */}
-        <Button onClick={runAnalysis} disabled={isAnalyzing} variant="outline" size="sm" className="w-full">
-          {isAnalyzing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
-          Reanalisar
-        </Button>
+        {/* Action buttons */}
+        <div className="space-y-2">
+          <Button onClick={runOptimization} disabled={isOptimizing || isAnalyzing} className="w-full" size="sm">
+            {isOptimizing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wand2 className="w-4 h-4 mr-2" />}
+            {isOptimizing ? 'Otimizando...' : 'Otimizar e Corrigir'}
+          </Button>
+          <Button onClick={runAnalysis} disabled={isAnalyzing || isOptimizing} variant="outline" size="sm" className="w-full">
+            {isAnalyzing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
+            Reanalisar
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

@@ -454,6 +454,7 @@ export function ArticleEditorSidebar({
                 excerpt={article.excerpt || undefined}
                 onApplyTitle={(title) => onFieldUpdate('title', title)}
                 onApplyMeta={(meta) => onFieldUpdate('excerpt', meta)}
+                onApplyContent={(content) => onFieldUpdate('content', content)}
               />
             </div>
           </ScrollArea>
