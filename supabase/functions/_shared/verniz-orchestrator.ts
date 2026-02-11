@@ -215,11 +215,22 @@ export function buildVernizDNASection(config: VernizConfig): string {
 
 ### Regras de Escrita OBRIGATÓRIAS:
 
-**🎯 LEGIBILIDADE FLESCH 70-100 (OBRIGATÓRIO):**
+**🎯 LEGIBILIDADE FLESCH 60-100 (OBRIGATÓRIO - MÍNIMO 60):**
+
+📊 **Escala Flesch (referência obrigatória):**
+| Score | Nível | Escolaridade |
+|-------|-------|-------------|
+| 90-100 | Muito Fácil | 5º ano — criança de 11 anos entende |
+| 80-89 | Fácil | 6º ano |
+| 70-79 | Bastante Fácil | 8º ano — maioria dos adultos |
+| 60-69 | Padrão | 8º-9º ano — inglês simples, ideal para web |
+| < 60 | ❌ REPROVADO | Reescrever obrigatoriamente |
+
 - Sentenças de no MÁXIMO 15-18 palavras em média
 - Use palavras curtas e comuns (2-3 sílabas no máximo)
 - Um semi-analfabeto deve conseguir ler e entender o conteúdo
-- Score Flesch abaixo de 70 = REPROVAR e reescrever
+- Score Flesch abaixo de 60 = REPROVAR e reescrever
+- NUNCA entregar conteúdo com Flesch abaixo de 60
 
 **LINGUAGEM DO DIA-A-DIA:**
 - ❌ "O jurisdicionado deve impetrar" → ✅ "Você precisa entrar com"

@@ -129,9 +129,16 @@ Requirements:
 - Write in HTML format with proper heading hierarchy (H2, H3)
 - Include engaging introduction with the keyword naturally
 - Add practical examples and actionable tips
-- Use short paragraphs (2-3 sentences max)
+- Use short paragraphs (2-3 sentences max, MAX 3 lines)
 - Target word count: ${plan.type === "pillar" ? "2000-3000" : "1200-1800"} words
 - Write in a conversational, authoritative tone
+- CRITICAL: Flesch Reading Ease score MUST be 60-100 (MINIMUM 60)
+- Sentences MUST have MAX 15 words each
+- Use SIMPLE vocabulary — explain technical terms in parentheses
+- NEVER use jargon without explanation
+- Start with <!-- META_DESCRIPTION: [145-160 chars] -->
+- Include FAQ section with 3-5 questions before conclusion
+- Include 2-3 external links to authoritative sources (.gov, .edu)
 
 Return a JSON object with:
 - content_html: the full article content in HTML
