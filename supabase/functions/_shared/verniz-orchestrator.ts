@@ -316,22 +316,108 @@ Na prática, isso significa que [consequência real para o leitor].
     section += `\n- NÃO contar links de redes sociais como "links externos" (são links de autoridade da marca)`;
   }
 
-  // Add CTA strategy
-  if (config.ctaComunidade || config.ctaConclusao || config.ctaLeads) {
-    section += `\n\n### 🎯 ESTRATÉGIA DE CTAs OBRIGATÓRIOS:`;
-    if (config.ctaComunidade) {
-      section += `\n\n**CTA COMUNIDADE** (inserir no meio do artigo, após seção de maior valor):`;
-      section += `\n"${config.ctaComunidade}"`;
+  // Add 5-CTA strategy (RDM Standard)
+  const hasCtas = config.ctaComunidade || config.ctaConclusao || config.ctaLeads;
+  const hasCompany = config.empresaNome || config.empresaEndereco;
+  const siteUrl = config.socialLinktree || '';
+
+  if (hasCtas || hasCompany) {
+    section += `\n\n### 🎯 ESTRUTURA DE 5 CTAs OBRIGATÓRIOS (inserir nas posições exatas):`;
+
+    // CTA #1 — URGÊNCIA (após introdução/gancho)
+    section += `\n\n**[CTA #1 — URGÊNCIA]** (inserir APÓS os 2 primeiros parágrafos):`;
+    section += `\n\`\`\``;
+    section += `\n---`;
+    section += `\n🚨 **ISSO É URGENTE? NÃO ESPERE.**`;
+    if (config.ctaLeads) section += `\n${config.ctaLeads}`;
+    if (config.empresaNome) section += `\n👉 **[FALE AGORA COM UM ESPECIALISTA](${siteUrl})**`;
+    if (config.empresaEndereco) section += `\n📍 ${config.empresaEndereco}`;
+    section += `\n---`;
+    section += `\n\`\`\``;
+
+    // CTA #2 — AUTORIDADE (após corpo principal)
+    section += `\n\n**[CTA #2 — AUTORIDADE]** (inserir após seção de maior valor técnico):`;
+    section += `\n\`\`\``;
+    section += `\n---`;
+    if (config.empresaNome) {
+      section += `\n> *"[Inserir frase de autoridade sobre o tema, na voz da empresa — direto, sem verniz]"*`;
+      section += `\n> **${config.empresaNome}**`;
+      if (config.empresaEndereco) section += `\n> ${config.empresaEndereco}`;
     }
-    if (config.ctaConclusao) {
-      section += `\n\n**CTA CONCLUSÃO** (inserir obrigatoriamente no fechamento):`;
-      section += `\n"${config.ctaConclusao}"`;
-    }
+    section += `\n---`;
+    section += `\n\`\`\``;
+
+    // CTA #3 — AVALIAÇÃO/LEAD (após erros comuns)
     if (config.ctaLeads) {
-      section += `\n\n**CTA LEADS** (inserir após seções sobre erros comuns ou problemas frequentes):`;
-      section += `\n"${config.ctaLeads}"`;
+      section += `\n\n**[CTA #3 — LEAD/AVALIAÇÃO]** (inserir após seção de erros comuns ou problemas frequentes):`;
+      section += `\n\`\`\``;
+      section += `\n---`;
+      section += `\n✅ **AVALIE SEU CASO COM UM ESPECIALISTA — SEM CUSTO**`;
+      section += `\n${config.ctaLeads}`;
+      section += `\n✅ Resposta rápida`;
+      section += `\n✅ Sem compromisso`;
+      section += `\n✅ Atendimento humano`;
+      section += `\n👉 **[QUERO AVALIAR MEU CASO GRATUITAMENTE](${siteUrl})**`;
+      section += `\n---`;
+      section += `\n\`\`\``;
+    }
+
+    // CTA #4 — COMUNIDADE E REDES SOCIAIS
+    if (config.ctaComunidade) {
+      section += `\n\n**[CTA #4 — COMUNIDADE]** (inserir antes da conclusão):`;
+      section += `\n\`\`\``;
+      section += `\n---`;
+      section += `\n📣 **${config.ctaComunidade}**`;
+      section += `\n`;
+      if (config.socialInstagram) section += `\n📸 Instagram: [${config.socialInstagram}](${config.socialInstagram})`;
+      if (config.socialYoutube) section += `\n▶️ YouTube: [${config.socialYoutube}](${config.socialYoutube})`;
+      if (config.socialTiktok) section += `\n🎵 TikTok: [${config.socialTiktok}](${config.socialTiktok})`;
+      if (config.socialLinkedin) section += `\n💼 LinkedIn: [${config.socialLinkedin}](${config.socialLinkedin})`;
+      if (config.socialTwitter) section += `\n🐦 X: [${config.socialTwitter}](${config.socialTwitter})`;
+      if (config.socialLinktree) section += `\n🔗 Links: [${config.socialLinktree}](${config.socialLinktree})`;
+      section += `\n---`;
+      section += `\n\`\`\``;
+    }
+
+    // CTA #5 — FECHAMENTO COM URGÊNCIA
+    if (config.ctaConclusao) {
+      section += `\n\n**[CTA #5 — FECHAMENTO]** (inserir obrigatoriamente no final do artigo):`;
+      section += `\n\`\`\``;
+      section += `\n---`;
+      section += `\n⚡ **NÃO DEIXE PARA AMANHÃ O QUE PODE CUSTAR CARO HOJE**`;
+      section += `\n${config.ctaConclusao}`;
+      if (config.empresaEndereco) section += `\n📍 ${config.empresaEndereco}`;
+      if (config.socialGoogleMaps) section += `\n🗺️ Google Maps: ${config.socialGoogleMaps}`;
+      section += `\n👉 **[🚀 QUERO RESOLVER ISSO AGORA](${siteUrl})**`;
+      section += `\n---`;
+      section += `\n\`\`\``;
     }
   }
+
+  // Add writing prohibitions (RDM Standard)
+  section += `\n\n### ❌ PROIBIÇÕES ABSOLUTAS DE ESCRITA:`;
+  section += `\n- NUNCA começar com "Neste artigo vamos explorar..."`;
+  section += `\n- NUNCA usar "Vale ressaltar que..." ou "Cabe mencionar..."`;
+  section += `\n- NUNCA escrever parágrafos com mais de 4 linhas`;
+  section += `\n- NUNCA usar placeholders como "(URL_DA_SUA_PAGINA)" — use as URLs reais do projeto`;
+  section += `\n- NUNCA deixar o artigo sem pelo menos 3 CTAs`;
+  section += `\n- NUNCA começar com definição: "X é uma área que..."`;
+  section += `\n- NUNCA usar "Este guia vai te mostrar..."`;
+  section += `\n- NUNCA iniciar com "De acordo com" ou "Segundo"`;
+
+  // Add article structure guidelines
+  section += `\n\n### 📋 ESTRUTURA OBRIGATÓRIA DO ARTIGO:`;
+  section += `\n1. **GANCHO** (2 parágrafos): Começar com a dor/situação REAL do leitor`;
+  section += `\n2. **CONTEXTO**: Validar que o problema é sério com dado ou lei`;
+  section += `\n3. **[CTA #1]** — Urgência`;
+  section += `\n4. **CORPO PRINCIPAL**: H2s como perguntas do leitor + listas + boxes de atenção`;
+  section += `\n5. **[CTA #2]** — Autoridade`;
+  section += `\n6. **APROFUNDAMENTO**: Prazos, variações, jurisprudência`;
+  section += `\n7. **[CTA #3]** — Lead/Avaliação`;
+  section += `\n8. **ERROS COMUNS**: 3-5 erros que fazem perder direitos`;
+  section += `\n9. **[CTA #4]** — Comunidade e Redes Sociais`;
+  section += `\n10. **FAQ**: Mínimo 5 perguntas`;
+  section += `\n11. **[CTA #5]** — Fechamento com urgência`;
 
   return section;
 }
