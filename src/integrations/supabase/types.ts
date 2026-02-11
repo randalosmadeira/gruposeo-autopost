@@ -796,6 +796,9 @@ export type Database = {
         Row: {
           compliance_rules: string | null
           created_at: string
+          cta_comunidade: string | null
+          cta_conclusao: string | null
+          cta_leads: string | null
           description: string | null
           domain: string
           empresa_endereco: string | null
@@ -810,6 +813,13 @@ export type Database = {
           palavras_secundarias: string[] | null
           pov_padrao: string | null
           seo_plugin: string | null
+          social_google_maps: string | null
+          social_instagram: string | null
+          social_linkedin: string | null
+          social_linktree: string | null
+          social_tiktok: string | null
+          social_twitter: string | null
+          social_youtube: string | null
           tom_padrao: string | null
           updated_at: string
           user_id: string
@@ -820,6 +830,9 @@ export type Database = {
         Insert: {
           compliance_rules?: string | null
           created_at?: string
+          cta_comunidade?: string | null
+          cta_conclusao?: string | null
+          cta_leads?: string | null
           description?: string | null
           domain: string
           empresa_endereco?: string | null
@@ -834,6 +847,13 @@ export type Database = {
           palavras_secundarias?: string[] | null
           pov_padrao?: string | null
           seo_plugin?: string | null
+          social_google_maps?: string | null
+          social_instagram?: string | null
+          social_linkedin?: string | null
+          social_linktree?: string | null
+          social_tiktok?: string | null
+          social_twitter?: string | null
+          social_youtube?: string | null
           tom_padrao?: string | null
           updated_at?: string
           user_id: string
@@ -844,6 +864,9 @@ export type Database = {
         Update: {
           compliance_rules?: string | null
           created_at?: string
+          cta_comunidade?: string | null
+          cta_conclusao?: string | null
+          cta_leads?: string | null
           description?: string | null
           domain?: string
           empresa_endereco?: string | null
@@ -858,6 +881,13 @@ export type Database = {
           palavras_secundarias?: string[] | null
           pov_padrao?: string | null
           seo_plugin?: string | null
+          social_google_maps?: string | null
+          social_instagram?: string | null
+          social_linkedin?: string | null
+          social_linktree?: string | null
+          social_tiktok?: string | null
+          social_twitter?: string | null
+          social_youtube?: string | null
           tom_padrao?: string | null
           updated_at?: string
           user_id?: string

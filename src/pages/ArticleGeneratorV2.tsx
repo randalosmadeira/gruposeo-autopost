@@ -326,6 +326,27 @@ export default function ArticleGeneratorV2() {
       await setGeneratingStatus();
     }
     
+    // Build projectConfig from selected project
+    const selectedProject = config.projectId ? projects.find(p => p.id === config.projectId) : null;
+    const projectConfigData = selectedProject ? {
+      nicho: (selectedProject as any).nicho || undefined,
+      compliance_rules: (selectedProject as any).compliance_rules || undefined,
+      empresa_nome: (selectedProject as any).empresa_nome || undefined,
+      empresa_telefone: (selectedProject as any).empresa_telefone || undefined,
+      empresa_endereco: (selectedProject as any).empresa_endereco || undefined,
+      empresa_whatsapp: (selectedProject as any).empresa_whatsapp || undefined,
+      social_instagram: (selectedProject as any).social_instagram || undefined,
+      social_youtube: (selectedProject as any).social_youtube || undefined,
+      social_linkedin: (selectedProject as any).social_linkedin || undefined,
+      social_twitter: (selectedProject as any).social_twitter || undefined,
+      social_tiktok: (selectedProject as any).social_tiktok || undefined,
+      social_google_maps: (selectedProject as any).social_google_maps || undefined,
+      social_linktree: (selectedProject as any).social_linktree || undefined,
+      cta_comunidade: (selectedProject as any).cta_comunidade || undefined,
+      cta_conclusao: (selectedProject as any).cta_conclusao || undefined,
+      cta_leads: (selectedProject as any).cta_leads || undefined,
+    } : undefined;
+
     const articlePromise = (async () => {
       await simulateGeneration();
       return await generateArticle({
@@ -351,6 +372,7 @@ export default function ArticleGeneratorV2() {
         humanizeContent: config.humanizeContent,
         realtimeData: config.realtimeData,
         internalLinks: internalLinks.map(link => ({ anchor: link.anchor, url: link.url })),
+        projectConfig: projectConfigData,
       });
     })();
 
