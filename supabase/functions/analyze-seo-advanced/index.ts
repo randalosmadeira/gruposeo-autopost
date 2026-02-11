@@ -1,11 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -14,8 +13,8 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const lovableKey = Deno.env.get("LOVABLE_API_KEY")!;
   const supabase = createClient(supabaseUrl, serviceKey);
+  const orchestrator = getOrchestrator();
 
   try {
     const body = await req.json();
@@ -91,7 +90,7 @@ Deno.serve(async (req) => {
           if (!hasContent) {
             // GENERATE full content from scratch
             console.log(`[AI SEO] Generating full content for article ${article.id} (keyword: ${article.keyword})`);
-            const generated = await generateFullContent(article, project, internalLinks, lovableKey);
+            const generated = await generateFullContent(article, project, internalLinks, orchestrator);
             
             if (generated.content) {
               const newClean = generated.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -138,7 +137,7 @@ Deno.serve(async (req) => {
             // OPTIMIZE existing content
             console.log(`[AI SEO] Optimizing existing content for article ${article.id}`);
             const localAnalysis = analyzeContent(content, cleanContent, article);
-            const optimized = await optimizeExistingContent(article, localAnalysis, project, internalLinks, lovableKey);
+            const optimized = await optimizeExistingContent(article, localAnalysis, project, internalLinks, orchestrator);
 
             if (optimized.content) {
               const newClean = optimized.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -216,14 +215,13 @@ Deno.serve(async (req) => {
 });
 
 // === GENERATE full content for empty articles ===
-async function generateFullContent(article: any, project: any, internalLinks: Array<{title: string, url: string}>, apiKey: string) {
+async function generateFullContent(article: any, project: any, internalLinks: Array<{title: string, url: string}>, orchestrator: any) {
   const keyword = article.keyword || "tema geral";
   const projectName = project?.empresa_nome || project?.name || "";
   const domain = project?.domain || "";
   const nicho = project?.nicho || "jurídico";
   const tom = project?.tom_padrao || "profissional";
   
-  // Build social links for CTAs
   const socialLinks: string[] = [];
   if (project?.social_instagram) socialLinks.push(`Instagram: ${project.social_instagram}`);
   if (project?.social_youtube) socialLinks.push(`YouTube: ${project.social_youtube}`);
@@ -233,7 +231,6 @@ async function generateFullContent(article: any, project: any, internalLinks: Ar
   if (project?.social_google_maps) socialLinks.push(`Google Maps: ${project.social_google_maps}`);
   if (project?.social_linktree) socialLinks.push(`Linktree: ${project.social_linktree}`);
   
-  // Build internal links list
   const internalLinksStr = internalLinks.length > 0 
     ? internalLinks.slice(0, 15).map(l => `- "${l.title}": ${l.url}`).join("\n")
     : "Nenhum link interno disponível";
@@ -283,34 +280,14 @@ FORMATO DA RESPOSTA - APENAS JSON VÁLIDO:
   "image_prompt": "prompt em inglês para gerar imagem destacada relacionada ao tema"
 }`;
 
-  const aiResp = await fetch(AI_GATEWAY_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+  const aiContent = await orchestrator.call('article_generation', [
+    { 
+      role: 'system', 
+      content: `Você é um redator SEO sênior especialista no nicho ${nicho}. Escreva em português brasileiro com linguagem simples e acessível (Madeira Sem Verniz). REGRA ABSOLUTA: Flesch >= 70. Frases curtas. Parágrafos de 3-4 linhas máximo. Inclua OBRIGATORIAMENTE links internos como tags <a> HTML, CTAs com redes sociais, FAQ, e conclusão. Responda APENAS com JSON válido.` 
     },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        { 
-          role: "system", 
-          content: `Você é um redator SEO sênior especialista no nicho ${nicho}. Escreva em português brasileiro com linguagem simples e acessível (Madeira Sem Verniz). REGRA ABSOLUTA: Flesch >= 70. Frases curtas. Parágrafos de 3-4 linhas máximo. Inclua OBRIGATORIAMENTE links internos como tags <a> HTML, CTAs com redes sociais, FAQ, e conclusão. Responda APENAS com JSON válido.` 
-        },
-        { role: "user", content: prompt },
-      ],
-      max_tokens: 16000,
-      temperature: 0.5,
-    }),
-  });
+    { role: 'user', content: prompt },
+  ], { maxTokens: 16000, temperature: 0.5 });
 
-  if (!aiResp.ok) {
-    const errText = await aiResp.text();
-    console.error(`[AI SEO] AI gateway error ${aiResp.status}:`, errText.substring(0, 500));
-    throw new Error(`AI gateway error: ${aiResp.status}`);
-  }
-
-  const aiData = await aiResp.json();
-  const aiContent = aiData.choices?.[0]?.message?.content || "";
   const jsonStr = aiContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
   
   try {
@@ -329,7 +306,7 @@ FORMATO DA RESPOSTA - APENAS JSON VÁLIDO:
 }
 
 // === OPTIMIZE existing content ===
-async function optimizeExistingContent(article: any, analysis: any, project: any, internalLinks: Array<{title: string, url: string}>, apiKey: string) {
+async function optimizeExistingContent(article: any, analysis: any, project: any, internalLinks: Array<{title: string, url: string}>, orchestrator: any) {
   const internalLinksStr = internalLinks.length > 0 
     ? internalLinks.slice(0, 15).map(l => `- "${l.title}": ${l.url}`).join("\n")
     : "Nenhum link interno disponível";
@@ -374,29 +351,11 @@ RESPONDA APENAS COM JSON:
   "optimized_meta": "meta description (145-165 chars)"
 }`;
 
-  const aiResp = await fetch(AI_GATEWAY_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        { role: "system", content: "Você é um editor SEO que otimiza artigos em HTML. Responda APENAS com JSON válido. Mantenha o conteúdo semântico original, melhore estrutura, legibilidade e SEO. ADICIONE links internos, CTAs e FAQ que estejam faltando." },
-        { role: "user", content: prompt },
-      ],
-      max_tokens: 16000,
-      temperature: 0.3,
-    }),
-  });
+  const aiContent = await orchestrator.call('seo_analysis', [
+    { role: 'system', content: "Você é um editor SEO que otimiza artigos em HTML. Responda APENAS com JSON válido. Mantenha o conteúdo semântico original, melhore estrutura, legibilidade e SEO. ADICIONE links internos, CTAs e FAQ que estejam faltando." },
+    { role: 'user', content: prompt },
+  ], { maxTokens: 16000, temperature: 0.3 });
 
-  if (!aiResp.ok) {
-    throw new Error(`AI gateway error: ${aiResp.status}`);
-  }
-
-  const aiData = await aiResp.json();
-  const aiContent = aiData.choices?.[0]?.message?.content || "";
   const jsonStr = aiContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
   const parsed = JSON.parse(jsonStr);
 
