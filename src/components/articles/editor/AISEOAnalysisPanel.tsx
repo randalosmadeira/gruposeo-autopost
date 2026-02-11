@@ -82,11 +82,27 @@ export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt
       
       const r = data?.results?.[0];
       if (r) {
+        // Check for AI errors (402 payment, 429 rate limit)
+        if (r.error) {
+          const isPayment = String(r.error).includes('402');
+          const isRateLimit = String(r.error).includes('429');
+          toast({
+            title: isPayment ? '❌ Créditos insuficientes' : isRateLimit ? '⏳ Limite de requisições' : '❌ Erro na IA',
+            description: isPayment 
+              ? 'Os créditos de IA estão esgotados. Vá em Settings → Workspace → Usage para recarregar.' 
+              : isRateLimit 
+                ? 'Muitas requisições. Aguarde alguns segundos e tente novamente.'
+                : `Erro: ${r.error}`,
+            variant: 'destructive',
+          });
+          setResult(r);
+          return;
+        }
+
         setResult(r);
         
         // Auto-apply optimized content to editor
-        if (r.optimized) {
-          // Fetch the updated article to get the new content
+        if (r.optimized || r.generated) {
           const { data: updated } = await supabase
             .from('articles')
             .select('title, content, excerpt')
@@ -100,13 +116,20 @@ export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt
           }
           
           toast({
-            title: 'Artigo otimizado e salvo ✅',
+            title: r.generated ? 'Artigo gerado e salvo ✅' : 'Artigo otimizado e salvo ✅',
             description: `Score: ${r.score}/100. Conteúdo corrigido automaticamente.`,
+          });
+        } else {
+          toast({
+            title: '⚠️ Otimização não aplicada',
+            description: 'A IA não conseguiu gerar melhorias. Verifique os créditos ou tente novamente.',
+            variant: 'destructive',
           });
         }
       }
-    } catch {
-      toast({ title: 'Erro na otimização', description: 'Tente novamente.', variant: 'destructive' });
+    } catch (e) {
+      console.error('Optimization error:', e);
+      toast({ title: 'Erro na otimização', description: 'Verifique sua conexão e tente novamente.', variant: 'destructive' });
     } finally {
       setIsOptimizing(false);
     }
