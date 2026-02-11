@@ -4,7 +4,7 @@ Tags: content, seo, articles, automation, ai, image-optimization, indexing, inde
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.2.0
+Stable tag: 3.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -153,6 +153,13 @@ Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject s
 * Upload de mídia via API
 * Logs de atividade
 
+= 3.2.1 =
+* **CORRIGIDO**: Erro 'verificação cookie falhou' em Autocorreções e Sincronização (migrado de REST para AJAX)
+* **CORRIGIDO**: Linkagem interna usa fallback 'Leia também' quando âncora exata não é encontrada
+* **CORRIGIDO**: Regex Unicode-safe para matching de texto âncora com caracteres acentuados
+* **CORRIGIDO**: Posts que já contêm link para URL alvo retornam sucesso em vez de erro
+* **MELHORADO**: Pré-verificação com mb_stripos antes de regex para melhor performance
+
 = 3.2.0 =
 * **NOVO**: Notificações automáticas no dashboard para artigos gerados por cron
 * **NOVO**: Monitoramento de portais com scraping HTML e RSS integrado
@@ -189,6 +196,9 @@ Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject s
 * **NOVO**: AI Content Enhancer
 
 == Upgrade Notice ==
+
+= 3.2.1 =
+Correção do erro de cookie em Autocorreções/Sincronização e melhorias na linkagem interna com suporte Unicode. Recomendado para todos os usuários.
 
 = 3.2.0 =
 Notificações automáticas, monitoramento de portais com reescrita IA e pipeline completo de automação. Recomendado para todos os usuários.
