@@ -56,7 +56,7 @@
             $(document).on('click', '#cfrdm-regenerate-key', this.regenerateKey.bind(this));
             
             // Manual Sync
-            $(document).on('click', '#cfrdm-manual-sync', this.manualSync.bind(this));
+            $(document).on('click', '#cfrdm-manual-sync, #cfrdm-sync-now', this.manualSync.bind(this));
             
             // Optimize Images
             $(document).on('click', '#cfrdm-optimize-images', this.optimizeImages.bind(this));
@@ -175,7 +175,7 @@
             });
         },
 
-        // Manual Sync
+        // Manual Sync (via AJAX)
         manualSync: function(e) {
             e.preventDefault();
             const $btn = $(e.currentTarget);
@@ -183,22 +183,23 @@
             this.setButtonLoading($btn, 'Sincronizando...');
             
             $.ajax({
-                url: cfrdmAdmin.restUrl + 'sync',
+                url: cfrdmAdmin.ajaxUrl,
                 method: 'POST',
-                headers: {
-                    'X-CFRDM-API-Key': cfrdmAdmin.apiKey,
-                    'X-WP-Nonce': cfrdmAdmin.nonce
+                data: {
+                    action: 'cfrdm_sync_stats',
+                    nonce: cfrdmAdmin.nonce
                 },
                 success: (response) => {
                     if (response.success) {
-                        this.showNotice('success', 'Sincronização concluída! ' + (response.synced || 0) + ' artigos sincronizados.');
+                        const data = response.data || {};
+                        this.showNotice('success', 'Sincronização concluída! ' + (data.synced || 0) + ' artigos sincronizados.');
                         this.refreshStats();
                     } else {
-                        this.showNotice('error', response.message || 'Erro na sincronização');
+                        this.showNotice('error', response.data || 'Erro na sincronização');
                     }
                 },
                 error: (xhr) => {
-                    const message = xhr.responseJSON?.message || 'Erro na sincronização';
+                    const message = xhr.responseJSON?.data || 'Erro na sincronização';
                     this.showNotice('error', message);
                 },
                 complete: () => {
@@ -237,7 +238,7 @@
             });
         },
 
-        // Run Auto-corrections
+        // Run Auto-corrections (via AJAX)
         runAutocorrect: function(e) {
             e.preventDefault();
             const $btn = $(e.currentTarget);
@@ -245,27 +246,29 @@
             this.setButtonLoading($btn, 'Analisando...');
             
             $.ajax({
-                url: cfrdmAdmin.restUrl + 'autocorrect',
+                url: cfrdmAdmin.ajaxUrl,
                 method: 'POST',
-                headers: {
-                    'X-WP-Nonce': cfrdmAdmin.nonce
+                data: {
+                    action: 'cfrdm_run_autocorrect',
+                    nonce: cfrdmAdmin.nonce
                 },
                 success: (response) => {
                     if (response.success) {
+                        const data = response.data || {};
                         let message = 'Análise concluída! ';
-                        message += (response.issues_found || 0) + ' problemas encontrados, ';
-                        message += (response.issues_fixed || 0) + ' corrigidos automaticamente.';
+                        message += (data.issues_found || data.processed || 0) + ' problemas encontrados, ';
+                        message += (data.issues_fixed || data.fixed || 0) + ' corrigidos automaticamente.';
                         this.showNotice('success', message);
                         
-                        if (response.issues && response.issues.length > 0) {
-                            this.displayAutocorrectResults(response.issues);
+                        if (data.issues && data.issues.length > 0) {
+                            this.displayAutocorrectResults(data.issues);
                         }
                     } else {
-                        this.showNotice('error', response.message || 'Erro na análise');
+                        this.showNotice('error', response.data?.message || response.data || 'Erro na análise');
                     }
                 },
                 error: (xhr) => {
-                    const message = xhr.responseJSON?.message || 'Erro na análise';
+                    const message = xhr.responseJSON?.data || 'Erro na análise';
                     this.showNotice('error', message);
                 },
                 complete: () => {
@@ -274,7 +277,7 @@
             });
         },
 
-        // Analyze Internal Links
+        // Analyze Internal Links (via AJAX)
         analyzeInternalLinks: function(e) {
             e.preventDefault();
             const $btn = $(e.currentTarget);
@@ -282,21 +285,22 @@
             this.setButtonLoading($btn, 'Analisando estrutura...');
             
             $.ajax({
-                url: cfrdmAdmin.restUrl + 'analyze-internal-links',
+                url: cfrdmAdmin.ajaxUrl,
                 method: 'POST',
-                headers: {
-                    'X-WP-Nonce': cfrdmAdmin.nonce
+                data: {
+                    action: 'cfrdm_analyze_links',
+                    nonce: cfrdmAdmin.nonce
                 },
                 success: (response) => {
                     if (response.success) {
                         this.displayLinkAnalysis(response.data);
                         this.showNotice('success', 'Análise de links concluída!');
                     } else {
-                        this.showNotice('error', response.message || 'Erro na análise de links');
+                        this.showNotice('error', response.data || 'Erro na análise de links');
                     }
                 },
                 error: (xhr) => {
-                    const message = xhr.responseJSON?.message || 'Erro na análise de links';
+                    const message = xhr.responseJSON?.data || 'Erro na análise de links';
                     this.showNotice('error', message);
                 },
                 complete: () => {
@@ -305,7 +309,7 @@
             });
         },
 
-        // Generate Internal Links
+        // Generate Internal Links (via AJAX)
         generateInternalLinks: function(e) {
             e.preventDefault();
             const $btn = $(e.currentTarget);
@@ -317,28 +321,27 @@
             this.setButtonLoading($btn, 'Gerando links...');
             
             $.ajax({
-                url: cfrdmAdmin.restUrl + 'generate-internal-links',
+                url: cfrdmAdmin.ajaxUrl,
                 method: 'POST',
-                headers: {
-                    'X-WP-Nonce': cfrdmAdmin.nonce
-                },
-                data: JSON.stringify({
+                data: {
+                    action: 'cfrdm_generate_links',
+                    nonce: cfrdmAdmin.nonce,
                     mode: 'smart',
                     max_links_per_post: 5
-                }),
-                contentType: 'application/json',
+                },
                 success: (response) => {
                     if (response.success) {
+                        const data = response.data || {};
                         let message = 'Links gerados com sucesso! ';
-                        message += (response.links_added || 0) + ' links adicionados em ';
-                        message += (response.posts_updated || 0) + ' artigos.';
+                        message += (data.links_added || 0) + ' links adicionados em ';
+                        message += (data.posts_updated || 0) + ' artigos.';
                         this.showNotice('success', message);
                     } else {
-                        this.showNotice('error', response.message || 'Erro ao gerar links');
+                        this.showNotice('error', response.data || 'Erro ao gerar links');
                     }
                 },
                 error: (xhr) => {
-                    const message = xhr.responseJSON?.message || 'Erro ao gerar links';
+                    const message = xhr.responseJSON?.data || 'Erro ao gerar links';
                     this.showNotice('error', message);
                 },
                 complete: () => {
@@ -424,7 +427,7 @@
             $container.html(html).addClass('cfrdm-fade-in');
         },
 
-        // Clear Logs
+        // Clear Logs (via AJAX)
         clearLogs: function(e) {
             e.preventDefault();
             
@@ -436,10 +439,11 @@
             this.setButtonLoading($btn, 'Limpando...');
             
             $.ajax({
-                url: cfrdmAdmin.restUrl + 'clear-logs',
+                url: cfrdmAdmin.ajaxUrl,
                 method: 'POST',
-                headers: {
-                    'X-WP-Nonce': cfrdmAdmin.nonce
+                data: {
+                    action: 'cfrdm_clear_logs',
+                    nonce: cfrdmAdmin.nonce
                 },
                 success: (response) => {
                     if (response.success) {
@@ -452,11 +456,11 @@
                             '</div>'
                         );
                     } else {
-                        this.showNotice('error', response.message || 'Erro ao limpar logs');
+                        this.showNotice('error', response.data || 'Erro ao limpar logs');
                     }
                 },
                 error: (xhr) => {
-                    const message = xhr.responseJSON?.message || 'Erro ao limpar logs';
+                    const message = xhr.responseJSON?.data || 'Erro ao limpar logs';
                     this.showNotice('error', message);
                 },
                 complete: () => {
@@ -465,7 +469,7 @@
             });
         },
 
-        // Export Logs
+        // Export Logs (via AJAX)
         exportLogs: function(e) {
             e.preventDefault();
             const $btn = $(e.currentTarget);
@@ -473,10 +477,11 @@
             this.setButtonLoading($btn, 'Exportando...');
             
             $.ajax({
-                url: cfrdmAdmin.restUrl + 'export-logs',
-                method: 'GET',
-                headers: {
-                    'X-WP-Nonce': cfrdmAdmin.nonce
+                url: cfrdmAdmin.ajaxUrl,
+                method: 'POST',
+                data: {
+                    action: 'cfrdm_export_logs',
+                    nonce: cfrdmAdmin.nonce
                 },
                 xhrFields: {
                     responseType: 'blob'

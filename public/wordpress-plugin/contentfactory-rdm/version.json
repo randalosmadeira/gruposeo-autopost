@@ -4,7 +4,7 @@
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.2.1 - Fix: Linkagem interna agora usa fallback 'Leia também' quando source_post_id é fornecido mas âncora não é encontrada. Fix: Regex Unicode-safe para matching de texto âncora com caracteres acentuados portugueses.",
+  "changelog": "v3.2.1 - Fix: Corrigido erro 'verificação cookie falhou' em Autocorreções e Sincronização (migrado de REST para AJAX). Fix: Linkagem interna usa fallback 'Leia também'. Fix: Regex Unicode-safe para matching de texto âncora.",
   "released": "2026-02-11",
   "features": [
     "auto_notifications",

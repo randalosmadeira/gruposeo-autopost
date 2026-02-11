@@ -409,7 +409,7 @@ class CFRDM_API {
             'success' => true,
             'version' => CFRDM_VERSION,
             'minimum_supported' => '3.0.0',
-            'is_current' => version_compare(CFRDM_VERSION, '3.2.0', '>='),
+            'is_current' => version_compare(CFRDM_VERSION, '3.2.1', '>='),
             'released' => '2026-02-10',
             'features' => array(
                 'gsc_integration' => version_compare(CFRDM_VERSION, '3.0.0', '>='),
