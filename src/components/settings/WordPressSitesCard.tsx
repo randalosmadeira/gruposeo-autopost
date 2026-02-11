@@ -518,7 +518,7 @@ export function WordPressSitesCard() {
                           Atualização Obrigatória do Plugin
                         </p>
                         <p className="text-xs text-amber-700 dark:text-amber-300">
-                          {health.updateMessage || `Versão instalada: v${health.pluginVersion}. Atualize para v3.0.0+ para acessar GSC, AI Auto-Fix e novas funcionalidades.`}
+                          {health.updateMessage || `Versão instalada: v${health.pluginVersion}. Atualize para v3.2.1+ para acessar todas as funcionalidades.`}
                         </p>
                       </div>
                       <Button
@@ -529,7 +529,7 @@ export function WordPressSitesCard() {
                       >
                         <Link to="/plugin-wp">
                           <Download className="w-3 h-3 mr-1" />
-                          Baixar v3.0.0
+                          Baixar v3.2.1
                         </Link>
                       </Button>
                     </div>
