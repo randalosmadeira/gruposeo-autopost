@@ -242,6 +242,10 @@ export default function ArticlesList() {
   const [isBulkAnalyzing, setIsBulkAnalyzing] = useState(false);
   const [bulkAnalysisProgress, setBulkAnalysisProgress] = useState(0);
 
+  // Bulk Image Generation state
+  const [isBulkGeneratingImages, setIsBulkGeneratingImages] = useState(false);
+  const [bulkImageProgress, setBulkImageProgress] = useState(0);
+
   // Status tabs configuration - proper counting based on DB status + scheduled_at field
   const statusTabs = useMemo(() => {
     // Count articles by actual database status
@@ -507,6 +511,114 @@ export default function ArticlesList() {
     }
   };
 
+  // Bulk Image Generation
+  const handleBulkImageGeneration = async () => {
+    if (selectedArticles.size === 0) return;
+    setIsBulkGeneratingImages(true);
+    setBulkImageProgress(0);
+
+    const ids = Array.from(selectedArticles);
+    let processed = 0;
+    let successCount = 0;
+    let failedCount = 0;
+
+    toast({
+      title: `🖼️ Gerando imagens para ${ids.length} artigos...`,
+      description: 'Criando imagens cinematográficas com IA. Isso pode levar alguns minutos.',
+    });
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        toast({ title: 'Sessão expirada', description: 'Faça login novamente.', variant: 'destructive' });
+        setIsBulkGeneratingImages(false);
+        return;
+      }
+
+      for (const articleId of ids) {
+        try {
+          const article = articles.find(a => a.id === articleId);
+          if (!article?.title) {
+            failedCount++;
+            processed++;
+            setBulkImageProgress(processed);
+            continue;
+          }
+
+          // Skip if already has featured image
+          if (article.featured_image_url) {
+            processed++;
+            setBulkImageProgress(processed);
+            successCount++;
+            continue;
+          }
+
+          const project = article.project_id ? projects.find(p => p.id === article.project_id) : null;
+          const segment = project?.nicho || 'general';
+
+          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-image`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              title: article.title,
+              keywords: article.keyword,
+              context: article.excerpt || '',
+              segment,
+              style: 'photorealistic',
+              aspectRatio: '16:9',
+              quality: 'high',
+              articleId: article.id,
+            }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.image) {
+              // Update article with generated image
+              await supabase.from('articles').update({
+                featured_image_url: data.image,
+                image_prompt: data.prompt,
+                image_source: 'ai-bulk-generated',
+              }).eq('id', articleId);
+              successCount++;
+            } else {
+              failedCount++;
+            }
+          } else {
+            failedCount++;
+          }
+        } catch (err) {
+          console.error(`Image generation failed for ${articleId}:`, err);
+          failedCount++;
+        }
+
+        processed++;
+        setBulkImageProgress(processed);
+
+        // Delay between requests to avoid rate limiting
+        if (processed < ids.length) {
+          await new Promise(resolve => setTimeout(resolve, 2500));
+        }
+      }
+
+      toast({
+        title: `🖼️ Geração concluída ✅`,
+        description: `${successCount} imagens geradas${failedCount > 0 ? `, ${failedCount} falharam` : ''}.`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+    } catch (e) {
+      console.error('Bulk image generation error:', e);
+      toast({ title: 'Erro na geração em massa', description: 'Tente novamente.', variant: 'destructive' });
+    } finally {
+      setIsBulkGeneratingImages(false);
+      setBulkImageProgress(0);
+    }
+  };
+
   // Copy article link
   const handleCopyLink = (articleId: string) => {
     const article = articles.find(a => a.id === articleId);
@@ -720,6 +832,20 @@ export default function ArticlesList() {
               <Sparkles className="w-4 h-4 mr-2" />
             )}
             {isBulkAnalyzing ? `Otimizando... (${bulkAnalysisProgress}/${selectedArticles.size})` : `Análise SEO IA (${selectedArticles.size})`}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={selectedArticles.size === 0 || isBulkGeneratingImages}
+            onClick={handleBulkImageGeneration}
+          >
+            {isBulkGeneratingImages ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <ImageIcon className="w-4 h-4 mr-2" />
+            )}
+            {isBulkGeneratingImages ? `Gerando... (${bulkImageProgress}/${selectedArticles.size})` : `Gerar Imagens (${selectedArticles.size})`}
           </Button>
           
           <Button
