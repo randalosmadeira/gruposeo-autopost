@@ -826,56 +826,48 @@ Esses limites são INEGOCIÁVEIS para ranqueamento no Google.`;
 
 ${config.title ? `Título sugerido: "${config.title}" (ajuste para máximo 60 caracteres se necessário)` : ''}
 
-**ATENÇÃO - LIMITES SEO OBRIGATÓRIOS:**
-- Título (H1): MÁXIMO 60 caracteres (tolerável até 70)
-- Meta Description: MÁXIMO 160 caracteres (tolerável até 170)
+⚠️⚠️⚠️ REGRAS CRÍTICAS - VERIFICAR ANTES DE ENTREGAR ⚠️⚠️⚠️
 
-**CRÍTICO - FORMATAÇÃO DO CONTEÚDO:**
-- NUNCA use marcadores de código como \`\`\`html ou \`\`\`
-- Escreva HTML puro diretamente, SEM cercado por backticks
-- Cada seção H2 deve ter parágrafos curtos (2-4 linhas cada)
-- Use subtítulos H3 para organizar melhor seções longas
-- Separe ideias diferentes em parágrafos distintos
-- Mantenha espaçamento visual adequado entre seções
+1. **META-DESCRIPTION**: A PRIMEIRA LINHA do artigo DEVE ser:
+   <!-- META_DESCRIPTION: [texto de 145-160 caracteres com keyword e CTA] -->
+   Se faltar, o artigo será REJEITADO.
 
-**Estrutura esperada:**
-1. Comentário HTML com META_DESCRIPTION e TITLE_SEO no início
-2. Introdução engajadora com hook + resposta direta nos primeiros 2 parágrafos
-3. 5-7 seções principais (H2) com subtítulos (H3) quando necessário
-4. Conteúdo detalhado, útil e acionável em cada seção
-5. Links internos distribuídos naturalmente ao longo do texto
-${config.includeTable ? '6. Pelo menos uma tabela comparativa ou informativa' : ''}
-${config.includeList ? '7. Listas organizadas (numeradas ou bullets) quando apropriado' : ''}
-${config.includeFaq ? `8. Seção FAQ com ${config.faqCount} perguntas otimizadas para featured snippets` : ''}
-${config.includeConclusion ? '9. Conclusão com resumo dos pontos principais e CTA claro' : ''}
+2. **TITLE_SEO**: A SEGUNDA LINHA deve ser:
+   <!-- TITLE_SEO: [título de máximo 60 caracteres] -->
 
-**Formato do início do artigo (SEM backticks, HTML puro):**
-<!-- META_DESCRIPTION: [máx 160 chars] -->
+3. **LEGIBILIDADE FÁCIL (Flesch 70-100)**:
+   - Cada frase deve ter NO MÁXIMO 15 palavras
+   - Cada parágrafo deve ter NO MÁXIMO 3 linhas
+   - Use APENAS palavras simples do dia-a-dia
+   - PROIBIDO: orações subordinadas longas, vocabulário rebuscado
+   - Se um termo é técnico, explique: "habeas corpus (pedido para soltar preso)"
+   - Escreva como se falasse com um amigo de 14 anos
+
+4. **LINKS EXTERNOS (MÍNIMO 2)**: Inclua 2-3 links reais para fontes oficiais
+   - Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto</a>
+
+5. **FORMATAÇÃO**: Sem espaços duplos, sem pontuação duplicada, H2>H3 correto
+
+**Estrutura obrigatória:**
+<!-- META_DESCRIPTION: [145-160 chars] -->
 <!-- TITLE_SEO: [máx 60 chars] -->
 
-<h1>Título do Artigo</h1>
+<h2>Primeira seção</h2>
+<p>Frase curta e direta. Máximo 15 palavras.</p>
+<p>Outro parágrafo curto.</p>
 
-<p>Introdução aqui...</p>
-
-<h2>Primeira Seção</h2>
-
-<p>Parágrafo curto e objetivo.</p>
-
-<p>Outro parágrafo com informação complementar.</p>
-
-**Lembre-se:**
-- Segmento: ${config.segment} (aplique diretrizes específicas e disclaimers)
-- Tipo: ${config.contentType} (siga estrutura apropriada)
+**Especificações:**
+- Segmento: ${config.segment}
+- Tipo: ${config.contentType}
 - Tom: ${config.tone}
 - Extensão: ${wordRange.min}-${wordRange.max} palavras
+${config.includeFaq ? `- FAQ com ${config.faqCount} perguntas` : ''}
+${config.includeConclusion ? '- Conclusão com resumo e CTA' : ''}
+${config.includeTable ? '- Incluir tabela comparativa' : ''}
 
-**VERIFIQUE ANTES DE FINALIZAR:**
-- NÃO inclua \`\`\`html ou \`\`\` no início ou final
-- Contagem de caracteres do título: MÁXIMO 60
-- Contagem de caracteres da meta description: MÁXIMO 160
-- Parágrafos curtos e bem espaçados
+**LEMBRE-SE**: Frases CURTAS. Palavras SIMPLES. Meta-description OBRIGATÓRIA.
 
-Comece agora (HTML direto, sem marcadores de código):`;
+Comece agora (HTML direto, sem backticks):`;
 
   return { system: systemPrompt, user: userPrompt };
 }

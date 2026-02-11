@@ -365,10 +365,19 @@ export async function runAgentPipeline(config: AgentPipelineConfig): Promise<Age
   
   let content = await orchestrator.call(writerTaskType, [
     { role: 'system', content: getWriterPrompt(config, sectorConfig, strategy) },
-    { role: 'user', content: `Escreva o artigo completo sobre "${config.keyword}" seguindo a estratégia definida. HTML puro, sem backticks.` },
+    { role: 'user', content: `Escreva o artigo completo sobre "${config.keyword}" seguindo a estratégia definida. HTML puro, sem backticks.
+
+⚠️ OBRIGATÓRIO:
+- PRIMEIRA LINHA: <!-- META_DESCRIPTION: [145-160 chars] -->
+- SEGUNDA LINHA: <!-- TITLE_SEO: [máx 60 chars] -->
+- Frases de NO MÁXIMO 15 palavras (Flesch 70-100)
+- Parágrafos de NO MÁXIMO 3 linhas
+- Linguagem SIMPLES (um adolescente de 14 anos deve entender)
+- MÍNIMO 2 links externos para fontes oficiais
+- Comece com <!-- META_DESCRIPTION: ... --> na primeira linha.` },
   ], { 
     maxTokens: 8000, 
-    temperature: 0.7,
+    temperature: 0.5,
     preferredProvider: sectorConfig.preferredAI,
   });
   providersUsed.push('writer');
