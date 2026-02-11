@@ -46,7 +46,7 @@ const AI_PROVIDERS: Record<string, AIProvider[]> = {
   article_generation: [
     { name: 'anthropic', model: 'claude-sonnet-4-5-20250929', costPer1kTokens: 0.003, maxTokens: 200000, strengths: ['creative', 'long-form', 'nuanced'] },
     { name: 'openai', model: 'gpt-4o', costPer1kTokens: 0.005, maxTokens: 128000, strengths: ['versatile', 'instruction-following'] },
-    { name: 'gemini', model: 'gemini-2.5-pro-preview-06-05', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['cost-effective', 'large-context'] },
+    { name: 'gemini', model: 'gemini-2.5-pro', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['cost-effective', 'large-context'] },
   ],
   seo_analysis: [
     { name: 'gemini', model: 'gemini-2.0-flash', costPer1kTokens: 0.0001, maxTokens: 1000000, strengths: ['fast', 'analytical', 'cost-effective'] },
@@ -63,7 +63,7 @@ const AI_PROVIDERS: Record<string, AIProvider[]> = {
   content_editing: [
     { name: 'anthropic', model: 'claude-sonnet-4-5-20250929', costPer1kTokens: 0.003, maxTokens: 200000, strengths: ['nuanced', 'careful'] },
     { name: 'openai', model: 'gpt-4o', costPer1kTokens: 0.005, maxTokens: 128000, strengths: ['versatile'] },
-    { name: 'gemini', model: 'gemini-2.5-pro-preview-06-05', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['large-context'] },
+    { name: 'gemini', model: 'gemini-2.5-pro', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['large-context'] },
   ],
   content_review: [
     { name: 'gemini', model: 'gemini-2.0-flash', costPer1kTokens: 0.0001, maxTokens: 1000000, strengths: ['fast', 'analytical'] },
@@ -76,15 +76,15 @@ const AI_PROVIDERS: Record<string, AIProvider[]> = {
   legal_review: [
     { name: 'anthropic', model: 'claude-sonnet-4-5-20250929', costPer1kTokens: 0.003, maxTokens: 200000, strengths: ['nuanced', 'careful', 'ethical'] },
     { name: 'openai', model: 'gpt-4o', costPer1kTokens: 0.005, maxTokens: 128000, strengths: ['versatile'] },
-    { name: 'gemini', model: 'gemini-2.5-pro-preview-06-05', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['large-context'] },
+    { name: 'gemini', model: 'gemini-2.5-pro', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['large-context'] },
   ],
   conversion_content: [
     { name: 'anthropic', model: 'claude-sonnet-4-5-20250929', costPer1kTokens: 0.003, maxTokens: 200000, strengths: ['persuasive', 'nuanced'] },
     { name: 'openai', model: 'gpt-4o', costPer1kTokens: 0.005, maxTokens: 128000, strengths: ['versatile'] },
-    { name: 'gemini', model: 'gemini-2.5-pro-preview-06-05', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['cost-effective'] },
+    { name: 'gemini', model: 'gemini-2.5-pro', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['cost-effective'] },
   ],
   strategy_planning: [
-    { name: 'gemini', model: 'gemini-2.5-pro-preview-06-05', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['analytical', 'large-context'] },
+    { name: 'gemini', model: 'gemini-2.5-pro', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['analytical', 'large-context'] },
     { name: 'openai', model: 'gpt-4o', costPer1kTokens: 0.005, maxTokens: 128000, strengths: ['versatile'] },
   ],
   image_generation: [

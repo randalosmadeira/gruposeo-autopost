@@ -21,15 +21,15 @@ export const GEMINI_MODELS = {
   // Text models
   "flash": "gemini-2.0-flash",
   "flash-lite": "gemini-2.0-flash-lite",
-  "pro": "gemini-2.5-pro-preview-06-05",
+  "pro": "gemini-2.5-pro",
   "flash-thinking": "gemini-2.0-flash-thinking-exp",
   // Image generation model (Imagen 3)
   "imagen": "imagen-3.0-generate-002",
   // Aliases for backward compatibility
   "standard": "gemini-2.0-flash",
-  "premium": "gemini-2.5-pro-preview-06-05",
+  "premium": "gemini-2.5-pro",
   "advanced": "gemini-2.0-flash",
-  "professional": "gemini-2.5-pro-preview-06-05",
+  "professional": "gemini-2.5-pro",
 } as const;
 
 // OpenAI models
