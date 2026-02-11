@@ -340,7 +340,8 @@ Deno.serve(async (req) => {
 3. Frases CURTAS: máximo 15 palavras cada (Flesch 70-100 OBRIGATÓRIO)
 4. Parágrafos CURTOS: máximo 3 linhas
 5. Linguagem SIMPLES: como se falasse com um amigo de 14 anos
-6. MÍNIMO 2 links externos para fontes oficiais (.gov, .edu)
+6. MÍNIMO 10 links internos (se disponíveis) e MÁXIMO 3 links externos para fontes oficiais (.gov, .edu)
+7. Citar TODAS as redes sociais configuradas no projeto
 
 Estrutura:
 1. Meta tags (comentários HTML)
@@ -371,7 +372,8 @@ Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
 □ <!-- TITLE_SEO: ... --> presente na SEGUNDA linha? (OBRIGATÓRIO)
 □ Frases com MÁXIMO 15 palavras cada? (Flesch 70-100)
 □ Parágrafos com MÁXIMO 3 linhas?
-□ Pelo menos 2 links externos para fontes oficiais?
+□ Mínimo 10 links internos (se fornecidos) e MÁXIMO 3 links externos?
+□ TODAS as redes sociais do projeto foram citadas?
 □ Linguagem simples que qualquer pessoa entende?
 Se algum item está faltando, CORRIJA antes de entregar.`;
 

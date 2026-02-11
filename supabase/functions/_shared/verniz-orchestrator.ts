@@ -300,14 +300,20 @@ Na prática, isso significa que [consequência real para o leitor].
   if (config.socialLinktree) socialLinks.push(`Links: ${config.socialLinktree}`);
 
   if (socialLinks.length > 0) {
-    section += `\n\n### 📱 REDES SOCIAIS (inserir como Link Juice estratégico):`;
+    section += `\n\n### 📱 REDES SOCIAIS - CITAR TODAS OBRIGATORIAMENTE:`;
     socialLinks.forEach(l => { section += `\n- ${l}`; });
-    section += `\n\n**REGRAS DE INSERÇÃO DE REDES SOCIAIS:**`;
-    section += `\n- Inserir 1-2 links sociais contextualmente relevantes ao longo do artigo`;
-    section += `\n- Usar como CTA de engajamento: "Acompanhe no Instagram", "Inscreva-se no canal"`;
-    section += `\n- Google Maps: usar em CTAs de contato/localização`;
-    section += `\n- Links agregadores: usar como CTA final "Veja todos os nossos canais"`;
+    section += `\n\n**REGRAS DE INSERÇÃO DE REDES SOCIAIS (OBRIGATÓRIO):**`;
+    section += `\n- TODAS as redes sociais listadas acima DEVEM ser citadas no artigo`;
+    section += `\n- Criar seção "Acompanhe nossos canais" ou "Siga-nos" antes da conclusão`;
+    section += `\n- Distribuir CTAs sociais ao longo do texto quando contextualmente relevante:`;
+    section += `\n  • Instagram: "Acompanhe dicas diárias no nosso Instagram"`;
+    section += `\n  • YouTube: "Assista nossos vídeos explicativos no YouTube"`;
+    section += `\n  • LinkedIn: "Conecte-se conosco no LinkedIn"`;
+    section += `\n  • TikTok: "Veja conteúdos rápidos no TikTok"`;
+    section += `\n  • Google Maps: "Encontre nosso escritório/loja no Google Maps"`;
+    section += `\n  • Linktree: "Acesse todos os nossos links"`;
     section += `\n- Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora</a>`;
+    section += `\n- NÃO contar links de redes sociais como "links externos" (são links de autoridade da marca)`;
   }
 
   // Add CTA strategy
