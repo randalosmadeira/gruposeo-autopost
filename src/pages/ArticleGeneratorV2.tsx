@@ -264,15 +264,32 @@ export default function ArticleGeneratorV2() {
       return;
     }
     setGeneratingTitle(true);
-    setTimeout(() => {
-      const generatedTitle = `${config.keyword}: Guia Completo para ${new Date().getFullYear()}`;
-      updateConfig('title', generatedTitle);
-      setGeneratingTitle(false);
-      toast({
-        title: 'Título gerado!',
-        description: 'Você pode editar o título se desejar.',
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-api', {
+        body: { action: 'generate-title', prompt: config.keyword },
       });
-    }, 1500);
+      if (error) throw error;
+      const titles = data?.titles?.filter((t: string) => t.length > 10) || [];
+      if (titles.length > 0) {
+        // Pick the first title (best ranked by the AI)
+        updateConfig('title', titles[0]);
+        toast({
+          title: 'Título gerado com IA!',
+          description: `${titles.length} opções geradas. Título principal aplicado.`,
+        });
+      } else {
+        throw new Error('Nenhum título gerado');
+      }
+    } catch (err) {
+      console.error('Erro ao gerar título:', err);
+      toast({
+        title: 'Erro ao gerar título',
+        description: 'Tente novamente em alguns segundos.',
+        variant: 'destructive',
+      });
+    } finally {
+      setGeneratingTitle(false);
+    }
   };
 
   const simulateGeneration = useCallback(async () => {
