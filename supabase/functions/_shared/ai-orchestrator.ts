@@ -109,6 +109,13 @@ export class AIOrchestrator {
     };
   }
 
+  /** Override API keys with user-provided BYOK keys */
+  setKeys(keys: { gemini?: string; openai?: string; anthropic?: string }) {
+    if (keys.gemini) this.apiKeys.gemini = keys.gemini;
+    if (keys.openai) this.apiKeys.openai = keys.openai;
+    if (keys.anthropic) this.apiKeys.anthropic = keys.anthropic;
+  }
+
   /** Check which providers are available */
   getAvailableProviders(): string[] {
     return Object.entries(this.apiKeys)
@@ -443,12 +450,7 @@ export class AIOrchestrator {
   }
 }
 
-// Singleton instance
-let orchestratorInstance: AIOrchestrator | null = null;
-
+// Factory - creates fresh instance each call to avoid BYOK key leakage between requests
 export function getOrchestrator(): AIOrchestrator {
-  if (!orchestratorInstance) {
-    orchestratorInstance = new AIOrchestrator();
-  }
-  return orchestratorInstance;
+  return new AIOrchestrator();
 }
