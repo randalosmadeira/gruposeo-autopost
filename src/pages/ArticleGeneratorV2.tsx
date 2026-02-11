@@ -109,16 +109,16 @@ const defaultConfig: ArticleConfig = {
   intentType: 'informational',
   metaDescription: true,
   lists: true,
-  tables: false,
+  tables: true,
   conclusion: true,
-  faq: false,
+  faq: true,
   internalLinking: true,
   projectId: '',
   usePlatformCredits: true,
-  seoOptimization: false,
+  seoOptimization: true,
   realtimeData: false,
-  humanizeContent: false,
-  generateImages: false,
+  humanizeContent: true,
+  generateImages: true,
   imageCount: 1,
   imageStyle: 'fotorrealístico',
   autoPublish: false,
@@ -163,6 +163,13 @@ export default function ArticleGeneratorV2() {
   const [userCredits] = useState(10);
 
   const connectedProjects = projects.filter(p => p.is_connected);
+
+  // Auto-select first connected project if none selected
+  useEffect(() => {
+    if (!config.projectId && connectedProjects.length > 0) {
+      updateConfig('projectId', connectedProjects[0].id);
+    }
+  }, [connectedProjects, config.projectId]);
 
   // Load template from URL parameter
   useEffect(() => {
@@ -326,8 +333,9 @@ export default function ArticleGeneratorV2() {
       await setGeneratingStatus();
     }
     
-    // Build projectConfig from selected project
-    const selectedProject = config.projectId ? projects.find(p => p.id === config.projectId) : null;
+    // Build projectConfig from selected project - ALWAYS send when project is selected (not just for internal linking)
+    const selectedProject = config.projectId ? projects.find(p => p.id === config.projectId) : 
+      (connectedProjects.length > 0 ? connectedProjects[0] : null);
     const projectConfigData = selectedProject ? {
       nicho: (selectedProject as any).nicho || undefined,
       compliance_rules: (selectedProject as any).compliance_rules || undefined,
