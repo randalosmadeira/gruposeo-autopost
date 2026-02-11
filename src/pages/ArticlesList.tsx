@@ -421,33 +421,51 @@ export default function ArticlesList() {
     setBulkAnalysisProgress(0);
 
     const ids = Array.from(selectedArticles);
-    const batchSize = 3; // smaller batches for optimize mode
+    const batchSize = 2; // smaller batches - content generation is heavy
     let processed = 0;
     let totalScore = 0;
     let optimizedCount = 0;
+    let generatedCount = 0;
     let republishedCount = 0;
+    let failedCount = 0;
+
+    toast({
+      title: `🔄 SEO IA: Processando ${ids.length} artigos...`,
+      description: 'Gerando conteúdo, links, CTAs, FAQ e imagens. Isso pode levar alguns minutos.',
+    });
 
     try {
       for (let i = 0; i < ids.length; i += batchSize) {
         const batch = ids.slice(i, i + batchSize);
         
-        // Step 1: Analyze + Auto-fix
-        const { data, error } = await supabase.functions.invoke('analyze-seo-advanced', {
-          body: { article_ids: batch, mode: 'optimize' },
-        });
+        try {
+          const { data, error } = await supabase.functions.invoke('analyze-seo-advanced', {
+            body: { article_ids: batch, mode: 'optimize' },
+          });
 
-        if (error) throw error;
-        processed += batch.length;
-        setBulkAnalysisProgress(processed);
+          if (error) {
+            console.error('Batch error:', error);
+            failedCount += batch.length;
+            processed += batch.length;
+            setBulkAnalysisProgress(processed);
+            continue;
+          }
 
-        if (data?.results) {
-          for (const r of data.results) {
-            totalScore += r.score;
-            if (r.optimized) {
-              optimizedCount++;
+          processed += batch.length;
+          setBulkAnalysisProgress(processed);
+
+          if (data?.results) {
+            for (const r of data.results) {
+              totalScore += r.score || 0;
+              if (r.generated) {
+                generatedCount++;
+              } else if (r.optimized) {
+                optimizedCount++;
+              }
+              if (r.error) failedCount++;
               
-              // Step 2: Republish if article was already published and has a project
-              if (r.status === 'published' && r.project_id) {
+              // Republish if article was already published
+              if (r.optimized && r.status === 'published' && r.project_id) {
                 try {
                   const { error: pubError } = await supabase.functions.invoke('publish-to-wordpress', {
                     body: { articleId: r.article_id, projectId: r.project_id },
@@ -459,17 +477,29 @@ export default function ArticlesList() {
               }
             }
           }
+        } catch (batchErr) {
+          console.error('Batch processing error:', batchErr);
+          failedCount += batch.length;
+          processed += batch.length;
+          setBulkAnalysisProgress(processed);
         }
       }
 
-      const avgScore = Math.round(totalScore / ids.length);
+      const avgScore = ids.length > 0 ? Math.round(totalScore / ids.length) : 0;
+      const parts: string[] = [];
+      if (generatedCount > 0) parts.push(`${generatedCount} artigos criados do zero`);
+      if (optimizedCount > 0) parts.push(`${optimizedCount} artigos otimizados`);
+      if (republishedCount > 0) parts.push(`${republishedCount} republicados`);
+      if (failedCount > 0) parts.push(`${failedCount} falharam`);
+      
       toast({
-        title: `SEO IA: Otimização Concluída ✅`,
-        description: `${optimizedCount} artigos corrigidos. Score médio: ${avgScore}/100.${republishedCount > 0 ? ` ${republishedCount} republicados no WordPress.` : ''}`,
+        title: `SEO IA: Concluído ✅`,
+        description: `${parts.join('. ')}. Score médio: ${avgScore}/100.`,
       });
       
       queryClient.invalidateQueries({ queryKey: ['articles'] });
     } catch (e) {
+      console.error('Bulk SEO error:', e);
       toast({ title: 'Erro na otimização em massa', description: 'Tente novamente.', variant: 'destructive' });
     } finally {
       setIsBulkAnalyzing(false);
