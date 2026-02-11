@@ -11,6 +11,7 @@ import {
   type JournalisticRewriteResponse 
 } from "./prompts.ts";
 import { createEmotionalImageSystem } from "../_shared/emotional/emotional-image-system.ts";
+import { orchestrate } from "../_shared/verniz-orchestrator.ts";
 
 const FUNCTION_NAME = "rewrite-news";
 
@@ -153,11 +154,7 @@ Deno.serve(async (req) => {
       .single();
     
     if (customTemplate?.prompt) {
-      // ALWAYS append mandatory JSON output instructions to custom prompts
-      // This ensures the AI always returns the expected JSON format regardless of custom persona
-      // The mandatory instructions contain the exact JSON schema, checklist, and required fields
       systemPromptToUse = customTemplate.prompt + "\n\n" + MANDATORY_JSON_OUTPUT_INSTRUCTIONS;
-      
       agentName = customTemplate.agent_name || null;
       log.info("using_custom_prompt", { 
         agentName,
@@ -168,6 +165,11 @@ Deno.serve(async (req) => {
     } else {
       log.info("using_default_prompt");
     }
+
+    // ZicaJuris: Inject Verniz DNA into system prompt
+    const orchestration = orchestrate(keyword || sourceName, keyword || sourceContent.substring(0, 200));
+    systemPromptToUse += '\n\n' + orchestration.vernizSection;
+    log.info("verniz_applied_to_rewrite", { nicho: orchestration.nichoDetectado.nicho, gatilho: orchestration.gatilho.gatilho });
 
     // Build user prompt with all configurations
     const userPrompt = buildUserPrompt({

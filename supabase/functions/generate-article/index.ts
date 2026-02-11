@@ -5,6 +5,7 @@ import { buildAdvancedSEOPrompt, type PromptConfig } from "../_shared/seo-prompt
 import { callAIStream, resolveModel } from "../_shared/gemini.ts";
 import { runAgentPipeline, type AgentPipelineConfig } from "../_shared/agents/agent-pipeline.ts";
 import { mapSegmentToSector } from "../_shared/sector-config.ts";
+import { orchestrate } from "../_shared/verniz-orchestrator.ts";
 
 const FUNCTION_NAME = "generate-article";
 
@@ -50,6 +51,15 @@ interface ArticleConfig {
   // NEW: Agent pipeline flag and sector selection
   useAgentPipeline?: boolean;
   sectorType?: string;
+  // NEW: ZicaJuris project config
+  projectConfig?: {
+    nicho?: string;
+    compliance_rules?: string;
+    empresa_nome?: string;
+    empresa_telefone?: string;
+    empresa_endereco?: string;
+    empresa_whatsapp?: string;
+  };
 }
 
 // Word count ranges - supports both legacy and new values
@@ -231,6 +241,19 @@ Deno.serve(async (req) => {
 
     const { config } = await req.json() as { config: ArticleConfig };
 
+    // ====== ZICAJURIS ORCHESTRATOR: Detect nicho, compliance, gatilho ======
+    const orchestration = orchestrate(
+      config.title || config.keyword,
+      config.keyword,
+      config.projectConfig || undefined
+    );
+    log.info("verniz_orchestration", {
+      nicho: orchestration.nichoDetectado.nicho,
+      compliance: orchestration.nichoDetectado.compliance,
+      gatilho: orchestration.gatilho.gatilho,
+      angulo: orchestration.angulo.angulo,
+    });
+
     // ====== CHECK IF AGENT PIPELINE SHOULD BE USED ======
     const sectorType = config.sectorType || config.segment;
     const shouldUseAgentPipeline = config.useAgentPipeline && sectorType && mapSegmentToSector(sectorType);
@@ -286,19 +309,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ====== STANDARD FLOW (existing) ======
-    // Determine which prompt system to use
+    // ====== STANDARD FLOW with Verniz DNA injection ======
     let systemPrompt: string;
     let userPrompt: string;
 
     if (hasAdvancedConfig(config)) {
       const promptConfig = buildPromptConfig(config);
       const prompts = buildAdvancedSEOPrompt(promptConfig);
-      systemPrompt = prompts.system;
+      // Inject Verniz DNA into advanced prompt
+      systemPrompt = prompts.system + '\n\n' + orchestration.vernizSection;
       userPrompt = prompts.user;
-      log.info("using_advanced_prompt", { segment: config.segment, contentType: config.contentType });
+      log.info("using_advanced_prompt_with_verniz", { segment: config.segment, contentType: config.contentType });
     } else {
-      systemPrompt = buildLegacySystemPrompt(config);
+      systemPrompt = buildLegacySystemPrompt(config) + '\n\n' + orchestration.vernizSection;
       userPrompt = `Escreva um artigo completo e otimizado para SEO sobre: "${config.keyword}"
 
 Estrutura esperada:
@@ -310,7 +333,7 @@ ${config.includeFaq ? `5. FAQ com ${config.faqCount} perguntas e respostas` : ''
 ${config.includeConclusion ? '6. Conclusão com resumo e CTA' : ''}
 
 Comece agora:`;
-      log.info("using_legacy_prompt", { keyword: config.keyword });
+      log.info("using_legacy_prompt_with_verniz", { keyword: config.keyword });
     }
 
     const modelAlias = config.aiModel || "flash";

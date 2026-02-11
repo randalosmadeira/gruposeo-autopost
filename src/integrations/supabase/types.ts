@@ -182,6 +182,8 @@ export type Database = {
       }
       articles: {
         Row: {
+          angulo_analise: string | null
+          compliance_aplicado: string | null
           config: Json | null
           content: string | null
           created_at: string
@@ -197,6 +199,8 @@ export type Database = {
           image_source: string | null
           image_style: string | null
           keyword: string
+          metricas_verniz: Json | null
+          nicho_detectado: string | null
           project_id: string | null
           published_at: string | null
           published_url: string | null
@@ -212,6 +216,8 @@ export type Database = {
           word_count: number | null
         }
         Insert: {
+          angulo_analise?: string | null
+          compliance_aplicado?: string | null
           config?: Json | null
           content?: string | null
           created_at?: string
@@ -227,6 +233,8 @@ export type Database = {
           image_source?: string | null
           image_style?: string | null
           keyword: string
+          metricas_verniz?: Json | null
+          nicho_detectado?: string | null
           project_id?: string | null
           published_at?: string | null
           published_url?: string | null
@@ -242,6 +250,8 @@ export type Database = {
           word_count?: number | null
         }
         Update: {
+          angulo_analise?: string | null
+          compliance_aplicado?: string | null
           config?: Json | null
           content?: string | null
           created_at?: string
@@ -257,6 +267,8 @@ export type Database = {
           image_source?: string | null
           image_style?: string | null
           keyword?: string
+          metricas_verniz?: Json | null
+          nicho_detectado?: string | null
           project_id?: string | null
           published_at?: string | null
           published_url?: string | null
@@ -782,13 +794,23 @@ export type Database = {
       }
       projects: {
         Row: {
+          compliance_rules: string | null
           created_at: string
           description: string | null
           domain: string
+          empresa_endereco: string | null
+          empresa_nome: string | null
+          empresa_telefone: string | null
+          empresa_whatsapp: string | null
           id: string
           is_connected: boolean
+          links_prioritarios: string[] | null
           name: string
+          nicho: string | null
+          palavras_secundarias: string[] | null
+          pov_padrao: string | null
           seo_plugin: string | null
+          tom_padrao: string | null
           updated_at: string
           user_id: string
           wordpress_app_password: string | null
@@ -796,13 +818,23 @@ export type Database = {
           wordpress_username: string | null
         }
         Insert: {
+          compliance_rules?: string | null
           created_at?: string
           description?: string | null
           domain: string
+          empresa_endereco?: string | null
+          empresa_nome?: string | null
+          empresa_telefone?: string | null
+          empresa_whatsapp?: string | null
           id?: string
           is_connected?: boolean
+          links_prioritarios?: string[] | null
           name: string
+          nicho?: string | null
+          palavras_secundarias?: string[] | null
+          pov_padrao?: string | null
           seo_plugin?: string | null
+          tom_padrao?: string | null
           updated_at?: string
           user_id: string
           wordpress_app_password?: string | null
@@ -810,13 +842,23 @@ export type Database = {
           wordpress_username?: string | null
         }
         Update: {
+          compliance_rules?: string | null
           created_at?: string
           description?: string | null
           domain?: string
+          empresa_endereco?: string | null
+          empresa_nome?: string | null
+          empresa_telefone?: string | null
+          empresa_whatsapp?: string | null
           id?: string
           is_connected?: boolean
+          links_prioritarios?: string[] | null
           name?: string
+          nicho?: string | null
+          palavras_secundarias?: string[] | null
+          pov_padrao?: string | null
           seo_plugin?: string | null
+          tom_padrao?: string | null
           updated_at?: string
           user_id?: string
           wordpress_app_password?: string | null

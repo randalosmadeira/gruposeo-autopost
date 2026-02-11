@@ -45,6 +45,15 @@ interface ArticleConfig {
   // Internal links
   internalLinks?: Array<{ anchor: string; url: string }>;
   sourcesContext?: string;
+  // ZicaJuris project config
+  projectConfig?: {
+    nicho?: string;
+    compliance_rules?: string;
+    empresa_nome?: string;
+    empresa_telefone?: string;
+    empresa_endereco?: string;
+    empresa_whatsapp?: string;
+  };
 }
 
 export type { ArticleConfig };

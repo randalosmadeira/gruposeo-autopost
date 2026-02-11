@@ -1,0 +1,335 @@
+/**
+ * ZicaJuris Orchestrator v1.0 - Verniz DNA Engine
+ * 
+ * Detecção automática de nicho, compliance, gatilho emocional e ângulo de análise.
+ * Integra o DNA "Madeira Sem Verniz" em toda geração de conteúdo.
+ */
+
+// =================== NICHE DETECTION ===================
+
+export interface NichoDetection {
+  nicho: string;
+  compliance: string;
+  disclaimers: string[];
+  tomPadrao: string;
+  povPadrao: string;
+  tamanhoIdeal: string;
+}
+
+const NICHO_KEYWORDS: Record<string, string[]> = {
+  juridico: ['advocacia', 'advogado', 'lei', 'processo', 'tribunal', 'justiça', 'direito', 'jurídico', 'stf', 'stj', 'oab', 'petição', 'recurso', 'sentença', 'honorários'],
+  saude: ['médico', 'saúde', 'tratamento', 'doença', 'sintoma', 'hospital', 'clínica', 'diagnóstico', 'medicina', 'paciente', 'terapia', 'cirurgia', 'exame'],
+  beleza: ['estética', 'beleza', 'procedimento', 'rejuvenescimento', 'pele', 'botox', 'preenchimento', 'micropigmentação', 'harmonização', 'laser'],
+  tecnologia: ['app', 'software', 'código', 'tech', 'tecnologia', 'inteligência artificial', 'programação', 'sistema', 'plataforma', 'digital', 'startup'],
+  marketing: ['vendas', 'marketing', 'roi', 'leads', 'conversão', 'tráfego', 'seo', 'campanha', 'funil', 'estratégia', 'branding'],
+  fintech: ['banco', 'investimento', 'crédito', 'finança', 'pix', 'empréstimo', 'conta', 'cartão', 'rendimento', 'ação', 'bolsa'],
+  ecommerce: ['loja', 'produto', 'compra', 'e-commerce', 'frete', 'carrinho', 'checkout', 'marketplace', 'estoque', 'dropshipping'],
+  b2b_saas: ['saas', 'b2b', 'enterprise', 'crm', 'erp', 'cloud', 'api', 'integração', 'automação', 'gestão'],
+  educacao: ['curso', 'certificação', 'ensino', 'aprendizado', 'escola', 'faculdade', 'mec', 'educação', 'professor', 'aluno'],
+};
+
+const NICHO_COMPLIANCE: Record<string, { compliance: string; disclaimers: string[]; tom: string; pov: string; tamanho: string }> = {
+  juridico: {
+    compliance: 'OAB/Res. 02/2015',
+    disclaimers: ['Consulte um advogado para seu caso específico.', 'Este conteúdo tem caráter informativo e não substitui consultoria jurídica.'],
+    tom: 'profissional', pov: '3p_singular', tamanho: 'grande',
+  },
+  saude: {
+    compliance: 'CFM/ANVISA',
+    disclaimers: ['Este conteúdo não substitui orientação médica profissional.', 'Procure um profissional de saúde para diagnóstico e tratamento.'],
+    tom: 'informativo', pov: '3p_singular', tamanho: 'medio',
+  },
+  beleza: {
+    compliance: 'ANVISA/Vigilância',
+    disclaimers: ['Resultados podem variar de pessoa para pessoa.', 'Procure profissionais qualificados e com registro.'],
+    tom: 'amigavel', pov: '2p_singular', tamanho: 'medio',
+  },
+  tecnologia: {
+    compliance: 'LGPD',
+    disclaimers: ['Dados tratados conforme a LGPD.'],
+    tom: 'informativo', pov: '2p_singular', tamanho: 'grande',
+  },
+  marketing: {
+    compliance: 'Geral',
+    disclaimers: [],
+    tom: 'transacional', pov: '2p_singular', tamanho: 'medio',
+  },
+  fintech: {
+    compliance: 'BACEN/CVM',
+    disclaimers: ['Não constitui recomendação de investimento.', 'Rentabilidade passada não garante resultados futuros.'],
+    tom: 'profissional', pov: 'impessoal', tamanho: 'grande',
+  },
+  ecommerce: {
+    compliance: 'CDC',
+    disclaimers: ['Confira condições atualizadas no site oficial.'],
+    tom: 'transacional', pov: '2p_singular', tamanho: 'medio',
+  },
+  b2b_saas: {
+    compliance: 'LGPD',
+    disclaimers: ['Dados tratados conforme a LGPD.'],
+    tom: 'profissional', pov: '2p_singular', tamanho: 'grande',
+  },
+  educacao: {
+    compliance: 'MEC',
+    disclaimers: ['Verifique reconhecimento junto ao MEC.'],
+    tom: 'encorajador', pov: '2p_singular', tamanho: 'grande',
+  },
+};
+
+// =================== EMOTIONAL TRIGGER DETECTION ===================
+
+export interface GatilhoEmocional {
+  gatilho: string;
+  emoji: string;
+}
+
+const GATILHO_KEYWORDS: Record<string, { keywords: string[]; emoji: string }> = {
+  serio: { keywords: ['dados', 'oficial', 'lei', 'norma', 'resolução', 'regulamento', 'decreto'], emoji: '📰' },
+  humor: { keywords: ['viral', 'meme', 'hilário', 'gafe', 'bizarro', 'engraçado'], emoji: '😄' },
+  preocupacao: { keywords: ['alerta', 'risco', 'cuidado', 'perigo', 'atenção', 'urgente'], emoji: '⚠️' },
+  revolta: { keywords: ['escândalo', 'fraude', 'corrupção', 'absurdo', 'indignação'], emoji: '😡' },
+  angustia: { keywords: ['morte', 'tragédia', 'perda', 'vítima', 'acidente'], emoji: '😢' },
+  sarcasmo: { keywords: ['ironia', 'contradição', 'hipocrisia', 'paradoxo'], emoji: '😏' },
+  satira: { keywords: ['política', 'crítica', 'charge', 'sátira'], emoji: '🎭' },
+  felicidade: { keywords: ['conquista', 'sucesso', 'aprovação', 'vitória', 'celebração'], emoji: '😊' },
+  comemoracao: { keywords: ['recorde', 'premiação', 'campeão', 'medalha'], emoji: '🎉' },
+  duvida: { keywords: ['incerteza', 'previsão', 'cenário', 'perspectiva', 'futuro'], emoji: '🤔' },
+  misterio: { keywords: ['investigação', 'desaparecimento', 'segredo', 'enigma'], emoji: '🔮' },
+};
+
+// =================== ANGLE DETECTION ===================
+
+export interface AnguloAnalise {
+  angulo: string;
+  descricao: string;
+  adicionaConteudo: string;
+}
+
+const ANGULO_KEYWORDS: Record<string, { keywords: string[]; descricao: string; adiciona: string }> = {
+  impacto_brasil: { keywords: ['internacional', 'eua', 'europa', 'china', 'global', 'mundial'], descricao: 'Impacto no Brasil', adiciona: '+40% contexto brasileiro' },
+  analise_juridica: { keywords: ['legislação', 'processo', 'direito', 'tribunal', 'lei'], descricao: 'Análise Jurídica', adiciona: 'Implicações legais detalhadas' },
+  visao_consumidor: { keywords: ['produto', 'serviço', 'preço', 'consumidor', 'compra'], descricao: 'Visão do Consumidor', adiciona: 'Impacto no bolso do leitor' },
+  tendencia_mercado: { keywords: ['setor', 'mercado', 'economia', 'indústria', 'crescimento'], descricao: 'Tendência de Mercado', adiciona: 'Projeções e cenários' },
+  opiniao_especialista: { keywords: ['técnico', 'especializado', 'estudo', 'pesquisa', 'análise'], descricao: 'Opinião de Especialista', adiciona: 'Análise técnica aprofundada' },
+};
+
+// =================== DETECTION FUNCTIONS ===================
+
+export function detectarNicho(text: string): NichoDetection {
+  const lower = text.toLowerCase();
+  let bestNicho = 'geral';
+  let bestScore = 0;
+
+  for (const [nicho, keywords] of Object.entries(NICHO_KEYWORDS)) {
+    const score = keywords.filter(kw => lower.includes(kw)).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestNicho = nicho;
+    }
+  }
+
+  const config = NICHO_COMPLIANCE[bestNicho] || {
+    compliance: 'Geral', disclaimers: [], tom: 'profissional', pov: '2p_singular', tamanho: 'medio',
+  };
+
+  return {
+    nicho: bestNicho,
+    compliance: config.compliance,
+    disclaimers: config.disclaimers,
+    tomPadrao: config.tom,
+    povPadrao: config.pov,
+    tamanhoIdeal: config.tamanho,
+  };
+}
+
+export function detectarGatilho(text: string): GatilhoEmocional {
+  const lower = text.toLowerCase();
+  let bestGatilho = 'serio';
+  let bestScore = 0;
+
+  for (const [gatilho, { keywords, emoji }] of Object.entries(GATILHO_KEYWORDS)) {
+    const score = keywords.filter(kw => lower.includes(kw)).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestGatilho = gatilho;
+    }
+  }
+
+  return {
+    gatilho: bestGatilho,
+    emoji: GATILHO_KEYWORDS[bestGatilho]?.emoji || '📰',
+  };
+}
+
+export function detectarAngulo(text: string): AnguloAnalise {
+  const lower = text.toLowerCase();
+  let bestAngulo = 'visao_consumidor';
+  let bestScore = 0;
+
+  for (const [angulo, { keywords, descricao, adiciona }] of Object.entries(ANGULO_KEYWORDS)) {
+    const score = keywords.filter(kw => lower.includes(kw)).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestAngulo = angulo;
+    }
+  }
+
+  const config = ANGULO_KEYWORDS[bestAngulo];
+  return {
+    angulo: bestAngulo,
+    descricao: config?.descricao || 'Análise Geral',
+    adicionaConteudo: config?.adiciona || '',
+  };
+}
+
+// =================== VERNIZ DNA PROMPT ===================
+
+export interface VernizConfig {
+  nichoDetectado: NichoDetection;
+  gatilho: GatilhoEmocional;
+  angulo: AnguloAnalise;
+  empresaNome?: string;
+  empresaTelefone?: string;
+  empresaEndereco?: string;
+  empresaWhatsapp?: string;
+}
+
+export function buildVernizDNASection(config: VernizConfig): string {
+  const { nichoDetectado, gatilho, angulo } = config;
+
+  let section = `
+## 🧬 DNA "MADEIRA SEM VERNIZ" - APLICAR OBRIGATORIAMENTE
+
+### Filosofia Central:
+"Informação de verdade, sem firula. O leitor tem que entender, não ficar impressionado com palavras difíceis."
+
+### Regras de Escrita OBRIGATÓRIAS:
+
+**LINGUAGEM DO DIA-A-DIA:**
+- ❌ "O jurisdicionado deve impetrar" → ✅ "Você precisa entrar com"
+- ❌ "A implementação do procedimento" → ✅ "Como fazer na prática"
+- ❌ "Outrossim, cumpre salientar" → ✅ "Além disso"
+- ❌ "Alavancar resultados" → ✅ "Aumentar vendas"
+- ❌ "Sinergia entre áreas" → ✅ "Trabalho em equipe"
+
+**DESMITIFICAR O SISTEMA:**
+- Explique COMO funciona, não apenas O QUE é
+- Mostre os bastidores que ninguém conta
+- Use padrões: "O que ninguém te conta é que...", "Na prática, o que acontece de verdade é..."
+- Para conceitos complexos, use analogias do cotidiano
+
+**ESTRUTURA DE EXPLICAÇÃO para termos técnicos:**
+[TERMO] (em português claro: [explicação])
+Na prática, isso significa que [consequência real para o leitor].
+💡 Exemplo do dia a dia: [analogia com situação comum]
+
+**TOM CONSULTIVO-PRÓXIMO:**
+- Como se estivesse explicando para um amigo inteligente
+- Frases-gatilho: "Olha, na real...", "Vou ser direto com você:", "Se tivesse que te dar um conselho:"
+
+### REGRA 80/20 - LEI 9.610/98:
+- **20% BASE ORIGINAL**: Dados, citações diretas com aspas, fatos verificáveis
+- **80% REESCRITA**: Análise, contexto, linguagem própria, comparações, exemplos
+
+### PROIBIÇÕES ABSOLUTAS:
+1. ❌ Palavras vazias: "incrível", "revolucionário", "o melhor", "único"
+2. ❌ Promessas irreais: "garantido", "100% seguro", "sem risco"
+3. ❌ Termos técnicos SEM explicar
+4. ❌ Parágrafos > 4 linhas
+5. ❌ Iniciar com "De acordo com" ou "Segundo"
+6. ❌ CTAs genéricos: "clique aqui", "saiba mais"
+
+## 🎯 DETECÇÃO AUTOMÁTICA APLICADA
+
+**Nicho**: ${nichoDetectado.nicho} | **Compliance**: ${nichoDetectado.compliance}
+**Gatilho Emocional**: ${gatilho.gatilho} ${gatilho.emoji}
+**Ângulo de Análise**: ${angulo.descricao} (${angulo.adicionaConteudo})`;
+
+  // Add disclaimers
+  if (nichoDetectado.disclaimers.length > 0) {
+    section += `\n\n### DISCLAIMERS OBRIGATÓRIOS (incluir no final do artigo):`;
+    nichoDetectado.disclaimers.forEach(d => {
+      section += `\n- "${d}"`;
+    });
+  }
+
+  // Add company data
+  if (config.empresaNome || config.empresaTelefone) {
+    section += `\n\n### DADOS DA EMPRESA (usar em CTAs personalizados):`;
+    if (config.empresaNome) section += `\n- **Empresa**: ${config.empresaNome}`;
+    if (config.empresaTelefone) section += `\n- **Telefone**: ${config.empresaTelefone}`;
+    if (config.empresaWhatsapp) section += `\n- **WhatsApp**: ${config.empresaWhatsapp}`;
+    if (config.empresaEndereco) section += `\n- **Endereço**: ${config.empresaEndereco}`;
+  }
+
+  return section;
+}
+
+// =================== FULL ORCHESTRATOR ===================
+
+export interface OrchestrationResult {
+  vernizSection: string;
+  nichoDetectado: NichoDetection;
+  gatilho: GatilhoEmocional;
+  angulo: AnguloAnalise;
+}
+
+export function orchestrate(
+  title: string,
+  keyword: string,
+  projectConfig?: {
+    nicho?: string;
+    compliance_rules?: string;
+    empresa_nome?: string;
+    empresa_telefone?: string;
+    empresa_endereco?: string;
+    empresa_whatsapp?: string;
+  }
+): OrchestrationResult {
+  const fullText = `${title} ${keyword}`;
+  
+  // Use project nicho if set, otherwise detect
+  let nichoDetectado = detectarNicho(fullText);
+  if (projectConfig?.nicho && projectConfig.nicho !== 'auto') {
+    const overrideConfig = NICHO_COMPLIANCE[projectConfig.nicho];
+    if (overrideConfig) {
+      nichoDetectado = {
+        nicho: projectConfig.nicho,
+        compliance: projectConfig.compliance_rules || overrideConfig.compliance,
+        disclaimers: overrideConfig.disclaimers,
+        tomPadrao: overrideConfig.tom,
+        povPadrao: overrideConfig.pov,
+        tamanhoIdeal: overrideConfig.tamanho,
+      };
+    }
+  }
+
+  const gatilho = detectarGatilho(fullText);
+  const angulo = detectarAngulo(fullText);
+
+  const vernizSection = buildVernizDNASection({
+    nichoDetectado,
+    gatilho,
+    angulo,
+    empresaNome: projectConfig?.empresa_nome,
+    empresaTelefone: projectConfig?.empresa_telefone,
+    empresaEndereco: projectConfig?.empresa_endereco,
+    empresaWhatsapp: projectConfig?.empresa_whatsapp,
+  });
+
+  return { vernizSection, nichoDetectado, gatilho, angulo };
+}
+
+// Export all available nichos for frontend
+export const NICHOS_DISPONIVEIS = [
+  { value: 'auto', label: 'Detecção Automática', description: 'O sistema detecta o nicho baseado no conteúdo' },
+  { value: 'juridico', label: 'Jurídico / Advocacia', description: 'Compliance OAB/Res. 02/2015' },
+  { value: 'saude', label: 'Saúde / Medicina', description: 'Compliance CFM/ANVISA' },
+  { value: 'beleza', label: 'Beleza / Estética', description: 'Compliance ANVISA/Vigilância' },
+  { value: 'tecnologia', label: 'Tecnologia', description: 'Compliance LGPD' },
+  { value: 'marketing', label: 'Marketing Digital', description: 'Geral' },
+  { value: 'fintech', label: 'Finanças / Fintech', description: 'Compliance BACEN/CVM' },
+  { value: 'ecommerce', label: 'E-commerce', description: 'Compliance CDC' },
+  { value: 'b2b_saas', label: 'B2B / SaaS', description: 'Compliance LGPD' },
+  { value: 'educacao', label: 'Educação', description: 'Compliance MEC' },
+];
