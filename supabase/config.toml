@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.ai-chat]
 verify_jwt = false
+
+[functions.analyze-seo-advanced]
+verify_jwt = false
