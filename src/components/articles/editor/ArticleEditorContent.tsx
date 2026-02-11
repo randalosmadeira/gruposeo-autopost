@@ -50,8 +50,8 @@ export function ArticleEditorContent({
       .replace(/<!--\s*TITLE_SEO:\s*.*?-->/gi, '')
       .trim();
     
-    // Check if content looks like HTML (starts with a tag or comment)
-    const isHTML = /^\s*<[a-z]/i.test(cleaned);
+    // Check if content contains HTML tags anywhere (not just at the start)
+    const isHTML = /<(h[1-6]|p|div|ul|ol|li|table|blockquote|section|article|figure|a|img|strong|em|br)\b[^>]*>/i.test(cleaned);
     
     if (isHTML) {
       return cleaned;
