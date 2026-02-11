@@ -357,13 +357,47 @@ RESPONDA APENAS COM JSON:
   ], { maxTokens: 16000, temperature: 0.3 });
 
   const jsonStr = aiContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-  const parsed = JSON.parse(jsonStr);
-
-  return {
-    content: parsed.optimized_content || null,
-    title: parsed.optimized_title || null,
-    excerpt: parsed.optimized_meta || null,
-  };
+  
+  try {
+    const parsed = JSON.parse(jsonStr);
+    return {
+      content: parsed.optimized_content || null,
+      title: parsed.optimized_title || null,
+      excerpt: parsed.optimized_meta || null,
+    };
+  } catch (parseErr) {
+    console.warn("[AI SEO] JSON parse failed, attempting extraction...", (parseErr as Error).message);
+    
+    // Try to extract JSON from partial/malformed response
+    const jsonMatch = jsonStr.match(/\{[\s\S]*"optimized_content"\s*:\s*"[\s\S]*?"(?:,[\s\S]*?)?\}/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          content: parsed.optimized_content || null,
+          title: parsed.optimized_title || null,
+          excerpt: parsed.optimized_meta || null,
+        };
+      } catch { /* fall through */ }
+    }
+    
+    // Last resort: extract fields individually via regex
+    const contentMatch = jsonStr.match(/"optimized_content"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"optimized_title"|$)/);
+    const titleMatch = jsonStr.match(/"optimized_title"\s*:\s*"([^"]+)"/);
+    const metaMatch = jsonStr.match(/"optimized_meta"\s*:\s*"([^"]+)"/);
+    
+    if (contentMatch?.[1]) {
+      console.log("[AI SEO] Recovered content via regex extraction");
+      return {
+        content: contentMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"'),
+        title: titleMatch?.[1] || null,
+        excerpt: metaMatch?.[1] || null,
+      };
+    }
+    
+    console.error("[AI SEO] Could not recover JSON. Raw length:", jsonStr.length, "First 300:", jsonStr.substring(0, 300));
+    throw new Error("Erro ao processar resposta da IA. Tente novamente.");
+  }
 }
 
 // === Content Analysis ===
