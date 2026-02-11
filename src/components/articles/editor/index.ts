@@ -11,3 +11,4 @@ export { RecreateArticleButton } from './RecreateArticleButton';
 export { VersionHistoryPanel } from './VersionHistoryPanel';
 export { SchedulingPanel } from './SchedulingPanel';
 export { ImageGalleryPanel } from './ImageGalleryPanel';
+export { AISEOAnalysisPanel } from './AISEOAnalysisPanel';

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { SEOOptimizationPanel } from './SEOOptimizationPanel';
 import { SchemaPreview } from './SchemaPreview';
+import { AISEOAnalysisPanel } from './AISEOAnalysisPanel';
 import { WordPressCategorySelector } from '../WordPressCategorySelector';
 import { ContentVariationsGenerator } from '@/components/content-variations';
 import { format } from 'date-fns';
@@ -72,7 +73,7 @@ export function ArticleEditorSidebar({
   hasChanges,
   niche,
 }: ArticleEditorSidebarProps) {
-  const [configTab, setConfigTab] = useState<'config' | 'seo' | 'schema'>('config');
+  const [configTab, setConfigTab] = useState<'config' | 'seo' | 'schema' | 'ai-seo'>('config');
   const [isScheduleEnabled, setIsScheduleEnabled] = useState(!!article.scheduled_at);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     article.scheduled_at ? new Date(article.scheduled_at) : undefined
@@ -118,7 +119,7 @@ export function ArticleEditorSidebar({
   return (
     <div className="w-80 flex flex-col border-l bg-card h-full">
       {/* Config/SEO Tabs */}
-      <Tabs value={configTab} onValueChange={(v) => setConfigTab(v as 'config' | 'seo' | 'schema')} className="flex-1 flex flex-col min-h-0">
+      <Tabs value={configTab} onValueChange={(v) => setConfigTab(v as 'config' | 'seo' | 'schema' | 'ai-seo')} className="flex-1 flex flex-col min-h-0">
         <TabsList className="w-full rounded-none border-b h-12 bg-transparent p-0 shrink-0">
           <TabsTrigger 
             value="config" 
@@ -140,6 +141,13 @@ export function ArticleEditorSidebar({
           >
             <Braces className="w-4 h-4" />
             <span className="hidden xl:inline">Schema</span>
+          </TabsTrigger>
+          <TabsTrigger 
+            value="ai-seo" 
+            className="flex-1 h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent gap-1.5"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span className="hidden xl:inline">IA</span>
           </TabsTrigger>
         </TabsList>
 
@@ -430,6 +438,22 @@ export function ArticleEditorSidebar({
                 excerpt={article.excerpt}
                 keyword={article.keyword}
                 featuredImageUrl={article.featured_image_url}
+              />
+            </div>
+          </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="ai-seo" className="flex-1 m-0 min-h-0 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="p-4">
+              <AISEOAnalysisPanel
+                articleId={article.id}
+                title={article.title || undefined}
+                keyword={article.keyword}
+                content={article.content || undefined}
+                excerpt={article.excerpt || undefined}
+                onApplyTitle={(title) => onFieldUpdate('title', title)}
+                onApplyMeta={(meta) => onFieldUpdate('excerpt', meta)}
               />
             </div>
           </ScrollArea>

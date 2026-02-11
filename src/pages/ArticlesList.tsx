@@ -36,6 +36,7 @@ import {
   Pencil, 
   Trash2, 
   Upload,
+  Sparkles,
   RefreshCw,
   ImageIcon,
   ChevronLeft,
@@ -59,6 +60,7 @@ import {
   CalendarDays
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 import { useArticles } from '@/hooks/useArticles';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
@@ -235,6 +237,10 @@ export default function ArticlesList() {
   const [sortBy, setSortBy] = useState<'created_at' | 'scheduled_at'>('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
+  
+  // Bulk SEO Analysis state
+  const [isBulkAnalyzing, setIsBulkAnalyzing] = useState(false);
+  const [bulkAnalysisProgress, setBulkAnalysisProgress] = useState(0);
 
   // Status tabs configuration - proper counting based on DB status + scheduled_at field
   const statusTabs = useMemo(() => {
@@ -406,6 +412,52 @@ export default function ArticlesList() {
       title: 'Exclusão concluída',
       description: `${deleted} artigos excluídos${failed > 0 ? `, ${failed} falharam` : ''}.`,
     });
+  };
+
+  // Bulk SEO Analysis
+  const handleBulkSEOAnalysis = async () => {
+    if (selectedArticles.size === 0) return;
+    setIsBulkAnalyzing(true);
+    setBulkAnalysisProgress(0);
+
+    const ids = Array.from(selectedArticles);
+    // Process in batches of 5
+    const batchSize = 5;
+    let processed = 0;
+    let totalScore = 0;
+
+    try {
+      for (let i = 0; i < ids.length; i += batchSize) {
+        const batch = ids.slice(i, i + batchSize);
+        const { data, error } = await supabase.functions.invoke('analyze-seo-advanced', {
+          body: { article_ids: batch },
+        });
+
+        if (error) throw error;
+        processed += batch.length;
+        setBulkAnalysisProgress(processed);
+
+        if (data?.results) {
+          for (const r of data.results) {
+            totalScore += r.score;
+          }
+        }
+      }
+
+      const avgScore = Math.round(totalScore / ids.length);
+      toast({
+        title: `Análise SEO IA concluída`,
+        description: `${ids.length} artigos analisados. Score médio: ${avgScore}/100`,
+      });
+      
+      // Refresh to show updated scores
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+    } catch (e) {
+      toast({ title: 'Erro na análise em massa', description: 'Tente novamente.', variant: 'destructive' });
+    } finally {
+      setIsBulkAnalyzing(false);
+      setBulkAnalysisProgress(0);
+    }
   };
 
   // Copy article link
@@ -607,6 +659,20 @@ export default function ArticlesList() {
           >
             <Upload className="w-4 h-4 mr-2" />
             Publicar em massa
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={selectedArticles.size === 0 || isBulkAnalyzing}
+            onClick={handleBulkSEOAnalysis}
+          >
+            {isBulkAnalyzing ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4 mr-2" />
+            )}
+            {isBulkAnalyzing ? `Analisando... (${bulkAnalysisProgress}/${selectedArticles.size})` : `Análise SEO IA (${selectedArticles.size})`}
           </Button>
           
           <Button
