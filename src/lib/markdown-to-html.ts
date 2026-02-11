@@ -16,20 +16,24 @@ marked.setOptions({
 export function markdownToHTML(content: string): string {
   if (!content) return '';
   
+  // Strip META_DESCRIPTION and TITLE_SEO comments before processing
+  let cleaned = content
+    .replace(/<!--\s*META_DESCRIPTION:\s*.*?-->/gi, '')
+    .replace(/<!--\s*TITLE_SEO:\s*.*?-->/gi, '')
+    .trim();
+  
   // Check if content is already HTML (starts with HTML tags)
-  const isHTML = /<[a-z][\s\S]*>/i.test(content.trim());
+  const isHTML = /<[a-z][\s\S]*>/i.test(cleaned);
   
   // If content has markdown indicators, convert it
-  const hasMarkdown = /^#{1,6}\s|^\*\*|^\*\s|^-\s|^\d+\.\s|^>\s|```/m.test(content);
+  const hasMarkdown = /^#{1,6}\s|^\*\*|^\*\s|^-\s|^\d+\.\s|^>\s|```/m.test(cleaned);
   
-  let html = content;
+  let html = cleaned;
   
   if (hasMarkdown && !isHTML) {
-    // Convert markdown to HTML
-    html = marked.parse(content) as string;
+    html = marked.parse(cleaned) as string;
   } else if (hasMarkdown && isHTML) {
-    // Mixed content - try to convert markdown parts
-    html = marked.parse(content) as string;
+    html = marked.parse(cleaned) as string;
   }
   
   // Sanitize the output

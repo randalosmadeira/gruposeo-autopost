@@ -49,30 +49,31 @@ function buildImagePrompt(request: ImageRequest): string {
   const visualContext = SEGMENT_VISUAL_CONTEXT[segment] || SEGMENT_VISUAL_CONTEXT.general;
   const keywordList = keywords ? keywords.split(',').map(k => k.trim()).join(', ') : '';
   
-  let prompt = `Create a ${style === 'photorealistic' ? 'photorealistic, high-quality professional photograph' : style === 'illustration' ? 'clean modern illustration' : 'abstract conceptual image'} for a blog article.
+  let prompt = `${style === 'photorealistic' ? 'Ultra-realistic, cinematic photograph shot on a Canon EOS R5 with 85mm f/1.4 lens' : style === 'illustration' ? 'Clean modern editorial illustration' : 'Abstract conceptual image'} that DIRECTLY represents the concept: "${title}".
 
-## TOPIC
-Title: "${title}"
-${keywordList ? `Keywords: ${keywordList}` : ''}
-${context ? `Additional Context: ${context}` : ''}
+## CRITICAL: VISUAL CONNECTION TO TITLE
+The image MUST visually tell the story of "${title}". The viewer should immediately understand what the article is about just by looking at the image.
+${keywordList ? `Incorporate visual elements related to: ${keywordList}` : ''}
+${context ? `Scene context: ${context}` : ''}
 
-## VISUAL DIRECTION
+## SCENE & ENVIRONMENT
 ${visualContext}
 
-## TECHNICAL REQUIREMENTS
+## PHOTOGRAPHIC QUALITY
+- ${style === 'photorealistic' ? 'Shot in golden hour or soft studio lighting. Shallow depth of field with creamy bokeh. Natural skin tones. Film-grain texture. 8K resolution detail. Hyper-detailed textures on materials (fabric, wood, metal). Volumetric lighting with subtle lens flare.' : style === 'illustration' ? 'Clean vector-style illustration, modern flat design with rich color palette' : 'Abstract geometric patterns, gradient colors, modern art style'}
 - Aspect Ratio: ${aspectRatio}
-- Style: ${style === 'photorealistic' ? 'Professional photography with natural lighting, depth of field (bokeh effect), high resolution' : style === 'illustration' ? 'Clean vector-style illustration, modern flat design' : 'Abstract geometric patterns, gradient colors'}
-- Composition: Rule of thirds, main subject clearly in focus
-- Colors: Professional color palette appropriate for the segment
-- Mood: Trustworthy, professional, engaging
+- Composition: Cinematic rule of thirds, strong leading lines, main subject clearly in sharp focus
+- Color grading: Professional cinema-grade color correction appropriate for ${segment} sector
+- Mood: Authentic, trustworthy, emotionally engaging - NOT stock photo feeling
 
-## RESTRICTIONS
-- NO text or watermarks in the image
-- NO fantasy elements or cartoons (unless illustration style)
-- NO distorted faces or incorrect anatomy
+## ABSOLUTE RESTRICTIONS
+- ZERO text, watermarks, or overlays in the image
+- NO AI-looking artifacts, plastic skin, or uncanny valley effects
+- NO distorted faces, extra fingers, or incorrect anatomy
+- NO generic stock photo poses - make it feel candid and real
 - NO third-party logos or trademarks
 
-Generate a single, high-quality image that visually represents the article topic.`;
+Generate ONE stunning, emotionally compelling image that creates immediate visual connection with the article title.`;
 
   return prompt;
 }

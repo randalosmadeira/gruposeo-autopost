@@ -44,15 +44,21 @@ export function ArticleEditorContent({
   const processedContent = useMemo(() => {
     if (!content) return '';
     
-    // Check if content looks like HTML (starts with a tag)
-    const isHTML = content.trim().startsWith('<');
+    // Strip META_DESCRIPTION and TITLE_SEO comments (they shouldn't be visible)
+    let cleaned = content
+      .replace(/<!--\s*META_DESCRIPTION:\s*.*?-->/gi, '')
+      .replace(/<!--\s*TITLE_SEO:\s*.*?-->/gi, '')
+      .trim();
+    
+    // Check if content looks like HTML (starts with a tag or comment)
+    const isHTML = /^\s*<[a-z]/i.test(cleaned);
     
     if (isHTML) {
-      return content;
+      return cleaned;
     }
     
     // Convert markdown to HTML
-    return marked.parse(content, { async: false }) as string;
+    return marked.parse(cleaned, { async: false }) as string;
   }, [content]);
 
   const handleCopyHTML = async () => {

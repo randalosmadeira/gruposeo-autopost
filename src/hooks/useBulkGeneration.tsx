@@ -530,12 +530,17 @@ export function useBulkGeneration() {
           const extractedTitle = titleMatch?.[1]?.trim().slice(0, 60) || job.keyword.keyword;
           const wordCount = content.split(/\s+/).filter(Boolean).length;
           
+          // Extract meta-description from HTML comment
+          const metaMatch = content.match(/<!--\s*META_DESCRIPTION:\s*(.+?)\s*-->/i);
+          const extractedExcerpt = metaMatch?.[1]?.trim().slice(0, 160) || null;
+          
           await supabase
             .from('articles')
             .update({ 
               status: 'ready',
               content,
               title: extractedTitle,
+              excerpt: extractedExcerpt,
               word_count: wordCount,
               featured_image_url: imageUrl,
             })
