@@ -354,6 +354,41 @@ async function executeAction(
         const isPlugin = project.wordpress_username === "__CFRDM_PLUGIN__";
         const baseUrl = project.wordpress_url.replace(/\/wp-json\/cfrdm\/v1\/?$/, "").replace(/\/+$/, "");
 
+        // Resolve source_wp_post_id if null - find a relevant post from the index
+        let sourcePostId = suggestion.source_wp_post_id;
+        if (!sourcePostId && suggestion.project_id) {
+          // Find a post that could contain the anchor text by searching titles/keywords
+          const anchorWords = suggestion.anchor_text.split(/\s+/).filter((w: string) => w.length >= 4).slice(0, 3);
+          if (anchorWords.length > 0) {
+            const searchTerm = anchorWords.join(" ");
+            const { data: candidates } = await supabase
+              .from("wordpress_article_index")
+              .select("wp_post_id, wp_post_title")
+              .eq("project_id", suggestion.project_id)
+              .eq("wp_post_status", "publish")
+              .neq("wp_post_url", suggestion.target_url)
+              .textSearch("wp_post_title", searchTerm.split(" ").join(" | "), { type: "plain" })
+              .limit(5);
+            
+            if (candidates && candidates.length > 0) {
+              sourcePostId = candidates[0].wp_post_id;
+            } else {
+              // Fallback: pick any recent post that isn't the target
+              const { data: recent } = await supabase
+                .from("wordpress_article_index")
+                .select("wp_post_id")
+                .eq("project_id", suggestion.project_id)
+                .eq("wp_post_status", "publish")
+                .neq("wp_post_url", suggestion.target_url)
+                .order("last_wp_modified_at", { ascending: false })
+                .limit(1);
+              if (recent && recent.length > 0) {
+                sourcePostId = recent[0].wp_post_id;
+              }
+            }
+          }
+        }
+
         if (isPlugin) {
           try {
             // Try the dedicated apply endpoint first
@@ -366,7 +401,7 @@ async function executeAction(
               body: JSON.stringify({
                 target_url: suggestion.target_url,
                 anchor_text: suggestion.anchor_text,
-                source_post_id: suggestion.source_wp_post_id,
+                source_post_id: sourcePostId,
               }),
               signal: AbortSignal.timeout(15000),
             });
