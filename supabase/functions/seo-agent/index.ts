@@ -1,21 +1,20 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const lovableKey = Deno.env.get("LOVABLE_API_KEY")!;
-  const supabase = createClient(supabaseUrl, serviceKey);
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceKey);
+    const orchestrator = getOrchestrator();
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -107,7 +106,7 @@ Deno.serve(async (req) => {
               console.log(`[SEO Agent] [${project.name}] Meta audit endpoint not available (${auditResp.status})`);
               
               // Fallback: AI-based audit on indexed articles
-              const aiAuditResult = await runAIMetaAudit(supabase, project, lovableKey);
+              const aiAuditResult = await runAIMetaAudit(supabase, project);
               metaIssuesFound = aiAuditResult.found;
               metaIssuesFixed = aiAuditResult.fixed;
               details.meta_audit = aiAuditResult;
@@ -115,7 +114,7 @@ Deno.serve(async (req) => {
           } catch (e) {
             console.error(`[SEO Agent] [${project.name}] Meta audit error:`, e);
             // Fallback to AI audit
-            const aiAuditResult = await runAIMetaAudit(supabase, project, lovableKey);
+            const aiAuditResult = await runAIMetaAudit(supabase, project);
             metaIssuesFound = aiAuditResult.found;
             metaIssuesFixed = aiAuditResult.fixed;
             details.meta_audit = aiAuditResult;
@@ -127,7 +126,7 @@ Deno.serve(async (req) => {
         // ═══════════════════════════════════════════
         console.log(`[SEO Agent] [${project.name}] Step 2: Internal Linking`);
 
-        const linkResult = await analyzeInternalLinks(supabase, project, lovableKey);
+        const linkResult = await analyzeInternalLinks(supabase, project);
         linksSuggested = linkResult.suggested;
         linksApplied = linkResult.applied;
         details.internal_links = linkResult;
@@ -265,7 +264,6 @@ Deno.serve(async (req) => {
 async function runAIMetaAudit(
   supabase: ReturnType<typeof createClient>,
   project: { id: string; name: string },
-  apiKey: string,
 ): Promise<{ found: number; fixed: number; issues: string[] }> {
   // Get indexed articles with low SEO scores
   const { data: articles } = await supabase
@@ -308,7 +306,6 @@ async function runAIMetaAudit(
 async function analyzeInternalLinks(
   supabase: ReturnType<typeof createClient>,
   project: { id: string; user_id: string; name: string },
-  apiKey: string,
 ): Promise<{ suggested: number; applied: number; orphans: number }> {
   // Find orphan articles (no internal links)
   const { data: orphans } = await supabase
@@ -362,30 +359,13 @@ Retorne APENAS JSON:
   "links_from_this": [{"title": "...", "url": "...", "anchor_text": "...", "relevance": 80}]
 }`;
 
-      const resp = await fetch(AI_GATEWAY_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash-lite",
-          messages: [
-            { role: "system", content: "Você é um especialista em SEO e linkagem interna. Gere anchor texts CURTOS (2-4 palavras) que provavelmente existem nos conteúdos dos artigos. Responda APENAS com JSON." },
-            { role: "user", content: prompt },
-          ],
-          max_tokens: 500,
-          temperature: 0.2,
-        }),
-      });
+      const orchestrator = getOrchestrator();
+      const aiContent = await orchestrator.call('seo_analysis', [
+        { role: "system", content: "Você é um especialista em SEO e linkagem interna. Gere anchor texts CURTOS (2-4 palavras) que provavelmente existem nos conteúdos dos artigos. Responda APENAS com JSON." },
+        { role: "user", content: prompt },
+      ], { maxTokens: 500, temperature: 0.2 });
 
-      if (!resp.ok) {
-        if (resp.status === 402 || resp.status === 429) break;
-        continue;
-      }
-
-      const data = await resp.json();
-      const content = data.choices?.[0]?.message?.content || "";
+      const content = aiContent;
       
       try {
         const jsonStr = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();

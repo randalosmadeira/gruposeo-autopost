@@ -1,13 +1,11 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
 interface ArticleData {
   wp_post_id: number;
@@ -113,56 +111,21 @@ IMPORTANTE:
 - topic_cluster: identifique o tema principal para agrupar artigos relacionados`;
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout per article
-    
-    const response = await fetch(AI_GATEWAY_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite", // Use cheaper model for bulk analysis
-        messages: [
-          { role: "system", content: "Você é um especialista em SEO e análise de conteúdo. Responda APENAS com JSON válido." },
-          { role: "user", content: prompt }
-        ],
-        max_tokens: 800,
-        temperature: 0.2,
-      }),
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("AI Gateway error:", error);
-      
-      // Check for payment/credit errors - signal to stop using AI
-      if (response.status === 402 || error.includes('credits') || error.includes('payment')) {
-        console.log("AI credits exhausted, using basic analysis");
-        return { result: analyzeArticleBasic(article), usedAI: false, creditsExhausted: true };
-      }
-      
-      // Other errors - use fallback but don't signal credits issue
-      return { result: analyzeArticleBasic(article), usedAI: false, creditsExhausted: false };
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || "";
+    const orchestrator = getOrchestrator();
+    const aiContent = await orchestrator.call('seo_analysis', [
+      { role: "system", content: "Você é um especialista em SEO e análise de conteúdo. Responda APENAS com JSON válido." },
+      { role: "user", content: prompt }
+    ], { maxTokens: 800, temperature: 0.2 });
 
     // Parse JSON from response
     try {
-      let jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      let jsonStr = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       return { result: JSON.parse(jsonStr), usedAI: true, creditsExhausted: false };
     } catch (e) {
-      console.error("Failed to parse AI response:", content);
+      console.error("Failed to parse AI response:", aiContent);
       return { result: analyzeArticleBasic(article), usedAI: false, creditsExhausted: false };
     }
   } catch (e: any) {
-    // Handle abort/timeout
     if (e.name === 'AbortError') {
       console.log("AI request timed out, using basic analysis");
     } else {
@@ -835,34 +798,19 @@ REGRAS:
 - Distribua links entre introdução, corpo e conclusão
 - Se houver regras de linkagem, inclua-as obrigatoriamente`;
 
-        const aiResponse = await fetch(AI_GATEWAY_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [
-              { role: "system", content: "Você é um especialista em SEO. Responda APENAS com JSON válido." },
-              { role: "user", content: suggestionsPrompt }
-            ],
-            max_tokens: 2000,
-            temperature: 0.3,
-          }),
-        });
-
+        const orchestrator = getOrchestrator();
         let suggestions = [];
-        if (aiResponse.ok) {
-          const aiData = await aiResponse.json();
-          const aiContent = aiData.choices?.[0]?.message?.content || "";
-          try {
-            const jsonStr = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-            const parsed = JSON.parse(jsonStr);
-            suggestions = parsed.suggestions || [];
-          } catch (e) {
-            console.error("Failed to parse AI suggestions:", aiContent);
-          }
+        try {
+          const aiContent = await orchestrator.call('seo_analysis', [
+            { role: "system", content: "Você é um especialista em SEO. Responda APENAS com JSON válido." },
+            { role: "user", content: suggestionsPrompt }
+          ], { maxTokens: 2000, temperature: 0.3 });
+          
+          const jsonStr = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const parsed = JSON.parse(jsonStr);
+          suggestions = parsed.suggestions || [];
+        } catch (e) {
+          console.error("Failed to get AI suggestions:", e);
         }
 
         // Add keyword rule matches
@@ -997,34 +945,19 @@ REGRAS IMPORTANTES:
 6. Não sugira links de um artigo para ele mesmo
 7. Distribua as posições (introduction, body, conclusion)`;
 
-        const aiResponse = await fetch(AI_GATEWAY_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [
-              { role: "system", content: "Você é um especialista em SEO. Responda APENAS com JSON válido." },
-              { role: "user", content: analysisPrompt }
-            ],
-            max_tokens: 4000,
-            temperature: 0.3,
-          }),
-        });
-
+        const orchestratorBL = getOrchestrator();
         let suggestions: any[] = [];
-        if (aiResponse.ok) {
-          const aiData = await aiResponse.json();
-          const aiContent = aiData.choices?.[0]?.message?.content || "";
-          try {
-            const jsonStr = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-            const parsed = JSON.parse(jsonStr);
-            suggestions = parsed.suggestions || [];
-          } catch (e) {
-            console.error("Failed to parse AI suggestions:", aiContent);
-          }
+        try {
+          const aiContent = await orchestratorBL.call('seo_analysis', [
+            { role: "system", content: "Você é um especialista em SEO. Responda APENAS com JSON válido." },
+            { role: "user", content: analysisPrompt }
+          ], { maxTokens: 4000, temperature: 0.3 });
+
+          const jsonStr = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const parsed = JSON.parse(jsonStr);
+          suggestions = parsed.suggestions || [];
+        } catch (e) {
+          console.error("Failed to get AI backlink suggestions:", e);
         }
 
         // Insert suggestions into database

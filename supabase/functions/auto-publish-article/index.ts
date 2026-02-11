@@ -1,6 +1,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
 
 const FUNCTION_NAME = "auto-publish-article";
 
@@ -39,13 +40,13 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseKey);
-  const AI_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const orchestrator = getOrchestrator();
 
-  if (!AI_API_KEY) {
+  if (!orchestrator.getAvailableProviders().length) {
     log.error("missing_ai_key");
     log.requestEnd(500, Date.now() - startTime);
     return new Response(
-      JSON.stringify({ success: false, error: "AI API key not configured" }),
+      JSON.stringify({ success: false, error: "Nenhuma chave de IA configurada (GEMINI_API_KEY ou OPENAI_API_KEY)" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -151,26 +152,16 @@ Estrutura esperada:
 
 Comece agora:`;
 
-    log.info("generating_content", { model: "google/gemini-3-flash-preview" });
+    log.info("generating_content", { provider: "BYOK orchestrator" });
 
-    const contentResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${AI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
-
-    if (!contentResponse.ok) {
-      const error = await contentResponse.text();
-      log.error("ai_generation_failed", { status: contentResponse.status });
+    let content = "";
+    try {
+      content = await orchestrator.call('article_generation', [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ], { maxTokens: 8192, temperature: 0.7 });
+    } catch (aiErr) {
+      log.error("ai_generation_failed", { error: aiErr instanceof Error ? aiErr.message : "unknown" });
       await supabase.from("articles").update({ status: "error", error_message: "AI generation failed" }).eq("id", article.id);
       log.requestEnd(500, Date.now() - startTime);
       return new Response(
@@ -179,8 +170,6 @@ Comece agora:`;
       );
     }
 
-    const contentData = await contentResponse.json();
-    const content = contentData.choices?.[0]?.message?.content || "";
     log.info("content_generated", { length: content.length });
 
     // Extract title from content (first H1)
@@ -203,34 +192,8 @@ Comece agora:`;
     let featuredImageUrl: string | null = null;
     if (generateImage) {
       log.info("generating_image");
-      try {
-        const imagePrompt = `Professional blog header image for an article about "${keyword}". Modern, clean design with subtle gradients. No text in the image. High quality, photorealistic, 16:9 aspect ratio.`;
-        
-        const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${AI_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-3-pro-image-preview",
-            messages: [{ role: "user", content: imagePrompt }],
-          }),
-        });
-
-        if (imageResponse.ok) {
-          const imageData = await imageResponse.json();
-          const imageParts = imageData.choices?.[0]?.message?.content;
-          if (imageParts && typeof imageParts === 'string' && imageParts.startsWith('data:image')) {
-            featuredImageUrl = imageParts;
-            log.info("image_generated");
-          }
-        } else {
-          log.warn("image_generation_failed", { status: imageResponse.status });
-        }
-      } catch (imageError) {
-        log.warn("image_generation_error", { error: imageError instanceof Error ? imageError.message : "unknown" });
-      }
+      // Image generation skipped - BYOK doesn't support gateway image models
+      log.warn("image_generation_skipped", { reason: "BYOK mode - use generate-image edge function instead" });
     }
 
     // Calculate word count
