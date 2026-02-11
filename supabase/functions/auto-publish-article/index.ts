@@ -134,21 +134,45 @@ REGRAS IMPORTANTES:
 - Use o tom "${tone}"
 - Use segunda pessoa (você)
 - O artigo deve ter entre ${wordRange.min} e ${wordRange.max} palavras
-- Use formatação Markdown com headers (H2, H3), listas e negrito quando apropriado
+- Use formatação HTML com headers (H2, H3), listas e negrito quando apropriado
 - A palavra-chave principal "${keyword}" deve aparecer naturalmente no título, introdução, headers e conclusão
 - Otimize para SEO: use variações semânticas, escreva parágrafos curtos, use headers descritivos
 - Inclua uma seção de FAQ com 3-5 perguntas frequentes ao final
-- Finalize com uma conclusão que resume os pontos principais e inclui um call-to-action`;
+- Finalize com uma conclusão que resume os pontos principais e inclui um call-to-action
+
+🚨 REGRA INEGOCIÁVEL - LEGIBILIDADE FLESCH 60-100:
+| Score | Nível | Escolaridade |
+|-------|-------|-------------|
+| 90-100 | Muito Fácil | 5º ano — criança de 11 anos entende |
+| 70-80 | Bastante Fácil | 8º ano — maioria dos adultos |
+| 60-70 | Padrão | 8º-9º ano — ideal para conteúdo web |
+| < 60 | ❌ REPROVADO | Reescrever obrigatoriamente |
+
+- Sentenças curtas: MÁXIMO 15 palavras por sentença
+- Parágrafos curtos: MÁXIMO 3-4 linhas
+- Vocabulário SIMPLES: use palavras do dia-a-dia
+- Se usar termo técnico, SEMPRE explique entre parênteses
+- Escreva como se explicasse para um amigo de 14 anos
+- Se o score ficar abaixo de 60, REESCREVER até atingir o mínimo`;
 
     const userPrompt = `Escreva um artigo completo e otimizado para SEO sobre: "${keyword}"
 
 Estrutura esperada:
-1. Título principal atraente (H1)
-2. Introdução engajadora que prenda o leitor
-3. Seções organizadas com subtítulos (H2/H3)
-4. Conteúdo detalhado e útil
-5. FAQ com 3-5 perguntas e respostas
-6. Conclusão com resumo e CTA
+1. <!-- META_DESCRIPTION: [145-160 chars com keyword] -->
+2. <!-- TITLE_SEO: [máx 60 chars] -->
+3. Título principal atraente (H1)
+4. Introdução engajadora que prenda o leitor
+5. Seções organizadas com subtítulos (H2/H3)
+6. Conteúdo detalhado e útil com links internos e externos
+7. FAQ com 3-5 perguntas e respostas
+8. Conclusão com resumo e CTA
+
+⚠️ CHECKLIST OBRIGATÓRIO:
+□ Flesch Reading Ease ≥ 60 (frases máx 15 palavras)
+□ Parágrafos máx 3-4 linhas
+□ Vocabulário simples do dia-a-dia
+□ FAQ incluído
+□ Meta description e título SEO incluídos
 
 Comece agora:`;
 
@@ -192,8 +216,20 @@ Comece agora:`;
     let featuredImageUrl: string | null = null;
     if (generateImage) {
       log.info("generating_image");
-      // Image generation skipped - BYOK doesn't support gateway image models
-      log.warn("image_generation_skipped", { reason: "BYOK mode - use generate-image edge function instead" });
+      try {
+        const imagePrompt = `Professional, cinematic, hyper-realistic editorial photo for article about "${keyword}". Shot with Canon EOS R5, 85mm lens, natural Golden Hour lighting, shallow depth of field, 8K resolution, 16:9 aspect ratio.`;
+        const { data: imgResult, error: imgError } = await supabase.functions.invoke("generate-image", {
+          body: { articleId: article.id, prompt: imagePrompt },
+        });
+        if (imgError) {
+          log.warn("image_generation_failed", { error: imgError.message });
+        } else {
+          featuredImageUrl = imgResult?.url || null;
+          log.info("image_generated", { hasImage: !!featuredImageUrl });
+        }
+      } catch (imgErr) {
+        log.warn("image_generation_error", { error: imgErr instanceof Error ? imgErr.message : 'unknown' });
+      }
     }
 
     // Calculate word count
