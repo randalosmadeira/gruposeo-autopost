@@ -324,15 +324,23 @@ Deno.serve(async (req) => {
       systemPrompt = buildLegacySystemPrompt(config) + '\n\n' + orchestration.vernizSection;
       userPrompt = `Escreva um artigo completo e otimizado para SEO sobre: "${config.keyword}"
 
-Estrutura esperada:
-1. Título principal atraente (H1)
-2. Introdução engajadora que prenda o leitor
+⚠️ OBRIGATÓRIO - NÃO ESQUECER:
+1. PRIMEIRA LINHA: <!-- META_DESCRIPTION: [145-160 caracteres com keyword] -->
+2. SEGUNDA LINHA: <!-- TITLE_SEO: [máximo 60 caracteres] -->
+3. Frases CURTAS: máximo 15 palavras cada (Flesch 70-100 OBRIGATÓRIO)
+4. Parágrafos CURTOS: máximo 3 linhas
+5. Linguagem SIMPLES: como se falasse com um amigo de 14 anos
+6. MÍNIMO 2 links externos para fontes oficiais (.gov, .edu)
+
+Estrutura:
+1. Meta tags (comentários HTML)
+2. Introdução engajadora (2 parágrafos curtos)
 3. Seções organizadas com subtítulos (H2/H3)
-4. Conteúdo detalhado e útil
+4. Conteúdo útil com listas e exemplos
 ${config.includeFaq ? `5. FAQ com ${config.faqCount} perguntas e respostas` : ''}
 ${config.includeConclusion ? '6. Conclusão com resumo e CTA' : ''}
 
-Comece agora:`;
+Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
       log.info("using_legacy_prompt_with_verniz", { keyword: config.keyword });
     }
 
@@ -345,12 +353,24 @@ Comece agora:`;
       useAdvanced: hasAdvancedConfig(config)
     });
 
+    // Add critical enforcement reminder at the end of user prompt
+    const enforcedUserPrompt = userPrompt + `
+
+⚠️ CHECKLIST FINAL ANTES DE RESPONDER:
+□ <!-- META_DESCRIPTION: ... --> presente na PRIMEIRA linha? (OBRIGATÓRIO)
+□ <!-- TITLE_SEO: ... --> presente na SEGUNDA linha? (OBRIGATÓRIO)
+□ Frases com MÁXIMO 15 palavras cada? (Flesch 70-100)
+□ Parágrafos com MÁXIMO 3 linhas?
+□ Pelo menos 2 links externos para fontes oficiais?
+□ Linguagem simples que qualquer pessoa entende?
+Se algum item está faltando, CORRIJA antes de entregar.`;
+
     const streamResponse = await callAIStream(
       [
         { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
+        { role: "user", content: enforcedUserPrompt },
       ],
-      { maxTokens: 8000 }
+      { maxTokens: 8000, temperature: 0.5 }
     );
 
     return new Response(streamResponse.body, {

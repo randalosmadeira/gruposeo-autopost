@@ -543,34 +543,42 @@ CONFIGURAÇÃO DA TAREFA:
 ${angleInstruction}
 ${request.keyword ? `- Palavra-chave SEO: ${request.keyword}` : ''}
 
+⚠️⚠️⚠️ REGRAS INEGOCIÁVEIS - VERIFICAR ANTES DE ENTREGAR ⚠️⚠️⚠️
+
+1. META-DESCRIPTION: A resposta JSON DEVE conter metaDescription com 145-160 caracteres. Se faltar = REJEITADO.
+2. LEGIBILIDADE FLESCH 70-100 (FÁCIL): 
+   - Frases de NO MÁXIMO 15 palavras
+   - Parágrafos de NO MÁXIMO 3 linhas
+   - Palavras SIMPLES do dia-a-dia
+   - PROIBIDO juridiquês, mediquês ou qualquer jargão
+   - Termos técnicos SEMPRE explicados entre parênteses
+3. MÍNIMO 2 links externos para fontes oficiais (.gov, .edu, instituições)
+4. SEM espaços duplos, SEM pontuação duplicada, hierarquia H2>H3 correta
+
 ${niches.length > 1 ? `
-INSTRUÇÕES ESPECIAIS PARA NICHOS COMBINADOS:
-Como este projeto abrange múltiplos nichos (${niches.join(' + ')}), você deve:
-1. Adaptar o tom para atender a ambos os públicos
+INSTRUÇÕES PARA NICHOS COMBINADOS (${niches.join(' + ')}):
+1. Adaptar o tom para ambos os públicos
 2. Cruzar informações relevantes entre os nichos
-3. Usar vocabulário que dialogue com especialistas de cada área
-4. Sugerir conexões naturais entre os temas
+3. Sugerir conexões naturais entre os temas
 ` : ''}
 
 ${request.internalLinks && request.internalLinks.length > 0 ? `
-LINKS INTERNOS PARA INCLUIR (naturalmente no texto):
+LINKS INTERNOS PARA INCLUIR:
 ${request.internalLinks.map(link => `- ${link.anchor}: ${link.url}`).join('\n')}
 ` : ''}
 
 CONTEXTO ORIGINAL DA NOTÍCIA:
 ${request.sourceContent.substring(0, 4000)}${request.sourceContent.length > 4000 ? '... (truncado)' : ''}
 
-INSTRUÇÕES CRÍTICAS:
-1. Reescrever 100% do conteúdo com estrutura TOTALMENTE diferente
-2. NÃO copiar parágrafos ou frases longas (máx 3 palavras sequenciais)
-3. Adicionar análise e contexto próprio (mín 40% do conteúdo)
+INSTRUÇÕES DE REESCRITA:
+1. Reescrever 100% do conteúdo com palavras SIMPLES
+2. NÃO copiar frases longas (máx 3 palavras sequenciais)
+3. Adicionar análise e contexto próprio (mín 40%)
 4. Gerar artigo entre ${lengthConfig.min}-${lengthConfig.max} palavras
-5. Estrutura: H2 inicial obrigatório, H3 para subseções
-6. Parágrafos curtos (2-4 linhas) para melhor leitura
-7. Creditar fonte no rodapé: "Fonte: ${request.sourceName}${request.sourceUrl ? ` - ${request.sourceUrl}` : ''}"
-${niches.length > 1 ? `8. Integrar perspectivas de TODOS os nichos: ${niches.join(', ')}` : ''}
+5. Creditar fonte no rodapé: "Fonte: ${request.sourceName}${request.sourceUrl ? ` - ${request.sourceUrl}` : ''}"
+${niches.length > 1 ? `6. Integrar perspectivas de TODOS os nichos: ${niches.join(', ')}` : ''}
 
-Se originalidade < 95%, reescreva novamente até atingir 95%+.
+LEMBRE-SE: Frases CURTAS (máx 15 palavras). Linguagem SIMPLES. Meta-description OBRIGATÓRIA no JSON.
 
-Retorne o resultado APENAS em formato JSON conforme especificado no sistema. Não inclua texto antes ou depois do JSON.`;
+Retorne o resultado APENAS em formato JSON conforme especificado no sistema.`;
 }
