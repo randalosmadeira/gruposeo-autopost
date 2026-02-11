@@ -20,6 +20,32 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { article_ids, mode } = body;
 
+    // --- BYOK: Fetch user's API keys from user_settings ---
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.replace("Bearer ", "");
+    if (token) {
+      const { data: { user } } = await createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY") || serviceKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      }).auth.getUser();
+
+      if (user) {
+        const { data: settings } = await supabase
+          .from("user_settings")
+          .select("gemini_api_key, openai_api_key, anthropic_api_key")
+          .eq("user_id", user.id)
+          .single();
+
+        if (settings) {
+          orchestrator.setKeys({
+            gemini: settings.gemini_api_key || undefined,
+            openai: settings.openai_api_key || undefined,
+            anthropic: settings.anthropic_api_key || undefined,
+          });
+          console.log("[AI SEO] BYOK keys loaded from user_settings");
+        }
+      }
+    }
+
     if (!article_ids || !Array.isArray(article_ids) || article_ids.length === 0) {
       return new Response(
         JSON.stringify({ error: "article_ids is required (array)" }),
