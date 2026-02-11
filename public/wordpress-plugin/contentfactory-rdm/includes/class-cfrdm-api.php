@@ -2180,16 +2180,43 @@ class CFRDM_API {
                 ), 404);
             }
             
+            // Skip if already links to this URL
+            if (strpos($post->post_content, $target_url) !== false) {
+                return new WP_REST_Response(array(
+                    'success' => true,
+                    'message' => __('Post já contém link para esta URL', 'contentfactory-rdm'),
+                    'post_id' => $source_post_id,
+                    'method' => 'already_linked',
+                ), 200);
+            }
+            
             $result = self::insert_link_into_post_flexible($post, $anchor_text, $target_url);
             
+            if ($result['inserted']) {
+                return new WP_REST_Response(array(
+                    'success' => true,
+                    'message' => sprintf(__('Link inserido com sucesso (âncora: %s)', 'contentfactory-rdm'), $result['used_anchor']),
+                    'post_id' => $source_post_id,
+                    'used_anchor' => $result['used_anchor'],
+                ), 200);
+            }
+            
+            // FALLBACK: Insert as "Leia também" when flexible match fails
+            $fallback = self::insert_link_as_suggestion($post, $anchor_text, $target_url);
+            if ($fallback['inserted']) {
+                return new WP_REST_Response(array(
+                    'success' => true,
+                    'message' => sprintf(__('Link inserido como sugestão de leitura no post (ID: %d)', 'contentfactory-rdm'), $source_post_id),
+                    'post_id' => $source_post_id,
+                    'used_anchor' => $anchor_text,
+                    'method' => 'read_also',
+                ), 200);
+            }
+            
             return new WP_REST_Response(array(
-                'success' => $result['inserted'],
-                'message' => $result['inserted'] 
-                    ? sprintf(__('Link inserido com sucesso (âncora: %s)', 'contentfactory-rdm'), $result['used_anchor'])
-                    : __('Texto âncora não encontrado no conteúdo do post', 'contentfactory-rdm'),
-                'post_id' => $source_post_id,
-                'used_anchor' => $result['used_anchor'] ?? $anchor_text,
-            ), $result['inserted'] ? 200 : 422);
+                'success' => false,
+                'message' => __('Não foi possível inserir o link neste post', 'contentfactory-rdm'),
+            ), 422);
         }
         
         // If no source_post_id, find the best matching post
@@ -2300,8 +2327,18 @@ class CFRDM_API {
     private static function insert_link_into_post($post, $anchor_text, $target_url) {
         $content = $post->post_content;
         
-        // Search for anchor text that's not already inside a link
-        $pattern = '/(?<!<a [^>]*>)(\b' . preg_quote($anchor_text, '/') . '\b)(?![^<]*<\/a>)/iu';
+        // Use Unicode-safe word boundary matching for Portuguese text
+        // \b doesn't work well with accented characters, so use lookaround with \s and punctuation
+        $escaped = preg_quote($anchor_text, '/');
+        
+        // Strategy: Try case-insensitive match, not inside existing links
+        // First check simple strpos to see if text exists at all
+        if (mb_stripos($content, $anchor_text) === false) {
+            return array('inserted' => false);
+        }
+        
+        // Pattern: match anchor text not inside <a> tags
+        $pattern = '/(?<![a-zA-ZÀ-ÿ])(' . $escaped . ')(?![a-zA-ZÀ-ÿ])(?![^<]*<\/a>)/iu';
         
         if (preg_match($pattern, $content, $matches, PREG_OFFSET_CAPTURE)) {
             $match = $matches[1][0];
