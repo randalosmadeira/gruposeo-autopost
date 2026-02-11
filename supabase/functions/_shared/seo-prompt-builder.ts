@@ -352,8 +352,8 @@ function buildEEATSection(): string {
 }
 
 function buildAdvancedLinkingSection(config: PromptConfig): string {
-  const minLinks = config.minInternalLinks || 5;
-  const maxLinks = config.maxInternalLinks || 12;
+  const minLinks = config.minInternalLinks || 10;
+  const maxLinks = config.maxInternalLinks || 15;
 
   let section = `## 🔗 ESTRATÉGIA AVANÇADA DE LINKAGEM E ARQUITETURA SEO
 
@@ -365,25 +365,31 @@ function buildAdvancedLinkingSection(config: PromptConfig): string {
 5. **Facilitar Indexação** pelo Google (crawl depth optimization)
 
 ### Quantidade de Links:
-- **Mínimo**: ${minLinks} links internos
-- **Máximo**: ${maxLinks} links internos
-- **Ideal**: 1 link interno a cada 150-200 palavras
+- **Links Internos OBRIGATÓRIOS**: Mínimo ${minLinks}, máximo ${maxLinks}
+- **Links Externos**: MÁXIMO 3 (apenas fontes oficiais .gov, .edu, instituições)
+- **Ideal**: 1 link interno a cada 100-150 palavras
 
-### Distribuição Estratégica:
+### Distribuição Estratégica de Links Internos:
 \`\`\`
 INTRODUÇÃO (primeiros 2 parágrafos):
-├─ 1 link para Pillar Page do cluster
+├─ 1-2 links para Pillar Page do cluster
 └─ 1 link para artigo relacionado principal
 
 DESENVOLVIMENTO (corpo principal):
-├─ 3-5 links para cluster content
+├─ 4-6 links para cluster content
 ├─ 1-2 links para notícias/atualizações recentes
-└─ 1-2 links para conteúdos de aprofundamento
+└─ 2-3 links para conteúdos de aprofundamento
 
 CONCLUSÃO/CTA:
 ├─ 1 link para landing page/serviço
 └─ 1 link para recurso prático (se aplicável)
-\`\`\``;
+\`\`\`
+
+### ⚠️ REGRA DE LINKS EXTERNOS (MÁXIMO 3):
+- Apenas fontes altamente autoritativas (.gov, .edu, organizações oficiais)
+- Distribuir ao longo do texto, NÃO concentrar no final
+- NUNCA usar mais de 3 links externos no artigo inteiro
+- NUNCA linkar para concorrentes diretos`;
 
   // Add pillar page link if provided
   if (config.pillarPageUrl) {
@@ -400,7 +406,7 @@ Na introdução ou conclusão, inclua link para a página pilar do cluster:
   if (config.internalLinks && config.internalLinks.length > 0) {
     section += `
 
-### Links Internos Obrigatórios:
+### Links Internos Obrigatórios (usar TODOS):
 Distribua os seguintes links NATURALMENTE ao longo do texto:
 
 `;
@@ -447,11 +453,12 @@ Distribua os seguintes links NATURALMENTE ao longo do texto:
 - Links para concorrentes diretos
 - Links quebrados ou desatualizados
 - Anchor text genérico repetitivo ("clique aqui" em todos os links)
-- Excesso de links externos (máximo 5-7)
+- Excesso de links externos (MÁXIMO 3 - regra inegociável)
 - Links sem contexto ou forçados`;
 
   return section;
 }
+
 
 function buildFeaturedSnippetOptimization(keyword: string, includeFaq: boolean, faqCount: number): string {
   let section = `## 📈 OTIMIZAÇÃO PARA FEATURED SNIPPETS
@@ -692,8 +699,8 @@ Você é um redator SEO sênior e especialista em link building com expertise em
 - TESTE MENTAL: "Meu avô de 70 anos sem faculdade entende isso?" Se não, reescreva
 - Escreva como se estivesse explicando para um amigo no WhatsApp
 
-### REGRA 3 - LINKS EXTERNOS OBRIGATÓRIOS (MÍNIMO 2)
-- SEMPRE inclua 2-3 links externos para fontes autoritativas
+### REGRA 3 - LINKS EXTERNOS (MÁXIMO 3 - FONTES OFICIAIS)
+- Inclua 2-3 links externos para fontes autoritativas (NUNCA mais de 3)
 - Fontes por nicho:
   - Jurídico: planalto.gov.br, stf.jus.br, stj.jus.br, oab.org.br, cnj.jus.br
   - Saúde: who.int, gov.br/saude, anvisa.gov.br, cfm.org.br
@@ -702,6 +709,7 @@ Você é um redator SEO sênior e especialista em link building com expertise em
   - Geral: .gov.br, .edu.br, wikipedia.org
 - Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto descritivo</a>
 - Distribuir ao longo do texto, não concentrar no final
+- Links de redes sociais do projeto NÃO contam como links externos
 
 ### REGRA 4 - FORMATAÇÃO SEO AVANÇADA CORRETA
 - Sem espaços duplos entre palavras
@@ -798,7 +806,7 @@ Antes de finalizar, verifique:
 - [ ] Resposta direta à intenção de busca nos primeiros 150 palavras
 - [ ] Todos os H2s têm variações semânticas da keyword
 - [ ] Parágrafos com máximo 4 linhas (mobile-first)
-- [ ] ${config.minInternalLinks || 5}-${config.maxInternalLinks || 12} links internos distribuídos
+- [ ] Mínimo ${config.minInternalLinks || 10} links internos e MÁXIMO 3 links externos
 - [ ] Anchor text diversificado (não repetitivo)
 - [ ] Negrito usado estrategicamente (1-2 por parágrafo)
 - [ ] Tom adequado ao segmento ${config.segment}
