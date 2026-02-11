@@ -1,11 +1,11 @@
 {
-  "version": "3.2.0",
+  "version": "3.2.1",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.2.0 - Notificações automáticas no dashboard, monitoramento de portais com scraping HTML/RSS, reescrita com score de originalidade 95%+, diagnóstico com reparo via AJAX fallback. Pipeline completo: portal monitoring → rewrite → publish → notify.",
-  "released": "2026-02-10",
+  "changelog": "v3.2.1 - Fix: Linkagem interna agora usa fallback 'Leia também' quando source_post_id é fornecido mas âncora não é encontrada. Fix: Regex Unicode-safe para matching de texto âncora com caracteres acentuados portugueses.",
+  "released": "2026-02-11",
   "features": [
     "auto_notifications",
     "portal_monitoring",
