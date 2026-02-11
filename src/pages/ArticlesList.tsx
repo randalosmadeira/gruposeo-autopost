@@ -414,23 +414,26 @@ export default function ArticlesList() {
     });
   };
 
-  // Bulk SEO Analysis
+  // Bulk SEO Analysis + Auto-Fix + Republish
   const handleBulkSEOAnalysis = async () => {
     if (selectedArticles.size === 0) return;
     setIsBulkAnalyzing(true);
     setBulkAnalysisProgress(0);
 
     const ids = Array.from(selectedArticles);
-    // Process in batches of 5
-    const batchSize = 5;
+    const batchSize = 3; // smaller batches for optimize mode
     let processed = 0;
     let totalScore = 0;
+    let optimizedCount = 0;
+    let republishedCount = 0;
 
     try {
       for (let i = 0; i < ids.length; i += batchSize) {
         const batch = ids.slice(i, i + batchSize);
+        
+        // Step 1: Analyze + Auto-fix
         const { data, error } = await supabase.functions.invoke('analyze-seo-advanced', {
-          body: { article_ids: batch },
+          body: { article_ids: batch, mode: 'optimize' },
         });
 
         if (error) throw error;
@@ -440,20 +443,34 @@ export default function ArticlesList() {
         if (data?.results) {
           for (const r of data.results) {
             totalScore += r.score;
+            if (r.optimized) {
+              optimizedCount++;
+              
+              // Step 2: Republish if article was already published and has a project
+              if (r.status === 'published' && r.project_id) {
+                try {
+                  const { error: pubError } = await supabase.functions.invoke('publish-to-wordpress', {
+                    body: { articleId: r.article_id, projectId: r.project_id },
+                  });
+                  if (!pubError) republishedCount++;
+                } catch (pubErr) {
+                  console.error(`Republish failed for ${r.article_id}:`, pubErr);
+                }
+              }
+            }
           }
         }
       }
 
       const avgScore = Math.round(totalScore / ids.length);
       toast({
-        title: `Análise SEO IA concluída`,
-        description: `${ids.length} artigos analisados. Score médio: ${avgScore}/100`,
+        title: `SEO IA: Otimização Concluída ✅`,
+        description: `${optimizedCount} artigos corrigidos. Score médio: ${avgScore}/100.${republishedCount > 0 ? ` ${republishedCount} republicados no WordPress.` : ''}`,
       });
       
-      // Refresh to show updated scores
       queryClient.invalidateQueries({ queryKey: ['articles'] });
     } catch (e) {
-      toast({ title: 'Erro na análise em massa', description: 'Tente novamente.', variant: 'destructive' });
+      toast({ title: 'Erro na otimização em massa', description: 'Tente novamente.', variant: 'destructive' });
     } finally {
       setIsBulkAnalyzing(false);
       setBulkAnalysisProgress(0);
@@ -672,7 +689,7 @@ export default function ArticlesList() {
             ) : (
               <Sparkles className="w-4 h-4 mr-2" />
             )}
-            {isBulkAnalyzing ? `Analisando... (${bulkAnalysisProgress}/${selectedArticles.size})` : `Análise SEO IA (${selectedArticles.size})`}
+            {isBulkAnalyzing ? `Otimizando... (${bulkAnalysisProgress}/${selectedArticles.size})` : `Análise SEO IA (${selectedArticles.size})`}
           </Button>
           
           <Button
