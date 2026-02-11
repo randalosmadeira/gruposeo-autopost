@@ -80,16 +80,21 @@ export default function BulkArticleGenerator() {
     // Content structure options (using same naming as ContentStructureConfig)
     metaDescription: true,
     lists: true,
-    tables: false,
+    tables: true,
     conclusion: true,
     faq: true,
-    internalLinking: false,
+    internalLinking: true,
     projectId: '',
     // SEO options
     seoOptimization: true,
-    humanizeContent: false,
+    humanizeContent: true,
     // AI Auto Optimization - analyzes all keywords and improves content automatically
     aiAutoOptimization: true,
+    // Advanced SEO
+    segment: 'general',
+    contentType: 'how-to',
+    goal: 'inform',
+    intentType: 'informational',
   });
 
   // Projects for internal linking
@@ -196,6 +201,29 @@ export default function BulkArticleGenerator() {
 
         if (createError) throw createError;
 
+        // Build projectConfig from selected project
+        const selectedProject = globalConfig.projectId 
+          ? projects.find(p => p.id === globalConfig.projectId) 
+          : connectedProjects.length > 0 ? connectedProjects[0] : null;
+        const projectConfigData = selectedProject ? {
+          nicho: (selectedProject as any).nicho || undefined,
+          compliance_rules: (selectedProject as any).compliance_rules || undefined,
+          empresa_nome: (selectedProject as any).empresa_nome || undefined,
+          empresa_telefone: (selectedProject as any).empresa_telefone || undefined,
+          empresa_endereco: (selectedProject as any).empresa_endereco || undefined,
+          empresa_whatsapp: (selectedProject as any).empresa_whatsapp || undefined,
+          social_instagram: (selectedProject as any).social_instagram || undefined,
+          social_youtube: (selectedProject as any).social_youtube || undefined,
+          social_linkedin: (selectedProject as any).social_linkedin || undefined,
+          social_twitter: (selectedProject as any).social_twitter || undefined,
+          social_tiktok: (selectedProject as any).social_tiktok || undefined,
+          social_google_maps: (selectedProject as any).social_google_maps || undefined,
+          social_linktree: (selectedProject as any).social_linktree || undefined,
+          cta_comunidade: (selectedProject as any).cta_comunidade || undefined,
+          cta_conclusao: (selectedProject as any).cta_conclusao || undefined,
+          cta_leads: (selectedProject as any).cta_leads || undefined,
+        } : undefined;
+
         // Call generation function with full globalConfig including tone/voice
         const { error } = await supabase.functions.invoke('generate-article', {
           body: {
@@ -208,6 +236,11 @@ export default function BulkArticleGenerator() {
               tone: globalConfig.tone === 'custom' ? globalConfig.customTone : globalConfig.tone,
               pointOfView: globalConfig.pointOfView,
               language: globalConfig.language,
+              // Advanced SEO
+              segment: globalConfig.segment,
+              contentType: globalConfig.contentType,
+              goal: globalConfig.goal,
+              intentType: globalConfig.intentType,
               // Content structure from globalConfig
               seoOptimization: globalConfig.seoOptimization,
               includeFaq: globalConfig.faq,
@@ -218,6 +251,8 @@ export default function BulkArticleGenerator() {
               includeMetaDescription: globalConfig.metaDescription,
               humanizeContent: globalConfig.humanizeContent,
               secondaryKeywords: '',
+              // Project config with company data, CTAs, social links
+              projectConfig: projectConfigData,
             },
           },
         });

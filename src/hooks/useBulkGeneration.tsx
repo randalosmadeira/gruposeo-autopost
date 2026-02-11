@@ -194,7 +194,8 @@ export function useBulkGeneration() {
     projectId: string | undefined,
     bulkConfig: BulkGenerationConfig | undefined,
     onProgress: (content: string, progress: number, step: string) => void,
-    retryAttempt = 0
+    retryAttempt = 0,
+    projectData?: Record<string, any> | null,
   ): Promise<{ content: string; articleId: string | null; imageUrl: string | null }> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) {
@@ -276,6 +277,25 @@ export function useBulkGeneration() {
       aiModel: bulkConfig?.aiModel || 'standard',
       // Internal links (automatically fetched)
       internalLinks: internalLinks.length > 0 ? internalLinks : undefined,
+      // Project config with company data, CTAs, social links
+      projectConfig: projectData ? {
+        nicho: projectData.nicho || undefined,
+        compliance_rules: projectData.compliance_rules || undefined,
+        empresa_nome: projectData.empresa_nome || undefined,
+        empresa_telefone: projectData.empresa_telefone || undefined,
+        empresa_endereco: projectData.empresa_endereco || undefined,
+        empresa_whatsapp: projectData.empresa_whatsapp || undefined,
+        social_instagram: projectData.social_instagram || undefined,
+        social_youtube: projectData.social_youtube || undefined,
+        social_linkedin: projectData.social_linkedin || undefined,
+        social_twitter: projectData.social_twitter || undefined,
+        social_tiktok: projectData.social_tiktok || undefined,
+        social_google_maps: projectData.social_google_maps || undefined,
+        social_linktree: projectData.social_linktree || undefined,
+        cta_comunidade: projectData.cta_comunidade || undefined,
+        cta_conclusao: projectData.cta_conclusao || undefined,
+        cta_leads: projectData.cta_leads || undefined,
+      } : undefined,
     };
 
     // Try to generate article with retries
@@ -401,7 +421,16 @@ export function useBulkGeneration() {
       return;
     }
 
-    // STEP 1: Create all articles in database as 'draft' (queue)
+    // STEP 1: Fetch project data for projectConfig injection
+    let projectData: Record<string, any> | null = null;
+    if (projectId && projectId !== 'none') {
+      try {
+        const { data } = await supabase.from('projects').select('*').eq('id', projectId).single();
+        projectData = data;
+      } catch { /* continue without project data */ }
+    }
+
+    // STEP 2: Create all articles in database as 'draft' (queue)
     // This makes them visible in the articles list immediately
     const articleIdMap = new Map<string, string>(); // job.id -> article.id
     
@@ -489,7 +518,9 @@ export function useBulkGeneration() {
                   : j
               )
             }));
-          }
+          },
+          0,
+          projectData,
         );
         
         // Update article in database with content and set to 'ready'
