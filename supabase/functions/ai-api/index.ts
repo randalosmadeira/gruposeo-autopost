@@ -99,25 +99,38 @@ Deno.serve(async (req) => {
       case "generate-title": {
         const selectedModel = model || "flash";
         
-        const titlePrompt = `Gere 5 títulos criativos e otimizados para SEO para um artigo sobre: "${prompt}"
+        const titlePrompt = `Você é um especialista em copywriting e SEO. Sua tarefa é gerar 5 títulos ÚNICOS e PERSUASIVOS para um artigo sobre: "${prompt}"
 
-Requisitos:
-- Títulos entre 50-60 caracteres
-- Incluir a palavra-chave principal
-- Usar números ou power words quando apropriado
-- Gerar curiosidade e engajamento
+REGRAS OBRIGATÓRIAS:
+1. NUNCA use padrões genéricos como "Guia Completo para [ano]", "Tudo o que Você Precisa Saber", "O Guia Definitivo"
+2. NUNCA inclua o ano (2025, 2026, etc.) no título, a menos que o tema seja inerentemente temporal (ex: "tendências", "mudanças na legislação")
+3. Cada título deve ter entre 45-60 caracteres para melhor CTR no Google
+4. Inclua a palavra-chave principal "${prompt}" de forma natural
 
-Retorne apenas os títulos, um por linha, numerados.`;
+TÉCNICAS DE TÍTULOS PERSUASIVOS (use variadas):
+- Números específicos: "7 Estratégias", "12 Erros que..."
+- Curiosidade: "Por Que...", "O Que Ninguém Te Conta Sobre..."
+- Benefício direto: "Como Aumentar...", "Economize..."
+- Urgência/Escassez: "Antes Que Seja Tarde...", "O Segredo..."
+- Autoridade: "Segundo Especialistas...", "Comprovado:..."
+- Negative hooks: "Erros Fatais em...", "Pare de..."
+- How-to prático: "Passo a Passo para...", "Como Fazer..."
+- Comparativo: "X vs Y: Qual o Melhor..."
+
+INSPIRAÇÃO: Pense como os melhores portais e blogs ranqueados no Google, Bing e Yahoo criam seus títulos para alta taxa de cliques. Analise mentalmente o que funciona nos resultados de busca para o termo "${prompt}".
+
+Retorne APENAS os 5 títulos, um por linha, numerados de 1 a 5. Sem explicações adicionais.`;
 
         const response = await callGemini(
           [{ role: "user", content: titlePrompt }],
-          { model: selectedModel, maxTokens: 500, temperature: 0.8 }
+          { model: selectedModel, maxTokens: 500, temperature: 0.9 }
         );
 
         const titles = response
           .split("\n")
           .filter((line: string) => line.trim())
-          .map((line: string) => line.replace(/^\d+\.\s*/, "").trim());
+          .map((line: string) => line.replace(/^\d+\.\s*/, "").replace(/\*\*/g, "").trim())
+          .filter((line: string) => line.length > 10);
 
         result = { titles, model: selectedModel };
         break;

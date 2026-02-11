@@ -118,21 +118,35 @@ export default function BulkArticleGenerator() {
 
     setGeneratingTitles(true);
     
-    // Simulate title generation
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    setArticles(prev => prev.map(a => {
-      if (a.keyword.trim() && !a.title.trim()) {
-        return { ...a, title: `${a.keyword}: Guia Completo ${new Date().getFullYear()}` };
+    try {
+      // Generate titles via AI for each keyword
+      const updatedArticles = [...articles];
+      for (const article of articlesWithKeywords) {
+        try {
+          const { data, error } = await supabase.functions.invoke('ai-api', {
+            body: { action: 'generate-title', prompt: article.keyword },
+          });
+          if (!error && data?.titles?.length > 0) {
+            const idx = updatedArticles.findIndex(a => a.keyword === article.keyword && !a.title.trim());
+            if (idx !== -1) {
+              updatedArticles[idx] = { ...updatedArticles[idx], title: data.titles[0] };
+            }
+          }
+        } catch (err) {
+          console.error(`Erro ao gerar título para "${article.keyword}":`, err);
+        }
       }
-      return a;
-    }));
+      
+      setArticles(updatedArticles);
+    } catch (err) {
+      console.error('Erro ao gerar títulos:', err);
+    }
     
     setGeneratingTitles(false);
     setShowTitlesDialog(false);
     
     toast({
-      title: 'Títulos gerados!',
+      title: 'Títulos gerados com IA!',
       description: `${articlesWithKeywords.length} títulos foram gerados com sucesso.`,
     });
   }, [articles, toast]);
