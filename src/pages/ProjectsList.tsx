@@ -492,17 +492,36 @@ function EditProjectForm({
 }) {
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description || '');
+  const [socialInstagram, setSocialInstagram] = useState(project.social_instagram || '');
+  const [socialYoutube, setSocialYoutube] = useState(project.social_youtube || '');
+  const [socialLinkedin, setSocialLinkedin] = useState(project.social_linkedin || '');
+  const [socialTwitter, setSocialTwitter] = useState(project.social_twitter || '');
+  const [socialTiktok, setSocialTiktok] = useState(project.social_tiktok || '');
+  const [socialGoogleMaps, setSocialGoogleMaps] = useState(project.social_google_maps || '');
+  const [socialLinktree, setSocialLinktree] = useState(project.social_linktree || '');
+  const [ctaComunidade, setCtaComunidade] = useState(project.cta_comunidade || '');
+  const [ctaConclusao, setCtaConclusao] = useState(project.cta_conclusao || '');
+  const [ctaLeads, setCtaLeads] = useState(project.cta_leads || '');
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     setName(project.name);
     setDescription(project.description || '');
+    setSocialInstagram(project.social_instagram || '');
+    setSocialYoutube(project.social_youtube || '');
+    setSocialLinkedin(project.social_linkedin || '');
+    setSocialTwitter(project.social_twitter || '');
+    setSocialTiktok(project.social_tiktok || '');
+    setSocialGoogleMaps(project.social_google_maps || '');
+    setSocialLinktree(project.social_linktree || '');
+    setCtaComunidade(project.cta_comunidade || '');
+    setCtaConclusao(project.cta_conclusao || '');
+    setCtaLeads(project.cta_leads || '');
     setHasChanges(false);
   }, [project]);
 
-  const handleChange = (field: 'name' | 'description', value: string) => {
-    if (field === 'name') setName(value);
-    if (field === 'description') setDescription(value);
+  const handleFieldChange = (setter: (v: string) => void) => (value: string) => {
+    setter(value);
     setHasChanges(true);
   };
 
@@ -510,7 +529,17 @@ function EditProjectForm({
     await onUpdate({
       id: project.id,
       name,
-      description: description || null
+      description: description || null,
+      social_instagram: socialInstagram || null,
+      social_youtube: socialYoutube || null,
+      social_linkedin: socialLinkedin || null,
+      social_twitter: socialTwitter || null,
+      social_tiktok: socialTiktok || null,
+      social_google_maps: socialGoogleMaps || null,
+      social_linktree: socialLinktree || null,
+      cta_comunidade: ctaComunidade || null,
+      cta_conclusao: ctaConclusao || null,
+      cta_leads: ctaLeads || null,
     });
     setHasChanges(false);
   };
@@ -534,69 +563,92 @@ function EditProjectForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="editName" className="text-sm font-medium">
-          Nome do Projeto
-        </Label>
-        <Input 
-          id="editName"
-          value={name} 
-          onChange={(e) => handleChange('name', e.target.value)} 
-          className="h-11"
-        />
+        <Label htmlFor="editName" className="text-sm font-medium">Nome do Projeto</Label>
+        <Input id="editName" value={name} onChange={(e) => handleFieldChange(setName)(e.target.value)} className="h-10" />
       </div>
 
       <div className="space-y-2">
-        <Label className="text-sm font-medium">
-          Domínio
-        </Label>
-        <Input 
-          value={project.domain}
-          disabled
-          className="h-11 bg-muted"
-        />
+        <Label className="text-sm font-medium">Domínio</Label>
+        <Input value={project.domain} disabled className="h-10 bg-muted" />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="editDescription" className="text-sm font-medium">
-          Descrição
-        </Label>
-        <Input 
-          id="editDescription"
-          placeholder="Descrição do projeto..."
-          value={description} 
-          onChange={(e) => handleChange('description', e.target.value)} 
-          className="h-11"
-        />
+        <Label htmlFor="editDescription" className="text-sm font-medium">Descrição</Label>
+        <Input id="editDescription" placeholder="Descrição do projeto..." value={description} onChange={(e) => handleFieldChange(setDescription)(e.target.value)} className="h-10" />
+      </div>
+
+      {/* Redes Sociais */}
+      <div className="pt-4 border-t border-border">
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <Globe className="w-4 h-4 text-primary" />
+          Redes Sociais (Link Juice & SEO)
+        </h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Instagram</Label>
+            <Input placeholder="https://instagram.com/..." value={socialInstagram} onChange={(e) => handleFieldChange(setSocialInstagram)(e.target.value)} className="h-9 text-sm" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">YouTube</Label>
+            <Input placeholder="https://youtube.com/@..." value={socialYoutube} onChange={(e) => handleFieldChange(setSocialYoutube)(e.target.value)} className="h-9 text-sm" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">LinkedIn</Label>
+            <Input placeholder="https://linkedin.com/in/..." value={socialLinkedin} onChange={(e) => handleFieldChange(setSocialLinkedin)(e.target.value)} className="h-9 text-sm" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">X (Twitter)</Label>
+            <Input placeholder="https://x.com/..." value={socialTwitter} onChange={(e) => handleFieldChange(setSocialTwitter)(e.target.value)} className="h-9 text-sm" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">TikTok</Label>
+            <Input placeholder="https://tiktok.com/@..." value={socialTiktok} onChange={(e) => handleFieldChange(setSocialTiktok)(e.target.value)} className="h-9 text-sm" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Google Maps</Label>
+            <Input placeholder="https://maps.app.goo.gl/..." value={socialGoogleMaps} onChange={(e) => handleFieldChange(setSocialGoogleMaps)(e.target.value)} className="h-9 text-sm" />
+          </div>
+          <div className="col-span-2 space-y-1">
+            <Label className="text-xs text-muted-foreground">Linktree / Links</Label>
+            <Input placeholder="https://linktr.ee/..." value={socialLinktree} onChange={(e) => handleFieldChange(setSocialLinktree)(e.target.value)} className="h-9 text-sm" />
+          </div>
+        </div>
+      </div>
+
+      {/* CTAs Estratégicos */}
+      <div className="pt-4 border-t border-border">
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <ExternalLink className="w-4 h-4 text-primary" />
+          CTAs Estratégicos
+        </h3>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">CTA Comunidade</Label>
+            <Input placeholder="Ex: Participe do nosso grupo no WhatsApp..." value={ctaComunidade} onChange={(e) => handleFieldChange(setCtaComunidade)(e.target.value)} className="h-9 text-sm" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">CTA Conclusão / Fechamento</Label>
+            <Input placeholder="Ex: Entre em contato com nossos especialistas..." value={ctaConclusao} onChange={(e) => handleFieldChange(setCtaConclusao)(e.target.value)} className="h-9 text-sm" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">CTA Leads</Label>
+            <Input placeholder="Ex: Baixe nosso e-book gratuito..." value={ctaLeads} onChange={(e) => handleFieldChange(setCtaLeads)(e.target.value)} className="h-9 text-sm" />
+          </div>
+        </div>
       </div>
 
       {/* WordPress Connection Status */}
       <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
-        <div className={cn(
-          "w-2 h-2 rounded-full",
-          project.is_connected ? "bg-green-500" : "bg-orange-500"
-        )} />
-        <span className="text-sm">
-          {project.is_connected ? 'WordPress conectado' : 'WordPress não conectado'}
-        </span>
+        <div className={cn("w-2 h-2 rounded-full", project.is_connected ? "bg-green-500" : "bg-orange-500")} />
+        <span className="text-sm">{project.is_connected ? 'WordPress conectado' : 'WordPress não conectado'}</span>
         {project.wordpress_url && (
-          <a 
-            href={project.wordpress_url} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-xs text-primary hover:underline ml-auto"
-          >
-            {project.wordpress_url}
-          </a>
+          <a href={project.wordpress_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline ml-auto">{project.wordpress_url}</a>
         )}
       </div>
 
       {/* Save Button */}
       <div className="flex justify-end pt-2">
-        <Button 
-          onClick={handleSave} 
-          disabled={!hasChanges || isUpdating || !name.trim()}
-          className="bg-gradient-primary hover:opacity-90 px-6"
-        >
+        <Button onClick={handleSave} disabled={!hasChanges || isUpdating || !name.trim()} className="bg-gradient-primary hover:opacity-90 px-6">
           {isUpdating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
           <Save className="w-4 h-4 mr-2" />
           Salvar Alterações
