@@ -97,42 +97,83 @@ Deno.serve(async (req) => {
 
       // === GENERATE ARTICLE TITLE ===
       case "generate-title": {
-        const selectedModel = model || "flash";
+        const selectedModel = model || "pro";
         
-        const titlePrompt = `Você é um especialista em copywriting e SEO. Sua tarefa é gerar 5 títulos ÚNICOS e PERSUASIVOS para um artigo sobre: "${prompt}"
+        // FASE 1: Pesquisa de referências via conhecimento do modelo
+        const researchPrompt = `Você é um analista sênior de SEO e marketing digital. Sua missão é PESQUISAR e ANALISAR como os maiores portais, buscadores e IAs abordam o tema: "${prompt}"
 
-REGRAS OBRIGATÓRIAS:
-1. NUNCA use padrões genéricos como "Guia Completo para [ano]", "Tudo o que Você Precisa Saber", "O Guia Definitivo"
-2. NUNCA inclua o ano (2025, 2026, etc.) no título, a menos que o tema seja inerentemente temporal (ex: "tendências", "mudanças na legislação")
-3. Cada título deve ter entre 45-60 caracteres para melhor CTR no Google
-4. Inclua a palavra-chave principal "${prompt}" de forma natural
+EXECUTE ESTA ANÁLISE PROFUNDA (use todo o seu conhecimento de treinamento):
 
-TÉCNICAS DE TÍTULOS PERSUASIVOS (use variadas):
-- Números específicos: "7 Estratégias", "12 Erros que..."
-- Curiosidade: "Por Que...", "O Que Ninguém Te Conta Sobre..."
-- Benefício direto: "Como Aumentar...", "Economize..."
-- Urgência/Escassez: "Antes Que Seja Tarde...", "O Segredo..."
-- Autoridade: "Segundo Especialistas...", "Comprovado:..."
-- Negative hooks: "Erros Fatais em...", "Pare de..."
-- How-to prático: "Passo a Passo para...", "Como Fazer..."
-- Comparativo: "X vs Y: Qual o Melhor..."
+1. **RESULTADOS DE BUSCA**: Quais são os títulos que aparecem nas primeiras posições do Google, Bing e Yahoo para "${prompt}"? Liste pelo menos 10 títulos reais ou muito prováveis que rankeariam bem.
 
-INSPIRAÇÃO: Pense como os melhores portais e blogs ranqueados no Google, Bing e Yahoo criam seus títulos para alta taxa de cliques. Analise mentalmente o que funciona nos resultados de busca para o termo "${prompt}".
+2. **PADRÕES DE IA**: Como ChatGPT, Gemini, Claude e outras IAs tipicamente intitulam conteúdo sobre "${prompt}"? Quais expressões e estruturas elas favorecem?
 
-Retorne APENAS os 5 títulos, um por linha, numerados de 1 a 5. Sem explicações adicionais.`;
+3. **PORTAIS DE REFERÊNCIA**: Quais títulos os maiores portais de notícias (G1, UOL, Folha, BBC, CNN, Forbes, etc.) e blogs especializados usariam para "${prompt}"?
 
-        const response = await callGemini(
-          [{ role: "user", content: titlePrompt }],
-          { model: selectedModel, maxTokens: 500, temperature: 0.9 }
+4. **TERMOS TRENDING**: Quais expressões, sinônimos e variações semânticas são mais pesquisadas relacionadas a "${prompt}"? Quais long-tails têm alto volume?
+
+5. **INTENÇÃO DE BUSCA**: Qual é a intenção predominante (informacional, transacional, navegacional) de quem pesquisa "${prompt}"?
+
+6. **GATILHOS EMOCIONAIS**: Quais emoções (medo, curiosidade, ganância, urgência, pertencimento) são mais eficazes para o nicho de "${prompt}"?
+
+Responda de forma estruturada e detalhada. Esta análise será usada para criar títulos de altíssimo CTR.`;
+
+        log.info("title_research_start", { keyword: prompt, model: selectedModel });
+        
+        const researchResponse = await callGemini(
+          [{ role: "user", content: researchPrompt }],
+          { model: selectedModel, maxTokens: 4096, temperature: 0.7 }
         );
 
-        const titles = response
+        log.info("title_research_complete", { researchLength: researchResponse.length });
+
+        // FASE 2: Sintetizar títulos baseados na pesquisa
+        const synthesisPrompt = `Com base nesta PESQUISA REAL de mercado sobre "${prompt}":
+
+---PESQUISA---
+${researchResponse}
+---FIM DA PESQUISA---
+
+Agora, como um copywriter de elite que trabalha para as maiores agências do mundo, crie 8 títulos ÚNICOS e IRRESISTÍVEIS.
+
+REGRAS ABSOLUTAS:
+1. PROIBIDO: "Guia Completo", "Guia Definitivo", "Tudo que Você Precisa Saber", "O Guia [adjetivo]"
+2. PROIBIDO: Incluir ano (2025, 2026) exceto se o tema for inerentemente temporal
+3. PROIBIDO: Títulos genéricos que poderiam servir para qualquer tema
+4. OBRIGATÓRIO: Entre 45-65 caracteres cada
+5. OBRIGATÓRIO: Incluir "${prompt}" de forma natural e fluida
+6. OBRIGATÓRIO: Cada título deve usar uma técnica DIFERENTE
+
+TÉCNICAS AVANÇADAS (use pelo menos 6 diferentes):
+- Power words com números ímpares: "7 Segredos", "11 Erros Fatais"  
+- Open loops de curiosidade: "O Método Que... (e Por Que Funciona)"
+- Negative hooks: "Pare de...", "O Erro #1 em...", "Por Que Você Está Falhando em..."
+- Prova social implícita: "O Que 93% dos Especialistas Fazem com..."
+- Benefício quantificável: "Como Triplicar...", "Reduza 40% dos..."
+- Contraste/Ruptura: "Esqueça Tudo Sobre... | A Nova Abordagem"
+- Autoridade: "Segundo Harvard/MIT/Especialistas..."
+- Micro-compromisso: "Em 5 Minutos Você Vai Entender..."
+- FOMO: "O Que Seus Concorrentes Já Sabem Sobre..."
+- Padrão interrompido: Começar com verbo imperativo inesperado
+
+INSPIRAÇÃO DIRETA: Use os termos, expressões e padrões que a pesquisa revelou serem mais populares nos buscadores e IAs para "${prompt}".
+
+Retorne APENAS os 8 títulos, um por linha, numerados de 1 a 8. Sem explicações.`;
+
+        const synthesisResponse = await callGemini(
+          [{ role: "user", content: synthesisPrompt }],
+          { model: selectedModel, maxTokens: 2048, temperature: 0.95 }
+        );
+
+        const titles = synthesisResponse
           .split("\n")
           .filter((line: string) => line.trim())
-          .map((line: string) => line.replace(/^\d+\.\s*/, "").replace(/\*\*/g, "").trim())
-          .filter((line: string) => line.length > 10);
+          .map((line: string) => line.replace(/^\d+\.\s*/, "").replace(/\*\*/g, "").replace(/"/g, "").trim())
+          .filter((line: string) => line.length > 10 && line.length < 120);
 
-        result = { titles, model: selectedModel };
+        log.info("titles_generated", { count: titles.length, keyword: prompt });
+
+        result = { titles, model: selectedModel, researchBased: true };
         break;
       }
 
