@@ -104,6 +104,12 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
     wordpress_username: project.wordpress_username || '',
     wordpress_app_password: project.wordpress_app_password || '',
     seo_plugin: project.seo_plugin || 'none',
+    // ZicaJuris fields
+    nicho: (project as any).nicho || 'auto',
+    empresa_nome: (project as any).empresa_nome || '',
+    empresa_telefone: (project as any).empresa_telefone || '',
+    empresa_endereco: (project as any).empresa_endereco || '',
+    empresa_whatsapp: (project as any).empresa_whatsapp || '',
   });
 
   const hasCredentials = !!(
@@ -171,7 +177,13 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
       wordpress_app_password: formData.wordpress_app_password || null,
       seo_plugin: formData.seo_plugin,
       is_connected: !!(cleanUrl && formData.wordpress_username && formData.wordpress_app_password),
-    });
+      // ZicaJuris fields
+      nicho: formData.nicho === 'auto' ? null : formData.nicho,
+      empresa_nome: formData.empresa_nome || null,
+      empresa_telefone: formData.empresa_telefone || null,
+      empresa_endereco: formData.empresa_endereco || null,
+      empresa_whatsapp: formData.empresa_whatsapp || null,
+    } as any);
     setIsEditOpen(false);
   };
 
@@ -391,6 +403,75 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
                 <p className="text-xs text-muted-foreground">
                   Se configurado, os artigos incluirão meta tags de SEO automaticamente.
                 </p>
+              </div>
+            </div>
+
+            {/* ZicaJuris - Nicho & Empresa */}
+            <div className="space-y-4 pt-4 border-t">
+              <h4 className="text-sm font-medium text-muted-foreground uppercase">🧬 DNA Verniz (ZicaJuris)</h4>
+              
+              <div className="space-y-2">
+                <Label>Nicho do Projeto</Label>
+                <Select 
+                  value={formData.nicho} 
+                  onValueChange={(value) => setFormData({ ...formData, nicho: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">🔍 Detecção Automática</SelectItem>
+                    <SelectItem value="juridico">⚖️ Jurídico / Advocacia</SelectItem>
+                    <SelectItem value="saude">🏥 Saúde / Medicina</SelectItem>
+                    <SelectItem value="beleza">💄 Beleza / Estética</SelectItem>
+                    <SelectItem value="tecnologia">💻 Tecnologia</SelectItem>
+                    <SelectItem value="marketing">📈 Marketing Digital</SelectItem>
+                    <SelectItem value="fintech">💰 Finanças / Fintech</SelectItem>
+                    <SelectItem value="ecommerce">🛒 E-commerce</SelectItem>
+                    <SelectItem value="b2b_saas">🏢 B2B / SaaS</SelectItem>
+                    <SelectItem value="educacao">📚 Educação</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Define compliance e tom automáticos para todo conteúdo gerado neste projeto.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Nome da Empresa</Label>
+                  <Input 
+                    placeholder="Ex: RDM Advogados"
+                    value={formData.empresa_nome} 
+                    onChange={(e) => setFormData({ ...formData, empresa_nome: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>WhatsApp</Label>
+                  <Input 
+                    placeholder="(11) 99999-9999"
+                    value={formData.empresa_whatsapp} 
+                    onChange={(e) => setFormData({ ...formData, empresa_whatsapp: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Telefone</Label>
+                <Input 
+                  placeholder="(11) 3333-4444"
+                  value={formData.empresa_telefone} 
+                  onChange={(e) => setFormData({ ...formData, empresa_telefone: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Endereço</Label>
+                <Input 
+                  placeholder="Av. Paulista, 1000 - São Paulo"
+                  value={formData.empresa_endereco} 
+                  onChange={(e) => setFormData({ ...formData, empresa_endereco: e.target.value })}
+                />
               </div>
             </div>
           </div>
