@@ -12,9 +12,13 @@
 
 // API endpoints
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
+const OPENAI_API_BASE = "https://api.openai.com/v1";
 
 // Default provider configuration - GEMINI ONLY
 const DEFAULT_PROVIDER: "gemini" = "gemini";
+
+// Runtime key registry - allows BYOK injection without Deno.env.set()
+const _runtimeKeys: Record<string, string> = {};
 
 // Model mappings - internal names to Gemini model IDs
 export const GEMINI_MODELS = {
@@ -62,10 +66,17 @@ export interface GeminiImageOptions {
 }
 
 /**
- * Get the configured Gemini API key
+ * Set a runtime API key (used by BYOK resolver instead of Deno.env.set)
+ */
+export function setRuntimeKey(name: string, value: string): void {
+  _runtimeKeys[name] = value;
+}
+
+/**
+ * Get the configured Gemini API key (runtime override > env)
  */
 export function getGeminiApiKey(): string {
-  const apiKey = Deno.env.get("GEMINI_API_KEY");
+  const apiKey = _runtimeKeys["GEMINI_API_KEY"] || Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY não configurada. Configure a chave da API do Gemini.");
   }
@@ -73,24 +84,24 @@ export function getGeminiApiKey(): string {
 }
 
 /**
- * Get the OpenAI API key
+ * Get the OpenAI API key (runtime override > env)
  */
 export function getOpenAIApiKey(): string | null {
-  return Deno.env.get("OPENAI_API_KEY") || null;
+  return _runtimeKeys["OPENAI_API_KEY"] || Deno.env.get("OPENAI_API_KEY") || null;
 }
 
 /**
  * Check if Gemini API key is available
  */
 export function hasGeminiKey(): boolean {
-  return !!Deno.env.get("GEMINI_API_KEY");
+  return !!(_runtimeKeys["GEMINI_API_KEY"] || Deno.env.get("GEMINI_API_KEY"));
 }
 
 /**
  * Check if OpenAI API key is available
  */
 export function hasOpenAIKey(): boolean {
-  return !!Deno.env.get("OPENAI_API_KEY");
+  return !!(_runtimeKeys["OPENAI_API_KEY"] || Deno.env.get("OPENAI_API_KEY"));
 }
 
 /**

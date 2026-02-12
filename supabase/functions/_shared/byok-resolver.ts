@@ -81,24 +81,24 @@ export async function getOrchestratorForUser(userId: string): Promise<AIOrchestr
 }
 
 /**
- * Set Gemini API key in Deno.env temporarily for functions that use gemini.ts directly.
- * This allows functions using callAI/callAIStream to work with user's BYOK key.
+ * Set API keys in the runtime registry for functions that use gemini.ts directly.
+ * Uses setRuntimeKey() instead of Deno.env.set() (which is blocked in edge functions).
  */
 export async function setEnvKeysForUser(userId: string): Promise<void> {
+  const { setRuntimeKey } = await import("./gemini.ts");
   const userKeys = await fetchUserKeys(userId);
   
-  // Override environment variables with user keys (if available)
+  // Override via runtime key registry (safe in edge functions)
   if (userKeys.gemini) {
-    // Store original to restore later if needed
-    Deno.env.set("GEMINI_API_KEY", userKeys.gemini);
+    setRuntimeKey("GEMINI_API_KEY", userKeys.gemini);
     console.log(`[BYOK] GEMINI_API_KEY set from user ${userId.slice(0, 8)}...`);
   }
   if (userKeys.openai) {
-    Deno.env.set("OPENAI_API_KEY", userKeys.openai);
+    setRuntimeKey("OPENAI_API_KEY", userKeys.openai);
     console.log(`[BYOK] OPENAI_API_KEY set from user ${userId.slice(0, 8)}...`);
   }
   if (userKeys.anthropic) {
-    Deno.env.set("ANTHROPIC_API_KEY", userKeys.anthropic);
+    setRuntimeKey("ANTHROPIC_API_KEY", userKeys.anthropic);
     console.log(`[BYOK] ANTHROPIC_API_KEY set from user ${userId.slice(0, 8)}...`);
   }
 }
