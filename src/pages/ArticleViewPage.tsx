@@ -41,6 +41,13 @@ export default function ArticleViewPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (isLoading) {
+        setError('O servidor está demorando para responder. Tente recarregar a página.');
+        setIsLoading(false);
+      }
+    }, 12000);
+
     const fetchArticle = async () => {
       if (!id) {
         setError('ID do artigo não fornecido');
@@ -57,7 +64,7 @@ export default function ArticleViewPage() {
 
         if (fetchError) {
           console.error('Error fetching article:', fetchError);
-          setError('Erro ao carregar artigo');
+          setError('Erro ao carregar artigo. Verifique sua conexão e tente novamente.');
           return;
         }
 
@@ -76,6 +83,7 @@ export default function ArticleViewPage() {
     };
 
     fetchArticle();
+    return () => clearTimeout(timeout);
   }, [id]);
 
   if (isLoading) {
@@ -90,10 +98,15 @@ export default function ArticleViewPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <p className="text-lg text-muted-foreground">{error || 'Artigo não encontrado'}</p>
-        <Button variant="outline" onClick={() => navigate('/articles')}>
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Voltar para lista
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Recarregar página
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/articles')}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Voltar para lista
+          </Button>
+        </div>
       </div>
     );
   }
