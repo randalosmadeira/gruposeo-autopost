@@ -50,7 +50,8 @@ export function useArticles(projectId?: string) {
             domain
           )
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(5000);
       
       if (projectId) {
         query = query.eq('project_id', projectId);

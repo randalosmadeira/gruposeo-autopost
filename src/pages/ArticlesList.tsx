@@ -249,25 +249,45 @@ export default function ArticlesList() {
   const [isBulkGeneratingImages, setIsBulkGeneratingImages] = useState(false);
   const [bulkImageProgress, setBulkImageProgress] = useState(0);
 
-  // Status tabs configuration - proper counting based on DB status + scheduled_at field
+  // Pre-filter articles by project, search, and date (everything EXCEPT status)
+  const baseFilteredArticles = useMemo(() => {
+    return articles.filter((a) => {
+      const matchesSearch = 
+        !search || 
+        a.title?.toLowerCase().includes(search.toLowerCase()) || 
+        a.keyword.toLowerCase().includes(search.toLowerCase());
+      
+      const matchesProject = projectFilter === 'all' || a.project_id === projectFilter;
+      
+      let matchesDate = true;
+      if (dateFilter) {
+        const articleDate = new Date(a.created_at);
+        matchesDate = 
+          articleDate.getFullYear() === dateFilter.getFullYear() &&
+          articleDate.getMonth() === dateFilter.getMonth() &&
+          articleDate.getDate() === dateFilter.getDate();
+      }
+      
+      return matchesSearch && matchesProject && matchesDate;
+    });
+  }, [articles, search, projectFilter, dateFilter]);
+
+  // Status tabs - counts based on base-filtered articles (respects project/search/date)
   const statusTabs = useMemo(() => {
-    // Count articles by actual database status
     const counts: Record<string, number> = { 
-      all: articles.length,
+      all: baseFilteredArticles.length,
       published: 0,
-      scheduled: 0, // This is virtual - based on scheduled_at field
+      scheduled: 0,
       ready: 0,
       generating: 0,
       draft: 0,
       error: 0,
     };
     
-    articles.forEach(a => {
-      // Count by actual status
+    baseFilteredArticles.forEach(a => {
       if (a.status === 'published') {
         counts.published++;
       } else if (a.status === 'ready') {
-        // Check if it's scheduled (has scheduled_at but not published yet)
         if (a.scheduled_at && new Date(a.scheduled_at) > new Date()) {
           counts.scheduled++;
         } else {
@@ -291,42 +311,19 @@ export default function ArticlesList() {
       { value: 'draft', label: 'Na Fila', count: counts.draft },
       { value: 'error', label: 'Erro', count: counts.error },
     ];
-  }, [articles]);
+  }, [baseFilteredArticles]);
 
-  // Filter and sort articles - proper status matching
+  // Filter by status and sort - uses baseFilteredArticles (already project/search/date filtered)
   const filteredArticles = useMemo(() => {
-    let filtered = articles.filter((a) => {
-      const matchesSearch = 
-        a.title?.toLowerCase().includes(search.toLowerCase()) || 
-        a.keyword.toLowerCase().includes(search.toLowerCase());
-      
-      // Status matching with special handling for 'scheduled' virtual status
-      let matchesStatus = false;
-      if (statusFilter === 'all') {
-        matchesStatus = true;
-      } else if (statusFilter === 'scheduled') {
-        // Scheduled = has scheduled_at in future and status is ready
-        matchesStatus = a.status === 'ready' && a.scheduled_at && new Date(a.scheduled_at) > new Date();
-      } else if (statusFilter === 'ready') {
-        // Ready = status is ready but NOT scheduled for future
-        matchesStatus = a.status === 'ready' && (!a.scheduled_at || new Date(a.scheduled_at) <= new Date());
-      } else {
-        matchesStatus = a.status === statusFilter;
+    let filtered = baseFilteredArticles.filter((a) => {
+      if (statusFilter === 'all') return true;
+      if (statusFilter === 'scheduled') {
+        return a.status === 'ready' && a.scheduled_at && new Date(a.scheduled_at) > new Date();
       }
-      
-      const matchesProject = projectFilter === 'all' || a.project_id === projectFilter;
-      
-      // Date filter
-      let matchesDate = true;
-      if (dateFilter) {
-        const articleDate = new Date(a.created_at);
-        matchesDate = 
-          articleDate.getFullYear() === dateFilter.getFullYear() &&
-          articleDate.getMonth() === dateFilter.getMonth() &&
-          articleDate.getDate() === dateFilter.getDate();
+      if (statusFilter === 'ready') {
+        return a.status === 'ready' && (!a.scheduled_at || new Date(a.scheduled_at) <= new Date());
       }
-      
-      return matchesSearch && matchesStatus && matchesProject && matchesDate;
+      return a.status === statusFilter;
     });
     
     // Sort articles
@@ -337,7 +334,7 @@ export default function ArticlesList() {
     });
     
     return filtered;
-  }, [articles, search, statusFilter, projectFilter, dateFilter, sortBy, sortOrder]);
+  }, [baseFilteredArticles, statusFilter, sortBy, sortOrder]);
 
   // Pagination
   const totalPages = Math.ceil(filteredArticles.length / itemsPerPage) || 1;
