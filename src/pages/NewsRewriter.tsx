@@ -321,7 +321,7 @@ export default function NewsRewriter() {
 
         {/* History Tab */}
         {mainTab === 'history' && (
-          <RepostHistory limit={20} />
+          <RepostHistory />
         )}
 
         {/* Schedule Tab */}

@@ -79,12 +79,11 @@ const pipelineConfig: Record<PipelineStatus, { label: string; icon: typeof Check
 type FilterTab = 'all' | 'generating' | 'draft' | 'ready' | 'published' | 'error';
 
 interface RepostHistoryProps {
-  limit?: number;
   showRefresh?: boolean;
   compact?: boolean;
 }
 
-export function RepostHistory({ limit = 50, showRefresh = true, compact = false }: RepostHistoryProps) {
+export function RepostHistory({ showRefresh = true, compact = false }: RepostHistoryProps) {
   const navigate = useNavigate();
   const { projects } = useProjects();
   const { toast } = useToast();
@@ -104,15 +103,31 @@ export function RepostHistory({ limit = 50, showRefresh = true, compact = false 
     else setLoading(true);
 
     try {
-      const { data, error } = await supabase
-        .from('articles')
-        .select('id, title, created_at, status, config, featured_image_url, excerpt, published_url, published_at, keyword')
-        .eq('config->>type', 'rewrite')
-        .order('created_at', { ascending: false })
-        .limit(limit);
+      const PAGE_SIZE = 1000;
+      let allData: any[] = [];
+      let from = 0;
+      let hasMore = true;
 
-      if (error) throw error;
-      setItems((data as RepostHistoryItem[]) || []);
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('articles')
+          .select('id, title, created_at, status, config, featured_image_url, excerpt, published_url, published_at, keyword')
+          .eq('config->>type', 'rewrite')
+          .order('created_at', { ascending: false })
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = allData.concat(data);
+          from += PAGE_SIZE;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      setItems(allData as RepostHistoryItem[]);
     } catch (error) {
       console.error('Error fetching repost history:', error);
     } finally {
@@ -149,7 +164,7 @@ export function RepostHistory({ limit = 50, showRefresh = true, compact = false 
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [limit]);
+  }, []);
 
   // Selection handlers
   const toggleSelect = (id: string) => {
