@@ -104,11 +104,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // THEN check for existing session with timeout fallback
     const sessionTimeout = setTimeout(() => {
-      if (mounted && loading) {
+      if (mounted) {
         console.warn('Auth session check timeout - proceeding without session');
         setLoading(false);
       }
-    }, 10000); // 10 second timeout
+    }, 20000); // 20 second timeout for slow backends
 
     supabase.auth
       .getSession()
@@ -133,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(sessionTimeout);
       subscription.unsubscribe();
     };
-  }, [loading]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signUp = useCallback(
     async (email: string, password: string, fullName?: string) => {
