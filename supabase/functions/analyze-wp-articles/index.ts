@@ -1,6 +1,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
+import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -111,7 +112,21 @@ IMPORTANTE:
 - topic_cluster: identifique o tema principal para agrupar artigos relacionados`;
 
   try {
-    const orchestrator = getOrchestrator();
+    let orchestrator = getOrchestrator();
+    // Try to load user-specific BYOK keys for better reliability
+    try {
+      const authHeader2 = req.headers.get("Authorization");
+      if (authHeader2) {
+        const supabaseUrl2 = Deno.env.get("SUPABASE_URL")!;
+        const anonKey2 = Deno.env.get("SUPABASE_ANON_KEY")!;
+        const sb2 = createClient(supabaseUrl2, anonKey2, {
+          global: { headers: { Authorization: authHeader2 } },
+        });
+        const { data: { user: u2 } } = await sb2.auth.getUser(authHeader2.replace("Bearer ", ""));
+        if (u2) orchestrator = await getOrchestratorForUser(u2.id);
+      }
+    } catch { /* use default orchestrator */ }
+
     const aiContent = await orchestrator.call('seo_analysis', [
       { role: "system", content: "Você é um especialista em SEO e análise de conteúdo. Responda APENAS com JSON válido." },
       { role: "user", content: prompt }
@@ -1009,6 +1024,335 @@ REGRAS IMPORTANTES:
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+      }
+
+      case "sync_all_projects": {
+        // Sync ALL connected projects automatically
+        const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const supabaseAdmin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
+
+        const { data: allProjects } = await supabaseAdmin
+          .from("projects")
+          .select("id, user_id, name, domain, wordpress_url, wordpress_username, wordpress_app_password")
+          .eq("user_id", user.id)
+          .eq("is_connected", true)
+          .not("wordpress_url", "is", null);
+
+        if (!allProjects || allProjects.length === 0) {
+          return new Response(
+            JSON.stringify({ success: true, message: "Nenhum projeto conectado encontrado", projects_synced: 0 }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Use SSE streaming for multi-project sync
+        const encoder2 = new TextEncoder();
+        const stream2 = new ReadableStream({
+          async start(controller) {
+            const sendEvent2 = (data: any) => {
+              controller.enqueue(encoder2.encode(`data: ${JSON.stringify(data)}\n\n`));
+            };
+
+            const projectResults: any[] = [];
+            let userOrchestrator = getOrchestrator();
+            try { userOrchestrator = await getOrchestratorForUser(user.id); } catch {}
+
+            for (const proj of allProjects!) {
+              sendEvent2({ phase: 'project_start', project_name: proj.name, project_id: proj.id });
+
+              try {
+                const baseUrl2 = normalizeWordPressUrl(proj.wordpress_url || "");
+                const isPlugin2 = proj.wordpress_username === '__CFRDM_PLUGIN__';
+                const fetchResult2 = await fetchWordPressArticlesForIndexing({
+                  wordpressUrl: proj.wordpress_url || "",
+                  wordpressUsername: proj.wordpress_username ?? null,
+                  wordpressAppPassword: proj.wordpress_app_password ?? null,
+                });
+
+                const articles2 = fetchResult2.articles;
+                sendEvent2({ phase: 'fetched', project_name: proj.name, total: articles2.length });
+
+                let synced2 = 0, errors2 = 0, analyzed2 = 0;
+                const BATCH = 10;
+
+                for (let i = 0; i < articles2.length; i += BATCH) {
+                  const batch = articles2.slice(i, i + BATCH);
+                  await Promise.all(batch.map(async (article) => {
+                    try {
+                      const contentHash = generateContentHash(article.content);
+                      const links = countLinks(article.content, baseUrl2);
+
+                      const { data: existing2 } = await supabase
+                        .from("wordpress_article_index")
+                        .select("id, content_hash")
+                        .eq("project_id", proj.id)
+                        .eq("wp_post_id", article.wp_post_id)
+                        .single();
+
+                      if (existing2 && existing2.content_hash === contentHash) return;
+
+                      let analysis: AnalysisResult;
+                      try {
+                        const aiResult = await analyzeArticle(article, true);
+                        analysis = aiResult.result;
+                        if (aiResult.usedAI) analyzed2++;
+                      } catch {
+                        analysis = analyzeArticleBasic(article);
+                      }
+
+                      await supabase
+                        .from("wordpress_article_index")
+                        .upsert({
+                          user_id: user.id,
+                          project_id: proj.id,
+                          wp_post_id: article.wp_post_id,
+                          wp_post_url: article.wp_post_url,
+                          wp_post_slug: article.wp_post_slug,
+                          wp_post_title: article.wp_post_title,
+                          wp_post_type: article.wp_post_type || 'post',
+                          wp_post_status: article.wp_post_status || 'publish',
+                          wp_categories: article.wp_categories || [],
+                          wp_tags: article.wp_tags || [],
+                          primary_keyword: analysis.primary_keyword,
+                          secondary_keywords: analysis.secondary_keywords,
+                          topic_cluster: analysis.topic_cluster,
+                          semantic_summary: analysis.semantic_summary,
+                          content_hash: contentHash,
+                          word_count: article.word_count || article.content.split(/\s+/).length,
+                          internal_links_count: links.internal,
+                          external_links_count: links.external,
+                          seo_score: analysis.seo_score,
+                          linkability_score: analysis.linkability_score,
+                          last_wp_modified_at: article.last_wp_modified_at,
+                          last_analyzed_at: new Date().toISOString(),
+                          sync_status: 'synced',
+                        }, { onConflict: 'project_id,wp_post_id' });
+
+                      synced2++;
+                    } catch { errors2++; }
+                  }));
+
+                  sendEvent2({ phase: 'progress', project_name: proj.name, progress: Math.min(i + BATCH, articles2.length), total: articles2.length, synced: synced2 });
+                }
+
+                projectResults.push({ project: proj.name, synced: synced2, analyzed: analyzed2, errors: errors2, total: articles2.length });
+                sendEvent2({ phase: 'project_done', project_name: proj.name, synced: synced2, analyzed: analyzed2, errors: errors2 });
+
+              } catch (e) {
+                projectResults.push({ project: proj.name, error: e instanceof Error ? e.message : String(e) });
+                sendEvent2({ phase: 'project_error', project_name: proj.name, error: e instanceof Error ? e.message : String(e) });
+              }
+            }
+
+            sendEvent2({ done: true, success: true, results: projectResults, projects_synced: projectResults.length });
+            controller.close();
+          },
+        });
+
+        return new Response(stream2, {
+          headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+        });
+      }
+
+      case "force_validate_all": {
+        // Force re-validate ALL articles with AI SEO analysis + auto-fix
+        const serviceKey3 = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const supabaseAdmin3 = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey3);
+
+        let userOrchestrator3 = getOrchestrator();
+        try { userOrchestrator3 = await getOrchestratorForUser(user.id); } catch {}
+
+        // Get all articles for the project (or all projects if no project_id specified)
+        let articlesQuery = supabaseAdmin3
+          .from("wordpress_article_index")
+          .select("id, wp_post_id, wp_post_url, wp_post_title, wp_post_slug, primary_keyword, secondary_keywords, topic_cluster, seo_score, semantic_summary, internal_links_count, project_id, word_count")
+          .eq("user_id", user.id)
+          .order("seo_score", { ascending: true });
+
+        if (project_id) {
+          articlesQuery = articlesQuery.eq("project_id", project_id);
+        }
+
+        const { data: allArticles3 } = await articlesQuery.limit(500);
+
+        if (!allArticles3 || allArticles3.length === 0) {
+          return new Response(
+            JSON.stringify({ success: true, message: "Nenhum artigo encontrado", validated: 0 }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Get all projects for WordPress connectivity
+        const projectIds = [...new Set(allArticles3.map(a => a.project_id))];
+        const { data: projects3 } = await supabaseAdmin3
+          .from("projects")
+          .select("id, name, wordpress_url, wordpress_username, wordpress_app_password, seo_plugin, nicho, social_instagram, social_youtube, social_linkedin, social_twitter, cta_leads, cta_conclusao, cta_comunidade")
+          .in("id", projectIds);
+
+        const projectMap = new Map((projects3 || []).map(p => [p.id, p]));
+
+        const encoder3 = new TextEncoder();
+        const stream3 = new ReadableStream({
+          async start(controller) {
+            const sendEvent3 = (data: any) => {
+              controller.enqueue(encoder3.encode(`data: ${JSON.stringify(data)}\n\n`));
+            };
+
+            let validated = 0, fixed = 0, linksApplied = 0, errors3 = 0;
+
+            sendEvent3({ phase: 'starting', total: allArticles3!.length, message: `Validando ${allArticles3!.length} artigos com Análise SEO IA...` });
+
+            // Process in batches of 5 (AI-intensive)
+            const BATCH3 = 5;
+            for (let i = 0; i < allArticles3!.length; i += BATCH3) {
+              const batch3 = allArticles3!.slice(i, i + BATCH3);
+
+              await Promise.all(batch3.map(async (article) => {
+                const proj3 = projectMap.get(article.project_id);
+                if (!proj3) return;
+
+                try {
+                  // Deep SEO validation prompt using Análise SEO IA standards
+                  const seoPrompt = `Analise este artigo com as diretrizes avançadas de SEO e E-E-A-T:
+
+ARTIGO: "${article.wp_post_title}"
+URL: ${article.wp_post_url}
+Keyword atual: ${article.primary_keyword || "N/A"}
+Score SEO atual: ${article.seo_score || 0}
+Links internos: ${article.internal_links_count || 0}
+Palavras: ${article.word_count || 0}
+Nicho do projeto: ${proj3.nicho || "N/A"}
+
+DIRETRIZES OBRIGATÓRIAS:
+1. Meta title otimizado (max 60 chars, keyword no início)
+2. Meta description persuasiva (max 155 chars)
+3. Focus keyword (baseada no título e nicho)
+4. Score SEO corrigido (0-100)
+5. Linkability score (0-100)
+6. Cluster temático adequado
+7. Resumo semântico (150 chars)
+8. 5 textos âncora sugeridos para links apontando para este artigo
+9. Problemas encontrados (lista)
+10. Correções aplicáveis
+
+Retorne APENAS JSON:
+{
+  "meta_title": "...",
+  "meta_description": "...",
+  "focus_keyword": "...",
+  "secondary_keywords": ["..."],
+  "seo_score": 85,
+  "linkability_score": 80,
+  "topic_cluster": "...",
+  "semantic_summary": "...",
+  "suggested_anchor_texts": ["..."],
+  "issues": ["..."],
+  "fixes": ["..."]
+}`;
+
+                  const aiContent3 = await userOrchestrator3.call('seo_analysis', [
+                    { role: "system", content: "Especialista SEO brasileiro. Responda APENAS JSON válido. Aplique padrões E-E-A-T rigorosos." },
+                    { role: "user", content: seoPrompt },
+                  ], { maxTokens: 1000, temperature: 0.2 });
+
+                  const jsonStr3 = aiContent3.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+                  const seoFix = JSON.parse(jsonStr3);
+
+                  // Update the article index with corrected data
+                  await supabase
+                    .from("wordpress_article_index")
+                    .update({
+                      primary_keyword: seoFix.focus_keyword || article.primary_keyword,
+                      secondary_keywords: seoFix.secondary_keywords || article.secondary_keywords,
+                      topic_cluster: seoFix.topic_cluster || article.topic_cluster,
+                      semantic_summary: seoFix.semantic_summary || article.semantic_summary,
+                      seo_score: seoFix.seo_score || article.seo_score,
+                      linkability_score: seoFix.linkability_score || 50,
+                      last_analyzed_at: new Date().toISOString(),
+                      sync_status: 'synced',
+                    })
+                    .eq("id", article.id);
+
+                  validated++;
+
+                  // Apply meta fixes to WordPress if plugin available
+                  const baseUrl3 = normalizeWordPressUrl(proj3.wordpress_url || "");
+                  const isPlugin3 = proj3.wordpress_username === '__CFRDM_PLUGIN__';
+                  const apiKey3 = proj3.wordpress_app_password || "";
+
+                  if (baseUrl3 && isPlugin3 && apiKey3 && seoFix.meta_title) {
+                    try {
+                      const updateResp3 = await fetch(`${baseUrl3}/wp-json/cfrdm/v1/update-seo-meta`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey3 },
+                        body: JSON.stringify({
+                          post_id: article.wp_post_id,
+                          meta_title: seoFix.meta_title,
+                          meta_description: seoFix.meta_description,
+                          focus_keyword: seoFix.focus_keyword,
+                        }),
+                      });
+                      if (updateResp3.ok) fixed++;
+                    } catch { /* continue */ }
+                  }
+
+                  // Auto-generate and apply link suggestions for orphan articles
+                  if ((article.internal_links_count || 0) < 3 && baseUrl3 && isPlugin3 && apiKey3) {
+                    // Find best target articles in same cluster
+                    const sameCluster = allArticles3!.filter(
+                      a => a.id !== article.id && a.topic_cluster === (seoFix.topic_cluster || article.topic_cluster)
+                    ).slice(0, 3);
+
+                    for (const target of sameCluster) {
+                      const anchorText = seoFix.suggested_anchor_texts?.[0] || target.primary_keyword || target.wp_post_title.split(' ').slice(0, 3).join(' ');
+                      try {
+                        const applyResp3 = await fetch(`${baseUrl3}/wp-json/cfrdm/v1/apply-internal-link`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey3 },
+                          body: JSON.stringify({
+                            post_id: article.wp_post_id,
+                            anchor_text: anchorText,
+                            target_url: target.wp_post_url,
+                          }),
+                        });
+                        if (applyResp3.ok) {
+                          const applyData3 = await applyResp3.json();
+                          if (applyData3.success || applyData3.applied) linksApplied++;
+                        }
+                      } catch { /* continue */ }
+                    }
+                  }
+
+                } catch (e) {
+                  console.error(`[ForceValidate] Error on ${article.wp_post_title}:`, e);
+                  errors3++;
+                }
+              }));
+
+              sendEvent3({
+                phase: 'validating',
+                progress: Math.min(i + BATCH3, allArticles3!.length),
+                total: allArticles3!.length,
+                validated,
+                fixed,
+                linksApplied,
+                errors: errors3,
+              });
+            }
+
+            sendEvent3({
+              done: true,
+              success: true,
+              results: { validated, fixed, linksApplied, errors: errors3, total: allArticles3!.length },
+              message: `Validação concluída: ${validated} validados, ${fixed} metas corrigidos, ${linksApplied} links aplicados`,
+            });
+            controller.close();
+          },
+        });
+
+        return new Response(stream3, {
+          headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+        });
       }
 
       default:
