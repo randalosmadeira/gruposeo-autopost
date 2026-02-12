@@ -115,7 +115,15 @@ Deno.serve(async (req) => {
         details.indexing = indexResult;
 
         // ═══════════════════════════════════════════
-        // STEP 4: Summary
+        // STEP 4: AI Discovery Optimization
+        // ═══════════════════════════════════════════
+        console.log(`[SEO Agent] [${project.name}] Step 4: AI Discovery Optimization`);
+
+        const aiDiscoveryResult = await optimizeAIDiscovery(supabase, project, baseUrl, isPlugin, apiKey);
+        details.ai_discovery = aiDiscoveryResult;
+
+        // ═══════════════════════════════════════════
+        // STEP 5: Summary
         // ═══════════════════════════════════════════
         const summaryParts = [];
         if (metaIssuesFixed > 0) summaryParts.push(`${metaIssuesFixed} metas corrigidos`);
@@ -124,6 +132,7 @@ Deno.serve(async (req) => {
         if (linksApplied > 0) summaryParts.push(`${linksApplied} links aplicados`);
         if (indexingSubmitted > 0) summaryParts.push(`${indexingSubmitted} URLs indexadas`);
         if (sitemapUpdated) summaryParts.push("sitemap atualizado");
+        if (aiDiscoveryResult.actions?.length > 0) summaryParts.push(`${aiDiscoveryResult.actions.length} otimizações IA discovery`);
 
         const summary = summaryParts.length > 0
           ? `✅ ${project.name}: ${summaryParts.join(", ")}`
@@ -712,4 +721,135 @@ async function submitDirectIndexNow(siteUrl: string, urls: string[]): Promise<nu
   }
 
   return 0;
+}
+
+// ═══════════════════════════════════════════════════════════
+// STEP 4: AI Discovery Optimization
+// Ensures content is discoverable by ChatGPT, Gemini, Claude, Manus
+// ═══════════════════════════════════════════════════════════
+async function optimizeAIDiscovery(
+  supabase: ReturnType<typeof createClient>,
+  project: any,
+  baseUrl: string,
+  isPlugin: boolean,
+  apiKey: string,
+): Promise<{ actions: string[]; llmsTxtRefreshed: boolean; schemaEnhanced: boolean; headersSet: boolean }> {
+  const actions: string[] = [];
+  let llmsTxtRefreshed = false;
+  let schemaEnhanced = false;
+  let headersSet = false;
+
+  if (!baseUrl || !isPlugin || !apiKey) {
+    return { actions: ["No WordPress connection"], llmsTxtRefreshed: false, schemaEnhanced: false, headersSet: false };
+  }
+
+  // 1) Refresh llms.txt - Critical for AI crawlers (ChatGPT, Claude, Gemini)
+  try {
+    const llmsResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-llms`, {
+      method: "POST",
+      headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ include_full_catalog: true }),
+    });
+    if (llmsResp.ok) {
+      llmsTxtRefreshed = true;
+      actions.push("llms.txt atualizado para AI crawlers");
+    }
+  } catch { /* ignore */ }
+
+  // 2) Ensure X-Robots-Tag headers allow AI indexing
+  try {
+    const headersResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/set-ai-headers`, {
+      method: "POST",
+      headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        headers: {
+          "X-Robots-Tag": "all",
+          "X-Content-Type-Options": "nosniff",
+        },
+        ai_meta_tags: [
+          { name: "robots", content: "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" },
+          { name: "googlebot", content: "index, follow" },
+          { name: "bingbot", content: "index, follow" },
+        ],
+      }),
+    });
+    if (headersResp.ok) {
+      headersSet = true;
+      actions.push("Headers AI-friendly configurados");
+    }
+  } catch { /* ignore */ }
+
+  // 3) Validate and enhance Schema.org structured data
+  try {
+    const schemaResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/validate-schemas`, {
+      method: "POST",
+      headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ auto_fix: true, include_faq: true, include_howto: true }),
+    });
+    if (schemaResp.ok) {
+      const schemaData = await schemaResp.json();
+      schemaEnhanced = schemaData.fixed > 0 || schemaData.enhanced > 0;
+      if (schemaEnhanced) {
+        actions.push(`Schema.org: ${schemaData.fixed || 0} corrigidos, ${schemaData.enhanced || 0} aprimorados`);
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 4) Ping AI search engines / services for content freshness
+  const sitemapUrl = `${baseUrl.replace(/\/blog\/?$/, "")}/sitemap_index.xml`;
+  const llmsUrl = `${baseUrl.replace(/\/blog\/?$/, "")}/llms.txt`;
+
+  // Ping Bing (feeds ChatGPT via Bing index)
+  try {
+    await fetch(`https://www.bing.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`);
+    actions.push("Bing pinged (ChatGPT source)");
+  } catch { /* ignore */ }
+
+  // Ping Google (feeds Gemini AI)
+  try {
+    await fetch(`https://www.google.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`);
+    actions.push("Google pinged (Gemini source)");
+  } catch { /* ignore */ }
+
+  // Ping Yandex (broader AI coverage)
+  try {
+    await fetch(`https://webmaster.yandex.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`);
+    actions.push("Yandex pinged");
+  } catch { /* ignore */ }
+
+  // 5) Submit to IndexNow (Bing, Yandex, Seznam, Naver - used by multiple AI systems)
+  try {
+    const host = new URL(baseUrl).hostname;
+    const key = Array.from(host).reduce((acc, c) => acc + c.charCodeAt(0).toString(16), "indexnow").slice(0, 32);
+    
+    await fetch("https://api.indexnow.org/indexnow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        host,
+        key,
+        keyLocation: `https://${host}/${key}.txt`,
+        urlList: [
+          `https://${host}/`,
+          `https://${host}/llms.txt`,
+          sitemapUrl,
+        ],
+      }),
+    });
+    actions.push("IndexNow: homepage + llms.txt submetidos");
+  } catch { /* ignore */ }
+
+  // 6) Verify llms.txt is accessible
+  try {
+    const checkResp = await fetch(llmsUrl, { method: "HEAD" });
+    if (checkResp.ok) {
+      actions.push("llms.txt acessível ✓");
+    } else {
+      actions.push("⚠ llms.txt não acessível - verificar plugin");
+    }
+  } catch {
+    actions.push("⚠ llms.txt check falhou");
+  }
+
+  return { actions, llmsTxtRefreshed, schemaEnhanced, headersSet };
 }
