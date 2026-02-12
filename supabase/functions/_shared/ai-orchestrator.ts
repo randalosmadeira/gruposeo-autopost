@@ -1,9 +1,8 @@
 /**
- * AI Orchestrator - Multi-Provider System
+ * AI Orchestrator - Multi-Provider System with Dual-Key Fallback
  * 
- * Selects the best AI provider based on task type, cost, and availability.
  * Supports: Gemini (primary), OpenAI, Anthropic (when key available)
- * Includes automatic fallback chain.
+ * Includes automatic fallback chain + platform key fallback when BYOK fails.
  */
 
 export interface AIProvider {
@@ -100,10 +99,10 @@ const ANTHROPIC_API_BASE = "https://api.anthropic.com/v1";
 
 export class AIOrchestrator {
   private apiKeys: Record<string, string>;
+  private platformKeys: Record<string, string>; // Platform-level fallback keys
 
   constructor() {
     const openaiKey = Deno.env.get('OPENAI_API_KEY') || '';
-    // Validate: OpenAI keys start with "sk-", reject Gemini keys stored incorrectly
     const validOpenaiKey = openaiKey.startsWith('sk-') ? openaiKey : '';
     
     this.apiKeys = {
@@ -112,57 +111,81 @@ export class AIOrchestrator {
       gemini: Deno.env.get('GEMINI_API_KEY') || '',
     };
     
+    // Save platform keys as immutable fallback
+    this.platformKeys = { ...this.apiKeys };
+    
     if (openaiKey && !validOpenaiKey) {
       console.warn('[AIOrchestrator] OPENAI_API_KEY ignorada - não é uma chave OpenAI válida (deve começar com sk-)');
     }
   }
 
-  /** Override API keys with user-provided BYOK keys */
+  /** Override API keys with user-provided BYOK keys. Platform keys are preserved as fallback. */
   setKeys(keys: { gemini?: string; openai?: string; anthropic?: string }) {
     if (keys.gemini) this.apiKeys.gemini = keys.gemini;
-    if (keys.openai) this.apiKeys.openai = keys.openai;
+    if (keys.openai) {
+      if (keys.openai.startsWith('sk-')) {
+        this.apiKeys.openai = keys.openai;
+      } else {
+        console.warn('[AIOrchestrator] BYOK OpenAI key ignorada - não começa com sk-');
+      }
+    }
     if (keys.anthropic) this.apiKeys.anthropic = keys.anthropic;
   }
 
-  /** Check which providers are available */
+  /** Check which providers are available (including platform fallbacks) */
   getAvailableProviders(): string[] {
-    return Object.entries(this.apiKeys)
-      .filter(([_, key]) => !!key)
-      .map(([name]) => name);
+    const available = new Set<string>();
+    for (const [name, key] of Object.entries(this.apiKeys)) {
+      if (key) available.add(name);
+    }
+    for (const [name, key] of Object.entries(this.platformKeys)) {
+      if (key) available.add(name);
+    }
+    return [...available];
   }
 
   /** Select the best available provider for a task */
   selectProvider(taskType: TaskType, preferences?: Partial<AICallOptions>): AIProvider | null {
     const providers = AI_PROVIDERS[taskType] || AI_PROVIDERS['article_generation'];
-    const available = providers.filter(p => !!this.apiKeys[p.name]);
+    const availableNames = this.getAvailableProviders();
+    const available = providers.filter(p => availableNames.includes(p.name));
     
     if (available.length === 0) return null;
 
-    // If user preferred a specific provider and it's available, use it
     if (preferences?.preferredProvider) {
       const preferred = available.find(p => p.name === preferences.preferredProvider);
       if (preferred) return preferred;
     }
 
-    // Sort by cost if prioritizing cost
     if (preferences?.prioritizeCost) {
       return available.sort((a, b) => a.costPer1kTokens - b.costPer1kTokens)[0];
     }
 
-    // Default: use the first available (ordered by quality preference)
     return available[0];
   }
 
-  /** Call AI with automatic provider selection and fallback */
+  /** Get all possible keys for a provider (BYOK first, then platform fallback) */
+  private getKeysForProvider(providerName: string): string[] {
+    const keys: string[] = [];
+    const byokKey = this.apiKeys[providerName];
+    const platformKey = this.platformKeys[providerName];
+    
+    if (byokKey) keys.push(byokKey);
+    if (platformKey && platformKey !== byokKey) keys.push(platformKey);
+    
+    return keys;
+  }
+
+  /** Call AI with automatic provider selection, key fallback, and provider fallback */
   async call(taskType: TaskType, messages: AIMessage[], options?: AICallOptions): Promise<string> {
     const providers = AI_PROVIDERS[taskType] || AI_PROVIDERS['article_generation'];
-    const available = providers.filter(p => !!this.apiKeys[p.name]);
+    const availableNames = this.getAvailableProviders();
+    const available = providers.filter(p => availableNames.includes(p.name));
 
     if (available.length === 0) {
       throw new Error('Nenhum provedor de IA disponível. Configure GEMINI_API_KEY, OPENAI_API_KEY ou ANTHROPIC_API_KEY.');
     }
 
-    // Try preferred provider first if specified
     let orderedProviders = [...available];
     if (options?.preferredProvider) {
       const preferredIdx = orderedProviders.findIndex(p => p.name === options.preferredProvider);
@@ -172,46 +195,55 @@ export class AIOrchestrator {
       }
     }
 
-    // Sort by cost if prioritizing
     if (options?.prioritizeCost) {
       orderedProviders.sort((a, b) => a.costPer1kTokens - b.costPer1kTokens);
     }
 
-    // Try each provider with fallback
+    // Try each provider, and for each provider try all available keys (BYOK → platform)
     let lastError: Error | null = null;
     for (const provider of orderedProviders) {
-      try {
-        console.log(`[AIOrchestrator] Tentando ${provider.name} (${provider.model}) para ${taskType}...`);
-        const result = await this.callProvider(provider, messages, options);
-        console.log(`[AIOrchestrator] Sucesso com ${provider.name}`);
-        return result;
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        console.warn(`[AIOrchestrator] Falha com ${provider.name}: ${lastError.message}. Tentando próximo...`);
+      const keys = this.getKeysForProvider(provider.name);
+      
+      for (let i = 0; i < keys.length; i++) {
+        const keyLabel = i === 0 ? 'BYOK' : 'platform';
+        try {
+          console.log(`[AIOrchestrator] Tentando ${provider.name} (${provider.model}, ${keyLabel}) para ${taskType}...`);
+          const result = await this.callProviderWithKey(provider, keys[i], messages, options);
+          console.log(`[AIOrchestrator] Sucesso com ${provider.name} (${keyLabel})`);
+          return result;
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          console.warn(`[AIOrchestrator] Falha ${provider.name} (${keyLabel}): ${lastError.message.slice(0, 100)}. Tentando próximo...`);
+        }
       }
     }
 
     throw lastError || new Error('Todos os provedores falharam');
   }
 
-  /** Call a specific provider */
-  private async callProvider(provider: AIProvider, messages: AIMessage[], options?: AICallOptions): Promise<string> {
+  /** Call a specific provider with an explicit key */
+  private async callProviderWithKey(provider: AIProvider, apiKey: string, messages: AIMessage[], options?: AICallOptions): Promise<string> {
     switch (provider.name) {
       case 'gemini':
-        return this.callGemini(provider.model, messages, options);
+        return this.callGemini(provider.model, messages, options, apiKey);
       case 'openai':
-        return this.callOpenAI(provider.model, messages, options);
+        return this.callOpenAI(provider.model, messages, options, apiKey);
       case 'anthropic':
-        return this.callAnthropic(provider.model, messages, options);
+        return this.callAnthropic(provider.model, messages, options, apiKey);
       default:
         throw new Error(`Provedor não suportado: ${provider.name}`);
     }
   }
 
+  /** Legacy: Call provider using stored key */
+  private async callProvider(provider: AIProvider, messages: AIMessage[], options?: AICallOptions): Promise<string> {
+    return this.callProviderWithKey(provider, this.apiKeys[provider.name] || this.platformKeys[provider.name], messages, options);
+  }
+
   /** Call Gemini API */
-  private async callGemini(model: string, messages: AIMessage[], options?: AICallOptions): Promise<string> {
-    const apiKey = this.apiKeys.gemini;
-    if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
+  private async callGemini(model: string, messages: AIMessage[], options?: AICallOptions, apiKey?: string): Promise<string> {
+    const key = apiKey || this.apiKeys.gemini || this.platformKeys.gemini;
+    if (!key) throw new Error('GEMINI_API_KEY não configurada');
 
     const systemMessages = messages.filter(m => m.role === 'system');
     const otherMessages = messages.filter(m => m.role !== 'system');
@@ -233,7 +265,7 @@ export class AIOrchestrator {
       };
     }
 
-    const url = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
+    const url = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${key}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -250,14 +282,14 @@ export class AIOrchestrator {
   }
 
   /** Call OpenAI API */
-  private async callOpenAI(model: string, messages: AIMessage[], options?: AICallOptions): Promise<string> {
-    const apiKey = this.apiKeys.openai;
-    if (!apiKey) throw new Error('OPENAI_API_KEY não configurada');
+  private async callOpenAI(model: string, messages: AIMessage[], options?: AICallOptions, apiKey?: string): Promise<string> {
+    const key = apiKey || this.apiKeys.openai || this.platformKeys.openai;
+    if (!key) throw new Error('OPENAI_API_KEY não configurada');
 
     const response = await fetch(`${OPENAI_API_BASE}/chat/completions`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${key}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -281,9 +313,9 @@ export class AIOrchestrator {
   }
 
   /** Call Anthropic (Claude) API */
-  private async callAnthropic(model: string, messages: AIMessage[], options?: AICallOptions): Promise<string> {
-    const apiKey = this.apiKeys.anthropic;
-    if (!apiKey) throw new Error('ANTHROPIC_API_KEY não configurada');
+  private async callAnthropic(model: string, messages: AIMessage[], options?: AICallOptions, apiKey?: string): Promise<string> {
+    const key = apiKey || this.apiKeys.anthropic || this.platformKeys.anthropic;
+    if (!key) throw new Error('ANTHROPIC_API_KEY não configurada');
 
     const systemMsg = messages.find(m => m.role === 'system');
     const otherMsgs = messages.filter(m => m.role !== 'system');
@@ -291,7 +323,7 @@ export class AIOrchestrator {
     const response = await fetch(`${ANTHROPIC_API_BASE}/messages`, {
       method: 'POST',
       headers: {
-        'x-api-key': apiKey,
+        'x-api-key': key,
         'Content-Type': 'application/json',
         'anthropic-version': '2023-06-01',
       },
@@ -317,20 +349,28 @@ export class AIOrchestrator {
 
   /** Stream call - uses Gemini stream with fallback to non-stream */
   async callStream(taskType: TaskType, messages: AIMessage[], options?: AICallOptions): Promise<Response> {
-    // For streaming, prefer Gemini (native SSE support) then OpenAI
     const provider = this.selectProvider(taskType, options);
     if (!provider) {
       throw new Error('Nenhum provedor de IA disponível para streaming.');
     }
 
-    if (provider.name === 'gemini') {
-      return this.streamGemini(provider.model, messages, options);
-    } else if (provider.name === 'openai') {
-      return this.streamOpenAI(provider.model, messages, options);
+    // Try streaming with key fallback
+    const keys = this.getKeysForProvider(provider.name);
+    
+    for (let i = 0; i < keys.length; i++) {
+      try {
+        if (provider.name === 'gemini') {
+          return await this.streamGemini(provider.model, messages, options, keys[i]);
+        } else if (provider.name === 'openai') {
+          return await this.streamOpenAI(provider.model, messages, options, keys[i]);
+        }
+      } catch (e) {
+        console.warn(`[AIOrchestrator] Stream fallback ${i + 1}/${keys.length}: ${e instanceof Error ? e.message.slice(0, 80) : e}`);
+      }
     }
 
-    // Fallback: non-streaming response wrapped as SSE
-    const text = await this.callProvider(provider, messages, options);
+    // Final fallback: non-streaming
+    const text = await this.call(taskType, messages, options);
     const sseData = `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: [DONE]\n\n`;
     return new Response(new TextEncoder().encode(sseData), {
       headers: { 'Content-Type': 'text/event-stream' },
@@ -338,9 +378,9 @@ export class AIOrchestrator {
   }
 
   /** Stream via Gemini */
-  private async streamGemini(model: string, messages: AIMessage[], options?: AICallOptions): Promise<Response> {
-    const apiKey = this.apiKeys.gemini;
-    if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
+  private async streamGemini(model: string, messages: AIMessage[], options?: AICallOptions, apiKey?: string): Promise<Response> {
+    const key = apiKey || this.apiKeys.gemini || this.platformKeys.gemini;
+    if (!key) throw new Error('GEMINI_API_KEY não configurada');
 
     const systemMessages = messages.filter(m => m.role === 'system');
     const otherMessages = messages.filter(m => m.role !== 'system');
@@ -362,7 +402,7 @@ export class AIOrchestrator {
       };
     }
 
-    const url = `${GEMINI_API_BASE}/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
+    const url = `${GEMINI_API_BASE}/models/${model}:streamGenerateContent?alt=sse&key=${key}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -374,7 +414,6 @@ export class AIOrchestrator {
       throw new Error(`Gemini stream error ${response.status}: ${errorText.slice(0, 200)}`);
     }
 
-    // Transform Gemini SSE to OpenAI-compatible format
     const transformStream = new TransformStream({
       transform(chunk, controller) {
         const text = new TextDecoder().decode(chunk);
@@ -406,14 +445,14 @@ export class AIOrchestrator {
   }
 
   /** Stream via OpenAI */
-  private async streamOpenAI(model: string, messages: AIMessage[], options?: AICallOptions): Promise<Response> {
-    const apiKey = this.apiKeys.openai;
-    if (!apiKey) throw new Error('OPENAI_API_KEY não configurada');
+  private async streamOpenAI(model: string, messages: AIMessage[], options?: AICallOptions, apiKey?: string): Promise<Response> {
+    const key = apiKey || this.apiKeys.openai || this.platformKeys.openai;
+    if (!key) throw new Error('OPENAI_API_KEY não configurada');
 
     const response = await fetch(`${OPENAI_API_BASE}/chat/completions`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${key}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -451,8 +490,9 @@ export class AIOrchestrator {
       }
     }
 
+    const availableNames = this.getAvailableProviders();
     for (const [name, tasks] of Object.entries(providerTasks)) {
-      status[name] = { available: !!this.apiKeys[name], tasks };
+      status[name] = { available: availableNames.includes(name), tasks };
     }
     return status;
   }
