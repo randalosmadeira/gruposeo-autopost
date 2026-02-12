@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
@@ -14,59 +14,83 @@ export function useArticles(projectId?: string) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const selectFields = `
+    id, keyword, title, status, type, slug, excerpt,
+    featured_image_url, seo_score, word_count, project_id,
+    published_at, published_url, scheduled_at, secondary_keywords,
+    config, error_message, emotional_trigger, emotional_confidence,
+    created_at, updated_at, user_id,
+    projects ( id, name, domain )
+  `;
+
   const { data: articles, isLoading, error } = useQuery({
     queryKey: ['articles', user?.id, projectId],
     queryFn: async () => {
       if (!user) return [];
       
-      const PAGE_SIZE = 1000;
-      const MAX_PAGES = 20; // Safety cap: max 20k articles
-      let allData: any[] = [];
-      let from = 0;
-      let pages = 0;
-
-      const selectFields = `
-        id, keyword, title, status, type, slug, excerpt,
-        featured_image_url, seo_score, word_count, project_id,
-        published_at, published_url, scheduled_at, secondary_keywords,
-        config, error_message, emotional_trigger, emotional_confidence,
-        created_at, updated_at, user_id,
-        projects ( id, name, domain )
-      `;
-
-      while (pages < MAX_PAGES) {
-        let query = supabase
-          .from('articles')
-          .select(selectFields)
-          .order('created_at', { ascending: false })
-          .range(from, from + PAGE_SIZE - 1);
-        
-        if (projectId) {
-          query = query.eq('project_id', projectId);
-        }
-        
-        const { data, error } = await query;
-        
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          allData = allData.concat(data);
-          from += PAGE_SIZE;
-          pages++;
-          if (data.length < PAGE_SIZE) break;
-        } else {
-          break;
-        }
+      // Single query with count - avoid recursive pagination for dashboard speed
+      let query = supabase
+        .from('articles')
+        .select(selectFields)
+        .order('created_at', { ascending: false })
+        .limit(1000);
+      
+      if (projectId) {
+        query = query.eq('project_id', projectId);
       }
-
-      return allData;
+      
+      const { data, error } = await query;
+      
+      if (error) throw error;
+      
+      // If we got exactly 1000, fetch remaining pages
+      if (data && data.length === 1000) {
+        let allData = [...data];
+        let from = 1000;
+        const MAX_PAGES = 19;
+        let pages = 0;
+        
+        while (pages < MAX_PAGES) {
+          let nextQuery = supabase
+            .from('articles')
+            .select(selectFields)
+            .order('created_at', { ascending: false })
+            .range(from, from + 999);
+          
+          if (projectId) {
+            nextQuery = nextQuery.eq('project_id', projectId);
+          }
+          
+          const { data: moreData, error: moreError } = await nextQuery;
+          if (moreError) throw moreError;
+          
+          if (moreData && moreData.length > 0) {
+            allData = allData.concat(moreData);
+            if (moreData.length < 1000) break;
+            from += 1000;
+            pages++;
+          } else {
+            break;
+          }
+        }
+        
+        return allData;
+      }
+      
+      return data || [];
     },
     enabled: !!user,
-    refetchInterval: 15000,
-    staleTime: 10000,
+    refetchInterval: 30000,
+    staleTime: 20000,
+    gcTime: 60000,
+    refetchOnWindowFocus: false,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
   });
 
-  // Real-time subscription for instant updates
+  // Debounced real-time subscription to avoid constant re-fetches
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (!user) return;
 
@@ -75,19 +99,23 @@ export function useArticles(projectId?: string) {
       .on(
         'postgres_changes',
         {
-          event: '*', // Listen to INSERT, UPDATE, DELETE
+          event: '*',
           schema: 'public',
           table: 'articles',
           filter: `user_id=eq.${user.id}`,
         },
         () => {
-          // Invalidate queries to refetch data on realtime update
-          queryClient.invalidateQueries({ queryKey: ['articles'] });
+          // Debounce: wait 2s after last event before refetching
+          if (debounceRef.current) clearTimeout(debounceRef.current);
+          debounceRef.current = setTimeout(() => {
+            queryClient.invalidateQueries({ queryKey: ['articles'] });
+          }, 2000);
         }
       )
       .subscribe();
 
     return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       supabase.removeChannel(channel);
     };
   }, [user, queryClient]);
