@@ -282,20 +282,38 @@ ${socialLinks.length > 0 ? `\nRedes Sociais (CITAR nos CTAs):\n${socialLinks.joi
 LINKS INTERNOS DISPONÍVEIS (USE no mínimo 10):
 ${internalLinksStr}
 
-REGRAS OBRIGATÓRIAS:
-1. Flesch Reading Ease >= 70 (frases curtas, máx 15 palavras, parágrafos máx 3-4 linhas)
-2. Mínimo 1500 palavras
-3. Estrutura: H1 (título) > H2 (mín 5) > H3 (mín 3) 
-4. Incluir seção FAQ com schema markup (mín 5 perguntas)
-5. 5 CTAs estratégicos: Urgência, Autoridade, Lead, Comunidade, Fechamento
-6. Mínimo 10 links internos (usando os links disponíveis acima como <a href="URL">texto âncora</a>)
-7. Máximo 3 links externos (apenas .gov, .edu ou sites oficiais relevantes)
-8. Incluir conclusão com CTA final
-9. Densidade de keyword entre 0.5% e 2.5%
-10. HTML semântico limpo (sem <div>, usar <article>, <section>)
-11. Meta description entre 145-165 caracteres com keyword
-12. Título entre 50-70 caracteres com keyword
-13. Gerar slug SEO-friendly
+═══ REGRAS INEGOCIÁVEIS (COMPLIANCE JORNALÍSTICO v3.0) ═══
+
+REGRA ZERO-A — META-DESCRIPTION OBRIGATÓRIA:
+- 145-160 caracteres, keyword nos primeiros 60 chars, CTA implícito
+
+REGRA ZERO-B — LEGIBILIDADE FLESCH:
+- Mínimo 60 (ideal 70-100). Frases máx 25 palavras. Parágrafos máx 4-7 linhas.
+- Vocabulário simples e acessível. Voz ativa prioritária (70%+).
+- Teste: "Um leitor de 15 anos entenderia isso?" Se não, simplifique.
+
+REGRA ZERO-C — LINKS EXTERNOS (mínimo 2):
+- Fontes .gov.br, .edu.br, portais consolidados
+- rel="noopener noreferrer" target="_blank"
+
+REGRA ZERO-D — FORMATAÇÃO SEO LIMPA:
+- Zero espaços duplos. Hierarquia H1>H2>H3 rigorosa.
+- Sem tags vazias, sem divs. HTML semântico: <article>, <section>, <figure>
+
+REGRAS SEO OBRIGATÓRIAS:
+1. Estrutura: H1 único > H2 (mín 5) > H3 (mín 3)
+2. Mínimo 2 listas estruturadas (ul/ol) para featured snippets
+3. Mínimo 10 links internos (usando os links acima como <a href="URL">texto âncora</a>)
+4. Máximo 3 links externos de autoridade
+5. FAQ com 5-8 perguntas (schema FAQPage)
+6. 5 CTAs estratégicos: Urgência, Autoridade, Lead, Comunidade, Fechamento
+7. Conclusão estruturada com CTA final
+8. Densidade de keyword 0.5%-2.5%
+9. Mínimo 1500 palavras
+10. Título entre 50-70 caracteres com keyword
+11. Gerar slug SEO-friendly
+12. Schema Article + FAQPage no JSON
+13. Incluir disclaimer de nicho quando aplicável
 
 FORMATO DA RESPOSTA - APENAS JSON VÁLIDO:
 {
@@ -309,7 +327,19 @@ FORMATO DA RESPOSTA - APENAS JSON VÁLIDO:
   const aiContent = await orchestrator.call('article_generation', [
     { 
       role: 'system', 
-      content: `Você é um redator SEO sênior especialista no nicho ${nicho}. Escreva em português brasileiro com linguagem simples e acessível (Madeira Sem Verniz). REGRA ABSOLUTA: Flesch >= 70. Frases curtas. Parágrafos de 3-4 linhas máximo. Inclua OBRIGATORIAMENTE links internos como tags <a> HTML, CTAs com redes sociais, FAQ, e conclusão. Responda APENAS com JSON válido.` 
+      content: `Você é um jornalista profissional sênior e especialista SEO do Grupo SEO Marketing. Escreva em português brasileiro seguindo a filosofia "Madeira Sem Verniz" — linguagem simples e acessível para TODOS os públicos.
+
+REGRAS ABSOLUTAS:
+- Flesch Reading Ease >= 70 (frases curtas máx 25 palavras, parágrafos 3-4 linhas)
+- Vocabulário simples: "dívida" não "inadimplência", "decisão" não "jurisprudência"
+- Voz ativa prioritária (mín 70% das frases)
+- HTML semântico: <article>, <section>, <figure>, <blockquote> (PROIBIDO: <div>, <span>, <b>, <i>)
+- Tags permitidas: p, strong, em, ul, ol, li, blockquote, a, table, h2-h6, figure, figcaption
+- Links: sempre target="_blank" rel="noopener noreferrer"
+- Zero espaços duplos, zero pontuação duplicada
+- Inclua OBRIGATORIAMENTE links internos como tags <a> HTML, CTAs com redes sociais, FAQ e conclusão
+- Nicho: ${nicho}. Adapte tom e vocabulário conforme especialização.
+- Responda APENAS com JSON válido.` 
     },
     { role: 'user', content: prompt },
   ], { maxTokens: 16000, temperature: 0.5 });
@@ -346,7 +376,18 @@ async function optimizeExistingContent(article: any, analysis: any, project: any
   if (project?.social_google_maps) socialLinks.push(`Google Maps: ${project.social_google_maps}`);
   if (project?.social_linktree) socialLinks.push(`Linktree: ${project.social_linktree}`);
 
-  const prompt = `Reescreva COMPLETAMENTE este artigo para atingir Flesch Reading Ease >= 70.
+  const prompt = `Reescreva COMPLETAMENTE este artigo seguindo as diretrizes do Agente Repostagem Jornalística v3.0.
+
+═══ REGRAS INEGOCIÁVEIS (COMPLIANCE JORNALÍSTICO v3.0) ═══
+
+REGRA ZERO-A — META-DESCRIPTION: 145-160 caracteres, keyword nos primeiros 60 chars, CTA implícito
+REGRA ZERO-B — LEGIBILIDADE FLESCH >= 70:
+- Frases: MÁXIMO 25 palavras cada
+- Parágrafos: MÁXIMO 4-7 linhas
+- Vocabulário direto e acessível, voz ativa (70%+)
+- Teste: "Um leitor de 15 anos entenderia?" Se não, simplifique
+REGRA ZERO-C — LINKS EXTERNOS: Mínimo 2 fontes autoritativas (.gov.br, .edu.br)
+REGRA ZERO-D — FORMATAÇÃO: Zero espaços duplos, hierarquia H2>H3 rigorosa, HTML semântico
 
 ## ESCALA FLESCH (OBRIGATÓRIA):
 - 90-100: Muito Fácil (5º ano) — ideal
@@ -356,24 +397,26 @@ async function optimizeExistingContent(article: any, analysis: any, project: any
 
 ## PROBLEMAS DETECTADOS:
 - Flesch ATUAL: ${analysis.flesch.score} (${analysis.flesch.passed ? "OK" : "REPROVADO - REESCREVER TUDO"})
-- Média palavras/frase: ${analysis.flesch.avgWordsPerSentence || "N/A"} (máx 15)
+- Média palavras/frase: ${analysis.flesch.avgWordsPerSentence || "N/A"} (máx 25)
 - H2s: ${analysis.structure.h2Count} (mín 5), H3s: ${analysis.structure.h3Count} (mín 3)
 - FAQ: ${analysis.structure.hasFAQ ? "OK" : "FALTANDO - ADICIONAR"}
-- CTA: ${analysis.structure.hasCTA ? "OK" : "FALTANDO - ADICIONAR 5 CTAs"}
+- CTA: ${analysis.structure.hasCTA ? "OK" : "FALTANDO - ADICIONAR CTAs"}
 - Links internos: ${analysis.structure.internalLinks} (mín 10)
-- Links externos: ${analysis.structure.externalLinks} (mín 1, máx 3)
+- Links externos: ${analysis.structure.externalLinks} (mín 2)
 - Parágrafos longos: ${analysis.structure.longParagraphs}
 - Conclusão: ${analysis.structure.hasConclusion ? "OK" : "FALTANDO"}
 
 ## REGRAS DE REESCRITA PARA FLESCH ≥ 70:
-1. CADA frase deve ter NO MÁXIMO 15 palavras
-2. CADA parágrafo deve ter NO MÁXIMO 3-4 linhas
-3. Use palavras simples. Substitua: "implementar" → "fazer", "subsequentemente" → "depois", "neste contexto" → "aqui", "no que diz respeito" → "sobre"
-4. Voz ativa sempre. "O contrato foi assinado pelo cliente" → "O cliente assinou o contrato"
+1. CADA frase: NO MÁXIMO 25 palavras
+2. CADA parágrafo: NO MÁXIMO 4-7 linhas
+3. Vocabulário simples: "fazer" não "implementar", "depois" não "subsequentemente", "sobre" não "no que diz respeito"
+4. Voz ativa sempre: "O cliente assinou o contrato" não "O contrato foi assinado pelo cliente"
 5. Quebre frases compostas em frases simples separadas por ponto final
 6. Elimine orações subordinadas longas
-7. NÃO use jargão técnico sem explicar
+7. Termos técnicos SEMPRE explicados entre parênteses
 8. Prefira listas com bullets a parágrafos densos
+9. HTML semântico: <article>, <section>, <figure> (PROIBIDO: <div>, <span>, <b>, <i>)
+10. Tags permitidas: p, strong, em, ul, ol, li, blockquote, a, table, h2-h6
 
 ## LINKS INTERNOS PARA INSERIR (mín 10):
 ${internalLinksStr}
@@ -389,13 +432,25 @@ ${(article.content || "").substring(0, 12000)}
 
 RESPONDA APENAS COM JSON:
 {
-  "optimized_content": "HTML completo reescrito com Flesch >= 70",
+  "optimized_content": "HTML completo reescrito com Flesch >= 70, HTML semântico, links, CTAs, FAQ",
   "optimized_title": "título otimizado (50-70 chars)",
-  "optimized_meta": "meta description (145-165 chars)"
+  "optimized_meta": "meta description (145-165 chars com keyword nos primeiros 60 chars)"
 }`;
 
   const aiContent = await orchestrator.call('content_editing', [
-    { role: 'system', content: `Você é um editor especialista em legibilidade e SEO. Sua MISSÃO PRINCIPAL é reescrever o conteúdo para atingir Flesch Reading Ease >= 70. Use frases de NO MÁXIMO 15 palavras. Parágrafos de 3-4 linhas. Linguagem simples e direta (Madeira Sem Verniz). Mantenha o tema e informações, mas simplifique TODA a linguagem. ADICIONE links internos como tags <a href>, CTAs com redes sociais, FAQ e conclusão que estejam faltando. Responda APENAS com JSON válido.` },
+    { role: 'system', content: `Você é um jornalista profissional sênior e editor especialista em legibilidade e SEO do Grupo SEO Marketing (Agente Repostagem Jornalística v3.0).
+
+Sua MISSÃO é reescrever conteúdo para atingir Flesch Reading Ease >= 70 seguindo a filosofia "Madeira Sem Verniz":
+- Frases de NO MÁXIMO 25 palavras. Parágrafos de 3-7 linhas.
+- Linguagem simples e direta para TODOS os públicos.
+- Vocabulário acessível: "dívida" não "inadimplência", "decisão" não "jurisprudência".
+- Voz ativa prioritária (mínimo 70% das frases).
+- HTML semântico: <article>, <section>, <figure>, <blockquote>. PROIBIDO: <div>, <span>, <b>, <i>.
+- Zero espaços duplos, zero pontuação duplicada.
+- ADICIONE links internos como tags <a href>, CTAs com redes sociais, FAQ e conclusão que estejam faltando.
+- Mínimo 2 links externos para fontes autoritativas (.gov.br, .edu.br).
+- Meta-description: 145-160 chars com keyword nos primeiros 60 chars.
+- Responda APENAS com JSON válido.` },
     { role: 'user', content: prompt },
   ], { maxTokens: 16000, temperature: 0.3 });
 
