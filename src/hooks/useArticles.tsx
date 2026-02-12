@@ -19,53 +19,68 @@ export function useArticles(projectId?: string) {
     queryFn: async () => {
       if (!user) return [];
       
-      let query = supabase
-        .from('articles')
-        .select(`
-          id,
-          keyword,
-          title,
-          status,
-          type,
-          slug,
-          excerpt,
-          featured_image_url,
-          seo_score,
-          word_count,
-          project_id,
-          published_at,
-          published_url,
-          scheduled_at,
-          secondary_keywords,
-          config,
-          error_message,
-          emotional_trigger,
-          emotional_confidence,
-          created_at,
-          updated_at,
-          user_id,
-          projects (
+      const PAGE_SIZE = 1000;
+      let allData: any[] = [];
+      let from = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        let query = supabase
+          .from('articles')
+          .select(`
             id,
-            name,
-            domain
-          )
-        `)
-        .order('created_at', { ascending: false })
-        .limit(5000);
-      
-      if (projectId) {
-        query = query.eq('project_id', projectId);
+            keyword,
+            title,
+            status,
+            type,
+            slug,
+            excerpt,
+            featured_image_url,
+            seo_score,
+            word_count,
+            project_id,
+            published_at,
+            published_url,
+            scheduled_at,
+            secondary_keywords,
+            config,
+            error_message,
+            emotional_trigger,
+            emotional_confidence,
+            created_at,
+            updated_at,
+            user_id,
+            projects (
+              id,
+              name,
+              domain
+            )
+          `)
+          .order('created_at', { ascending: false })
+          .range(from, from + PAGE_SIZE - 1);
+        
+        if (projectId) {
+          query = query.eq('project_id', projectId);
+        }
+        
+        const { data, error } = await query;
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allData = allData.concat(data);
+          from += PAGE_SIZE;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
       }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      return data;
+
+      return allData;
     },
     enabled: !!user,
-    // Refetch frequently to catch status changes instantly
-    refetchInterval: 3000, // Every 3 seconds
-    staleTime: 1000, // Consider data stale after 1 second
+    refetchInterval: 5000,
+    staleTime: 2000,
   });
 
   // Real-time subscription for instant updates
