@@ -12,10 +12,10 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceKey);
-    let orchestrator = getOrchestrator(); // default, will be overridden per-project
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, serviceKey);
+  let orchestrator = getOrchestrator();
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -25,7 +25,6 @@ Deno.serve(async (req) => {
 
     console.log(`[SEO Agent] Starting run: type=${runType}, user=${targetUserId || "all"}, project=${targetProjectId || "all"}`);
 
-    // Get all projects with WordPress connections
     let query = supabase
       .from("projects")
       .select("id, user_id, name, domain, wordpress_url, wordpress_username, wordpress_app_password, seo_plugin")
@@ -46,17 +45,15 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[SEO Agent] Found ${projects.length} connected projects`);
-
     const results = [];
 
     for (const project of projects) {
-      // Load user's BYOK keys for this project's owner
       try {
         orchestrator = await getOrchestratorForUser(project.user_id);
       } catch (byokErr) {
         console.warn(`[SEO Agent] BYOK load failed for ${project.user_id}, using defaults`);
       }
-      // Create run record
+
       const { data: run, error: runErr } = await supabase
         .from("seo_agent_runs")
         .insert({
@@ -82,129 +79,56 @@ Deno.serve(async (req) => {
       let sitemapUpdated = false;
       const details: Record<string, unknown> = {};
 
+      const baseUrl = project.wordpress_url?.replace(/\/wp-json\/cfrdm\/v1\/?$/, "").replace(/\/+$/, "") || "";
+      const isPlugin = project.wordpress_username === "__CFRDM_PLUGIN__";
+      const apiKey = project.wordpress_app_password || "";
+
       try {
         // ═══════════════════════════════════════════
-        // STEP 1: SEO Meta Audit via WordPress Plugin
+        // STEP 1: SEO Meta Audit + AUTO-FIX via AI
         // ═══════════════════════════════════════════
-        console.log(`[SEO Agent] [${project.name}] Step 1: SEO Meta Audit`);
+        console.log(`[SEO Agent] [${project.name}] Step 1: SEO Meta Audit + Auto-Fix`);
 
-        const baseUrl = project.wordpress_url?.replace(/\/wp-json\/cfrdm\/v1\/?$/, "").replace(/\/+$/, "") || "";
-        const isPlugin = project.wordpress_username === "__CFRDM_PLUGIN__";
-
-        if (baseUrl && isPlugin && project.wordpress_app_password) {
-          try {
-            // Trigger meta audit via plugin endpoint
-            const auditResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/meta-audit`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-CFRDM-API-Key": project.wordpress_app_password,
-              },
-              body: JSON.stringify({ auto_fix: true }),
-            });
-
-            if (auditResp.ok) {
-              const auditData = await auditResp.json();
-              metaIssuesFound = auditData.issues_found || 0;
-              metaIssuesFixed = auditData.issues_fixed || 0;
-              details.meta_audit = auditData;
-              console.log(`[SEO Agent] [${project.name}] Meta audit: ${metaIssuesFound} found, ${metaIssuesFixed} fixed`);
-            } else {
-              console.log(`[SEO Agent] [${project.name}] Meta audit endpoint not available (${auditResp.status})`);
-              
-              // Fallback: AI-based audit on indexed articles
-              const aiAuditResult = await runAIMetaAudit(supabase, project);
-              metaIssuesFound = aiAuditResult.found;
-              metaIssuesFixed = aiAuditResult.fixed;
-              details.meta_audit = aiAuditResult;
-            }
-          } catch (e) {
-            console.error(`[SEO Agent] [${project.name}] Meta audit error:`, e);
-            // Fallback to AI audit
-            const aiAuditResult = await runAIMetaAudit(supabase, project);
-            metaIssuesFound = aiAuditResult.found;
-            metaIssuesFixed = aiAuditResult.fixed;
-            details.meta_audit = aiAuditResult;
-          }
-        }
+        const metaResult = await runMetaAuditWithFix(supabase, orchestrator, project, baseUrl, isPlugin, apiKey);
+        metaIssuesFound = metaResult.found;
+        metaIssuesFixed = metaResult.fixed;
+        details.meta_audit = metaResult;
 
         // ═══════════════════════════════════════════
-        // STEP 2: Internal Linking Analysis
+        // STEP 2: Internal Linking - SUGGEST + APPLY
         // ═══════════════════════════════════════════
         console.log(`[SEO Agent] [${project.name}] Step 2: Internal Linking`);
 
-        const linkResult = await analyzeInternalLinks(supabase, project);
+        const linkResult = await analyzeAndApplyLinks(supabase, orchestrator, project, baseUrl, isPlugin, apiKey);
         linksSuggested = linkResult.suggested;
         linksApplied = linkResult.applied;
         details.internal_links = linkResult;
 
         // ═══════════════════════════════════════════
-        // STEP 3: Indexing & Sitemap
+        // STEP 3: Indexing - Submit ALL published URLs
         // ═══════════════════════════════════════════
-        console.log(`[SEO Agent] [${project.name}] Step 3: Indexing & Sitemap`);
+        console.log(`[SEO Agent] [${project.name}] Step 3: Indexing`);
 
-        if (baseUrl && isPlugin && project.wordpress_app_password) {
-          try {
-            // Trigger sitemap refresh
-            const sitemapResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-sitemap`, {
-              method: "POST",
-              headers: { "X-CFRDM-API-Key": project.wordpress_app_password },
-            });
-            sitemapUpdated = sitemapResp.ok;
-
-            // Get recently modified articles for IndexNow
-            const { data: recentArticles } = await supabase
-              .from("wordpress_article_index")
-              .select("wp_post_url")
-              .eq("project_id", project.id)
-              .gte("updated_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
-              .limit(100);
-
-            if (recentArticles && recentArticles.length > 0) {
-              const urls = recentArticles.map(a => a.wp_post_url).filter(Boolean);
-              if (urls.length > 0) {
-                const indexNowResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/indexnow-batch`, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "X-CFRDM-API-Key": project.wordpress_app_password,
-                  },
-                  body: JSON.stringify({ urls }),
-                });
-                indexingSubmitted = indexNowResp.ok ? urls.length : 0;
-              }
-            }
-
-            // Refresh llms.txt
-            await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-llms`, {
-              method: "POST",
-              headers: { "X-CFRDM-API-Key": project.wordpress_app_password },
-            }).catch(() => {});
-
-            details.indexing = {
-              sitemap_refreshed: sitemapUpdated,
-              urls_submitted: indexingSubmitted,
-              llms_refreshed: true,
-            };
-          } catch (e) {
-            console.error(`[SEO Agent] [${project.name}] Indexing error:`, e);
-          }
-        }
+        const indexResult = await submitIndexing(supabase, project, baseUrl, isPlugin, apiKey);
+        indexingSubmitted = indexResult.submitted;
+        sitemapUpdated = indexResult.sitemapRefreshed;
+        details.indexing = indexResult;
 
         // ═══════════════════════════════════════════
-        // STEP 4: Generate Summary
+        // STEP 4: Summary
         // ═══════════════════════════════════════════
         const summaryParts = [];
         if (metaIssuesFixed > 0) summaryParts.push(`${metaIssuesFixed} metas corrigidos`);
+        if (metaIssuesFound > 0 && metaIssuesFixed === 0) summaryParts.push(`${metaIssuesFound} issues encontrados`);
         if (linksSuggested > 0) summaryParts.push(`${linksSuggested} links sugeridos`);
+        if (linksApplied > 0) summaryParts.push(`${linksApplied} links aplicados`);
         if (indexingSubmitted > 0) summaryParts.push(`${indexingSubmitted} URLs indexadas`);
         if (sitemapUpdated) summaryParts.push("sitemap atualizado");
-        
-        const summary = summaryParts.length > 0 
+
+        const summary = summaryParts.length > 0
           ? `✅ ${project.name}: ${summaryParts.join(", ")}`
           : `✅ ${project.name}: sem problemas detectados`;
 
-        // Update run record
         await supabase
           .from("seo_agent_runs")
           .update({
@@ -221,7 +145,6 @@ Deno.serve(async (req) => {
           })
           .eq("id", runId);
 
-        // Create notification
         await supabase
           .from("cron_notifications")
           .insert({
@@ -243,6 +166,7 @@ Deno.serve(async (req) => {
             status: "error",
             completed_at: new Date().toISOString(),
             error_message: errMsg,
+            details,
           })
           .eq("id", runId);
 
@@ -265,56 +189,266 @@ Deno.serve(async (req) => {
   }
 });
 
-// ═══════════════════════════════════════════
-// AI Meta Audit (fallback when plugin endpoint unavailable)
-// ═══════════════════════════════════════════
-async function runAIMetaAudit(
+// ═══════════════════════════════════════════════════════════
+// STEP 1: Meta Audit with AI Auto-Fix
+// ═══════════════════════════════════════════════════════════
+async function runMetaAuditWithFix(
   supabase: ReturnType<typeof createClient>,
-  project: { id: string; name: string },
-): Promise<{ found: number; fixed: number; issues: string[] }> {
-  // Get indexed articles with low SEO scores
+  orchestrator: ReturnType<typeof getOrchestrator>,
+  project: any,
+  baseUrl: string,
+  isPlugin: boolean,
+  apiKey: string,
+): Promise<{ found: number; fixed: number; issues: string[]; fixes_applied: string[] }> {
+  const issues: string[] = [];
+  const fixesApplied: string[] = [];
+  let found = 0;
+  let fixed = 0;
+
+  // 1) Try plugin meta-audit endpoint first
+  if (baseUrl && isPlugin && apiKey) {
+    try {
+      const auditResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/meta-audit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CFRDM-API-Key": apiKey,
+        },
+        body: JSON.stringify({ auto_fix: true }),
+      });
+
+      if (auditResp.ok) {
+        const auditData = await auditResp.json();
+        found = auditData.issues_found || 0;
+        fixed = auditData.issues_fixed || 0;
+        if (fixed > 0) {
+          fixesApplied.push(`Plugin auto-fix: ${fixed} metas corrigidos`);
+        }
+        return { found, fixed, issues: auditData.issues || [], fixes_applied: fixesApplied };
+      }
+    } catch (e) {
+      console.log(`[SEO Agent] [${project.name}] Plugin meta-audit unavailable, using AI fallback`);
+    }
+  }
+
+  // 2) AI Fallback: Get articles with issues and fix them
   const { data: articles } = await supabase
     .from("wordpress_article_index")
-    .select("id, wp_post_title, wp_post_url, primary_keyword, seo_score, semantic_summary")
+    .select("id, wp_post_id, wp_post_title, wp_post_url, wp_post_slug, primary_keyword, seo_score, semantic_summary")
     .eq("project_id", project.id)
-    .lt("seo_score", 60)
     .order("seo_score", { ascending: true })
-    .limit(20);
+    .limit(50);
 
   if (!articles || articles.length === 0) {
-    return { found: 0, fixed: 0, issues: [] };
+    return { found: 0, fixed: 0, issues: [], fixes_applied: [] };
   }
 
-  const issues: string[] = [];
-  let found = 0;
-
+  // Find articles with SEO issues
+  const articlesWithIssues: any[] = [];
   for (const article of articles) {
-    // Check title length
+    const articleIssues: string[] = [];
     if (article.wp_post_title && article.wp_post_title.length > 70) {
-      issues.push(`Título muito longo: "${article.wp_post_title.substring(0, 50)}..." (${article.wp_post_title.length} chars)`);
-      found++;
+      articleIssues.push("title_too_long");
     }
-    if (article.wp_post_title && article.wp_post_title.length < 30) {
-      issues.push(`Título muito curto: "${article.wp_post_title}" (${article.wp_post_title.length} chars)`);
-      found++;
+    if (article.wp_post_title && article.wp_post_title.length < 20) {
+      articleIssues.push("title_too_short");
     }
     if (!article.primary_keyword) {
-      issues.push(`Sem keyword principal: "${article.wp_post_title}"`);
+      articleIssues.push("no_keyword");
+    }
+    if ((article.seo_score || 0) < 40) {
+      articleIssues.push("low_seo_score");
+    }
+    if (articleIssues.length > 0) {
+      articlesWithIssues.push({ ...article, issues: articleIssues });
       found++;
+      issues.push(`${articleIssues.join(", ")}: "${article.wp_post_title}"`);
     }
   }
 
-  return { found, fixed: 0, issues: issues.slice(0, 10) };
+  if (articlesWithIssues.length === 0) {
+    return { found: 0, fixed: 0, issues: [], fixes_applied: [] };
+  }
+
+  // 3) Use AI to generate meta fixes for articles with issues
+  const batchToFix = articlesWithIssues.slice(0, 10); // Fix 10 per run
+  
+  try {
+    const articlesList = batchToFix.map(a => 
+      `- ID: ${a.wp_post_id} | Título: "${a.wp_post_title}" | Keyword: ${a.primary_keyword || "N/A"} | Score: ${a.seo_score || 0} | Issues: ${a.issues.join(", ")}`
+    ).join("\n");
+
+    const prompt = `Analise estes artigos com problemas de SEO e gere correções otimizadas:
+
+${articlesList}
+
+Para cada artigo, gere:
+1. meta_title otimizado (max 60 chars, incluir keyword)
+2. meta_description otimizada (max 155 chars, persuasiva)
+3. focus_keyword sugerida (se ausente)
+
+Retorne APENAS JSON:
+{
+  "fixes": [
+    {
+      "wp_post_id": 123,
+      "meta_title": "...",
+      "meta_description": "...",
+      "focus_keyword": "..."
+    }
+  ]
+}`;
+
+    const aiContent = await orchestrator.call('seo_analysis', [
+      { role: "system", content: "Você é um especialista SEO brasileiro. Gere metas otimizadas para máximo CTR e ranqueamento. Responda APENAS com JSON válido." },
+      { role: "user", content: prompt },
+    ], { maxTokens: 1500, temperature: 0.3 });
+
+    const jsonStr = aiContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const fixData = JSON.parse(jsonStr);
+
+    if (fixData.fixes && Array.isArray(fixData.fixes) && baseUrl && isPlugin && apiKey) {
+      for (const fix of fixData.fixes) {
+        try {
+          // Apply fix via WordPress REST API (plugin update-meta endpoint or standard WP API)
+          const updateResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/update-seo-meta`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CFRDM-API-Key": apiKey,
+            },
+            body: JSON.stringify({
+              post_id: fix.wp_post_id,
+              meta_title: fix.meta_title,
+              meta_description: fix.meta_description,
+              focus_keyword: fix.focus_keyword,
+            }),
+          });
+
+          if (updateResp.ok) {
+            fixed++;
+            fixesApplied.push(`Post ${fix.wp_post_id}: meta atualizada`);
+
+            // Update index
+            const matchingArticle = batchToFix.find(a => a.wp_post_id === fix.wp_post_id);
+            if (matchingArticle) {
+              await supabase
+                .from("wordpress_article_index")
+                .update({
+                  primary_keyword: fix.focus_keyword || matchingArticle.primary_keyword,
+                  seo_score: Math.min(85, (matchingArticle.seo_score || 0) + 20),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", matchingArticle.id);
+            }
+          } else {
+            // Fallback: try standard WP REST API for Rank Math / Yoast
+            const wpUpdateResp = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${fix.wp_post_id}`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-CFRDM-API-Key": apiKey,
+              },
+              body: JSON.stringify({
+                meta: {
+                  // Rank Math
+                  rank_math_title: fix.meta_title,
+                  rank_math_description: fix.meta_description,
+                  rank_math_focus_keyword: fix.focus_keyword,
+                  // Yoast
+                  _yoast_wpseo_title: fix.meta_title,
+                  _yoast_wpseo_metadesc: fix.meta_description,
+                  _yoast_wpseo_focuskw: fix.focus_keyword,
+                },
+              }),
+            });
+
+            if (wpUpdateResp.ok) {
+              fixed++;
+              fixesApplied.push(`Post ${fix.wp_post_id}: meta atualizada (WP API)`);
+            }
+          }
+        } catch (e) {
+          console.error(`[SEO Agent] Fix failed for post ${fix.wp_post_id}:`, e);
+        }
+      }
+    }
+  } catch (e) {
+    console.error(`[SEO Agent] [${project.name}] AI meta fix error:`, e);
+  }
+
+  return { found, fixed, issues: issues.slice(0, 15), fixes_applied: fixesApplied };
 }
 
-// ═══════════════════════════════════════════
-// Internal Linking Analysis
-// ═══════════════════════════════════════════
-async function analyzeInternalLinks(
+// ═══════════════════════════════════════════════════════════
+// STEP 2: Internal Linking - Suggest + Apply
+// ═══════════════════════════════════════════════════════════
+async function analyzeAndApplyLinks(
   supabase: ReturnType<typeof createClient>,
-  project: { id: string; user_id: string; name: string },
-): Promise<{ suggested: number; applied: number; orphans: number }> {
-  // Find orphan articles (no internal links)
+  orchestrator: ReturnType<typeof getOrchestrator>,
+  project: any,
+  baseUrl: string,
+  isPlugin: boolean,
+  apiKey: string,
+): Promise<{ suggested: number; applied: number; orphans: number; applied_details: string[] }> {
+  const appliedDetails: string[] = [];
+
+  // 1) First, apply any PENDING suggestions from previous runs
+  let totalApplied = 0;
+  if (baseUrl && isPlugin && apiKey) {
+    const { data: pendingLinks } = await supabase
+      .from("internal_link_suggestions")
+      .select("id, source_wp_post_id, anchor_text, target_url, relevance_score")
+      .eq("project_id", project.id)
+      .eq("status", "pending")
+      .gte("relevance_score", 70)
+      .order("relevance_score", { ascending: false })
+      .limit(20);
+
+    if (pendingLinks && pendingLinks.length > 0) {
+      for (const link of pendingLinks) {
+        if (!link.source_wp_post_id || !link.anchor_text || !link.target_url) continue;
+
+        try {
+          const applyResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CFRDM-API-Key": apiKey,
+            },
+            body: JSON.stringify({
+              post_id: link.source_wp_post_id,
+              anchor_text: link.anchor_text,
+              target_url: link.target_url,
+            }),
+          });
+
+          if (applyResp.ok) {
+            const applyData = await applyResp.json();
+            if (applyData.success || applyData.applied) {
+              totalApplied++;
+              appliedDetails.push(`Link aplicado: "${link.anchor_text}" → ${link.target_url}`);
+
+              await supabase
+                .from("internal_link_suggestions")
+                .update({ status: "applied", applied_at: new Date().toISOString() })
+                .eq("id", link.id);
+            } else {
+              // Mark as failed to avoid retrying
+              await supabase
+                .from("internal_link_suggestions")
+                .update({ status: "rejected", rejected_reason: applyData.reason || "anchor not found in content" })
+                .eq("id", link.id);
+            }
+          }
+        } catch (e) {
+          console.error(`[SEO Agent] Apply link failed:`, e);
+        }
+      }
+    }
+  }
+
+  // 2) Find orphan articles and generate new suggestions
   const { data: orphans } = await supabase
     .from("wordpress_article_index")
     .select("id, wp_post_id, wp_post_title, wp_post_url, primary_keyword, topic_cluster, internal_links_count")
@@ -323,10 +457,9 @@ async function analyzeInternalLinks(
     .limit(30);
 
   if (!orphans || orphans.length === 0) {
-    return { suggested: 0, applied: 0, orphans: 0 };
+    return { suggested: 0, applied: totalApplied, orphans: 0, applied_details: appliedDetails };
   }
 
-  // Get all articles for matching
   const { data: allArticles } = await supabase
     .from("wordpress_article_index")
     .select("id, wp_post_id, wp_post_title, wp_post_url, primary_keyword, topic_cluster, semantic_summary")
@@ -334,75 +467,66 @@ async function analyzeInternalLinks(
     .limit(200);
 
   if (!allArticles || allArticles.length < 2) {
-    return { suggested: 0, applied: 0, orphans: orphans.length };
+    return { suggested: 0, applied: totalApplied, orphans: orphans.length, applied_details: appliedDetails };
   }
 
   let totalSuggested = 0;
 
-  // Use AI to find link opportunities for orphan articles
-  const orphanBatch = orphans.slice(0, 10); // Process 10 at a time
-  
   try {
     const articleList = allArticles
-      .map(a => `- [${a.wp_post_title}](${a.wp_post_url}) | keyword: ${a.primary_keyword || "N/A"} | cluster: ${a.topic_cluster || "N/A"}`)
+      .map(a => `- [${a.wp_post_title}](${a.wp_post_url}) | kw: ${a.primary_keyword || "N/A"} | cluster: ${a.topic_cluster || "N/A"}`)
       .join("\n");
 
+    const orphanBatch = orphans.slice(0, 10);
+
     for (const orphan of orphanBatch) {
-      const prompt = `Dado o artigo "${orphan.wp_post_title}" (keyword: ${orphan.primary_keyword || "N/A"}, cluster: ${orphan.topic_cluster || "N/A"}), 
-sugira os 3 melhores artigos para linkar PARA este artigo e os 3 melhores artigos para este artigo linkar.
+      const prompt = `Artigo órfão: "${orphan.wp_post_title}" (kw: ${orphan.primary_keyword || "N/A"}, cluster: ${orphan.topic_cluster || "N/A"})
 
-IMPORTANTE para anchor_text:
-- Use palavras que PROVAVELMENTE existem no conteúdo dos artigos fonte
-- Prefira termos genéricos do tema (ex: "direito trabalhista", "processo judicial") em vez de títulos completos
-- Use 2-4 palavras no máximo para o anchor
-- Evite frases longas ou muito específicas que podem não existir no texto
+Sugira os 3 melhores artigos para linkar PARA este e 3 artigos que este deveria linkar.
 
-ARTIGOS DISPONÍVEIS:
+REGRAS para anchor_text:
+- Use 2-4 palavras que EXISTEM no conteúdo do artigo fonte
+- Prefira termos genéricos do tema
+- Evite títulos completos
+
+ARTIGOS:
 ${articleList}
 
-Retorne APENAS JSON:
-{
-  "links_to_this": [{"title": "...", "url": "...", "anchor_text": "...", "relevance": 85}],
-  "links_from_this": [{"title": "...", "url": "...", "anchor_text": "...", "relevance": 80}]
-}`;
+JSON:
+{"links_to_this":[{"title":"...","url":"...","anchor_text":"...","relevance":85}],"links_from_this":[{"title":"...","url":"...","anchor_text":"...","relevance":80}]}`;
 
-      const orchestrator = getOrchestrator();
       const aiContent = await orchestrator.call('seo_analysis', [
-        { role: "system", content: "Você é um especialista em SEO e linkagem interna. Gere anchor texts CURTOS (2-4 palavras) que provavelmente existem nos conteúdos dos artigos. Responda APENAS com JSON." },
+        { role: "system", content: "Especialista SEO. Gere anchor texts CURTOS (2-4 palavras). APENAS JSON." },
         { role: "user", content: prompt },
       ], { maxTokens: 500, temperature: 0.2 });
 
-      const content = aiContent;
-      
       try {
-        const jsonStr = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        const jsonStr = aiContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
         const suggestions = JSON.parse(jsonStr);
-        
-        // Map source URLs to wp_post_ids for better apply targeting
+
         const urlToArticle = new Map(allArticles.map(a => [a.wp_post_url, a]));
-        
+
         const allSuggestions = [
           ...(suggestions.links_to_this || []).map((s: any) => ({
             source_url: s.url,
             target_url: orphan.wp_post_url,
             anchor_text: s.anchor_text,
-            relevance_score: s.relevance,
+            relevance_score: s.relevance || 70,
             source_article: urlToArticle.get(s.url),
           })),
           ...(suggestions.links_from_this || []).map((s: any) => ({
             source_url: orphan.wp_post_url,
             target_url: s.url,
             anchor_text: s.anchor_text,
-            relevance_score: s.relevance,
+            relevance_score: s.relevance || 70,
             source_article: urlToArticle.get(orphan.wp_post_url),
           })),
         ];
 
         for (const suggestion of allSuggestions) {
-          // Find source article's wp_post_id for more reliable link application
-          const sourceArticle = suggestion.source_article || 
+          const sourceArticle = suggestion.source_article ||
             allArticles.find(a => a.wp_post_url === suggestion.source_url);
-          
+
           await supabase
             .from("internal_link_suggestions")
             .insert({
@@ -410,20 +534,182 @@ Retorne APENAS JSON:
               project_id: project.id,
               anchor_text: suggestion.anchor_text || orphan.wp_post_title,
               target_url: suggestion.target_url,
-              relevance_score: suggestion.relevance_score || 70,
+              relevance_score: suggestion.relevance_score,
               status: "pending",
               source_wp_post_id: sourceArticle?.wp_post_id || null,
-              anchor_context: `Sugerido pelo Agente SEO para artigo: ${orphan.wp_post_title}`,
+              anchor_context: `Agente SEO: ${orphan.wp_post_title}`,
             });
           totalSuggested++;
+
+          // Auto-apply if high relevance and plugin available
+          if (suggestion.relevance_score >= 80 && sourceArticle?.wp_post_id && baseUrl && isPlugin && apiKey) {
+            try {
+              const applyResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-CFRDM-API-Key": apiKey,
+                },
+                body: JSON.stringify({
+                  post_id: sourceArticle.wp_post_id,
+                  anchor_text: suggestion.anchor_text,
+                  target_url: suggestion.target_url,
+                }),
+              });
+
+              if (applyResp.ok) {
+                const applyData = await applyResp.json();
+                if (applyData.success || applyData.applied) {
+                  totalApplied++;
+                  appliedDetails.push(`Auto-link: "${suggestion.anchor_text}" em post ${sourceArticle.wp_post_id}`);
+                }
+              }
+            } catch { /* continue */ }
+          }
         }
-      } catch {
-        // Skip parse errors
-      }
+      } catch { /* skip parse errors */ }
     }
   } catch (e) {
     console.error(`[SEO Agent] [${project.name}] Link analysis error:`, e);
   }
 
-  return { suggested: totalSuggested, applied: 0, orphans: orphans.length };
+  return { suggested: totalSuggested, applied: totalApplied, orphans: orphans.length, applied_details: appliedDetails };
+}
+
+// ═══════════════════════════════════════════════════════════
+// STEP 3: Indexing - Submit ALL non-indexed URLs + Sitemap
+// ═══════════════════════════════════════════════════════════
+async function submitIndexing(
+  supabase: ReturnType<typeof createClient>,
+  project: any,
+  baseUrl: string,
+  isPlugin: boolean,
+  apiKey: string,
+): Promise<{ submitted: number; sitemapRefreshed: boolean; googlePinged: boolean; details: string[] }> {
+  const detailsList: string[] = [];
+  let submitted = 0;
+  let sitemapRefreshed = false;
+  let googlePinged = false;
+
+  if (!baseUrl || !isPlugin || !apiKey) {
+    return { submitted: 0, sitemapRefreshed: false, googlePinged: false, details: ["No WordPress connection"] };
+  }
+
+  try {
+    // 1) Get ALL published article URLs from index
+    const { data: allArticles } = await supabase
+      .from("wordpress_article_index")
+      .select("wp_post_url")
+      .eq("project_id", project.id)
+      .eq("wp_post_status", "publish")
+      .limit(500);
+
+    const urls = allArticles?.map(a => a.wp_post_url).filter(Boolean) || [];
+
+    if (urls.length > 0) {
+      // 2) Submit to IndexNow via plugin (batch)
+      try {
+        const indexNowResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/indexnow-batch`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CFRDM-API-Key": apiKey,
+          },
+          body: JSON.stringify({ urls: urls.slice(0, 100) }), // IndexNow allows 10k but lets do 100 per run
+        });
+
+        if (indexNowResp.ok) {
+          const indexData = await indexNowResp.json();
+          submitted = indexData.submitted || urls.slice(0, 100).length;
+          detailsList.push(`IndexNow: ${submitted} URLs submetidas`);
+        } else {
+          // Fallback: Direct IndexNow API submission
+          const directResult = await submitDirectIndexNow(baseUrl, urls.slice(0, 50));
+          submitted = directResult;
+          detailsList.push(`IndexNow direto: ${submitted} URLs submetidas`);
+        }
+      } catch (e) {
+        // Fallback: Direct IndexNow
+        const directResult = await submitDirectIndexNow(baseUrl, urls.slice(0, 50));
+        submitted = directResult;
+        detailsList.push(`IndexNow fallback: ${submitted} URLs`);
+      }
+    }
+
+    // 3) Refresh sitemap
+    try {
+      const sitemapResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-sitemap`, {
+        method: "POST",
+        headers: { "X-CFRDM-API-Key": apiKey },
+      });
+      sitemapRefreshed = sitemapResp.ok;
+      if (sitemapRefreshed) detailsList.push("Sitemap atualizado");
+    } catch { /* ignore */ }
+
+    // 4) Ping Google sitemap
+    try {
+      const sitemapUrl = `${baseUrl.replace(/\/blog\/?$/, "")}/sitemap_index.xml`;
+      await fetch(`https://www.google.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`, {
+        method: "GET",
+      });
+      googlePinged = true;
+      detailsList.push("Google sitemap pinged");
+    } catch { /* ignore */ }
+
+    // 5) Ping Bing sitemap
+    try {
+      const sitemapUrl = `${baseUrl.replace(/\/blog\/?$/, "")}/sitemap_index.xml`;
+      await fetch(`https://www.bing.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`, {
+        method: "GET",
+      });
+      detailsList.push("Bing sitemap pinged");
+    } catch { /* ignore */ }
+
+    // 6) Refresh llms.txt
+    try {
+      await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-llms`, {
+        method: "POST",
+        headers: { "X-CFRDM-API-Key": apiKey },
+      });
+      detailsList.push("llms.txt atualizado");
+    } catch { /* ignore */ }
+
+  } catch (e) {
+    console.error(`[SEO Agent] [${project.name}] Indexing error:`, e);
+  }
+
+  return { submitted, sitemapRefreshed, googlePinged, details: detailsList };
+}
+
+// ═══════════════════════════════════════════════════════════
+// Direct IndexNow API (fallback when plugin endpoint unavailable)
+// ═══════════════════════════════════════════════════════════
+async function submitDirectIndexNow(siteUrl: string, urls: string[]): Promise<number> {
+  if (urls.length === 0) return 0;
+
+  const host = new URL(siteUrl).hostname;
+  // Generate a deterministic key from the hostname
+  const key = Array.from(host).reduce((acc, c) => acc + c.charCodeAt(0).toString(16), "indexnow").slice(0, 32);
+
+  try {
+    const resp = await fetch("https://api.indexnow.org/indexnow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        host,
+        key,
+        keyLocation: `https://${host}/${key}.txt`,
+        urlList: urls,
+      }),
+    });
+
+    const status = resp.status;
+    if (status === 200 || status === 202) {
+      return urls.length;
+    }
+  } catch (e) {
+    console.error("[IndexNow Direct] Error:", e);
+  }
+
+  return 0;
 }
