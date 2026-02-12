@@ -92,6 +92,8 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
     fetchTopicClusters,
     fetchKeywordRules,
     triggerSync,
+    syncAllProjects,
+    forceValidateAll,
     generateClusters,
     addKeywordRule,
     deleteKeywordRule,
@@ -301,7 +303,7 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button
             variant="ghost"
             size="sm"
@@ -315,10 +317,29 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
           </Button>
           <Button
             variant="outline"
+            size="sm"
+            onClick={() => syncAllProjects()}
+            disabled={isSyncing}
+          >
+            <Wifi className="w-4 h-4 mr-2" />
+            Sync Todos Projetos
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => forceValidateAll()}
+            disabled={isSyncing}
+            className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/30"
+          >
+            <Sparkles className="w-4 h-4 mr-2" />
+            Validação SEO IA
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => generateClusters()}
             disabled={isLoading || indexedArticles.length === 0}
           >
-            <Sparkles className="w-4 h-4 mr-2" />
+            <Layers className="w-4 h-4 mr-2" />
             Gerar Clusters
           </Button>
         </div>

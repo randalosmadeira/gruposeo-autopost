@@ -558,6 +558,182 @@ export function useInternalLinking(projectId: string | null) {
     return modifiedContent;
   }, []);
 
+  // Sync ALL projects at once
+  const syncAllProjects = useCallback(async () => {
+    setIsSyncing(true);
+    setSyncProgress({
+      phase: 'fetching',
+      total: 0,
+      fetched: 0,
+      analyzed: 0,
+      indexed: 0,
+      skipped: 0,
+      errors: 0,
+      logs: [],
+    });
+
+    try {
+      addLog('info', 'Sincronizando TODOS os projetos...');
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) throw new Error('Sessão expirada');
+
+      const resp = await fetch(`${supabaseUrl}/functions/v1/analyze-wp-articles`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ action: 'sync_all_projects', project_id: projectId }),
+      });
+
+      if (!resp.ok) throw new Error(await resp.text());
+
+      const reader = resp.body?.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = '';
+      let totalSynced = 0;
+
+      if (reader) {
+        let done = false;
+        while (!done) {
+          const { value, done: streamDone } = await reader.read();
+          done = streamDone;
+          if (value) {
+            textBuffer += decoder.decode(value, { stream: true });
+            const lines = textBuffer.split('\n');
+            textBuffer = lines.pop() || '';
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              try {
+                const event = JSON.parse(line.slice(6));
+                if (event.phase === 'project_start') {
+                  addLog('info', `📁 Sincronizando: ${event.project_name}`);
+                } else if (event.phase === 'fetched') {
+                  addLog('info', `${event.project_name}: ${event.total} artigos encontrados`);
+                } else if (event.phase === 'project_done') {
+                  addLog('success', `✅ ${event.project_name}: ${event.synced} sincronizados, ${event.analyzed} analisados`);
+                  totalSynced += event.synced || 0;
+                } else if (event.phase === 'project_error') {
+                  addLog('error', `❌ ${event.project_name}: ${event.error}`);
+                }
+                if (event.done) {
+                  setSyncProgress(prev => ({ ...prev, phase: 'complete', indexed: totalSynced }));
+                }
+              } catch {}
+            }
+          }
+        }
+      }
+
+      addLog('success', `Sincronização global concluída: ${totalSynced} artigos sincronizados`);
+      await fetchIndexedArticles();
+      await fetchTopicClusters();
+
+      toast({ title: 'Sincronização global concluída!', description: `${totalSynced} artigos sincronizados em todos os projetos.` });
+    } catch (error) {
+      addLog('error', error instanceof Error ? error.message : 'Erro desconhecido');
+      setSyncProgress(prev => ({ ...prev, phase: 'error' }));
+      toast({ title: 'Erro na sincronização', description: error instanceof Error ? error.message : 'Erro', variant: 'destructive' });
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [projectId, fetchIndexedArticles, fetchTopicClusters, toast, addLog]);
+
+  // Force validate ALL articles with SEO IA
+  const forceValidateAll = useCallback(async () => {
+    setIsSyncing(true);
+    setSyncProgress({
+      phase: 'fetching',
+      total: 0,
+      fetched: 0,
+      analyzed: 0,
+      indexed: 0,
+      skipped: 0,
+      errors: 0,
+      logs: [],
+    });
+
+    try {
+      addLog('info', '🔍 Forçando validação SEO IA em todos os artigos...');
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) throw new Error('Sessão expirada');
+
+      const resp = await fetch(`${supabaseUrl}/functions/v1/analyze-wp-articles`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ action: 'force_validate_all', project_id: projectId }),
+      });
+
+      if (!resp.ok) throw new Error(await resp.text());
+
+      const reader = resp.body?.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = '';
+      let finalResults = { validated: 0, fixed: 0, linksApplied: 0, errors: 0 };
+
+      if (reader) {
+        let done = false;
+        while (!done) {
+          const { value, done: streamDone } = await reader.read();
+          done = streamDone;
+          if (value) {
+            textBuffer += decoder.decode(value, { stream: true });
+            const lines = textBuffer.split('\n');
+            textBuffer = lines.pop() || '';
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              try {
+                const event = JSON.parse(line.slice(6));
+                if (event.phase === 'starting') {
+                  addLog('info', event.message);
+                  setSyncProgress(prev => ({ ...prev, total: event.total, phase: 'analyzing' }));
+                } else if (event.phase === 'validating') {
+                  setSyncProgress(prev => ({
+                    ...prev,
+                    analyzed: event.validated || 0,
+                    indexed: event.fixed || 0,
+                    fetched: event.progress || 0,
+                    total: event.total,
+                    errors: event.errors || 0,
+                  }));
+                }
+                if (event.done) {
+                  finalResults = event.results || finalResults;
+                  setSyncProgress(prev => ({ ...prev, phase: 'complete' }));
+                }
+              } catch {}
+            }
+          }
+        }
+      }
+
+      addLog('success', `✅ Validação concluída: ${finalResults.validated} validados, ${finalResults.fixed} metas corrigidos, ${finalResults.linksApplied} links aplicados`);
+      await fetchIndexedArticles();
+
+      toast({
+        title: 'Validação SEO IA concluída!',
+        description: `${finalResults.validated} validados, ${finalResults.fixed} corrigidos, ${finalResults.linksApplied} links aplicados.`,
+      });
+    } catch (error) {
+      addLog('error', error instanceof Error ? error.message : 'Erro desconhecido');
+      setSyncProgress(prev => ({ ...prev, phase: 'error' }));
+      toast({ title: 'Erro na validação', description: error instanceof Error ? error.message : 'Erro', variant: 'destructive' });
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [projectId, fetchIndexedArticles, toast, addLog]);
+
   return {
     // State
     isLoading,
@@ -574,6 +750,8 @@ export function useInternalLinking(projectId: string | null) {
     fetchKeywordRules,
     getLinkSuggestions,
     triggerSync,
+    syncAllProjects,
+    forceValidateAll,
     generateClusters,
     addKeywordRule,
     deleteKeywordRule,
