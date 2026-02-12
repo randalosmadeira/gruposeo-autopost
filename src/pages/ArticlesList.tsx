@@ -242,6 +242,9 @@ export default function ArticlesList() {
   const [isBulkAnalyzing, setIsBulkAnalyzing] = useState(false);
   const [bulkAnalysisProgress, setBulkAnalysisProgress] = useState(0);
 
+  // Refresh state
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   // Bulk Image Generation state
   const [isBulkGeneratingImages, setIsBulkGeneratingImages] = useState(false);
   const [bulkImageProgress, setBulkImageProgress] = useState(0);
@@ -635,8 +638,11 @@ export default function ArticlesList() {
   };
 
   // Refresh handler - invalidate cache for instant update
-  const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['articles'] });
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ['articles'] });
+    await queryClient.invalidateQueries({ queryKey: ['projects'] });
+    setTimeout(() => setIsRefreshing(false), 600);
   };
 
   if (isLoading) {
@@ -890,10 +896,11 @@ export default function ArticlesList() {
           
           <button 
             onClick={handleRefresh}
+            disabled={isRefreshing}
             className="p-2 ml-2 text-muted-foreground hover:text-foreground hover:bg-muted 
-                       rounded-lg transition-colors"
+                       rounded-lg transition-colors disabled:opacity-50"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
           </button>
         </div>
       </div>
