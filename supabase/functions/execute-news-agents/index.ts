@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
 import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
+import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
 
 const FUNCTION_NAME = "execute-news-agents";
 
@@ -237,7 +238,7 @@ Se originalidade < 90%, reescreva novamente até atingir 90%+.
 Retorne o resultado em formato JSON conforme especificado.`;
 
   try {
-    const orchestrator = getOrchestrator();
+    const orchestrator = await getOrchestratorForUser(agent.user_id);
     const rawContent = await orchestrator.call('news_rewrite', [
       { role: "system", content: MAA_SYSTEM_PROMPT },
       { role: "user", content: userPrompt },
@@ -300,10 +301,6 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const AI_API_KEY = "byok"; // Using AIOrchestrator BYOK keys
-
-    if (!getOrchestrator().getAvailableProviders().length) {
-      throw new Error("Nenhuma chave de IA configurada (GEMINI_API_KEY ou OPENAI_API_KEY)");
-    }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 

@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
+import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +15,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
-    const orchestrator = getOrchestrator();
+    let orchestrator = getOrchestrator(); // default, will be overridden per-project
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -49,6 +50,12 @@ Deno.serve(async (req) => {
     const results = [];
 
     for (const project of projects) {
+      // Load user's BYOK keys for this project's owner
+      try {
+        orchestrator = await getOrchestratorForUser(project.user_id);
+      } catch (byokErr) {
+        console.warn(`[SEO Agent] BYOK load failed for ${project.user_id}, using defaults`);
+      }
       // Create run record
       const { data: run, error: runErr } = await supabase
         .from("seo_agent_runs")

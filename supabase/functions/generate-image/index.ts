@@ -5,6 +5,7 @@ import { generateGeminiImage, callAI } from "../_shared/gemini.ts";
 import { createTokenLogger } from "../_shared/token-logger.ts";
 import { createEmotionalImageSystem } from "../_shared/emotional/emotional-image-system.ts";
 import type { EmotionalTrigger } from "../_shared/emotional/emotional-triggers-config.ts";
+import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
 
 const FUNCTION_NAME = "generate-image";
 
@@ -117,6 +118,9 @@ Deno.serve(async (req) => {
       );
     }
     log.authSuccess(user.id);
+
+    // Load user's BYOK API keys for image generation
+    await setEnvKeysForUser(user.id);
 
     // Parse request
     const body: ImageRequest = await req.json();

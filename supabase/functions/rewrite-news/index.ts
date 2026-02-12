@@ -12,6 +12,7 @@ import {
 } from "./prompts.ts";
 import { createEmotionalImageSystem } from "../_shared/emotional/emotional-image-system.ts";
 import { orchestrate } from "../_shared/verniz-orchestrator.ts";
+import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
 
 const FUNCTION_NAME = "rewrite-news";
 
@@ -110,6 +111,9 @@ Deno.serve(async (req) => {
       userId = user.id;
       log.authSuccess(userId);
     }
+
+    // Load user's BYOK API keys into environment for this request
+    await setEnvKeysForUser(userId);
 
     // Extract request fields (body already parsed above)
     const { 

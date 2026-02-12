@@ -1,4 +1,5 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -338,6 +339,8 @@ Deno.serve(async (req) => {
       try {
         console.log(`[RSS-AUTO] Processing feed: ${feed.feed_name} (${feed.feed_url})`);
         
+        // Load user's BYOK keys for this feed's owner
+        await setEnvKeysForUser(feed.user_id);
         // Fetch RSS items
         const rssItems = await fetchRSSFeed(feed.feed_url);
         
@@ -390,9 +393,10 @@ Deno.serve(async (req) => {
                 sourceContent: content,
                 sourceName: sourceName,
                 analysisAngle: adaptiveAngle,
-                niche: nicheConfig.primaryNiches[0], // Primary niche for now
+                niche: nicheConfig.primaryNiches[0],
                 articleLength: feed.article_length || 'medium',
                 projectId: feed.project_id,
+                userId: feed.user_id,
                 language: 'pt-BR',
               }),
             }
