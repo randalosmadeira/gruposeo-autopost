@@ -354,34 +354,74 @@ export function RepostHistory({ limit = 50, showRefresh = true, compact = false 
     <div className="space-y-4">
       {/* Stats Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <Card className={cn("cursor-pointer hover:border-primary/50 transition-colors", filter === 'all' && "border-primary/50")} onClick={() => setFilter('all')}>
+        <Card 
+          className={cn(
+            "cursor-pointer transition-all duration-200 hover:border-primary/50 hover:shadow-md",
+            filter === 'all' 
+              ? "border-primary ring-2 ring-primary/20 shadow-md bg-primary/5" 
+              : "border-border"
+          )} 
+          onClick={() => setFilter(filter === 'all' ? 'all' : 'all')}
+        >
           <CardContent className="py-3 px-4 text-center">
-            <p className="text-2xl font-bold">{stats.total}</p>
-            <p className="text-xs text-muted-foreground">Total</p>
+            <p className={cn("text-2xl font-bold transition-colors", filter === 'all' && "text-primary")}>{stats.total}</p>
+            <p className={cn("text-xs transition-colors", filter === 'all' ? "text-primary font-medium" : "text-muted-foreground")}>Total</p>
           </CardContent>
         </Card>
-        <Card className={cn("cursor-pointer hover:border-blue-500/50 transition-colors", filter === 'generating' && "border-blue-500/50")} onClick={() => setFilter('generating')}>
+        <Card 
+          className={cn(
+            "cursor-pointer transition-all duration-200 hover:border-blue-500/50 hover:shadow-md",
+            filter === 'generating' 
+              ? "border-blue-500 ring-2 ring-blue-500/20 shadow-md bg-blue-500/5" 
+              : "border-border"
+          )} 
+          onClick={() => setFilter(filter === 'generating' ? 'all' : 'generating')}
+        >
           <CardContent className="py-3 px-4 text-center">
             <p className="text-2xl font-bold text-blue-500">{stats.generating}</p>
-            <p className="text-xs text-muted-foreground">Em criação</p>
+            <p className={cn("text-xs transition-colors", filter === 'generating' ? "text-blue-600 font-medium" : "text-muted-foreground")}>Em criação</p>
           </CardContent>
         </Card>
-        <Card className={cn("cursor-pointer hover:border-amber-500/50 transition-colors", filter === 'draft' && "border-amber-500/50")} onClick={() => setFilter('draft')}>
+        <Card 
+          className={cn(
+            "cursor-pointer transition-all duration-200 hover:border-amber-500/50 hover:shadow-md",
+            filter === 'draft' 
+              ? "border-amber-500 ring-2 ring-amber-500/20 shadow-md bg-amber-500/5" 
+              : "border-border"
+          )} 
+          onClick={() => setFilter(filter === 'draft' ? 'all' : 'draft')}
+        >
           <CardContent className="py-3 px-4 text-center">
             <p className="text-2xl font-bold text-amber-500">{stats.draft}</p>
-            <p className="text-xs text-muted-foreground">Analisados</p>
+            <p className={cn("text-xs transition-colors", filter === 'draft' ? "text-amber-600 font-medium" : "text-muted-foreground")}>Analisados</p>
           </CardContent>
         </Card>
-        <Card className={cn("cursor-pointer hover:border-green-500/50 transition-colors", filter === 'published' && "border-green-500/50")} onClick={() => setFilter('published')}>
+        <Card 
+          className={cn(
+            "cursor-pointer transition-all duration-200 hover:border-green-500/50 hover:shadow-md",
+            filter === 'published' 
+              ? "border-green-500 ring-2 ring-green-500/20 shadow-md bg-green-500/5" 
+              : "border-border"
+          )} 
+          onClick={() => setFilter(filter === 'published' ? 'all' : 'published')}
+        >
           <CardContent className="py-3 px-4 text-center">
             <p className="text-2xl font-bold text-green-500">{stats.published}</p>
-            <p className="text-xs text-muted-foreground">Publicados</p>
+            <p className={cn("text-xs transition-colors", filter === 'published' ? "text-green-600 font-medium" : "text-muted-foreground")}>Publicados</p>
           </CardContent>
         </Card>
-        <Card className={cn("cursor-pointer hover:border-destructive/50 transition-colors", filter === 'error' && "border-destructive/50")} onClick={() => setFilter('error')}>
+        <Card 
+          className={cn(
+            "cursor-pointer transition-all duration-200 hover:border-destructive/50 hover:shadow-md",
+            filter === 'error' 
+              ? "border-destructive ring-2 ring-destructive/20 shadow-md bg-destructive/5" 
+              : "border-border"
+          )} 
+          onClick={() => setFilter(filter === 'error' ? 'all' : 'error')}
+        >
           <CardContent className="py-3 px-4 text-center">
             <p className="text-2xl font-bold text-destructive">{stats.error}</p>
-            <p className="text-xs text-muted-foreground">Erros</p>
+            <p className={cn("text-xs transition-colors", filter === 'error' ? "text-destructive font-medium" : "text-muted-foreground")}>Erros</p>
           </CardContent>
         </Card>
       </div>
