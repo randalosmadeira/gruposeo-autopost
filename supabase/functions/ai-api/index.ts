@@ -10,6 +10,7 @@ import {
   hasOpenAIKey,
   getAIProvidersStatus,
 } from "../_shared/gemini.ts";
+import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
 
 const FUNCTION_NAME = "ai-api";
 
@@ -54,7 +55,11 @@ Deno.serve(async (req) => {
       const token = authHeader.replace("Bearer ", "");
       const { data: { user } } = await supabase.auth.getUser(token);
       userId = user?.id || null;
-      if (userId) log.authSuccess(userId);
+      if (userId) {
+        log.authSuccess(userId);
+        // Load user's BYOK API keys into environment
+        await setEnvKeysForUser(userId);
+      }
     }
 
     const body: AIRequest = await req.json();

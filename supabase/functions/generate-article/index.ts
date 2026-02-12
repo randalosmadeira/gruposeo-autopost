@@ -6,6 +6,7 @@ import { callAIStream, resolveModel } from "../_shared/gemini.ts";
 import { runAgentPipeline, type AgentPipelineConfig } from "../_shared/agents/agent-pipeline.ts";
 import { mapSegmentToSector } from "../_shared/sector-config.ts";
 import { orchestrate } from "../_shared/verniz-orchestrator.ts";
+import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
 
 const FUNCTION_NAME = "generate-article";
 
@@ -248,6 +249,9 @@ Deno.serve(async (req) => {
     }
     log.authSuccess(user.id);
     // ========== END AUTHENTICATION ==========
+
+    // Load user's BYOK API keys into environment for this request
+    await setEnvKeysForUser(user.id);
 
     const { config } = await req.json() as { config: ArticleConfig };
 

@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
+import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -636,7 +637,18 @@ Deno.serve(async (req) => {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Verify at least one AI key is available
-    const orchestrator = getOrchestrator();
+    // Load user's BYOK keys for AI calls
+    const userId = context?.userId || "";
+    let orchestrator;
+    if (userId) {
+      try {
+        orchestrator = await getOrchestratorForUser(userId);
+      } catch {
+        orchestrator = getOrchestrator();
+      }
+    } else {
+      orchestrator = getOrchestrator();
+    }
     const availableProviders = orchestrator.getAvailableProviders();
     if (availableProviders.length === 0) {
       return new Response(

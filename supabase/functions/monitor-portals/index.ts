@@ -1,4 +1,5 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -520,11 +521,7 @@ Deno.serve(async (req) => {
 
     const geminiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiKey) {
-      console.error("GEMINI_API_KEY not configured");
-      return new Response(
-        JSON.stringify({ error: "GEMINI_API_KEY not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      console.warn("GEMINI_API_KEY not configured at platform level, will try BYOK per user");
     }
 
     // Parse request body for options
@@ -575,7 +572,9 @@ Deno.serve(async (req) => {
     let totalArticlesCreated = 0;
 
     for (const portal of portals || []) {
-      const result = await processPortal(supabase, portal, geminiKey);
+      // Load user's BYOK keys into env for this portal's processing
+      await setEnvKeysForUser(portal.user_id);
+      const result = await processPortal(supabase, portal, Deno.env.get("GEMINI_API_KEY") || "");
       results.push({
         portal_id: portal.id,
         portal_name: portal.portal_name,
