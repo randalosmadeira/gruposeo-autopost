@@ -62,9 +62,9 @@ export function useArticles(projectId?: string) {
       return data;
     },
     enabled: !!user,
-    // Refetch more frequently to catch generating articles
-    refetchInterval: 10000, // Every 10 seconds
-    staleTime: 5000, // Consider data stale after 5 seconds
+    // Refetch frequently to catch status changes instantly
+    refetchInterval: 3000, // Every 3 seconds
+    staleTime: 1000, // Consider data stale after 1 second
   });
 
   // Real-time subscription for instant updates
