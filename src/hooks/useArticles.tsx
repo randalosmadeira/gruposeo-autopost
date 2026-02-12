@@ -20,42 +20,24 @@ export function useArticles(projectId?: string) {
       if (!user) return [];
       
       const PAGE_SIZE = 1000;
+      const MAX_PAGES = 20; // Safety cap: max 20k articles
       let allData: any[] = [];
       let from = 0;
-      let hasMore = true;
+      let pages = 0;
 
-      while (hasMore) {
+      const selectFields = `
+        id, keyword, title, status, type, slug, excerpt,
+        featured_image_url, seo_score, word_count, project_id,
+        published_at, published_url, scheduled_at, secondary_keywords,
+        config, error_message, emotional_trigger, emotional_confidence,
+        created_at, updated_at, user_id,
+        projects ( id, name, domain )
+      `;
+
+      while (pages < MAX_PAGES) {
         let query = supabase
           .from('articles')
-          .select(`
-            id,
-            keyword,
-            title,
-            status,
-            type,
-            slug,
-            excerpt,
-            featured_image_url,
-            seo_score,
-            word_count,
-            project_id,
-            published_at,
-            published_url,
-            scheduled_at,
-            secondary_keywords,
-            config,
-            error_message,
-            emotional_trigger,
-            emotional_confidence,
-            created_at,
-            updated_at,
-            user_id,
-            projects (
-              id,
-              name,
-              domain
-            )
-          `)
+          .select(selectFields)
           .order('created_at', { ascending: false })
           .range(from, from + PAGE_SIZE - 1);
         
@@ -70,17 +52,18 @@ export function useArticles(projectId?: string) {
         if (data && data.length > 0) {
           allData = allData.concat(data);
           from += PAGE_SIZE;
-          hasMore = data.length === PAGE_SIZE;
+          pages++;
+          if (data.length < PAGE_SIZE) break;
         } else {
-          hasMore = false;
+          break;
         }
       }
 
       return allData;
     },
     enabled: !!user,
-    refetchInterval: 5000,
-    staleTime: 2000,
+    refetchInterval: 15000,
+    staleTime: 10000,
   });
 
   // Real-time subscription for instant updates
