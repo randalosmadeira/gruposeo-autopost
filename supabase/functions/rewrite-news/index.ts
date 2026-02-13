@@ -170,10 +170,46 @@ Deno.serve(async (req) => {
       log.info("using_default_prompt");
     }
 
-    // ZicaJuris: Inject Verniz DNA into system prompt
-    const orchestration = orchestrate(keyword || sourceName, keyword || sourceContent.substring(0, 200));
+    // ZicaJuris: Fetch project config for CTAs and social media injection
+    let projectConfig: Record<string, any> | undefined;
+    if (projectId) {
+      const { data: projectData } = await supabaseAdmin
+        .from('projects')
+        .select('nicho, compliance_rules, empresa_nome, empresa_telefone, empresa_endereco, empresa_whatsapp, social_instagram, social_youtube, social_linkedin, social_twitter, social_tiktok, social_google_maps, social_linktree, cta_comunidade, cta_conclusao, cta_leads')
+        .eq('id', projectId)
+        .single();
+      
+      if (projectData) {
+        projectConfig = {
+          nicho: projectData.nicho || undefined,
+          compliance_rules: projectData.compliance_rules || undefined,
+          empresa_nome: projectData.empresa_nome || undefined,
+          empresa_telefone: projectData.empresa_telefone || undefined,
+          empresa_endereco: projectData.empresa_endereco || undefined,
+          empresa_whatsapp: projectData.empresa_whatsapp || undefined,
+          social_instagram: projectData.social_instagram || undefined,
+          social_youtube: projectData.social_youtube || undefined,
+          social_linkedin: projectData.social_linkedin || undefined,
+          social_twitter: projectData.social_twitter || undefined,
+          social_tiktok: projectData.social_tiktok || undefined,
+          social_google_maps: projectData.social_google_maps || undefined,
+          social_linktree: projectData.social_linktree || undefined,
+          cta_comunidade: projectData.cta_comunidade || undefined,
+          cta_conclusao: projectData.cta_conclusao || undefined,
+          cta_leads: projectData.cta_leads || undefined,
+        };
+        log.info("project_config_loaded", { 
+          projectId, 
+          hasCtas: !!(projectData.cta_comunidade || projectData.cta_conclusao || projectData.cta_leads),
+          hasSocial: !!(projectData.social_instagram || projectData.social_youtube),
+        });
+      }
+    }
+
+    // ZicaJuris: Inject Verniz DNA into system prompt (with project CTAs/social when available)
+    const orchestration = orchestrate(keyword || sourceName, keyword || sourceContent.substring(0, 200), projectConfig);
     systemPromptToUse += '\n\n' + orchestration.vernizSection;
-    log.info("verniz_applied_to_rewrite", { nicho: orchestration.nichoDetectado.nicho, gatilho: orchestration.gatilho.gatilho });
+    log.info("verniz_applied_to_rewrite", { nicho: orchestration.nichoDetectado.nicho, gatilho: orchestration.gatilho.gatilho, hasProjectConfig: !!projectConfig });
 
     // Build user prompt with all configurations
     const userPrompt = buildUserPrompt({
