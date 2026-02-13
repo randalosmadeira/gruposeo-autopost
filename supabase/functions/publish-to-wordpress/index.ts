@@ -151,6 +151,59 @@ function buildBreadcrumbSchema(ctx: SchemaInjectionContext): Record<string, unkn
 }
 
 /**
+ * Extract HowTo steps from content for how-to articles
+ */
+function extractHowToSteps(content: string): Array<{ name: string; text: string }> {
+  const steps: Array<{ name: string; text: string }> = [];
+  if (!content) return steps;
+
+  // Detect how-to patterns: "Passo X:", "Etapa X:", numbered lists with instructions
+  const hasHowTo = /##\s*(Como|How\s+To|Passo\s+a\s+Passo|Tutorial|Guia)/i.test(content) ||
+    /<h[23][^>]*>(Como|How\s+To|Passo\s+a\s+Passo|Tutorial|Guia)/i.test(content);
+  if (!hasHowTo) return steps;
+
+  // Pattern: ### Passo X: Title \n description
+  const stepPattern = /###\s*(?:Passo|Etapa|Step)\s*\d+[:.]\s*(.+?)\s*\n+([\s\S]*?)(?=###|\n##|$)/gi;
+  let match;
+  while ((match = stepPattern.exec(content)) !== null) {
+    const name = match[1].replace(/\*\*/g, '').trim();
+    const text = match[2].replace(/<[^>]+>/g, '').replace(/\*\*/g, '').replace(/\s+/g, ' ').trim();
+    if (name && text) steps.push({ name, text: text.slice(0, 500) });
+  }
+
+  // Pattern: numbered H3 headings in how-to section
+  if (steps.length === 0) {
+    const numberedPattern = /###\s*\d+[.)]\s*(.+?)\s*\n+([\s\S]*?)(?=###|\n##|$)/g;
+    while ((match = numberedPattern.exec(content)) !== null) {
+      const name = match[1].replace(/\*\*/g, '').trim();
+      const text = match[2].replace(/<[^>]+>/g, '').replace(/\*\*/g, '').replace(/\s+/g, ' ').trim();
+      if (name && text) steps.push({ name, text: text.slice(0, 500) });
+    }
+  }
+
+  return steps.slice(0, 15);
+}
+
+/**
+ * Build HowTo JSON-LD schema
+ */
+function buildHowToSchema(title: string, description: string, steps: Array<{ name: string; text: string }>): Record<string, unknown> | null {
+  if (steps.length < 2) return null;
+  return {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": title,
+    "description": description,
+    "step": steps.map((s, i) => ({
+      "@type": "HowToStep",
+      "position": i + 1,
+      "name": s.name,
+      "text": s.text,
+    })),
+  };
+}
+
+/**
  * Inject all JSON-LD schemas into article content
  */
 function injectSchemas(content: string, ctx: SchemaInjectionContext): string {
@@ -166,7 +219,14 @@ function injectSchemas(content: string, ctx: SchemaInjectionContext): string {
     schemas.push(`<script type="application/ld+json">\n${JSON.stringify(faqSchema, null, 2)}\n</script>`);
   }
 
-  // 3. BreadcrumbList schema (always)
+  // 3. HowTo schema (if how-to steps detected)
+  const howToSteps = extractHowToSteps(content);
+  const howToSchema = buildHowToSchema(ctx.title, ctx.description, howToSteps);
+  if (howToSchema) {
+    schemas.push(`<script type="application/ld+json">\n${JSON.stringify(howToSchema, null, 2)}\n</script>`);
+  }
+
+  // 4. BreadcrumbList schema (always)
   schemas.push(`<script type="application/ld+json">\n${JSON.stringify(buildBreadcrumbSchema(ctx), null, 2)}\n</script>`);
 
   return content + "\n\n<!-- JSON-LD Structured Data by ContentFactory -->\n" + schemas.join("\n");
