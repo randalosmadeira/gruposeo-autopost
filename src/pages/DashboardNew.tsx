@@ -37,6 +37,7 @@ import { WordPressHealthCard } from '@/components/dashboard/WordPressHealthCard'
 import { CronNotificationsPanel } from '@/components/dashboard/CronNotificationsPanel';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { SEOAgentPanel } from '@/components/dashboard/SEOAgentPanel';
+import { AuditReportPanel } from '@/components/dashboard/AuditReportPanel';
 
 // Quick action card component
 function QuickActionCard({ 
@@ -386,8 +387,11 @@ export default function DashboardNew() {
           </CardContent>
         </Card>
 
-        {/* SEO Agent Panel */}
-        <SEOAgentPanel />
+        {/* SEO Agent Panel + Audit Report */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SEOAgentPanel />
+          <AuditReportPanel />
+        </div>
 
         {/* Cron Notifications */}
         <CronNotificationsPanel />
