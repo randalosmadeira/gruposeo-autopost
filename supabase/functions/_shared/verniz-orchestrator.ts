@@ -182,6 +182,128 @@ export function detectarAngulo(text: string): AnguloAnalise {
   };
 }
 
+// =================== VERNIZ DNA MATRIX (Nicho × Gatilho) ===================
+
+export type VernizNicheType = 'geral' | 'advocacia' | 'saude' | 'beleza' | 'tecnologia' | 'marketing';
+export type VernizTriggerType = 'serio' | 'humor' | 'preocupacao' | 'revolta' | 'angustia' | 'sarcasmo' | 'satira' | 'felicidade' | 'comemoracao' | 'duvida' | 'misterio';
+
+interface VernizDNAEntry {
+  tone: string;
+  vocabulary: string[];
+  cta: string;
+  imageStyle: string;
+}
+
+/**
+ * Matriz 6×11 — Nicho × Gatilho Emocional
+ * Define tom, vocabulário, CTA e estilo de imagem por combinação.
+ */
+export const VERNIZ_DNA_MATRIX: Record<VernizNicheType, Record<VernizTriggerType, VernizDNAEntry>> = {
+  geral: {
+    serio: { tone: "Formal e factual", vocabulary: ["determina", "estabelece", "conforme"], cta: "Acompanhe as atualizações", imageStyle: "tons sóbrios, azul-marinho, ambiente formal" },
+    humor: { tone: "Leve e acessível", vocabulary: ["inusitado", "surpreende", "plot twist"], cta: "Compartilhe essa curiosidade", imageStyle: "cores vibrantes, expressões cômicas" },
+    preocupacao: { tone: "Cauteloso e orientador", vocabulary: ["alerta", "atenção", "risco"], cta: "Fique atento às mudanças", imageStyle: "tons amarelos/laranjas, rostos pensativos" },
+    revolta: { tone: "Denúncia fundamentada", vocabulary: ["absurdo", "inaceitável", "escândalo"], cta: "Compartilhe para que mais pessoas saibam", imageStyle: "contrastes fortes, tons vermelhos" },
+    angustia: { tone: "Empático e sensível", vocabulary: ["drama", "tragédia", "apelo"], cta: "Saiba como ajudar", imageStyle: "tons escuros, silhuetas" },
+    sarcasmo: { tone: "Questionador e mordaz", vocabulary: ["claro que sim", "como sempre", "surpreendente"], cta: "Tire suas próprias conclusões", imageStyle: "expressões irônicas" },
+    satira: { tone: "Crítica social elegante", vocabulary: ["em um país onde", "mais uma vez"], cta: "Reflexão que vale o compartilhamento", imageStyle: "cenários absurdos estilizados" },
+    felicidade: { tone: "Otimista e celebratório", vocabulary: ["conquista", "vitória", "avanço"], cta: "Celebre essa conquista", imageStyle: "cores quentes, sorrisos, luz natural" },
+    comemoracao: { tone: "Festivo e orgulhoso", vocabulary: ["celebra", "recorde", "inédito"], cta: "Parabéns a todos os envolvidos", imageStyle: "dourado, troféus, confetes" },
+    duvida: { tone: "Investigativo e reflexivo", vocabulary: ["será que", "ninguém explica", "controvérsia"], cta: "O que você acha? Comente", imageStyle: "lupa, documentos, sombras" },
+    misterio: { tone: "Suspense e instigante", vocabulary: ["enigma", "sem resposta", "revelação"], cta: "Descubra o que ninguém está contando", imageStyle: "névoa, silhuetas, portas entreabertas" },
+  },
+  advocacia: {
+    serio: { tone: "Técnico-institucional", vocabulary: ["conforme legislação", "jurisprudência consolidada", "entendimento do STF"], cta: "Consulte um advogado especializado", imageStyle: "martelo jurídico, balança da justiça, tons azul-marinho" },
+    humor: { tone: "Didático leve", vocabulary: ["acredite se quiser", "a lei prevê que", "surpreendentemente legal"], cta: "Conheça seus direitos", imageStyle: "ilustração conceitual jurídica" },
+    preocupacao: { tone: "Alerta jurídico preventivo", vocabulary: ["risco legal", "pode ser penalizado", "atenção ao prazo"], cta: "Não perca seus direitos — consulte um advogado", imageStyle: "relógio, documentos, tons de alerta" },
+    revolta: { tone: "Denúncia jurídica fundamentada", vocabulary: ["afronta à constituição", "violação de direitos", "impunidade"], cta: "Não aceite — conheça seus direitos", imageStyle: "punho cerrado, constituição, tons vermelhos escuros" },
+    angustia: { tone: "Defesa humanizada", vocabulary: ["desespero jurídico", "sem amparo legal", "clamor por justiça"], cta: "Busque orientação jurídica agora", imageStyle: "silhueta em tribunal, tons sombrios" },
+    sarcasmo: { tone: "Crítica jurídica afiada", vocabulary: ["a justiça é cega — literalmente", "mais uma decisão surpreendente"], cta: "Entenda o que isso significa na prática", imageStyle: "balança desequilibrada, expressão irônica" },
+    satira: { tone: "Paródia jurídica inteligente", vocabulary: ["no país da jurisprudência criativa", "lei para inglês ver"], cta: "Reflexão jurídica para compartilhar", imageStyle: "caricatura de tribunal" },
+    felicidade: { tone: "Conquista de direitos", vocabulary: ["vitória judicial", "direito garantido", "marco jurídico"], cta: "Conheça essa conquista", imageStyle: "martelo jurídico dourado, sorrisos" },
+    comemoracao: { tone: "Marco legal celebratório", vocabulary: ["decisão histórica", "precedente inédito", "avanço legislativo"], cta: "Uma vitória para todos os brasileiros", imageStyle: "tribunal iluminado, bandeira" },
+    duvida: { tone: "Investigação jurídica", vocabulary: ["lacuna legal", "interpretação controversa", "divergência doutrinária"], cta: "Consulte um especialista para seu caso", imageStyle: "códigos jurídicos, lupa, interrogação" },
+    misterio: { tone: "Caso jurídico instigante", vocabulary: ["processo sigiloso", "decisão oculta", "o que não foi publicado"], cta: "Acompanhe os desdobramentos", imageStyle: "pasta sigilosa, sombras no tribunal" },
+  },
+  saude: {
+    serio: { tone: "Médico-informativo baseado em evidências", vocabulary: ["estudo comprova", "evidência científica", "protocolo clínico"], cta: "Consulte seu médico", imageStyle: "jaleco branco, estetoscópio, tons azul-claros" },
+    humor: { tone: "Saúde descomplicada", vocabulary: ["calma que tem solução", "não é o fim do mundo", "respira fundo"], cta: "Cuide-se com leveza", imageStyle: "ilustração médica alegre" },
+    preocupacao: { tone: "Alerta médico preventivo", vocabulary: ["atenção redobrada", "sintomas de alerta", "procure atendimento"], cta: "Agende uma consulta preventiva", imageStyle: "tons amarelos, termômetro, atenção" },
+    revolta: { tone: "Denúncia sanitária", vocabulary: ["descaso com a saúde", "sistema falha", "pacientes abandonados"], cta: "Exija seus direitos como paciente", imageStyle: "hospital lotado, tons vermelhos" },
+    angustia: { tone: "Empatia médica profunda", vocabulary: ["sofrimento silencioso", "luta diária", "esperança de tratamento"], cta: "Você não está sozinho — busque ajuda", imageStyle: "mãos que acolhem, tons suaves" },
+    sarcasmo: { tone: "Crítica ao sistema de saúde", vocabulary: ["saúde de primeiro mundo", "fila de apenas 6 meses"], cta: "Informe-se e cobre mudanças", imageStyle: "contraste hospital público/privado" },
+    satira: { tone: "Saúde com ironia inteligente", vocabulary: ["no país do SUS criativo", "remédio mais eficaz: paciência"], cta: "Ria para não chorar — e cuide-se", imageStyle: "ilustração satírica médica" },
+    felicidade: { tone: "Avanço médico celebratório", vocabulary: ["cura descoberta", "tratamento revolucionário", "esperança renovada"], cta: "Descubra como se beneficiar", imageStyle: "laboratório iluminado, sorrisos" },
+    comemoracao: { tone: "Marco na saúde", vocabulary: ["vacina aprovada", "recorde de transplantes", "erradicação histórica"], cta: "Uma conquista para a humanidade", imageStyle: "confetes em hospital, equipe médica" },
+    duvida: { tone: "Investigação médica", vocabulary: ["estudo controverso", "dados conflitantes", "pesquisa questiona"], cta: "Consulte seu médico sobre esse tema", imageStyle: "microscópio, dados, interrogação" },
+    misterio: { tone: "Descoberta médica instigante", vocabulary: ["doença rara", "caso sem explicação", "medicina não sabe"], cta: "Acompanhe as pesquisas", imageStyle: "laboratório escuro, microscópio" },
+  },
+  beleza: {
+    serio: { tone: "Estético-científico", vocabulary: ["dermatologicamente testado", "ativo comprovado", "protocolo estético"], cta: "Agende sua avaliação", imageStyle: "clínica estética clean, tons brancos e rosé" },
+    humor: { tone: "Beauty fun", vocabulary: ["glow up real", "skincare não é frescura", "beleza sem drama"], cta: "Experimente e nos conte!", imageStyle: "cores pastel, expressões divertidas" },
+    preocupacao: { tone: "Alerta estético responsável", vocabulary: ["cuidado com", "procedimento arriscado", "verifique a qualificação"], cta: "Consulte um dermatologista antes", imageStyle: "tons de alerta suaves, pele com zoom" },
+    revolta: { tone: "Denúncia estética", vocabulary: ["procedimento clandestino", "risco à saúde", "profissional não habilitado"], cta: "Denuncie e se proteja", imageStyle: "contraste antes/depois negativo, tons vermelhos" },
+    angustia: { tone: "Autoestima e acolhimento", vocabulary: ["insegurança", "pressão estética", "aceitação"], cta: "Você é mais do que aparência", imageStyle: "espelho, reflexo, tons suaves" },
+    sarcasmo: { tone: "Beauty critic", vocabulary: ["mais um milagre em frasco", "promessa de 10 anos mais jovem"], cta: "Não caia em promessas milagrosas", imageStyle: "produto com etiqueta irônica" },
+    satira: { tone: "Humor beauty inteligente", vocabulary: ["rotina de 47 passos", "tendência que ninguém pediu"], cta: "Ria e cuide da sua pele", imageStyle: "caricatura beauty" },
+    felicidade: { tone: "Glow celebratório", vocabulary: ["resultado incrível", "autoestima renovada", "tendência que funciona"], cta: "Descubra como conseguir esse resultado", imageStyle: "pele radiante, luz natural, dourado" },
+    comemoracao: { tone: "Beauty milestone", vocabulary: ["inovação premiada", "tratamento revolucionário"], cta: "Conheça a novidade", imageStyle: "troféu beauty, embalagem premium" },
+    duvida: { tone: "Beauty investigativo", vocabulary: ["funciona mesmo?", "mito ou verdade", "a ciência diz que"], cta: "Descubra a verdade", imageStyle: "lupa sobre produto, interrogação" },
+    misterio: { tone: "Segredo beauty revelado", vocabulary: ["ingrediente secreto", "poucos sabem", "revelação exclusiva"], cta: "Descubra o que funciona de verdade", imageStyle: "frasco misterioso, névoa suave" },
+  },
+  tecnologia: {
+    serio: { tone: "Tech analítico", vocabulary: ["dados demonstram", "benchmark confirma", "adoção enterprise"], cta: "Implemente na sua operação", imageStyle: "dashboard, código, tons azuis tech" },
+    humor: { tone: "Tech descontraído", vocabulary: ["bug vira feature", "AI não dominou o mundo ainda", "404 not found na vida real"], cta: "Compartilhe com seu dev favorito", imageStyle: "memes tech estilizados" },
+    preocupacao: { tone: "Alerta tech responsável", vocabulary: ["vulnerabilidade crítica", "dados expostos", "risco de privacidade"], cta: "Proteja seus dados agora", imageStyle: "cadeado aberto, tela vermelha" },
+    revolta: { tone: "Denúncia tech", vocabulary: ["big tech abusa", "monopólio digital", "dados vendidos"], cta: "Exija transparência", imageStyle: "correntes digitais, tons vermelhos" },
+    angustia: { tone: "Impacto tech humano", vocabulary: ["empregos ameaçados", "dependência digital", "solidão conectada"], cta: "Reflita sobre seu uso de tecnologia", imageStyle: "humano vs máquina, tons frios" },
+    sarcasmo: { tone: "Tech critic afiado", vocabulary: ["mais uma revolução que muda tudo", "desta vez a IA é diferente"], cta: "Veja os dados reais", imageStyle: "hype vs realidade" },
+    satira: { tone: "Tech humor inteligente", vocabulary: ["no Vale do Silício da esperança", "startup de startup"], cta: "Ria antes que automatizem o humor", imageStyle: "robô em situação absurda" },
+    felicidade: { tone: "Inovação celebratória", vocabulary: ["marco histórico", "revolução", "futuro chegou"], cta: "Explore a nova tecnologia", imageStyle: "foguete, chips, luz neon positiva" },
+    comemoracao: { tone: "Tech milestone", vocabulary: ["recorde de processamento", "lançamento épico", "adoção massiva"], cta: "O futuro é agora", imageStyle: "palco de lançamento, confetes digitais" },
+    duvida: { tone: "Tech investigativo", vocabulary: ["promete mas entrega?", "dados não batem", "benchmark questionável"], cta: "Analise antes de adotar", imageStyle: "gráficos com interrogação" },
+    misterio: { tone: "Tech enigmático", vocabulary: ["projeto secreto", "patente revelada", "o que estão escondendo"], cta: "Acompanhe os bastidores da tech", imageStyle: "servidor escuro, código misterioso" },
+  },
+  marketing: {
+    serio: { tone: "Data-driven estratégico", vocabulary: ["ROI comprova", "métricas indicam", "benchmark setorial"], cta: "Otimize sua estratégia agora", imageStyle: "dashboard analítico, gráficos, tons profissionais" },
+    humor: { tone: "Marketing descomplicado", vocabulary: ["funilzinho maroto", "lead qualificado (finalmente)", "CTA irrecusável"], cta: "Teste e nos conte o resultado", imageStyle: "funil colorido, emojis profissionais" },
+    preocupacao: { tone: "Alerta de mercado", vocabulary: ["orçamento em risco", "métrica no vermelho", "mercado instável"], cta: "Revise sua estratégia hoje", imageStyle: "gráfico em queda, tons amarelos" },
+    revolta: { tone: "Denúncia de mercado", vocabulary: ["golpe do marketing fácil", "guru vendendo fumaça", "promessa vazia"], cta: "Exija resultados reais", imageStyle: "gráfico falso vs real, tons vermelhos" },
+    angustia: { tone: "Crise de marketing", vocabulary: ["campanha fracassou", "budget cortado", "equipe reduzida"], cta: "Encontre saída com estratégia", imageStyle: "escritório vazio, gráficos negativos" },
+    sarcasmo: { tone: "Anti-guru", vocabulary: ["mais uma promessa de 6 dígitos", "hack infalível número 847"], cta: "Veja o que os dados dizem de verdade", imageStyle: "guru vs realidade, split screen" },
+    satira: { tone: "Marketing humor ácido", vocabulary: ["persona imaginária perfeita", "jornada do cliente de 47 touchpoints"], cta: "Simplifique antes de complicar", imageStyle: "funil absurdamente complexo" },
+    felicidade: { tone: "Resultado celebratório", vocabulary: ["meta batida", "ROAS recorde", "crescimento exponencial"], cta: "Replique essa estratégia", imageStyle: "dashboard no verde, confetes" },
+    comemoracao: { tone: "Marketing milestone", vocabulary: ["case de sucesso", "premiação", "benchmark do setor"], cta: "Inspire-se nesse resultado", imageStyle: "troféu, dashboard premiado" },
+    duvida: { tone: "Marketing investigativo", vocabulary: ["funciona mesmo?", "dados manipulados?", "será hype?"], cta: "Analise antes de investir", imageStyle: "lupa sobre gráfico, interrogação" },
+    misterio: { tone: "Estratégia oculta", vocabulary: ["o que ninguém conta", "algoritmo secreto", "estratégia revelada"], cta: "Descubra o que os líderes fazem diferente", imageStyle: "porta-de-sala-de-estratégia" },
+  },
+};
+
+// Map orchestrator nicho names to VERNIZ_DNA matrix keys
+const NICHO_TO_VERNIZ: Record<string, VernizNicheType> = {
+  juridico: 'advocacia',
+  advocacia: 'advocacia',
+  saude: 'saude',
+  beleza: 'beleza',
+  tecnologia: 'tecnologia',
+  marketing: 'marketing',
+  geral: 'geral',
+  fintech: 'geral',
+  ecommerce: 'marketing',
+  b2b_saas: 'tecnologia',
+  educacao: 'geral',
+};
+
+/**
+ * Resolve the VERNIZ_DNA entry for a given nicho + gatilho combination.
+ * Returns tone, vocabulary, CTA and imageStyle.
+ */
+export function resolveVernizDNA(nicho: string, gatilho: string): VernizDNAEntry | null {
+  const mappedNicho = NICHO_TO_VERNIZ[nicho] || 'geral';
+  const mappedTrigger = (gatilho || 'serio') as VernizTriggerType;
+  return VERNIZ_DNA_MATRIX[mappedNicho]?.[mappedTrigger] || null;
+}
+
 // =================== VERNIZ DNA PROMPT ===================
 
 export interface VernizConfig {
@@ -283,6 +405,16 @@ Na prática, isso significa que [consequência real para o leitor].
 **Gatilho Emocional**: ${gatilho.gatilho} ${gatilho.emoji}
 **Ângulo de Análise**: ${angulo.descricao} (${angulo.adicionaConteudo})`;
 
+  // Inject VERNIZ_DNA matrix tone/vocabulary/CTA/imageStyle
+  const dnaEntry = resolveVernizDNA(nichoDetectado.nicho, gatilho.gatilho);
+  if (dnaEntry) {
+    section += `\n\n### 🎨 VERNIZ DNA ATIVO (${nichoDetectado.nicho} × ${gatilho.gatilho}):`;
+    section += `\n- **Tom**: "${dnaEntry.tone}"`;
+    section += `\n- **Vocabulário-chave**: ${dnaEntry.vocabulary.join(', ')}`;
+    section += `\n- **CTA padrão do gatilho**: "${dnaEntry.cta}"`;
+    section += `\n- **Estilo de imagem**: ${dnaEntry.imageStyle}`;
+    section += `\n\n**REGRA**: Adapte TODO o conteúdo ao tom "${dnaEntry.tone}" e use o vocabulário-chave naturalmente.`;
+  }
   // Add disclaimers
   if (nichoDetectado.disclaimers.length > 0) {
     section += `\n\n### DISCLAIMERS OBRIGATÓRIOS (incluir no final do artigo):`;

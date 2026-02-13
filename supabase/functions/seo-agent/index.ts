@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
 import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
+import { orchestrate, resolveVernizDNA } from "../_shared/verniz-orchestrator.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,7 +28,7 @@ Deno.serve(async (req) => {
 
     let query = supabase
       .from("projects")
-      .select("id, user_id, name, domain, wordpress_url, wordpress_username, wordpress_app_password, seo_plugin")
+      .select("id, user_id, name, domain, wordpress_url, wordpress_username, wordpress_app_password, seo_plugin, nicho, empresa_nome, empresa_telefone, empresa_endereco, empresa_whatsapp, social_instagram, social_youtube, social_linkedin, social_twitter, social_tiktok, social_google_maps, social_linktree, cta_comunidade, cta_conclusao, cta_leads, compliance_rules")
       .eq("is_connected", true)
       .not("wordpress_url", "is", null);
 
@@ -287,14 +288,49 @@ async function runMetaAuditWithFix(
       `- ID: ${a.wp_post_id} | Título: "${a.wp_post_title}" | Keyword: ${a.primary_keyword || "N/A"} | Score: ${a.seo_score || 0} | Issues: ${a.issues.join(", ")}`
     ).join("\n");
 
+    // Use Verniz orchestrator for project context
+    const projectConfig = {
+      nicho: project.nicho || undefined,
+      compliance_rules: project.compliance_rules || undefined,
+      empresa_nome: project.empresa_nome || undefined,
+      empresa_telefone: project.empresa_telefone || undefined,
+      empresa_endereco: project.empresa_endereco || undefined,
+      empresa_whatsapp: project.empresa_whatsapp || undefined,
+      social_instagram: project.social_instagram || undefined,
+      social_youtube: project.social_youtube || undefined,
+      social_linkedin: project.social_linkedin || undefined,
+      social_twitter: project.social_twitter || undefined,
+      social_tiktok: project.social_tiktok || undefined,
+      social_google_maps: project.social_google_maps || undefined,
+      social_linktree: project.social_linktree || undefined,
+      cta_comunidade: project.cta_comunidade || undefined,
+      cta_conclusao: project.cta_conclusao || undefined,
+      cta_leads: project.cta_leads || undefined,
+    };
+
+    const orchestration = orchestrate(project.name, project.domain || '', projectConfig);
+    const dnaEntry = resolveVernizDNA(orchestration.nichoDetectado.nicho, orchestration.gatilho.gatilho);
+
     const prompt = `Analise estes artigos com problemas de SEO e gere correções otimizadas:
 
 ${articlesList}
 
+CONTEXTO DO PROJETO:
+- Nicho: ${orchestration.nichoDetectado.nicho} | Compliance: ${orchestration.nichoDetectado.compliance}
+${dnaEntry ? `- Tom: "${dnaEntry.tone}" | Vocabulário: ${dnaEntry.vocabulary.join(', ')}` : ''}
+${project.empresa_nome ? `- Empresa: ${project.empresa_nome}` : ''}
+
 Para cada artigo, gere:
-1. meta_title otimizado (max 60 chars, incluir keyword)
-2. meta_description otimizada (max 155 chars, persuasiva)
+1. meta_title otimizado (max 60 chars, incluir keyword, tom "${dnaEntry?.tone || 'profissional'}")
+2. meta_description otimizada (145-160 chars, keyword nos primeiros 60 chars, CTA implícito)
 3. focus_keyword sugerida (se ausente)
+
+REGRAS INEGOCIÁVEIS:
+- Meta-description SEMPRE entre 145-160 caracteres
+- Keyword nos primeiros 60 chars da meta-description
+- Flesch mínimo 60: vocabulário simples, frases curtas
+- Adaptar tom ao nicho ${orchestration.nichoDetectado.nicho}
+${orchestration.nichoDetectado.disclaimers.length > 0 ? `- Disclaimers obrigatórios: ${orchestration.nichoDetectado.disclaimers[0]}` : ''}
 
 Retorne APENAS JSON:
 {
@@ -309,7 +345,7 @@ Retorne APENAS JSON:
 }`;
 
     const aiContent = await orchestrator.call('seo_analysis', [
-      { role: "system", content: "Você é um especialista SEO brasileiro. Gere metas otimizadas para máximo CTR e ranqueamento. Responda APENAS com JSON válido." },
+      { role: "system", content: `Você é um especialista SEO brasileiro seguindo a filosofia "Madeira Sem Verniz": linguagem simples, acessível, Flesch mínimo 60. Gere metas otimizadas para máximo CTR e ranqueamento. Meta-descriptions SEMPRE 145-160 caracteres. Responda APENAS com JSON válido.` },
       { role: "user", content: prompt },
     ], { maxTokens: 1500, temperature: 0.3 });
 
