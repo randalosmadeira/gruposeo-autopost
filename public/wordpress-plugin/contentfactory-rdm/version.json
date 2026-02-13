@@ -1,11 +1,11 @@
 {
-  "version": "3.2.2",
+  "version": "3.2.3",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.2.2 - Fix: Registro de 6 endpoints REST ausentes (indexnow-batch, meta-audit, update-seo-meta, refresh-sitemap, refresh-llms, set-ai-headers). Fix: Correção de erros 404 na indexação IndexNow. Melhoria: Verniz DNA v3.0 integrado em 100% dos agentes SEO.",
-  "released": "2026-02-13T14:30:00-03:00",
+  "changelog": "v3.2.3 - Novo: Detecção automática de tráfego de IA (ChatGPT, Perplexity, Gemini, Claude, Meta AI, Apple Intelligence + 10 outros bots). Novo: Checklist visual de Fundação SEO com 15 verificações e score automático. Novo: Endpoints REST /ai-traffic e /seo-checklist.",
+  "released": "2026-02-13T19:00:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",
@@ -23,6 +23,8 @@
     "pre_update_checks",
     "verniz_dna_v3",
     "rest_indexnow_batch",
-    "rest_meta_audit"
+    "rest_meta_audit",
+    "ai_traffic_detector",
+    "seo_checklist"
   ]
 }
