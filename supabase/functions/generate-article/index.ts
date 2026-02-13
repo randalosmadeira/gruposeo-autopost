@@ -7,6 +7,7 @@ import { runAgentPipeline, type AgentPipelineConfig } from "../_shared/agents/ag
 import { mapSegmentToSector } from "../_shared/sector-config.ts";
 import { orchestrate } from "../_shared/verniz-orchestrator.ts";
 import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
+import { detectBrand, buildBrandSEOGeoPrompt } from "../_shared/brand-seo-geo.ts";
 
 const FUNCTION_NAME = "generate-article";
 
@@ -255,6 +256,45 @@ Deno.serve(async (req) => {
 
     const { config } = await req.json() as { config: ArticleConfig };
 
+    // ====== BRAND DETECTION: Auto-detect brand from project config ======
+    const brandDetection = detectBrand(config.projectConfig ? {
+      empresa_nome: config.projectConfig.empresa_nome,
+      nicho: config.projectConfig.nicho,
+      wordpress_url: undefined, // not in projectConfig interface
+      social_instagram: config.projectConfig.social_instagram,
+      social_linktree: config.projectConfig.social_linktree,
+      empresa_telefone: config.projectConfig.empresa_telefone,
+      empresa_endereco: config.projectConfig.empresa_endereco,
+      empresa_whatsapp: config.projectConfig.empresa_whatsapp,
+      cta_comunidade: config.projectConfig.cta_comunidade,
+      cta_conclusao: config.projectConfig.cta_conclusao,
+      cta_leads: config.projectConfig.cta_leads,
+    } : undefined);
+    
+    const brandSEOGeoSection = buildBrandSEOGeoPrompt(brandDetection, config.projectConfig ? {
+      empresa_nome: config.projectConfig.empresa_nome,
+      wordpress_url: undefined,
+      social_instagram: config.projectConfig.social_instagram,
+      social_youtube: config.projectConfig.social_youtube,
+      social_linkedin: config.projectConfig.social_linkedin,
+      social_twitter: config.projectConfig.social_twitter,
+      social_tiktok: config.projectConfig.social_tiktok,
+      social_google_maps: config.projectConfig.social_google_maps,
+      social_linktree: config.projectConfig.social_linktree,
+      empresa_telefone: config.projectConfig.empresa_telefone,
+      empresa_endereco: config.projectConfig.empresa_endereco,
+      empresa_whatsapp: config.projectConfig.empresa_whatsapp,
+      cta_comunidade: config.projectConfig.cta_comunidade,
+      cta_conclusao: config.projectConfig.cta_conclusao,
+      cta_leads: config.projectConfig.cta_leads,
+    } : undefined);
+
+    log.info("brand_detected", {
+      brand: brandDetection.brand,
+      brandName: brandDetection.brandName,
+      confidence: brandDetection.confidence,
+    });
+
     // ====== ZICAJURIS ORCHESTRATOR: Detect nicho, compliance, gatilho ======
     const orchestration = orchestrate(
       config.title || config.keyword,
@@ -323,40 +363,48 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ====== STANDARD FLOW with Verniz DNA injection ======
+    // ====== STANDARD FLOW with Verniz DNA + Brand SEO+GEO injection ======
     let systemPrompt: string;
     let userPrompt: string;
 
     if (hasAdvancedConfig(config)) {
       const promptConfig = buildPromptConfig(config);
       const prompts = buildAdvancedSEOPrompt(promptConfig);
-      // Inject Verniz DNA into advanced prompt
-      systemPrompt = prompts.system + '\n\n' + orchestration.vernizSection;
+      // Inject Brand SEO+GEO + Verniz DNA into advanced prompt
+      systemPrompt = prompts.system + '\n\n' + brandSEOGeoSection + '\n\n' + orchestration.vernizSection;
       userPrompt = prompts.user;
-      log.info("using_advanced_prompt_with_verniz", { segment: config.segment, contentType: config.contentType });
+      log.info("using_advanced_prompt_with_brand_geo", { 
+        brand: brandDetection.brand, 
+        segment: config.segment, 
+        contentType: config.contentType 
+      });
     } else {
-      systemPrompt = buildLegacySystemPrompt(config) + '\n\n' + orchestration.vernizSection;
-      userPrompt = `Escreva um artigo completo e otimizado para SEO sobre: "${config.keyword}"
+      systemPrompt = buildLegacySystemPrompt(config) + '\n\n' + brandSEOGeoSection + '\n\n' + orchestration.vernizSection;
+      userPrompt = `Escreva um artigo completo e otimizado para SEO e GEO (IA Generativa) sobre: "${config.keyword}"
 
 ⚠️ OBRIGATÓRIO - NÃO ESQUECER:
 1. PRIMEIRA LINHA: <!-- META_DESCRIPTION: [145-160 caracteres com keyword] -->
 2. SEGUNDA LINHA: <!-- TITLE_SEO: [máximo 60 caracteres] -->
-3. Frases CURTAS: máximo 15 palavras cada (Flesch 70-100 OBRIGATÓRIO)
-4. Parágrafos CURTOS: máximo 3 linhas
-5. Linguagem SIMPLES: como se falasse com um amigo de 14 anos
-6. MÍNIMO 10 links internos (se disponíveis) e MÁXIMO 3 links externos para fontes oficiais (.gov, .edu)
-7. Citar TODAS as redes sociais configuradas no projeto
+3. PARÁGRAFO 1: Resposta direta em 40-60 palavras (otimizado para extração por IAs)
+4. H2s como PERGUNTAS NATURAIS (formato GEO)
+5. Frases CURTAS: máximo 15 palavras cada (Flesch 70-100 OBRIGATÓRIO)
+6. Parágrafos CURTOS: máximo 3 linhas
+7. Linguagem SIMPLES: como se falasse com um amigo de 14 anos
+8. MÍNIMO 10 links internos (se disponíveis) e MÁXIMO 3 links externos para fontes oficiais (.gov, .edu)
+9. Citar TODAS as redes sociais configuradas no projeto
+10. Estatísticas verificáveis com fonte a cada 150-200 palavras (GEO)
+11. Definições no formato "X é..." para extração por IAs (GEO)
 
 Estrutura:
 1. Meta tags (comentários HTML)
-2. Introdução engajadora (2 parágrafos curtos)
-3. Seções organizadas com subtítulos (H2/H3)
-4. Conteúdo útil com listas e exemplos
-${config.includeFaq ? `5. FAQ com ${config.faqCount} perguntas e respostas` : ''}
+2. Parágrafo de resposta direta (GEO-First)
+3. Seções organizadas com subtítulos como perguntas naturais (H2/H3)
+4. Conteúdo útil com listas, tabelas e exemplos
+${config.includeFaq ? `5. FAQ com ${config.faqCount} perguntas (otimizadas para People Also Ask)` : ''}
 ${config.includeConclusion ? '6. Conclusão com resumo e CTA' : ''}
 
 Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
-      log.info("using_legacy_prompt_with_verniz", { keyword: config.keyword });
+      log.info("using_legacy_prompt_with_brand_geo", { brand: brandDetection.brand, keyword: config.keyword });
     }
 
     const modelAlias = config.aiModel || "flash";
