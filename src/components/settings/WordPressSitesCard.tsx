@@ -299,20 +299,50 @@ export function WordPressSitesCard() {
       return;
     }
 
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(pluginSiteUrl);
+    } catch {
+      toast({
+        title: 'URL inválida',
+        description: 'Insira uma URL válida (ex: https://meusite.com.br).',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsCreating(true);
     try {
-      const url = new URL(pluginSiteUrl);
-      const domain = url.hostname;
+      // Step 1: Test connection BEFORE saving
+      const { data: testData, error: testError } = await supabase.functions.invoke('test-wordpress-connection', {
+        body: {
+          wordpress_url: pluginSiteUrl,
+          use_plugin: true,
+          api_key: pluginApiKey,
+        },
+      });
 
-      // For plugin connection, we store the API key in wordpress_app_password
-      // and use a special marker in wordpress_username to identify plugin auth
+      if (testError) {
+        throw new Error(`Falha ao testar conexão: ${testError.message || 'Servidor indisponível. Tente novamente em alguns minutos.'}`);
+      }
+
+      if (!testData?.success) {
+        const errorMsg = testData?.error || 'Plugin não encontrado ou API Key inválida.';
+        const hint = testData?.hint || '';
+        throw new Error(`${errorMsg}${hint ? ` ${hint}` : ''}`);
+      }
+
+      // Step 2: Save to database only after successful connection test
+      const finalUrl = testData.correctedUrl || pluginSiteUrl;
+      const domain = new URL(finalUrl).hostname;
+
       await createProject.mutateAsync({
         name: pluginSiteName,
         domain,
-        wordpress_url: pluginSiteUrl,
+        wordpress_url: finalUrl,
         wordpress_username: '__CFRDM_PLUGIN__',
         wordpress_app_password: pluginApiKey,
-        is_connected: false,
+        is_connected: true,
       });
 
       setPluginSiteName('');
@@ -320,13 +350,18 @@ export function WordPressSitesCard() {
       setPluginApiKey('');
 
       toast({
-        title: 'Site adicionado!',
-        description: 'O site WordPress foi adicionado via Plugin.',
+        title: 'Site adicionado e conectado! ✓',
+        description: `Conectado a: ${testData.site?.name || finalUrl}${testData.pluginVersion ? ` (Plugin v${testData.pluginVersion})` : ''}`,
       });
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro desconhecido';
+      const isNetworkError = message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('fetch');
+      
       toast({
         title: 'Erro ao adicionar site',
-        description: error instanceof Error ? error.message : 'Erro desconhecido',
+        description: isNetworkError 
+          ? 'Servidor temporariamente indisponível. Verifique sua conexão e tente novamente em alguns minutos.'
+          : message,
         variant: 'destructive',
       });
     } finally {
