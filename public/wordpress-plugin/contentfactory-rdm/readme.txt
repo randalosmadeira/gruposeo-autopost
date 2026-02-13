@@ -66,6 +66,11 @@ Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject s
 
 == Changelog ==
 
+= 3.2.2 =
+* **CORRIGIDO**: Registro de 6 endpoints REST ausentes (indexnow-batch, meta-audit, update-seo-meta, refresh-sitemap, refresh-llms, set-ai-headers)
+* **CORRIGIDO**: Erros 404 na indexação IndexNow corrigidos
+* **MELHORADO**: Verniz DNA v3.0 integrado em 100% dos agentes SEO
+
 = 2.6.2 =
 * **MELHORADO**: Paginação completa para buscar TODOS os artigos (sem limite de 100)
 * **MELHORADO**: Retorno de total de páginas no endpoint articles-for-indexing
@@ -196,6 +201,9 @@ Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject s
 * **NOVO**: AI Content Enhancer
 
 == Upgrade Notice ==
+
+= 3.2.2 =
+Correção de 6 endpoints REST ausentes e erros 404 no IndexNow. Verniz DNA v3.0 em todos os agentes. Recomendado para todos os usuários.
 
 = 3.2.1 =
 Correção do erro de cookie em Autocorreções/Sincronização e melhorias na linkagem interna com suporte Unicode. Recomendado para todos os usuários.

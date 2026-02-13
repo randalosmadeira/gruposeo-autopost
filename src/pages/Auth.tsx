@@ -47,7 +47,8 @@ export default function Auth() {
       const isNetwork =
         message.includes('Failed to fetch') ||
         message.toLowerCase().includes('timeout') ||
-        message.toLowerCase().includes('network');
+        message.toLowerCase().includes('network') ||
+        message.includes('signal is aborted');
 
       toast({
         title: isNetwork ? 'Sem conexão com o backend' : 'Erro ao entrar',
@@ -71,7 +72,8 @@ export default function Auth() {
       const isNetwork =
         message.includes('Failed to fetch') ||
         message.toLowerCase().includes('timeout') ||
-        message.toLowerCase().includes('network');
+        message.toLowerCase().includes('network') ||
+        message.includes('signal is aborted');
 
       toast({
         title: isNetwork ? 'Sem conexão com o backend' : 'Erro ao criar conta',
@@ -105,6 +107,8 @@ export default function Auth() {
             className={`inline-flex items-center gap-1.5 mx-auto mt-2 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
               backendStatus === 'online'
                 ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                : backendStatus === 'degraded'
+                ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 cursor-pointer hover:bg-yellow-500/20'
                 : backendStatus === 'offline'
                 ? 'bg-destructive/10 text-destructive cursor-pointer hover:bg-destructive/20'
                 : 'bg-muted text-muted-foreground'
@@ -113,9 +117,11 @@ export default function Auth() {
           >
             {backendStatus === 'checking' && <RefreshCw className="w-3 h-3 animate-spin" />}
             {backendStatus === 'online' && <Wifi className="w-3 h-3" />}
+            {backendStatus === 'degraded' && <Wifi className="w-3 h-3" />}
             {backendStatus === 'offline' && <WifiOff className="w-3 h-3" />}
             {backendStatus === 'checking' && 'Verificando backend…'}
             {backendStatus === 'online' && `Backend online${latency ? ` (${latency}ms)` : ''}`}
+            {backendStatus === 'degraded' && `Backend lento${latency ? ` (${latency}ms)` : ''} — clique para retry`}
             {backendStatus === 'offline' && 'Backend offline — clique para retry'}
           </button>
         </CardHeader>
