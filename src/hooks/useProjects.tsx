@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
+import { retryQuery, withRetry } from '@/lib/supabase-retry';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 type Project = Tables<'projects'>;
@@ -17,28 +18,30 @@ export function useProjects() {
     queryKey: ['projects', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
+      const { data } = await retryQuery(() =>
+        supabase
+          .from('projects')
+          .select('*')
+          .order('created_at', { ascending: false })
+      );
       return data as Project[];
     },
     enabled: !!user,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
   });
 
   const createProject = useMutation({
     mutationFn: async (project: Omit<ProjectInsert, 'user_id'>) => {
       if (!user) throw new Error('User not authenticated');
       
-      const { data, error } = await supabase
-        .from('projects')
-        .insert({ ...project, user_id: user.id })
-        .select()
-        .single();
-      
-      if (error) throw error;
+      const { data } = await retryQuery(() =>
+        supabase
+          .from('projects')
+          .insert({ ...project, user_id: user.id })
+          .select()
+          .single()
+      );
       return data;
     },
     onSuccess: () => {
@@ -59,14 +62,14 @@ export function useProjects() {
 
   const updateProject = useMutation({
     mutationFn: async ({ id, ...updates }: ProjectUpdate & { id: string }) => {
-      const { data, error } = await supabase
-        .from('projects')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      
-      if (error) throw error;
+      const { data } = await retryQuery(() =>
+        supabase
+          .from('projects')
+          .update(updates)
+          .eq('id', id)
+          .select()
+          .single()
+      );
       return data;
     },
     onSuccess: () => {
@@ -87,12 +90,13 @@ export function useProjects() {
 
   const deleteProject = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('projects')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
+      await withRetry(async () => {
+        const { error } = await supabase
+          .from('projects')
+          .delete()
+          .eq('id', id);
+        if (error) throw error;
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
