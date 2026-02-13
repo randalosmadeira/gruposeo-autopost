@@ -77,6 +77,68 @@ export type Database = {
           },
         ]
       }
+      analysis_uploads: {
+        Row: {
+          analysis_result: Json | null
+          analyzed_at: string | null
+          cleaned_at: string | null
+          corrections_applied: Json | null
+          created_at: string
+          error_message: string | null
+          file_format: string
+          file_name: string
+          file_path: string
+          file_size_bytes: number
+          file_type: string
+          id: string
+          project_id: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          analysis_result?: Json | null
+          analyzed_at?: string | null
+          cleaned_at?: string | null
+          corrections_applied?: Json | null
+          created_at?: string
+          error_message?: string | null
+          file_format: string
+          file_name: string
+          file_path: string
+          file_size_bytes?: number
+          file_type: string
+          id?: string
+          project_id?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          analysis_result?: Json | null
+          analyzed_at?: string | null
+          cleaned_at?: string | null
+          corrections_applied?: Json | null
+          created_at?: string
+          error_message?: string | null
+          file_format?: string
+          file_name?: string
+          file_path?: string
+          file_size_bytes?: number
+          file_type?: string
+          id?: string
+          project_id?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_uploads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       article_reports: {
         Row: {
           admin_notes: string | null
