@@ -24,6 +24,7 @@ import {
   Upload,
   CheckSquare,
   Square,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -97,6 +98,8 @@ export function RepostHistory({ showRefresh = true, compact = false }: RepostHis
   const [bulkPublishOpen, setBulkPublishOpen] = useState(false);
   const [bulkImageProgress, setBulkImageProgress] = useState({ current: 0, total: 0 });
   const [bulkSeoProgress, setBulkSeoProgress] = useState({ current: 0, total: 0 });
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const fetchHistory = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -324,6 +327,34 @@ export function RepostHistory({ showRefresh = true, compact = false }: RepostHis
     }
   }, [selectedItems, toast]);
 
+  // Bulk Delete
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+
+    setBulkDeleteLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const { error } = await supabase
+        .from('articles')
+        .delete()
+        .in('id', ids);
+
+      if (error) throw error;
+
+      setItems(prev => prev.filter(i => !selectedIds.has(i.id)));
+      setSelectedIds(new Set());
+      setDeleteConfirmOpen(false);
+
+      toast({
+        title: '🗑️ Artigos excluídos',
+        description: `${ids.length} artigo(s) removido(s) com sucesso.`,
+      });
+    } catch (err: any) {
+      toast({ title: 'Erro ao excluir', description: err.message, variant: 'destructive' });
+    } finally {
+      setBulkDeleteLoading(false);
+    }
+  }, [selectedIds, toast]);
   // Stats
   const stats = {
     total: items.length,
@@ -516,6 +547,45 @@ export function RepostHistory({ showRefresh = true, compact = false }: RepostHis
                 <Upload className="w-3.5 h-3.5" />
                 Publicar em Massa
               </Button>
+
+              {/* Bulk Delete */}
+              {deleteConfirmOpen ? (
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                    disabled={bulkDeleteLoading}
+                    className="gap-1.5 text-xs"
+                  >
+                    {bulkDeleteLoading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                    Confirmar ({selectedIds.size})
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDeleteConfirmOpen(false)}
+                    className="text-xs"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  disabled={!hasSelection || bulkDeleteLoading}
+                  className="gap-1.5 text-xs border-destructive/50 text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Excluir
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
