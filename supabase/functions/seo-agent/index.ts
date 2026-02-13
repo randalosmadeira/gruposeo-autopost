@@ -124,7 +124,15 @@ Deno.serve(async (req) => {
         details.ai_discovery = aiDiscoveryResult;
 
         // ═══════════════════════════════════════════
-        // STEP 5: Summary
+        // STEP 5: Full Technical Audit
+        // ═══════════════════════════════════════════
+        console.log(`[SEO Agent] [${project.name}] Step 5: Full Technical Audit`);
+
+        const auditResult = await runFullTechnicalAudit(supabase, orchestrator, project, baseUrl, isPlugin, apiKey);
+        details.audit = auditResult;
+
+        // ═══════════════════════════════════════════
+        // STEP 6: Summary
         // ═══════════════════════════════════════════
         const summaryParts = [];
         if (metaIssuesFixed > 0) summaryParts.push(`${metaIssuesFixed} metas corrigidos`);
@@ -134,6 +142,8 @@ Deno.serve(async (req) => {
         if (indexingSubmitted > 0) summaryParts.push(`${indexingSubmitted} URLs indexadas`);
         if (sitemapUpdated) summaryParts.push("sitemap atualizado");
         if (aiDiscoveryResult.actions?.length > 0) summaryParts.push(`${aiDiscoveryResult.actions.length} otimizações IA discovery`);
+        if (auditResult.score > 0) summaryParts.push(`audit score: ${auditResult.score}/100`);
+        if (auditResult.issues_fixed > 0) summaryParts.push(`${auditResult.issues_fixed} problemas corrigidos`);
 
         const summary = summaryParts.length > 0
           ? `✅ ${project.name}: ${summaryParts.join(", ")}`
@@ -907,4 +917,300 @@ async function optimizeAIDiscovery(
   }
 
   return { actions, llmsTxtRefreshed, schemaEnhanced, headersSet };
+}
+
+// ═══════════════════════════════════════════════════════════
+// STEP 5: Full Technical Audit
+// Schema Validation, Performance, Content Quality, GEO
+// ═══════════════════════════════════════════════════════════
+interface AuditIssue {
+  id: string;
+  priority: "P0" | "P1" | "P2" | "P3";
+  category: string;
+  title: string;
+  description: string;
+  impact: string;
+  fix_instruction: string;
+  auto_fixed: boolean;
+}
+
+async function runFullTechnicalAudit(
+  supabase: ReturnType<typeof createClient>,
+  orchestrator: ReturnType<typeof getOrchestrator>,
+  project: any,
+  baseUrl: string,
+  isPlugin: boolean,
+  apiKey: string,
+): Promise<{
+  score: number;
+  issues: AuditIssue[];
+  issues_found: number;
+  issues_fixed: number;
+  categories: Record<string, { score: number; issues: number; fixed: number }>;
+}> {
+  const issues: AuditIssue[] = [];
+  let totalFixed = 0;
+  const categories: Record<string, { score: number; issues: number; fixed: number }> = {
+    indexing: { score: 100, issues: 0, fixed: 0 },
+    schema: { score: 100, issues: 0, fixed: 0 },
+    performance: { score: 100, issues: 0, fixed: 0 },
+    content: { score: 100, issues: 0, fixed: 0 },
+    geo: { score: 100, issues: 0, fixed: 0 },
+  };
+
+  // ═══ AUDIT 1: Indexing Health ═══
+  if (baseUrl) {
+    // Check robots.txt
+    try {
+      const robotsResp = await fetch(`${baseUrl.replace(/\/blog\/?$/, "")}/robots.txt`, { signal: AbortSignal.timeout(8000) });
+      if (!robotsResp.ok) {
+        issues.push({
+          id: "IDX-001", priority: "P0", category: "indexing",
+          title: "robots.txt ausente ou inacessível",
+          description: "O arquivo robots.txt não foi encontrado.",
+          impact: "Crawlers podem ter dificuldade em rastrear o site corretamente.",
+          fix_instruction: "Criar robots.txt na raiz com User-agent: * e Sitemap.", auto_fixed: false
+        });
+        categories.indexing.score -= 25;
+        categories.indexing.issues++;
+      } else {
+        const robotsContent = await robotsResp.text();
+        const blockedCrawlers = ["GPTBot", "ClaudeBot", "PerplexityBot", "Google-Extended"].filter(
+          bot => robotsContent.includes(`User-agent: ${bot}`) && robotsContent.includes("Disallow: /")
+        );
+        if (blockedCrawlers.length > 0) {
+          issues.push({
+            id: "IDX-002", priority: "P1", category: "indexing",
+            title: `${blockedCrawlers.length} crawlers de IA bloqueados no robots.txt`,
+            description: `Crawlers bloqueados: ${blockedCrawlers.join(", ")}`,
+            impact: "Conteúdo não aparecerá em respostas de IAs generativas.",
+            fix_instruction: "Remover regras de Disallow para crawlers de IA estratégicos.", auto_fixed: false
+          });
+          categories.indexing.score -= 10 * blockedCrawlers.length;
+          categories.indexing.issues++;
+        }
+        // Check sitemap reference
+        if (!robotsContent.toLowerCase().includes("sitemap:")) {
+          issues.push({
+            id: "IDX-003", priority: "P2", category: "indexing",
+            title: "Referência ao sitemap ausente no robots.txt",
+            description: "robots.txt não contém diretiva Sitemap.",
+            impact: "Crawlers podem demorar mais para descobrir todas as páginas.",
+            fix_instruction: "Adicionar 'Sitemap: https://dominio/sitemap_index.xml' ao robots.txt.", auto_fixed: false
+          });
+          categories.indexing.score -= 10;
+          categories.indexing.issues++;
+        }
+      }
+    } catch { /* timeout */ }
+
+    // Check sitemap
+    try {
+      const sitemapUrl = `${baseUrl.replace(/\/blog\/?$/, "")}/sitemap_index.xml`;
+      const sitemapResp = await fetch(sitemapUrl, { signal: AbortSignal.timeout(8000) });
+      if (!sitemapResp.ok) {
+        issues.push({
+          id: "IDX-004", priority: "P0", category: "indexing",
+          title: "Sitemap XML inacessível",
+          description: `sitemap_index.xml retornou status ${sitemapResp.status}`,
+          impact: "Motores de busca não conseguem descobrir páginas eficientemente.",
+          fix_instruction: "Verificar se plugin de SEO está gerando sitemap. Ativar no Rank Math/Yoast.", auto_fixed: false
+        });
+        categories.indexing.score -= 30;
+        categories.indexing.issues++;
+      }
+    } catch { /* timeout */ }
+
+    // Check llms.txt
+    try {
+      const llmsResp = await fetch(`${baseUrl.replace(/\/blog\/?$/, "")}/llms.txt`, { signal: AbortSignal.timeout(5000) });
+      if (!llmsResp.ok) {
+        issues.push({
+          id: "IDX-005", priority: "P1", category: "geo",
+          title: "llms.txt ausente",
+          description: "Arquivo llms.txt não encontrado na raiz do site.",
+          impact: "IAs generativas (ChatGPT, Claude, Gemini) têm dificuldade em descobrir conteúdo.",
+          fix_instruction: "Ativar geração de llms.txt no plugin ContentFactory.", auto_fixed: false
+        });
+        categories.geo.score -= 20;
+        categories.geo.issues++;
+
+        // Auto-fix via plugin
+        if (isPlugin && apiKey) {
+          try {
+            const fixResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-llms`, {
+              method: "POST", headers: { "X-CFRDM-API-Key": apiKey },
+            });
+            if (fixResp.ok) {
+              issues[issues.length - 1].auto_fixed = true;
+              totalFixed++;
+              categories.geo.fixed++;
+              categories.geo.score += 15;
+            }
+          } catch { /* */ }
+        }
+      }
+    } catch { /* timeout */ }
+
+    // Check HTTPS
+    if (!baseUrl.startsWith("https")) {
+      issues.push({
+        id: "IDX-006", priority: "P0", category: "performance",
+        title: "Site sem HTTPS",
+        description: "URL do WordPress não utiliza protocolo HTTPS.",
+        impact: "Penalização severa no ranking. Navegadores mostram aviso de insegurança.",
+        fix_instruction: "Instalar certificado SSL e forçar redirecionamento HTTPS.", auto_fixed: false
+      });
+      categories.performance.score -= 30;
+      categories.performance.issues++;
+    }
+  }
+
+  // ═══ AUDIT 2: Schema Markup ═══
+  if (isPlugin && apiKey && baseUrl) {
+    try {
+      const schemaResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/validate-schemas`, {
+        method: "POST",
+        headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ auto_fix: true, include_faq: true }),
+      });
+      if (schemaResp.ok) {
+        const schemaData = await schemaResp.json();
+        const schemaErrors = schemaData.errors || 0;
+        const schemaFixed = schemaData.fixed || 0;
+
+        if (schemaErrors > 0) {
+          issues.push({
+            id: "SCH-001", priority: "P1", category: "schema",
+            title: `${schemaErrors} erros de Schema JSON-LD detectados`,
+            description: `Schemas inválidos encontrados em ${schemaErrors} páginas.`,
+            impact: "Rich Results não aparecerão no Google. Perda de CTR estimada em 20-30%.",
+            fix_instruction: "Plugin tentou corrigir automaticamente. Validar no Google Rich Results Test.",
+            auto_fixed: schemaFixed > 0
+          });
+          categories.schema.score -= Math.min(schemaErrors * 5, 40);
+          categories.schema.issues++;
+          if (schemaFixed > 0) {
+            totalFixed++;
+            categories.schema.fixed++;
+          }
+        }
+      }
+    } catch { /* */ }
+  }
+
+  // ═══ AUDIT 3: Content Quality (E-E-A-T) ═══
+  const { data: recentArticles } = await supabase
+    .from("wordpress_article_index")
+    .select("id, wp_post_title, wp_post_url, primary_keyword, seo_score, word_count, internal_links_count, wp_post_date")
+    .eq("project_id", project.id)
+    .eq("wp_post_status", "publish")
+    .order("wp_post_date", { ascending: false })
+    .limit(50);
+
+  if (recentArticles && recentArticles.length > 0) {
+    // Check for thin content
+    const thinContent = recentArticles.filter(a => (a.word_count || 0) < 800);
+    if (thinContent.length > 0) {
+      issues.push({
+        id: "CNT-001", priority: "P1", category: "content",
+        title: `${thinContent.length} artigos com conteúdo fino (<800 palavras)`,
+        description: `Artigos: ${thinContent.slice(0, 5).map(a => a.wp_post_title).join(", ")}`,
+        impact: "Conteúdo fino tem dificuldade de ranquear e baixo E-E-A-T.",
+        fix_instruction: "Expandir artigos para mínimo 1.500 palavras com dados, fontes e FAQ.",
+        auto_fixed: false
+      });
+      categories.content.score -= Math.min(thinContent.length * 3, 30);
+      categories.content.issues++;
+    }
+
+    // Check for orphan pages (no internal links)
+    const orphans = recentArticles.filter(a => (a.internal_links_count || 0) === 0);
+    if (orphans.length > 0) {
+      issues.push({
+        id: "CNT-002", priority: "P1", category: "content",
+        title: `${orphans.length} páginas órfãs (sem links internos)`,
+        description: `Páginas sem nenhum link interno apontando para elas.`,
+        impact: "Páginas órfãs são difíceis de descobrir por crawlers e perdem autoridade.",
+        fix_instruction: "Usar o motor de linkagem interna para sugerir e aplicar links automaticamente.",
+        auto_fixed: false
+      });
+      categories.content.score -= Math.min(orphans.length * 2, 25);
+      categories.content.issues++;
+    }
+
+    // Check for low SEO score articles
+    const lowSEO = recentArticles.filter(a => (a.seo_score || 0) < 40);
+    if (lowSEO.length > 0) {
+      issues.push({
+        id: "CNT-003", priority: "P2", category: "content",
+        title: `${lowSEO.length} artigos com SEO score baixo (<40)`,
+        description: `Artigos com otimização deficiente.`,
+        impact: "Baixo ranqueamento e visibilidade orgânica.",
+        fix_instruction: "Usar 'Análise SEO IA' no editor para otimizar metas, headings e keywords.",
+        auto_fixed: false
+      });
+      categories.content.score -= Math.min(lowSEO.length * 2, 20);
+      categories.content.issues++;
+    }
+
+    // Check content freshness
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const staleContent = recentArticles.filter(a => a.wp_post_date && new Date(a.wp_post_date) < sixMonthsAgo);
+    if (staleContent.length > recentArticles.length * 0.5) {
+      issues.push({
+        id: "CNT-004", priority: "P2", category: "content",
+        title: `${staleContent.length} artigos sem atualização há 6+ meses`,
+        description: "Mais de 50% do conteúdo publicado está desatualizado.",
+        impact: "Google penaliza conteúdo desatualizado, especialmente em nichos YMYL.",
+        fix_instruction: "Priorizar atualização de pillar pages e artigos de maior tráfego.",
+        auto_fixed: false
+      });
+      categories.content.score -= 15;
+      categories.content.issues++;
+    }
+  }
+
+  // ═══ AUDIT 4: GEO Visibility ═══
+  // Check if articles have FAQ schema
+  const { data: articlesWithConfig } = await supabase
+    .from("articles")
+    .select("id, config, status")
+    .eq("project_id", project.id)
+    .eq("status", "published")
+    .limit(50);
+
+  if (articlesWithConfig && articlesWithConfig.length > 0) {
+    const withoutFaq = articlesWithConfig.filter(a => {
+      const cfg = a.config as any;
+      return !cfg?.include_faq && !cfg?.faq_count;
+    });
+    if (withoutFaq.length > articlesWithConfig.length * 0.3) {
+      issues.push({
+        id: "GEO-001", priority: "P2", category: "geo",
+        title: `${withoutFaq.length} artigos sem FAQ Schema`,
+        description: "Artigos publicados sem FAQPage schema estruturado.",
+        impact: "Perde oportunidade de rich snippets e citação por IAs generativas.",
+        fix_instruction: "Ativar FAQ na geração de artigos e reprocessar artigos existentes.",
+        auto_fixed: false
+      });
+      categories.geo.score -= 15;
+      categories.geo.issues++;
+    }
+  }
+
+  // ═══ Calculate overall score ═══
+  const categoryScores = Object.values(categories).map(c => Math.max(0, Math.min(100, c.score)));
+  const overallScore = Math.round(categoryScores.reduce((a, b) => a + b, 0) / categoryScores.length);
+
+  console.log(`[SEO Agent] [${project.name}] Audit complete: score=${overallScore}, issues=${issues.length}, fixed=${totalFixed}`);
+
+  return {
+    score: overallScore,
+    issues,
+    issues_found: issues.length,
+    issues_fixed: totalFixed,
+    categories,
+  };
 }
