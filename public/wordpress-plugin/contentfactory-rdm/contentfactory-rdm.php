@@ -3,7 +3,7 @@
  * Plugin Name: ContentFactory RDM
  * Plugin URI: https://gruposeo.marketing/contentfactory
  * Description: Integração avançada com ContentFactory para publicação automática de artigos, sincronização, otimização de imagens, links internos, geração de SEO via IA, indexação automática, social posting e queue system.
- * Version: 3.2.2
+ * Version: 3.2.3
  * Author: GRUPO SEO MARKETING
  * Author URI: https://gruposeo.marketing
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '3.2.2');
+define('CFRDM_VERSION', '3.2.3');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -83,6 +83,10 @@ function cfrdm_load_dependencies() {
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-llms-txt.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-post-duplicator.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-sitemap-optimizer.php';
+    
+    // v3.2.3 - AI Traffic Detection & SEO Checklist
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-traffic-detector.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-seo-checklist.php';
 }
 
 /**
@@ -167,6 +171,14 @@ class ContentFactory_RDM {
             CFRDM_Meta_Auditor::get_instance()->init();
         } catch (Exception $e) {
             error_log('ContentFactory v3.1.0 init error: ' . $e->getMessage());
+        }
+        
+        // Initialize v3.2.3 modules
+        try {
+            CFRDM_AI_Traffic_Detector::get_instance()->init();
+            CFRDM_SEO_Checklist::get_instance()->init();
+        } catch (Exception $e) {
+            error_log('ContentFactory v3.2.3 init error: ' . $e->getMessage());
         }
         
         // Only load admin-specific hooks in admin context

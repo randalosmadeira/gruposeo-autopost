@@ -376,6 +376,67 @@ class CFRDM_Admin {
                     </div>
                 </div>
                 
+                <!-- AI Traffic Detection -->
+                <?php 
+                if (class_exists('CFRDM_AI_Traffic_Detector') && CFRDM_AI_Traffic_Detector::is_enabled()):
+                    $ai_stats = CFRDM_AI_Traffic_Detector::get_dashboard_stats();
+                ?>
+                <div class="cfrdm-card">
+                    <div class="cfrdm-card-header">
+                        <h2>
+                            <span class="dashicons dashicons-visibility"></span>
+                            <?php _e('Tráfego de IA', 'contentfactory-rdm'); ?>
+                        </h2>
+                        <span class="cfrdm-version-badge"><?php echo number_format_i18n($ai_stats['total']); ?> visitas</span>
+                    </div>
+                    <div class="cfrdm-card-body">
+                        <div class="cfrdm-stats-grid cfrdm-stats-grid-3" style="margin-bottom: 16px;">
+                            <div class="cfrdm-stat-card small">
+                                <div class="stat-content">
+                                    <span class="stat-value"><?php echo number_format_i18n($ai_stats['today']); ?></span>
+                                    <span class="stat-label"><?php _e('Hoje', 'contentfactory-rdm'); ?></span>
+                                </div>
+                            </div>
+                            <div class="cfrdm-stat-card small">
+                                <div class="stat-content">
+                                    <span class="stat-value"><?php echo number_format_i18n($ai_stats['yesterday']); ?></span>
+                                    <span class="stat-label"><?php _e('Ontem', 'contentfactory-rdm'); ?></span>
+                                </div>
+                            </div>
+                            <div class="cfrdm-stat-card small">
+                                <div class="stat-content">
+                                    <span class="stat-value"><?php echo $ai_stats['trend'] >= 0 ? '+' : ''; ?><?php echo $ai_stats['trend']; ?>%</span>
+                                    <span class="stat-label"><?php _e('Tendência', 'contentfactory-rdm'); ?></span>
+                                </div>
+                            </div>
+                        </div>
+                        <?php if (!empty($ai_stats['bots'])): ?>
+                        <div class="cfrdm-ai-bots-list">
+                            <?php foreach (array_slice($ai_stats['bots'], 0, 6) as $bot): ?>
+                            <div class="cfrdm-ai-bot-item">
+                                <span class="bot-indicator <?php echo strtotime($bot['last_seen']) >= strtotime('-1 day') ? 'active' : 'inactive'; ?>"></span>
+                                <span class="bot-label"><?php echo esc_html($bot['label']); ?></span>
+                                <span class="bot-visits"><?php echo number_format_i18n($bot['visits']); ?></span>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php else: ?>
+                        <p class="cfrdm-empty-state">
+                            <span class="dashicons dashicons-info"></span>
+                            <?php _e('Nenhum bot de IA detectado ainda. Os dados aparecerão à medida que bots visitarem seu site.', 'contentfactory-rdm'); ?>
+                        </p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+                
+                <!-- SEO Foundation Checklist -->
+                <?php 
+                if (class_exists('CFRDM_SEO_Checklist')) {
+                    CFRDM_SEO_Checklist::render_panel();
+                }
+                ?>
+                
                 <!-- Quick Actions -->
                 <div class="cfrdm-card">
                     <div class="cfrdm-card-header">
