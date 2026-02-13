@@ -36,6 +36,7 @@ const QueueMonitor = lazy(() => import("./pages/QueueMonitor"));
 const Academy = lazy(() => import("./pages/Academy"));
 const InternalLinking = lazy(() => import("./pages/InternalLinking"));
 const AIChat = lazy(() => import("./pages/AIChat"));
+const SystemPrompts = lazy(() => import("./pages/SystemPrompts"));
 
 const queryClient = new QueryClient();
 
@@ -90,6 +91,7 @@ const App = () => (
                 <Route path="/news-rewriter" element={<NewsRewriter />} />
                 <Route path="/bulk-generator" element={<BulkKeywordGenerator />} />
                 <Route path="/ai-chat" element={<AIChat />} />
+                <Route path="/system-prompts" element={<SystemPrompts />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

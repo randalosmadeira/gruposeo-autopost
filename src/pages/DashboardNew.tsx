@@ -38,6 +38,7 @@ import { CronNotificationsPanel } from '@/components/dashboard/CronNotifications
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { SEOAgentPanel } from '@/components/dashboard/SEOAgentPanel';
 import { AuditReportPanel } from '@/components/dashboard/AuditReportPanel';
+import { AuditScoreHistoryChart } from '@/components/dashboard/AuditScoreHistoryChart';
 
 // Quick action card component
 function QuickActionCard({ 
@@ -392,6 +393,9 @@ export default function DashboardNew() {
           <SEOAgentPanel />
           <AuditReportPanel />
         </div>
+
+        {/* Audit Score History */}
+        <AuditScoreHistoryChart />
 
         {/* Cron Notifications */}
         <CronNotificationsPanel />

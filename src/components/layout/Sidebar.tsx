@@ -99,6 +99,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: 'Autoridade', icon: Crown, href: '/authority-planner' },
       { label: 'Agentes', icon: Newspaper, href: '/news-agents' },
+      { label: 'Prompts', icon: Zap, href: '/system-prompts', badge: 'Novo', badgeVariant: 'orange', iconColor: '#8B5CF6' },
     ],
   },
   {

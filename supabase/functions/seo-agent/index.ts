@@ -175,6 +175,28 @@ Deno.serve(async (req) => {
             metadata: { run_id: runId, project_id: project.id, project_name: project.name },
           });
 
+        // ═══ P0 Critical Issue Notifications ═══
+        const p0Issues = (auditResult.issues || []).filter((i: any) => i.priority === "P0");
+        if (p0Issues.length > 0) {
+          const p0Titles = p0Issues.map((i: any) => i.title).join("; ");
+          await supabase
+            .from("cron_notifications")
+            .insert({
+              user_id: project.user_id,
+              title: "🚨 ALERTA CRÍTICO — Problemas P0 Detectados",
+              message: `${p0Issues.length} problema(s) crítico(s) em ${project.name}: ${p0Titles}`,
+              type: "audit_critical",
+              metadata: {
+                run_id: runId,
+                project_id: project.id,
+                project_name: project.name,
+                p0_count: p0Issues.length,
+                p0_issues: p0Issues.map((i: any) => ({ id: i.id, title: i.title, fix: i.fix_instruction })),
+              },
+            });
+          console.log(`[SEO Agent] [${project.name}] 🚨 ${p0Issues.length} P0 critical notifications sent`);
+        }
+
         results.push({ project: project.name, status: "completed", summary });
         console.log(`[SEO Agent] [${project.name}] Completed: ${summary}`);
 
