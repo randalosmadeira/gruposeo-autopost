@@ -1,11 +1,11 @@
 {
-  "version": "3.2.1",
+  "version": "3.2.2",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.2.1 - Fix: Corrigido erro 'verificação cookie falhou' em Autocorreções e Sincronização (migrado de REST para AJAX). Fix: Linkagem interna usa fallback 'Leia também'. Fix: Regex Unicode-safe para matching de texto âncora.",
-  "released": "2026-02-11",
+  "changelog": "v3.2.2 - Fix: Registro de 6 endpoints REST ausentes (indexnow-batch, meta-audit, update-seo-meta, refresh-sitemap, refresh-llms, set-ai-headers). Fix: Correção de erros 404 na indexação IndexNow. Melhoria: Verniz DNA v3.0 integrado em 100% dos agentes SEO.",
+  "released": "2026-02-13T14:30:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",
@@ -20,6 +20,9 @@
     "ai_og_twitter",
     "realtime_module_integration",
     "safe_auto_update",
-    "pre_update_checks"
+    "pre_update_checks",
+    "verniz_dna_v3",
+    "rest_indexnow_batch",
+    "rest_meta_audit"
   ]
 }
