@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
+import { orchestrate } from "../_shared/verniz-orchestrator.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -75,7 +76,7 @@ Deno.serve(async (req) => {
     if (projectIds.length > 0) {
       const { data: projects } = await supabase
         .from("projects")
-        .select("id, name, domain, wordpress_url, nicho, tom_padrao, links_prioritarios, social_instagram, social_youtube, social_linkedin, social_twitter, social_tiktok, social_google_maps, social_linktree, cta_leads, cta_conclusao, cta_comunidade, empresa_nome, empresa_whatsapp, empresa_telefone")
+        .select("id, name, domain, wordpress_url, nicho, tom_padrao, compliance_rules, links_prioritarios, social_instagram, social_youtube, social_linkedin, social_twitter, social_tiktok, social_google_maps, social_linktree, cta_leads, cta_conclusao, cta_comunidade, empresa_nome, empresa_whatsapp, empresa_telefone, empresa_endereco")
         .in("id", projectIds);
       if (projects) {
         for (const p of projects) {
@@ -248,26 +249,40 @@ async function generateFullContent(article: any, project: any, internalLinks: Ar
   const nicho = project?.nicho || "jurídico";
   const tom = project?.tom_padrao || "profissional";
   
-  const socialLinks: string[] = [];
-  if (project?.social_instagram) socialLinks.push(`Instagram: ${project.social_instagram}`);
-  if (project?.social_youtube) socialLinks.push(`YouTube: ${project.social_youtube}`);
-  if (project?.social_linkedin) socialLinks.push(`LinkedIn: ${project.social_linkedin}`);
-  if (project?.social_twitter) socialLinks.push(`X/Twitter: ${project.social_twitter}`);
-  if (project?.social_tiktok) socialLinks.push(`TikTok: ${project.social_tiktok}`);
-  if (project?.social_google_maps) socialLinks.push(`Google Maps: ${project.social_google_maps}`);
-  if (project?.social_linktree) socialLinks.push(`Linktree: ${project.social_linktree}`);
-  
   const internalLinksStr = internalLinks.length > 0 
     ? internalLinks.slice(0, 15).map(l => `- "${l.title}": ${l.url}`).join("\n")
     : "Nenhum link interno disponível";
 
-  const ctaInfo = [
-    project?.cta_leads ? `CTA Leads: ${project.cta_leads}` : "",
-    project?.cta_conclusao ? `CTA Conclusão: ${project.cta_conclusao}` : "",
-    project?.cta_comunidade ? `CTA Comunidade: ${project.cta_comunidade}` : "",
-    project?.empresa_whatsapp ? `WhatsApp: ${project.empresa_whatsapp}` : "",
-    project?.empresa_telefone ? `Telefone: ${project.empresa_telefone}` : "",
-  ].filter(Boolean).join("\n");
+  // Build projectConfig for Verniz orchestrator (CTAs + Social + Company data)
+  const projectConfig = project ? {
+    nicho: project.nicho || undefined,
+    compliance_rules: project.compliance_rules || undefined,
+    empresa_nome: project.empresa_nome || undefined,
+    empresa_telefone: project.empresa_telefone || undefined,
+    empresa_endereco: project.empresa_endereco || undefined,
+    empresa_whatsapp: project.empresa_whatsapp || undefined,
+    social_instagram: project.social_instagram || undefined,
+    social_youtube: project.social_youtube || undefined,
+    social_linkedin: project.social_linkedin || undefined,
+    social_twitter: project.social_twitter || undefined,
+    social_tiktok: project.social_tiktok || undefined,
+    social_google_maps: project.social_google_maps || undefined,
+    social_linktree: project.social_linktree || undefined,
+    cta_comunidade: project.cta_comunidade || undefined,
+    cta_conclusao: project.cta_conclusao || undefined,
+    cta_leads: project.cta_leads || undefined,
+  } : undefined;
+
+  // Use Verniz orchestrator to inject DNA with 5-CTA structure + social links
+  const orchestration = orchestrate(article.title || keyword, keyword, projectConfig);
+  const vernizDNA = orchestration.vernizSection;
+
+  console.log("[AI SEO] Verniz DNA applied to generateFullContent", {
+    nicho: orchestration.nichoDetectado.nicho,
+    gatilho: orchestration.gatilho.gatilho,
+    hasProjectConfig: !!projectConfig,
+    hasCtas: !!(project?.cta_comunidade || project?.cta_conclusao || project?.cta_leads),
+  });
 
   const prompt = `Crie um artigo completo e otimizado para SEO sobre "${keyword}".
 
@@ -276,8 +291,8 @@ DADOS DO PROJETO:
 - Domínio: ${domain}
 - Nicho: ${nicho}
 - Tom: ${tom}
-${ctaInfo ? `\nCTAs configurados:\n${ctaInfo}` : ""}
-${socialLinks.length > 0 ? `\nRedes Sociais (CITAR nos CTAs):\n${socialLinks.join("\n")}` : ""}
+
+${vernizDNA}
 
 LINKS INTERNOS DISPONÍVEIS (USE no mínimo 10):
 ${internalLinksStr}
@@ -367,16 +382,40 @@ async function optimizeExistingContent(article: any, analysis: any, project: any
     ? internalLinks.slice(0, 15).map(l => `- "${l.title}": ${l.url}`).join("\n")
     : "Nenhum link interno disponível";
 
-  const socialLinks: string[] = [];
-  if (project?.social_instagram) socialLinks.push(`Instagram: ${project.social_instagram}`);
-  if (project?.social_youtube) socialLinks.push(`YouTube: ${project.social_youtube}`);
-  if (project?.social_linkedin) socialLinks.push(`LinkedIn: ${project.social_linkedin}`);
-  if (project?.social_twitter) socialLinks.push(`X/Twitter: ${project.social_twitter}`);
-  if (project?.social_tiktok) socialLinks.push(`TikTok: ${project.social_tiktok}`);
-  if (project?.social_google_maps) socialLinks.push(`Google Maps: ${project.social_google_maps}`);
-  if (project?.social_linktree) socialLinks.push(`Linktree: ${project.social_linktree}`);
+  // Build projectConfig for Verniz orchestrator (CTAs + Social + Company data)
+  const projectConfig = project ? {
+    nicho: project.nicho || undefined,
+    compliance_rules: project.compliance_rules || undefined,
+    empresa_nome: project.empresa_nome || undefined,
+    empresa_telefone: project.empresa_telefone || undefined,
+    empresa_endereco: project.empresa_endereco || undefined,
+    empresa_whatsapp: project.empresa_whatsapp || undefined,
+    social_instagram: project.social_instagram || undefined,
+    social_youtube: project.social_youtube || undefined,
+    social_linkedin: project.social_linkedin || undefined,
+    social_twitter: project.social_twitter || undefined,
+    social_tiktok: project.social_tiktok || undefined,
+    social_google_maps: project.social_google_maps || undefined,
+    social_linktree: project.social_linktree || undefined,
+    cta_comunidade: project.cta_comunidade || undefined,
+    cta_conclusao: project.cta_conclusao || undefined,
+    cta_leads: project.cta_leads || undefined,
+  } : undefined;
+
+  // Use Verniz orchestrator to inject DNA with 5-CTA structure + social links
+  const orchestration = orchestrate(article.title || article.keyword, article.keyword, projectConfig);
+  const vernizDNA = orchestration.vernizSection;
+
+  console.log("[AI SEO] Verniz DNA applied to optimizeExistingContent", {
+    nicho: orchestration.nichoDetectado.nicho,
+    gatilho: orchestration.gatilho.gatilho,
+    hasProjectConfig: !!projectConfig,
+    hasCtas: !!(project?.cta_comunidade || project?.cta_conclusao || project?.cta_leads),
+  });
 
   const prompt = `Reescreva COMPLETAMENTE este artigo seguindo as diretrizes do Agente Repostagem Jornalística v3.0.
+
+${vernizDNA}
 
 ═══ REGRAS INEGOCIÁVEIS (COMPLIANCE JORNALÍSTICO v3.0) ═══
 
@@ -421,7 +460,6 @@ REGRA ZERO-D — FORMATAÇÃO: Zero espaços duplos, hierarquia H2>H3 rigorosa, 
 ## LINKS INTERNOS PARA INSERIR (mín 10):
 ${internalLinksStr}
 
-${socialLinks.length > 0 ? `## REDES SOCIAIS (citar nos CTAs):\n${socialLinks.join("\n")}` : ""}
 
 ## DADOS DO ARTIGO:
 KEYWORD: ${article.keyword}
