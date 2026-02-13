@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.analyze-seo-advanced]
 verify_jwt = false
+
+[functions.analyze-file]
+verify_jwt = false

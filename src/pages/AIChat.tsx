@@ -9,7 +9,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { 
   Send, Bot, User, Sparkles, Loader2, Trash2, 
   Target, FileText, Link, Search, AlertTriangle,
-  Shield, RefreshCw, Globe
+  Shield, RefreshCw, Globe, Paperclip, X, CheckCircle,
+  FileUp, BarChart3
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -17,6 +18,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  attachments?: UploadedFile[];
 }
 
 interface ProjectContext {
@@ -28,12 +30,18 @@ interface ProjectContext {
   seo_plugin: string | null;
 }
 
-interface ActionResult {
-  action: string;
-  result: string;
+interface UploadedFile {
+  id: string;
+  name: string;
+  size: number;
+  format: string;
+  status: 'uploading' | 'uploaded' | 'analyzing' | 'completed' | 'error';
+  analysis?: any;
+  error?: string;
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
+const ANALYZE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-file`;
 
 const quickActions = [
   { label: 'Sugerir palavras-chave', icon: Target, prompt: 'Sugira 10 palavras-chave de cauda longa para o nicho de ' },
@@ -149,14 +157,34 @@ function renderMarkdown(text: string) {
     .replace(/\n/g, '<br/>');
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getFileFormat(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  if (ext === 'csv') return 'csv';
+  if (ext === 'xlsx' || ext === 'xls') return 'xlsx';
+  if (ext === 'pdf') return 'pdf';
+  return ext;
+}
+
+const ACCEPTED_FORMATS = '.csv,.xlsx,.xls,.pdf,.tsv,.txt';
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+
 export default function AIChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [projects, setProjects] = useState<ProjectContext[]>([]);
   const [articleCount, setArticleCount] = useState(0);
+  const [pendingFiles, setPendingFiles] = useState<UploadedFile[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -194,18 +222,209 @@ export default function AIChat() {
     loadContext();
   }, [user]);
 
+  const uploadAndAnalyzeFile = async (file: File): Promise<UploadedFile | null> => {
+    if (!user) return null;
+
+    const format = getFileFormat(file.name);
+    if (!['csv', 'xlsx', 'xls', 'pdf', 'tsv', 'txt'].includes(format)) {
+      toast({
+        title: 'Formato não suportado',
+        description: 'Envie arquivos CSV, XLSX, PDF ou TXT exportados do GSC/Ubersuggest.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast({
+        title: 'Arquivo muito grande',
+        description: 'O arquivo deve ter no máximo 20MB.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    const fileId = crypto.randomUUID();
+    const filePath = `${user.id}/${fileId}-${file.name}`;
+    
+    const uploadedFile: UploadedFile = {
+      id: fileId,
+      name: file.name,
+      size: file.size,
+      format,
+      status: 'uploading',
+    };
+
+    setPendingFiles(prev => [...prev, uploadedFile]);
+
+    try {
+      // Upload to storage
+      const { error: uploadError } = await supabase.storage
+        .from('analysis-uploads')
+        .upload(filePath, file);
+
+      if (uploadError) throw new Error(uploadError.message);
+
+      // Create DB record
+      const { data: dbRecord, error: dbError } = await supabase
+        .from('analysis_uploads')
+        .insert({
+          user_id: user.id,
+          file_name: file.name,
+          file_path: filePath,
+          file_type: 'generic',
+          file_format: format === 'xls' ? 'xlsx' : format,
+          file_size_bytes: file.size,
+          status: 'uploaded',
+        })
+        .select('id')
+        .single();
+
+      if (dbError) throw new Error(dbError.message);
+
+      // Update state
+      const realId = dbRecord.id;
+      setPendingFiles(prev => prev.map(f =>
+        f.id === fileId ? { ...f, id: realId, status: 'uploaded' } : f
+      ));
+
+      // Trigger analysis
+      setPendingFiles(prev => prev.map(f =>
+        f.id === realId ? { ...f, status: 'analyzing' } : f
+      ));
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const analyzeResp = await fetch(ANALYZE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ uploadId: realId }),
+      });
+
+      const result = await analyzeResp.json();
+
+      if (!analyzeResp.ok || !result.success) {
+        throw new Error(result.error || 'Erro na análise');
+      }
+
+      const completedFile: UploadedFile = {
+        id: realId,
+        name: file.name,
+        size: file.size,
+        format,
+        status: 'completed',
+        analysis: result.analysis,
+      };
+
+      setPendingFiles(prev => prev.map(f =>
+        f.id === realId ? completedFile : f
+      ));
+
+      return completedFile;
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : 'Erro desconhecido';
+      setPendingFiles(prev => prev.map(f =>
+        f.id === fileId ? { ...f, status: 'error', error: errMsg } : f
+      ));
+      toast({
+        title: 'Erro no upload',
+        description: errMsg,
+        variant: 'destructive',
+      });
+      return null;
+    }
+  };
+
+  const handleFileSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const fileArray = Array.from(files).slice(0, 5); // Max 5 files at once
+    
+    for (const file of fileArray) {
+      await uploadAndAnalyzeFile(file);
+    }
+  };
+
+  const removePendingFile = (fileId: string) => {
+    setPendingFiles(prev => prev.filter(f => f.id !== fileId));
+  };
+
+  const cleanupCompletedFiles = async () => {
+    if (!user) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await fetch(ANALYZE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ action: 'cleanup' }),
+      });
+      const result = await resp.json();
+      if (result.success) {
+        toast({
+          title: '🗑️ Limpeza concluída',
+          description: result.message,
+        });
+        setPendingFiles(prev => prev.filter(f => f.status !== 'completed'));
+      }
+    } catch {
+      toast({ title: 'Erro na limpeza', variant: 'destructive' });
+    }
+  };
+
   const sendMessage = async (text?: string) => {
     const messageText = text || input.trim();
-    if (!messageText || isLoading) return;
+    if ((!messageText && pendingFiles.length === 0) || isLoading) return;
 
-    const userMsg: Message = { role: 'user', content: messageText, timestamp: new Date() };
+    // Build message content including file analysis results
+    let fullContent = messageText;
+    const completedFiles = pendingFiles.filter(f => f.status === 'completed' && f.analysis);
+
+    if (completedFiles.length > 0) {
+      const analysisContext = completedFiles.map(f => {
+        const a = f.analysis;
+        return `\n\n📎 **Arquivo analisado: ${f.name}** (${f.format.toUpperCase()})\n` +
+          `Tipo detectado: ${a.file_type || 'genérico'}\n` +
+          `Score de saúde SEO: ${a.health_score ?? 'N/A'}/100\n` +
+          `Resumo: ${a.summary || 'N/A'}\n` +
+          `Issues críticos: ${(a.critical_issues || []).length}\n` +
+          `Oportunidades: ${(a.opportunities || []).length}\n` +
+          `Recomendações: ${(a.recommendations || []).length}`;
+      }).join('');
+
+      const detailedAnalysis = completedFiles.map(f => {
+        return `\n\nDADOS COMPLETOS DA ANÁLISE DO ARQUIVO "${f.name}":\n${JSON.stringify(f.analysis, null, 2)}`;
+      }).join('');
+
+      fullContent = (messageText || 'Analise os arquivos anexados e me dê um plano de ação completo com prioridades.') +
+        analysisContext +
+        '\n\n[CONTEXTO TÉCNICO PARA A IA - dados completos da análise]:' +
+        detailedAnalysis;
+    }
+
+    const userMsg: Message = {
+      role: 'user',
+      content: messageText || 'Analise os arquivos anexados e me dê um plano de ação completo.',
+      timestamp: new Date(),
+      attachments: completedFiles.length > 0 ? [...completedFiles] : undefined,
+    };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
 
+    // Clear completed files after sending
+    if (completedFiles.length > 0) {
+      setPendingFiles(prev => prev.filter(f => f.status !== 'completed'));
+    }
+
     let assistantSoFar = '';
 
-    const allMessages = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
+    const allMessages = [...messages, { role: 'user' as const, content: fullContent }]
+      .map(m => ({ role: m.role, content: m.content }));
 
     try {
       await streamChat({
@@ -251,6 +470,12 @@ export default function AIChat() {
               // Action parse failed, ignore
             }
           }
+
+          // Auto-cleanup after analysis is fully processed
+          if (completedFiles.length > 0) {
+            setTimeout(() => cleanupCompletedFiles(), 2000);
+          }
+
           setIsLoading(false);
         },
         onError: (error) => {
@@ -273,8 +498,25 @@ export default function AIChat() {
 
   const clearChat = () => {
     setMessages([]);
+    setPendingFiles([]);
     toast({ title: 'Chat limpo', description: 'Conversa reiniciada.' });
   };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => setIsDragOver(false);
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    handleFileSelect(e.dataTransfer.files);
+  };
+
+  const hasCompletedFiles = pendingFiles.some(f => f.status === 'completed');
+  const hasAnalyzingFiles = pendingFiles.some(f => f.status === 'uploading' || f.status === 'analyzing');
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] p-4 lg:p-6 max-w-4xl mx-auto">
@@ -305,7 +547,26 @@ export default function AIChat() {
       </div>
 
       {/* Chat Area */}
-      <Card className="flex-1 flex flex-col overflow-hidden border-border/50">
+      <Card
+        className={cn(
+          "flex-1 flex flex-col overflow-hidden border-border/50 transition-colors",
+          isDragOver && "border-primary border-2 bg-primary/5"
+        )}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {/* Drag overlay */}
+        {isDragOver && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-primary/5 rounded-lg pointer-events-none">
+            <div className="text-center">
+              <FileUp className="w-12 h-12 text-primary mx-auto mb-2" />
+              <p className="text-sm font-medium text-primary">Solte o arquivo aqui</p>
+              <p className="text-xs text-muted-foreground">CSV, XLSX, PDF do GSC ou Ubersuggest</p>
+            </div>
+          </div>
+        )}
+
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-6">
@@ -318,8 +579,12 @@ export default function AIChat() {
                   Sou seu assistente especializado em SEO, conteúdo e automação WordPress.
                   Conheço todas as funcionalidades da plataforma e do plugin.
                 </p>
+                <p className="text-xs text-primary/80 mt-2 flex items-center justify-center gap-1">
+                  <Paperclip className="w-3 h-3" />
+                  Anexe arquivos do GSC, Ubersuggest ou ferramentas SEO para análise automática com IA
+                </p>
                 {projects.length > 0 && (
-                  <p className="text-xs text-primary mt-2">
+                  <p className="text-xs text-primary mt-1">
                     📋 {projects.length} projeto{projects.length > 1 ? 's' : ''} conectado{projects.length > 1 ? 's' : ''} • {articleCount} artigo{articleCount !== 1 ? 's' : ''}
                   </p>
                 )}
@@ -364,6 +629,17 @@ export default function AIChat() {
                       : 'bg-muted/50 text-foreground'
                   )}
                 >
+                  {/* Show attachments if any */}
+                  {msg.attachments && msg.attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {msg.attachments.map(att => (
+                        <span key={att.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-background/20 text-xs">
+                          <BarChart3 className="w-3 h-3" />
+                          {att.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {msg.role === 'assistant' ? (
                     <div
                       className="prose prose-sm max-w-none dark:prose-invert [&_li]:my-0.5"
@@ -393,22 +669,85 @@ export default function AIChat() {
           )}
         </div>
 
+        {/* Pending files bar */}
+        {pendingFiles.length > 0 && (
+          <div className="border-t border-border/50 px-3 py-2 flex flex-wrap gap-2 items-center">
+            {pendingFiles.map(f => (
+              <div
+                key={f.id}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border",
+                  f.status === 'completed' && "bg-accent border-primary/30 text-primary",
+                  f.status === 'error' && "bg-destructive/10 border-destructive/30 text-destructive",
+                  (f.status === 'uploading' || f.status === 'analyzing') && "bg-primary/10 border-primary/30 text-primary",
+                  f.status === 'uploaded' && "bg-muted border-border text-muted-foreground",
+                )}
+              >
+                {f.status === 'completed' ? (
+                  <CheckCircle className="w-3.5 h-3.5" />
+                ) : f.status === 'error' ? (
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                ) : (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                )}
+                <span className="max-w-[120px] truncate font-medium">{f.name}</span>
+                <span className="text-[10px] opacity-70">{formatFileSize(f.size)}</span>
+                {(f.status === 'completed' || f.status === 'error') && (
+                  <button onClick={() => removePendingFile(f.id)} className="ml-0.5 hover:opacity-70">
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+            {hasCompletedFiles && (
+              <span className="text-[10px] text-muted-foreground ml-1">
+                ✅ Pronto — envie uma mensagem para a IA analisar
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Input */}
         <div className="border-t border-border/50 p-3">
           <div className="flex gap-2 items-end">
+            {/* File upload button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-[44px] w-[44px] flex-shrink-0 text-muted-foreground hover:text-primary"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading || hasAnalyzingFiles}
+              title="Anexar arquivo (GSC, Ubersuggest, CSV, XLSX, PDF)"
+            >
+              <Paperclip className="w-5 h-5" />
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_FORMATS}
+              multiple
+              className="hidden"
+              onChange={e => {
+                handleFileSelect(e.target.files);
+                e.target.value = '';
+              }}
+            />
             <Textarea
               ref={textareaRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Pergunte sobre SEO, plugin WordPress, auditorias, linkagem interna..."
+              placeholder={hasCompletedFiles
+                ? "Descreva o que deseja analisar nos arquivos anexados..."
+                : "Pergunte sobre SEO, plugin WordPress, auditorias, linkagem interna..."
+              }
               className="min-h-[44px] max-h-[120px] resize-none border-border/50 bg-background"
               rows={1}
               disabled={isLoading}
             />
             <Button
               onClick={() => sendMessage()}
-              disabled={!input.trim() || isLoading}
+              disabled={(!input.trim() && !hasCompletedFiles) || isLoading || hasAnalyzingFiles}
               size="icon"
               className="h-[44px] w-[44px] flex-shrink-0"
             >
@@ -416,7 +755,7 @@ export default function AIChat() {
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
-            Powered by Lovable AI · Conhece todas as funcionalidades da plataforma e plugin WordPress
+            Powered by Lovable AI · Anexe arquivos GSC, Ubersuggest (CSV/XLSX/PDF) para análise automática
           </p>
         </div>
       </Card>
