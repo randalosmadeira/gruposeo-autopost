@@ -34,6 +34,144 @@ interface ArticleData {
   focus_keyword?: string;
 }
 
+interface SchemaInjectionContext {
+  title: string;
+  description: string;
+  slug: string;
+  keyword: string;
+  content: string;
+  featuredImageUrl: string | null;
+  publishedAt: string;
+  authorName: string;
+  authorJobTitle: string;
+  publisherName: string;
+  publisherLogoUrl: string;
+  siteUrl: string;
+  categoryName: string;
+}
+
+/**
+ * Build Article JSON-LD schema
+ */
+function buildArticleSchema(ctx: SchemaInjectionContext): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": ctx.title,
+    "description": ctx.description,
+    "image": ctx.featuredImageUrl || `${ctx.siteUrl}/logo.png`,
+    "datePublished": ctx.publishedAt,
+    "dateModified": ctx.publishedAt,
+    "author": {
+      "@type": "Person",
+      "name": ctx.authorName,
+      "jobTitle": ctx.authorJobTitle,
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": ctx.publisherName,
+      "logo": { "@type": "ImageObject", "url": ctx.publisherLogoUrl },
+    },
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": `${ctx.siteUrl}/${ctx.categoryName ? ctx.categoryName + '/' : ''}${ctx.slug}/`,
+    },
+  };
+}
+
+/**
+ * Extract FAQ items from article content (markdown/HTML)
+ */
+function extractFAQsFromContent(content: string): Array<{ question: string; answer: string }> {
+  const faqs: Array<{ question: string; answer: string }> = [];
+  if (!content) return faqs;
+
+  // Detect FAQ section
+  const hasFAQ = /##\s*(FAQ|Perguntas\s+Frequentes|Dúvidas)/i.test(content) ||
+    /<h[23][^>]*>(FAQ|Perguntas\s+Frequentes|Dúvidas)/i.test(content);
+
+  if (!hasFAQ) return faqs;
+
+  // Pattern: ### Question? followed by answer
+  const qaPattern = /###\s*(.+\?)\s*\n+([\s\S]*?)(?=###|\n##|$)/g;
+  let match;
+  while ((match = qaPattern.exec(content)) !== null) {
+    const q = match[1].replace(/\*\*/g, '').trim();
+    const a = match[2].replace(/<[^>]+>/g, '').replace(/\*\*/g, '').replace(/\s+/g, ' ').trim();
+    if (q && a && a.length > 20) faqs.push({ question: q, answer: a.slice(0, 300) });
+  }
+
+  // HTML h3/h4 questions
+  if (faqs.length === 0) {
+    const htmlPattern = /<h[34][^>]*>([^<]+\?)<\/h[34]>\s*<p>([^<]+)<\/p>/gi;
+    while ((match = htmlPattern.exec(content)) !== null) {
+      const q = match[1].trim();
+      const a = match[2].trim();
+      if (q && a && a.length > 20) faqs.push({ question: q, answer: a.slice(0, 300) });
+    }
+  }
+
+  return faqs.slice(0, 10);
+}
+
+/**
+ * Build FAQPage JSON-LD schema
+ */
+function buildFAQSchema(faqs: Array<{ question: string; answer: string }>): Record<string, unknown> | null {
+  if (faqs.length === 0) return null;
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": faqs.map((f) => ({
+      "@type": "Question",
+      "name": f.question,
+      "acceptedAnswer": { "@type": "Answer", "text": f.answer },
+    })),
+  };
+}
+
+/**
+ * Build BreadcrumbList JSON-LD schema
+ */
+function buildBreadcrumbSchema(ctx: SchemaInjectionContext): Record<string, unknown> {
+  const items = [
+    { "@type": "ListItem", "position": 1, "name": "Início", "item": ctx.siteUrl + "/" },
+  ];
+  if (ctx.categoryName) {
+    items.push({ "@type": "ListItem", "position": 2, "name": ctx.categoryName, "item": `${ctx.siteUrl}/${ctx.categoryName}/` });
+    items.push({ "@type": "ListItem", "position": 3, "name": ctx.title, "item": `${ctx.siteUrl}/${ctx.categoryName}/${ctx.slug}/` });
+  } else {
+    items.push({ "@type": "ListItem", "position": 2, "name": ctx.title, "item": `${ctx.siteUrl}/${ctx.slug}/` });
+  }
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": items,
+  };
+}
+
+/**
+ * Inject all JSON-LD schemas into article content
+ */
+function injectSchemas(content: string, ctx: SchemaInjectionContext): string {
+  const schemas: string[] = [];
+
+  // 1. Article schema (always)
+  schemas.push(`<script type="application/ld+json">\n${JSON.stringify(buildArticleSchema(ctx), null, 2)}\n</script>`);
+
+  // 2. FAQPage schema (if FAQs detected)
+  const faqs = extractFAQsFromContent(content);
+  const faqSchema = buildFAQSchema(faqs);
+  if (faqSchema) {
+    schemas.push(`<script type="application/ld+json">\n${JSON.stringify(faqSchema, null, 2)}\n</script>`);
+  }
+
+  // 3. BreadcrumbList schema (always)
+  schemas.push(`<script type="application/ld+json">\n${JSON.stringify(buildBreadcrumbSchema(ctx), null, 2)}\n</script>`);
+
+  return content + "\n\n<!-- JSON-LD Structured Data by ContentFactory -->\n" + schemas.join("\n");
+}
+
 async function publishViaPluginAPI(
   baseUrl: string,
   apiKey: string,
@@ -366,9 +504,32 @@ Deno.serve(async (req) => {
     const categories = config?.wordpress_categories || [];
     const tags = config?.wordpress_tags || [];
 
+    // Build schema injection context
+    const siteUrl = project.wordpress_url.replace(/\/$/, "");
+    const publishedAt = new Date().toISOString();
+    const schemaCtx: SchemaInjectionContext = {
+      title: article.title || "Untitled",
+      description: article.excerpt || config?.seo_description || "",
+      slug: article.slug || "",
+      keyword: config?.focus_keyword || article.keyword || "",
+      content: article.content || "",
+      featuredImageUrl: article.featured_image_url,
+      publishedAt,
+      authorName: config?.seo_title ? "Equipe Editorial" : "Equipe Editorial",
+      authorJobTitle: "Redator SEO",
+      publisherName: siteUrl.replace(/https?:\/\/(www\.)?/, "").split("/")[0],
+      publisherLogoUrl: `${siteUrl}/wp-content/uploads/logo.png`,
+      siteUrl,
+      categoryName: "",
+    };
+
+    // Inject JSON-LD schemas into content
+    const enrichedContent = injectSchemas(article.content || "", schemaCtx);
+    console.log("JSON-LD schemas injected: Article + FAQPage + BreadcrumbList");
+
     const articleData: ArticleData = {
       title: article.title || "Untitled",
-      content: article.content || "",
+      content: enrichedContent,
       excerpt: article.excerpt || "",
       slug: article.slug || "",
       featured_image_url: article.featured_image_url,
