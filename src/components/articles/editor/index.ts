@@ -12,3 +12,4 @@ export { VersionHistoryPanel } from './VersionHistoryPanel';
 export { SchedulingPanel } from './SchedulingPanel';
 export { ImageGalleryPanel } from './ImageGalleryPanel';
 export { AISEOAnalysisPanel } from './AISEOAnalysisPanel';
+export { GoogleAdsVariationsPanel } from './GoogleAdsVariationsPanel';
