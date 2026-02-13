@@ -375,6 +375,48 @@ class CFRDM_API {
             'callback' => array(__CLASS__, 'apply_internal_link'),
             'permission_callback' => array(__CLASS__, 'verify_api_key'),
         ));
+        
+        // ===== IndexNow Batch Endpoint (for SEO Agent) =====
+        register_rest_route('cfrdm/v1', '/indexnow-batch', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'indexnow_batch'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // ===== Meta Audit Endpoint (for SEO Agent) =====
+        register_rest_route('cfrdm/v1', '/meta-audit', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'meta_audit'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // ===== Update SEO Meta Endpoint (for SEO Agent) =====
+        register_rest_route('cfrdm/v1', '/update-seo-meta', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'update_seo_meta'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // ===== Refresh Sitemap Endpoint (for SEO Agent) =====
+        register_rest_route('cfrdm/v1', '/refresh-sitemap', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'refresh_sitemap'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // ===== Refresh llms.txt Endpoint (for SEO Agent) =====
+        register_rest_route('cfrdm/v1', '/refresh-llms', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'refresh_llms'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // ===== Set AI Headers Endpoint (for SEO Agent) =====
+        register_rest_route('cfrdm/v1', '/set-ai-headers', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'set_ai_headers'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
     }
     
     public static function verify_api_key($request) {
@@ -2433,5 +2475,293 @@ class CFRDM_API {
         }
         
         return array('inserted' => true);
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // IndexNow Batch Submit
+    // ═══════════════════════════════════════════════════════════
+    public static function indexnow_batch($request) {
+        $params = $request->get_json_params();
+        $urls = isset($params['urls']) ? (array) $params['urls'] : array();
+        
+        if (empty($urls)) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'No URLs provided',
+            ), 400);
+        }
+        
+        if (!class_exists('CFRDM_IndexNow')) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'IndexNow module not available',
+            ), 500);
+        }
+        
+        $indexnow = CFRDM_IndexNow::get_instance();
+        
+        // Ensure key exists
+        $key = CFRDM_IndexNow::get_key();
+        if (empty($key)) {
+            // Generate key if missing
+            $key = wp_generate_password(32, false);
+            update_option('cfrdm_indexnow_key', $key);
+        }
+        
+        // Submit in batches of 100 (IndexNow limit per request is 10,000)
+        $total_submitted = 0;
+        $errors = array();
+        $batches = array_chunk($urls, 100);
+        
+        foreach ($batches as $batch) {
+            $result = $indexnow->submit_indexnow($batch);
+            if ($result) {
+                $total_submitted += count($batch);
+            } else {
+                $errors[] = 'Batch of ' . count($batch) . ' URLs failed';
+            }
+        }
+        
+        // Also ping Google and Bing sitemaps
+        $sitemap_url = self::detect_sitemap_url();
+        if ($sitemap_url) {
+            @wp_remote_get('https://www.google.com/ping?sitemap=' . urlencode($sitemap_url), array('timeout' => 10, 'blocking' => false));
+            @wp_remote_get('https://www.bing.com/ping?sitemap=' . urlencode($sitemap_url), array('timeout' => 10, 'blocking' => false));
+        }
+        
+        if (class_exists('CFRDM_Logger')) {
+            CFRDM_Logger::success('indexnow', sprintf('IndexNow batch: %d/%d URLs submetidas', $total_submitted, count($urls)), array(
+                'total_urls' => count($urls),
+                'submitted' => $total_submitted,
+                'errors' => $errors,
+            ));
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'submitted' => $total_submitted,
+            'total' => count($urls),
+            'errors' => $errors,
+            'key' => $key,
+        ), 200);
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // Meta Audit (trigger audit and return results)
+    // ═══════════════════════════════════════════════════════════
+    public static function meta_audit($request) {
+        $params = $request->get_json_params();
+        $auto_fix = isset($params['auto_fix']) ? (bool) $params['auto_fix'] : false;
+        
+        if (!class_exists('CFRDM_Meta_Auditor')) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Meta Auditor module not available',
+            ), 500);
+        }
+        
+        $auditor = CFRDM_Meta_Auditor::get_instance();
+        
+        // Run the audit (this will auto-fix if the auditor is configured to do so)
+        $auditor->run_audit();
+        
+        // Get last stats
+        $stats = get_option('cfrdm_meta_auditor_last_stats', array());
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'issues_found' => isset($stats['issues_found']) ? (int) $stats['issues_found'] : 0,
+            'issues_fixed' => isset($stats['issues_fixed']) ? (int) $stats['issues_fixed'] : 0,
+            'posts_audited' => isset($stats['posts_audited']) ? (int) $stats['posts_audited'] : 0,
+            'issues' => isset($stats['issues']) ? $stats['issues'] : array(),
+            'last_run' => get_option('cfrdm_meta_auditor_last_run', ''),
+        ), 200);
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // Update SEO Meta for a specific post
+    // ═══════════════════════════════════════════════════════════
+    public static function update_seo_meta($request) {
+        $params = $request->get_json_params();
+        $post_id = isset($params['post_id']) ? (int) $params['post_id'] : 0;
+        
+        if (!$post_id) {
+            return new WP_REST_Response(array('success' => false, 'error' => 'post_id required'), 400);
+        }
+        
+        $post = get_post($post_id);
+        if (!$post) {
+            return new WP_REST_Response(array('success' => false, 'error' => 'Post not found'), 404);
+        }
+        
+        $updated = array();
+        
+        // Detect active SEO plugin
+        $seo_plugin = self::detect_seo_plugin();
+        
+        $meta_title = isset($params['meta_title']) ? sanitize_text_field($params['meta_title']) : '';
+        $meta_description = isset($params['meta_description']) ? sanitize_text_field($params['meta_description']) : '';
+        $focus_keyword = isset($params['focus_keyword']) ? sanitize_text_field($params['focus_keyword']) : '';
+        
+        if ($meta_title) {
+            if ($seo_plugin === 'rankmath') {
+                update_post_meta($post_id, 'rank_math_title', $meta_title);
+            } elseif ($seo_plugin === 'yoast') {
+                update_post_meta($post_id, '_yoast_wpseo_title', $meta_title);
+            }
+            // Also update OG title
+            update_post_meta($post_id, '_cfrdm_og_title', $meta_title);
+            $updated[] = 'meta_title';
+        }
+        
+        if ($meta_description) {
+            if ($seo_plugin === 'rankmath') {
+                update_post_meta($post_id, 'rank_math_description', $meta_description);
+            } elseif ($seo_plugin === 'yoast') {
+                update_post_meta($post_id, '_yoast_wpseo_metadesc', $meta_description);
+            }
+            // Also update OG description
+            update_post_meta($post_id, '_cfrdm_og_description', $meta_description);
+            $updated[] = 'meta_description';
+        }
+        
+        if ($focus_keyword) {
+            if ($seo_plugin === 'rankmath') {
+                update_post_meta($post_id, 'rank_math_focus_keyword', $focus_keyword);
+            } elseif ($seo_plugin === 'yoast') {
+                update_post_meta($post_id, '_yoast_wpseo_focuskw', $focus_keyword);
+            }
+            $updated[] = 'focus_keyword';
+        }
+        
+        if (class_exists('CFRDM_Logger') && !empty($updated)) {
+            CFRDM_Logger::success('seo', sprintf('SEO meta atualizada via API: %s', implode(', ', $updated)), array(
+                'post_id' => $post_id,
+                'seo_plugin' => $seo_plugin,
+                'updated_fields' => $updated,
+            ), $post_id);
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'post_id' => $post_id,
+            'seo_plugin' => $seo_plugin,
+            'updated' => $updated,
+        ), 200);
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // Refresh Sitemap
+    // ═══════════════════════════════════════════════════════════
+    public static function refresh_sitemap($request) {
+        // Invalidate WordPress core sitemap cache
+        delete_transient('wp_sitemaps_index');
+        
+        // If Yoast is active, ping its sitemap
+        if (function_exists('wpseo_ping_search_engines')) {
+            wpseo_ping_search_engines();
+        }
+        
+        // Ping Google and Bing
+        $sitemap_url = self::detect_sitemap_url();
+        if ($sitemap_url) {
+            @wp_remote_get('https://www.google.com/ping?sitemap=' . urlencode($sitemap_url), array('timeout' => 10, 'blocking' => false));
+            @wp_remote_get('https://www.bing.com/ping?sitemap=' . urlencode($sitemap_url), array('timeout' => 10, 'blocking' => false));
+        }
+        
+        if (class_exists('CFRDM_Logger')) {
+            CFRDM_Logger::info('sitemap', 'Sitemap refreshed via API', array('sitemap_url' => $sitemap_url));
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'sitemap_url' => $sitemap_url,
+            'message' => 'Sitemap cache invalidated and search engines pinged',
+        ), 200);
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // Refresh llms.txt
+    // ═══════════════════════════════════════════════════════════
+    public static function refresh_llms($request) {
+        if (!class_exists('CFRDM_LLMS_Txt')) {
+            return new WP_REST_Response(array('success' => false, 'error' => 'LLMS module not available'), 500);
+        }
+        
+        $llms = CFRDM_LLMS_Txt::get_instance();
+        $llms->invalidate_cache();
+        
+        if (class_exists('CFRDM_Logger')) {
+            CFRDM_Logger::info('llms', 'llms.txt cache invalidated via API');
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => 'llms.txt cache invalidated - will be regenerated on next request',
+        ), 200);
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // Set AI-Friendly Headers config
+    // ═══════════════════════════════════════════════════════════
+    public static function set_ai_headers($request) {
+        $params = $request->get_json_params();
+        
+        // Enable/disable AI headers via LLMS_Txt module
+        if (isset($params['enable_ai_indexing'])) {
+            update_option('cfrdm_llms_txt_enabled', (bool) $params['enable_ai_indexing']);
+        }
+        
+        if (isset($params['enable_x_robots_tag'])) {
+            update_option('cfrdm_ai_x_robots_enabled', (bool) $params['enable_x_robots_tag']);
+        }
+        
+        // Invalidate cache to apply changes
+        if (class_exists('CFRDM_LLMS_Txt')) {
+            CFRDM_LLMS_Txt::get_instance()->invalidate_cache();
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => 'AI headers configuration updated',
+            'ai_indexing' => (bool) get_option('cfrdm_llms_txt_enabled', true),
+            'x_robots_tag' => (bool) get_option('cfrdm_ai_x_robots_enabled', true),
+        ), 200);
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // Helper: Detect active SEO plugin
+    // ═══════════════════════════════════════════════════════════
+    private static function detect_seo_plugin() {
+        if (defined('RANK_MATH_VERSION') || class_exists('RankMath')) {
+            return 'rankmath';
+        }
+        if (defined('WPSEO_VERSION') || class_exists('WPSEO_Options')) {
+            return 'yoast';
+        }
+        if (defined('AIOSEO_VERSION')) {
+            return 'aioseo';
+        }
+        return 'none';
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // Helper: Detect sitemap URL
+    // ═══════════════════════════════════════════════════════════
+    private static function detect_sitemap_url() {
+        $site_url = get_site_url();
+        
+        // Check Yoast sitemap
+        if (defined('WPSEO_VERSION')) {
+            return $site_url . '/sitemap_index.xml';
+        }
+        
+        // Check Rank Math sitemap
+        if (defined('RANK_MATH_VERSION') || class_exists('RankMath')) {
+            return $site_url . '/sitemap_index.xml';
+        }
+        
+        // WordPress core sitemap
+        return $site_url . '/wp-sitemap.xml';
     }
 }

@@ -669,13 +669,13 @@ async function submitIndexing(
           detailsList.push(`IndexNow: ${submitted} URLs submetidas`);
         } else {
           // Fallback: Direct IndexNow API submission
-          const directResult = await submitDirectIndexNow(baseUrl, urls.slice(0, 50));
+          const directResult = await submitDirectIndexNow(baseUrl, urls.slice(0, 50), apiKey);
           submitted = directResult;
           detailsList.push(`IndexNow direto: ${submitted} URLs submetidas`);
         }
       } catch (e) {
         // Fallback: Direct IndexNow
-        const directResult = await submitDirectIndexNow(baseUrl, urls.slice(0, 50));
+        const directResult = await submitDirectIndexNow(baseUrl, urls.slice(0, 50), apiKey);
         submitted = directResult;
         detailsList.push(`IndexNow fallback: ${submitted} URLs`);
       }
@@ -729,12 +729,30 @@ async function submitIndexing(
 // ═══════════════════════════════════════════════════════════
 // Direct IndexNow API (fallback when plugin endpoint unavailable)
 // ═══════════════════════════════════════════════════════════
-async function submitDirectIndexNow(siteUrl: string, urls: string[]): Promise<number> {
+async function submitDirectIndexNow(siteUrl: string, urls: string[], apiKey?: string): Promise<number> {
   if (urls.length === 0) return 0;
 
   const host = new URL(siteUrl).hostname;
-  // Generate a deterministic key from the hostname
-  const key = Array.from(host).reduce((acc, c) => acc + c.charCodeAt(0).toString(16), "indexnow").slice(0, 32);
+  
+  // Try to get the real IndexNow key from the plugin first
+  let key = "";
+  if (apiKey) {
+    try {
+      const keyResp = await fetch(`${siteUrl}/wp-json/cfrdm/v1/info`, {
+        headers: { "X-CFRDM-API-Key": apiKey },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (keyResp.ok) {
+        const info = await keyResp.json();
+        key = info.indexnow_key || "";
+      }
+    } catch { /* ignore */ }
+  }
+  
+  // Fallback: generate a deterministic key (won't have matching .txt file, but IndexNow may still accept)
+  if (!key) {
+    key = Array.from(host).reduce((acc, c) => acc + c.charCodeAt(0).toString(16), "indexnow").slice(0, 32);
+  }
 
   try {
     const resp = await fetch("https://api.indexnow.org/indexnow", {
@@ -752,6 +770,7 @@ async function submitDirectIndexNow(siteUrl: string, urls: string[]): Promise<nu
     if (status === 200 || status === 202) {
       return urls.length;
     }
+    console.warn(`[IndexNow Direct] Status ${status} for ${host}`);
   } catch (e) {
     console.error("[IndexNow Direct] Error:", e);
   }
