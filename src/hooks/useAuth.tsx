@@ -18,7 +18,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const withRetry = async <T,>(
   fn: () => Promise<T>,
   maxRetries: number = 3,
-  baseDelay: number = 1000
+  baseDelay: number = 1500
 ): Promise<T> => {
   let lastError: Error | null = null;
 
@@ -43,12 +43,14 @@ const withRetry = async <T,>(
         lastError.message.toLowerCase().includes('timeout') ||
         lastError.message.includes('Failed to fetch') ||
         lastError.message.includes('NetworkError') ||
-        lastError.message.includes('ECONNREFUSED');
+        lastError.message.includes('ECONNREFUSED') ||
+        lastError.message.includes('Load failed') ||
+        lastError.message.includes('signal is aborted');
 
-      if (isTransient) {
-        const delay = baseDelay * Math.pow(2, attempt);
+      if (isTransient && attempt < maxRetries - 1) {
+        const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 500;
         await new Promise((resolve) => setTimeout(resolve, delay));
-      } else {
+      } else if (!isTransient) {
         throw lastError;
       }
     }
@@ -66,7 +68,7 @@ class TimeoutError extends Error {
 
 const withTimeout = async <T,>(
   promise: Promise<T>,
-  ms: number = 12000,
+  ms: number = 20000,
   message?: string
 ): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -108,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.warn('Auth session check timeout - proceeding without session');
         setLoading(false);
       }
-    }, 20000); // 20 second timeout for slow backends
+    }, 30000); // 30 second timeout for slow backends
 
     supabase.auth
       .getSession()
@@ -149,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               },
             },
           }),
-          12000
+          20000
         );
 
         if (error) throw error;
@@ -174,7 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email,
             password,
           }),
-          12000
+          20000
         );
 
         if (error) throw error;
