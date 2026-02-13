@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '3.2.1';
-const PLUGIN_LAST_UPDATE = '2026-02-11T10:00:00';
+const PLUGIN_VERSION = '3.2.2';
+const PLUGIN_LAST_UPDATE = '2026-02-13T14:30:00';
 
 const features = [
   {
@@ -91,6 +91,19 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '3.2.2',
+    date: '2026-02-13',
+    type: 'patch' as const,
+    changes: [
+      { type: 'fix', text: 'Registro de 6 endpoints REST ausentes: indexnow-batch, meta-audit, update-seo-meta, refresh-sitemap, refresh-llms, set-ai-headers' },
+      { type: 'fix', text: 'Correção de erros 404 na indexação IndexNow pelo SEO Agent autônomo' },
+      { type: 'fix', text: 'SEO Agent agora recupera chave IndexNow real do plugin antes do fallback' },
+      { type: 'improvement', text: 'Verniz DNA v3.0 integrado em 100% dos agentes: SEO Agent, Análise SEO IA e Chat IA' },
+      { type: 'improvement', text: 'Matriz 6x11 nichos/gatilhos emocionais no orquestrador centralizado' },
+      { type: 'improvement', text: 'Prompts de meta-tags seguem compliance jornalístico v3.0 e Flesch ≥ 60' },
+    ],
+  },
   {
     version: '3.2.1',
     date: '2026-02-11',
