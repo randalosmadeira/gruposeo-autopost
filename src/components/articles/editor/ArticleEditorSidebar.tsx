@@ -28,6 +28,7 @@ import {
 import { SEOOptimizationPanel } from './SEOOptimizationPanel';
 import { SchemaPreview } from './SchemaPreview';
 import { AISEOAnalysisPanel } from './AISEOAnalysisPanel';
+import { GoogleAdsVariationsPanel } from './GoogleAdsVariationsPanel';
 import { WordPressCategorySelector } from '../WordPressCategorySelector';
 import { ContentVariationsGenerator } from '@/components/content-variations';
 import { format } from 'date-fns';
@@ -423,12 +424,11 @@ export function ArticleEditorSidebar({
                 <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center">
                   <Braces className="w-4 h-4 text-primary" />
                 </div>
-                <h3 className="font-semibold">Schema Markup</h3>
+                <h3 className="font-semibold">Schema & Ads</h3>
               </div>
               
               <p className="text-xs text-muted-foreground">
-                Dados estruturados detectados automaticamente para Google Rich Results.
-                Suporta Article, FAQ e HowTo schemas.
+                Dados estruturados + variações de Google Ads gerados automaticamente.
               </p>
 
               {/* Complete Schema Preview */}
@@ -438,6 +438,14 @@ export function ArticleEditorSidebar({
                 excerpt={article.excerpt}
                 keyword={article.keyword}
                 featuredImageUrl={article.featured_image_url}
+              />
+
+              {/* Google Ads Variations */}
+              <GoogleAdsVariationsPanel
+                title={article.title}
+                keyword={article.keyword}
+                content={article.content}
+                excerpt={article.excerpt}
               />
             </div>
           </ScrollArea>
