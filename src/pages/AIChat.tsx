@@ -423,17 +423,25 @@ export default function AIChat() {
     }]);
 
     try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      const token = currentSession?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      
       const resp = await fetch(CHAT_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({
           executeActions: [action.directAction],
-          context: { userId: user?.id },
+          context: { projects, articleCount, userId: user?.id },
         }),
       });
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+        throw new Error(errData.error || `Erro ${resp.status}`);
+      }
       const result = await resp.json();
       const actionResult = result.results?.[0]?.result || 'Ação executada sem retorno.';
 
