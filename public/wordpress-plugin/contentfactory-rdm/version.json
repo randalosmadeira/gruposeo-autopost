@@ -1,11 +1,11 @@
 {
-  "version": "3.2.9",
+  "version": "3.3.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.2.9 - Fix: Contrato do Method Validator para add_to_queue (max:3→5) previne warnings em GSC sync. Fix: detect_sitemap_url agora usa cache transient (1h) evitando HTTP calls repetidos no robots.txt. Melhoria: GSC Integration com inspeção expandida (posts, pages, products) ordenada por data de modificação.",
-  "released": "2026-02-14T20:30:00-03:00",
+  "changelog": "v3.3.0 - Auto-fix: robots.txt agora remove automaticamente bloqueios de crawlers de IA (GPTBot, PerplexityBot, ClaudeBot). Auto-fix: Injeção batch de FAQ Schema (FAQPage JSON-LD) em artigos publicados sem schema. Novo endpoint: fix-ai-crawlers para correção remota via SEO Agent. Novo endpoint: batch-inject-faq-schema para injeção massiva de structured data. Melhoria: robots.txt expandido com 12+ crawlers de IA permitidos.",
+  "released": "2026-02-14T22:30:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",
@@ -31,6 +31,8 @@
     "ai_source_rules",
     "google_indexing_submitter",
     "gmb_auto_poster",
-    "gsc_dynamic_sitemap"
+    "gsc_dynamic_sitemap",
+    "auto_fix_ai_crawlers",
+    "batch_faq_schema_injection"
   ]
 }

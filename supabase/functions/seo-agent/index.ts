@@ -1050,6 +1050,24 @@ async function runFullTechnicalAudit(
           });
           categories.indexing.score -= 10 * blockedCrawlers.length;
           categories.indexing.issues++;
+
+          // AUTO-FIX: Call plugin endpoint to unblock AI crawlers
+          if (isPlugin && apiKey) {
+            try {
+              const fixResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/fix-ai-crawlers`, {
+                method: "POST",
+                headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+              });
+              if (fixResp.ok) {
+                const fixData = await fixResp.json();
+                issues[issues.length - 1].auto_fixed = true;
+                issues[issues.length - 1].description += ` → Auto-fix: ${fixData.message}`;
+                totalFixed++;
+                categories.indexing.fixed++;
+                categories.indexing.score += 10 * blockedCrawlers.length;
+              }
+            } catch { /* plugin endpoint unavailable */ }
+          }
         }
         // Check sitemap reference
         if (!robotsContent.toLowerCase().includes("sitemap:")) {
@@ -1294,6 +1312,35 @@ async function runFullTechnicalAudit(
       });
       categories.geo.score -= 15;
       categories.geo.issues++;
+
+      // AUTO-FIX: Call plugin to batch-inject FAQ schema
+      if (isPlugin && apiKey) {
+        try {
+          const faqResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/batch-inject-faq-schema`, {
+            method: "POST",
+            headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+            body: JSON.stringify({ limit: 50, post_type: "post" }),
+          });
+          if (faqResp.ok) {
+            const faqData = await faqResp.json();
+            if (faqData.injected > 0) {
+              issues[issues.length - 1].auto_fixed = true;
+              issues[issues.length - 1].description += ` → Auto-fix: ${faqData.injected} artigos receberam FAQ Schema.`;
+              totalFixed++;
+              categories.geo.fixed++;
+              categories.geo.score += 10;
+            }
+          }
+        } catch { /* plugin endpoint unavailable */ }
+      }
+
+      // Also update article configs in Supabase to include FAQ for future generations
+      try {
+        for (const article of withoutFaq.slice(0, 20)) {
+          const newConfig = { ...(article.config as any || {}), include_faq: true, faq_count: 5 };
+          await supabase.from("articles").update({ config: newConfig }).eq("id", article.id);
+        }
+      } catch { /* ignore */ }
     }
   }
 

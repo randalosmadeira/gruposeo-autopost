@@ -1,13 +1,18 @@
 {
-  "latest_version": "3.2.9",
-  "version": "3.2.9",
+  "latest_version": "3.3.0",
+  "version": "3.3.0",
   "minimum_version": "3.0.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "## v3.2.9 (2026-02-14)\n\n### Correções\n- Fix: Contrato do Method Validator para `add_to_queue` (max:3→5) previne warnings durante sincronização GSC\n- Fix: `detect_sitemap_url()` agora usa cache transient (1h) evitando HTTP calls repetidos no robots.txt\n- Melhoria: GSC Integration com inspeção expandida (posts, pages, products) ordenada por data de modificação\n- Melhoria: SEO Agent com detecção dinâmica de sitemap e submissão batch ao Google Indexing API\n\n## v3.2.8 (2026-02-14)\n\n### Correções\n- Fix: Status 'Desconectado' no dashboard agora verifica API Key (sempre gerada na ativação) em vez de cfrdm_api_url\n- Fix: Health check JS com fallback para endpoint /version e headers anti-cache\n- Fix: Versão do plugin exibida no status de conexão\n- Fix: plugin-updates.json atualizado para permitir auto-update de v3.2.3+ para v3.2.8\n- Melhoria: Headers Cache-Control/Pragma/Expires no endpoint /health para evitar respostas em cache\n\n## v3.2.7 (2026-02-14)\n\n### Novas Funcionalidades\n- Tabela de regras AI Source (Fonte IA / Campo / Operador / Valor) para detecção de sessões de IA\n- Google Indexing API para submissão direta de URLs (200/dia)\n- Google Meu Negócio Auto-Poster com limpeza de page builders\n- Guards defensivos e captura de \\Throwable em todos os blocos de inicialização\n\n## v3.2.3 (2026-02-13)\n\n### Novas Funcionalidades\n- Detecção automática de tráfego de IA via User-Agent (16 bots)\n- Checklist visual de Fundação SEO com 15 verificações automáticas\n\n## v3.2.0 (2026-02-10)\n\n### Novas Funcionalidades\n- Notificações automáticas no dashboard para artigos gerados por cron\n- Monitoramento de portais com scraping HTML e RSS integrado\n\n## v3.1.0 (2026-02-09)\n\n### Novas Funcionalidades\n- Auditor de Meta Descriptions com IA\n- IndexNow para Bing/Google/Yandex\n- llms.txt + headers AI-friendly\n- Duplicador de Posts/Páginas\n- Sitemap Optimizer\n\n## v3.0.0 (2026-02-08)\n- Integração Google Search Console\n- AI Auto-Fix para erros 404\n- Ubersuggest Sync\n- HTTPS Enforcer\n- AI Content Enhancer",
+  "changelog": "## v3.3.0 (2026-02-14)\n\n### Auto-Fix Avançado\n- Auto-fix: robots.txt agora remove automaticamente bloqueios de crawlers de IA (GPTBot, PerplexityBot, ClaudeBot, Google-Extended)\n- Auto-fix: Injeção batch de FAQ Schema (FAQPage JSON-LD) em artigos publicados sem structured data\n- Novo endpoint REST: `fix-ai-crawlers` para correção remota via SEO Agent\n- Novo endpoint REST: `batch-inject-faq-schema` para injeção massiva de structured data\n- Melhoria: robots.txt expandido com 12+ crawlers de IA permitidos (Applebot-Extended, CCBot, etc.)\n- Melhoria: SEO Agent agora corrige automaticamente issues IDX-002 e GEO-001\n\n## v3.2.9 (2026-02-14)\n\n### Correções\n- Fix: Contrato do Method Validator para `add_to_queue` (max:3→5) previne warnings durante sincronização GSC\n- Fix: `detect_sitemap_url()` agora usa cache transient (1h) evitando HTTP calls repetidos no robots.txt\n- Melhoria: GSC Integration com inspeção expandida (posts, pages, products) ordenada por data de modificação\n- Melhoria: SEO Agent com detecção dinâmica de sitemap e submissão batch ao Google Indexing API\n\n## v3.2.8 (2026-02-14)\n\n### Correções\n- Fix: Status 'Desconectado' no dashboard agora verifica API Key em vez de cfrdm_api_url\n- Fix: Health check JS com fallback para endpoint /version e headers anti-cache\n\n## v3.2.7 (2026-02-14)\n\n### Novas Funcionalidades\n- Tabela de regras AI Source (Fonte IA / Campo / Operador / Valor) para detecção de sessões de IA\n- Google Indexing API para submissão direta de URLs (200/dia)\n- Google Meu Negócio Auto-Poster com limpeza de page builders\n\n## v3.2.3 (2026-02-13)\n\n### Novas Funcionalidades\n- Detecção automática de tráfego de IA via User-Agent (16 bots)\n- Checklist visual de Fundação SEO com 15 verificações automáticas",
   "versions": {
+    "3.3.0": {
+      "released": "2026-02-14",
+      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
+      "features": ["auto_fix_ai_crawlers", "batch_faq_schema_injection", "expanded_robots_txt"]
+    },
     "3.2.9": {
       "released": "2026-02-14",
       "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
@@ -27,21 +32,6 @@
       "released": "2026-02-13",
       "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
       "features": ["ai_traffic_detector", "seo_checklist"]
-    },
-    "3.2.0": {
-      "released": "2026-02-10",
-      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-      "features": ["auto_notifications", "portal_monitoring", "originality_score"]
-    },
-    "3.1.0": {
-      "released": "2026-02-09",
-      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-      "features": ["meta_auditor", "indexnow", "llms_txt", "post_duplicator", "sitemap_optimizer"]
-    },
-    "3.0.0": {
-      "released": "2026-02-08",
-      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-      "features": ["gsc_integration", "ai_auto_fix", "ubersuggest_sync", "https_enforcer", "content_enhancer"]
     }
   }
 }
