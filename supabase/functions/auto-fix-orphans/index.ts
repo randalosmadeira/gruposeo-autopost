@@ -245,10 +245,27 @@ FORMATO JSON OBRIGATÓRIO:
       try {
         fixes = JSON.parse(jsonStr);
       } catch {
-        // Try to extract JSON from response
-        const match = jsonStr.match(/\{[\s\S]*\}/);
-        if (match) fixes = JSON.parse(match[0]);
-        else continue;
+        // Try to extract JSON from response - more resilient parsing
+        try {
+          const match = jsonStr.match(/\{[\s\S]*"fixes"\s*:\s*\[[\s\S]*?\]\s*\}/);
+          if (match) {
+            // Try to fix truncated JSON by closing open arrays/objects
+            let candidate = match[0];
+            const openBrackets = (candidate.match(/\[/g) || []).length;
+            const closeBrackets = (candidate.match(/\]/g) || []).length;
+            const openBraces = (candidate.match(/\{/g) || []).length;
+            const closeBraces = (candidate.match(/\}/g) || []).length;
+            candidate += "]".repeat(Math.max(0, openBrackets - closeBrackets));
+            candidate += "}".repeat(Math.max(0, openBraces - closeBraces));
+            fixes = JSON.parse(candidate);
+          } else {
+            console.warn(`[OrphanFixer] Could not parse AI response, skipping batch`);
+            continue;
+          }
+        } catch {
+          console.warn(`[OrphanFixer] JSON repair failed, skipping batch`);
+          continue;
+        }
       }
 
       if (!fixes?.fixes || !Array.isArray(fixes.fixes)) continue;
