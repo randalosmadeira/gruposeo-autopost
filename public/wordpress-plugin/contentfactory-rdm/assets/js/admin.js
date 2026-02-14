@@ -154,7 +154,7 @@
                 url: cfrdmAdmin.restUrl + 'regenerate-key',
                 method: 'POST',
                 headers: {
-                    'X-WP-Nonce': cfrdmAdmin.nonce
+                    'X-WP-Nonce': cfrdmAdmin.restNonce || cfrdmAdmin.nonce
                 },
                 success: (response) => {
                     if (response.success) {
@@ -219,7 +219,7 @@
                 url: cfrdmAdmin.restUrl + 'optimize-images',
                 method: 'POST',
                 headers: {
-                    'X-WP-Nonce': cfrdmAdmin.nonce
+                    'X-WP-Nonce': cfrdmAdmin.restNonce || cfrdmAdmin.nonce
                 },
                 success: (response) => {
                     if (response.success) {
@@ -362,7 +362,7 @@
                 method: 'POST',
                 headers: {
                     'X-CFRDM-API-Key': cfrdmAdmin.apiKey,
-                    'X-WP-Nonce': cfrdmAdmin.nonce
+                    'X-WP-Nonce': cfrdmAdmin.restNonce || cfrdmAdmin.nonce
                 },
                 success: (response) => {
                     if (response.success) {

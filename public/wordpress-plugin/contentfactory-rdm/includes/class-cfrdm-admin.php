@@ -1928,19 +1928,27 @@ class CFRDM_Admin {
                         <div class="cfrdm-stat-card small">
                             <div class="stat-content">
                                 <span class="stat-value"><?php echo number_format_i18n($total_posts); ?></span>
-                                <span class="stat-label"><?php _e('Artigos Indexáveis', 'contentfactory-rdm'); ?></span>
+                                <span class="stat-label"><?php _e('Artigos Indexáveis (publicados)', 'contentfactory-rdm'); ?></span>
                             </div>
                         </div>
                         <div class="cfrdm-stat-card small published">
                             <div class="stat-content">
-                                <span class="stat-value"><?php echo number_format_i18n(wp_count_posts('post')->publish); ?></span>
-                                <span class="stat-label"><?php _e('Posts Publicados', 'contentfactory-rdm'); ?></span>
+                                <?php
+                                $post_counts = wp_count_posts('post');
+                                $total_all_posts = intval($post_counts->publish) + intval($post_counts->draft) + intval($post_counts->pending) + intval($post_counts->private) + intval($post_counts->future);
+                                ?>
+                                <span class="stat-value"><?php echo number_format_i18n($post_counts->publish); ?></span>
+                                <span class="stat-label"><?php printf(__('Posts Publicados (de %s total)', 'contentfactory-rdm'), number_format_i18n($total_all_posts)); ?></span>
                             </div>
                         </div>
                         <div class="cfrdm-stat-card small">
                             <div class="stat-content">
-                                <span class="stat-value"><?php echo number_format_i18n(wp_count_posts('page')->publish); ?></span>
-                                <span class="stat-label"><?php _e('Páginas Publicadas', 'contentfactory-rdm'); ?></span>
+                                <?php
+                                $page_counts = wp_count_posts('page');
+                                $total_all_pages = intval($page_counts->publish) + intval($page_counts->draft) + intval($page_counts->pending) + intval($page_counts->private);
+                                ?>
+                                <span class="stat-value"><?php echo number_format_i18n($page_counts->publish); ?></span>
+                                <span class="stat-label"><?php printf(__('Páginas Publicadas (de %s total)', 'contentfactory-rdm'), number_format_i18n($total_all_pages)); ?></span>
                             </div>
                         </div>
                         <div class="cfrdm-stat-card small synced">
