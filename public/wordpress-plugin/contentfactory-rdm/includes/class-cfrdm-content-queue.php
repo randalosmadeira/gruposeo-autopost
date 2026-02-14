@@ -88,7 +88,7 @@ class CFRDM_Content_Queue {
     }
     
     /**
-     * Add item to queue
+     * Add item to queue (alias: add_item)
      */
     public static function push($queue_type, $action, $payload, $options = array()) {
         global $wpdb;
@@ -648,5 +648,26 @@ class CFRDM_Content_Queue {
         }
         
         return $results;
+    }
+    
+    /**
+     * Alias for push() - backward compatibility with MethodValidator contracts
+     */
+    public static function add_item($data) {
+        $queue_type = $data['queue_type'] ?? 'default';
+        $action = $data['action'] ?? 'process';
+        $payload = $data['payload'] ?? $data;
+        $options = $data['options'] ?? array();
+        return self::push($queue_type, $action, $payload, $options);
+    }
+    
+    /**
+     * Alias for get_items with pending filter - backward compatibility
+     */
+    public static function get_pending($limit = 50) {
+        return self::get_items(array(
+            'status' => self::STATUS_PENDING,
+            'limit' => $limit,
+        ));
     }
 }

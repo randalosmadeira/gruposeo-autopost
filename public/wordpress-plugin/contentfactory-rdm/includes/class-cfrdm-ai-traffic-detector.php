@@ -256,4 +256,11 @@ class CFRDM_AI_Traffic_Detector {
         
         update_option(self::OPTION_DAILY_LOG, $daily, false);
     }
+    
+    /**
+     * Alias for get_dashboard_stats() - backward compatibility with MethodValidator contracts
+     */
+    public static function get_stats($period = null) {
+        return self::get_dashboard_stats();
+    }
 }

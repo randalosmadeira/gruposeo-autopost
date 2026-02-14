@@ -380,4 +380,14 @@ class CFRDM_SEO_Checklist {
         </div>
         <?php
     }
+    
+    /**
+     * Alias for run_checks() - backward compatibility with MethodValidator contracts
+     */
+    public static function get_results() {
+        return array(
+            'checks' => self::run_checks(),
+            'score' => self::calculate_score(),
+        );
+    }
 }

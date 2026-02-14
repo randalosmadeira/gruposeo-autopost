@@ -50,7 +50,7 @@ class CFRDM_Method_Validator {
             'CFRDM_Content_Queue::get_pending'       => array('min' => 0, 'max' => 1),
 
             // Cron Scheduler
-            'CFRDM_Cron_Scheduler::register_job'     => array('min' => 1, 'max' => 1),
+            'CFRDM_Cron_Scheduler::register_job'     => array('min' => 1, 'max' => 5),
 
             // LLMS Txt
             'CFRDM_LLMS_Txt::invalidate_cache'       => array('min' => 0, 'max' => 0),
