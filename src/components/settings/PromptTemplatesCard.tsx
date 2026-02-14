@@ -93,6 +93,9 @@ const TARGET_FUNCTIONS = [
   { id: 'bulk_generator', label: 'Geração em Massa', icon: '⚡' },
   { id: 'image_generator', label: 'Geração de Imagens', icon: '🎨' },
   { id: 'content_variations', label: 'Variações de Conteúdo', icon: '🔄' },
+  { id: 'blog_architecture', label: 'Arquitetura de Blog', icon: '🏗️' },
+  { id: 'seo_audit', label: 'Auditoria SEO', icon: '🔍' },
+  { id: 'metadata_schema', label: 'Metadados & Schema', icon: '🏷️' },
 ];
 
 const DEFAULT_TEMPLATES = [
@@ -181,11 +184,20 @@ Máximo 6 subtítulos H2. Use H3 para aprofundamento (máximo 2-3 por H2).
 
 ---
 
-## 🎯 CHECKLIST E-E-A-T (Google + IAs de Busca)
+## 🎯 CHECKLIST E-E-A-T + GEO (Google + IAs de Busca)
 - Experience: mencione casos práticos reais (anonimizados)
 - Expertise: credenciais do autor no bloco CTA #2
 - Authoritativeness: links para fontes .gov.br, .jus.br, OAB
 - Trustworthiness: disclaimer de nicho + dados de contato reais
+
+### GEO — Otimização para IAs Generativas (ChatGPT, Claude, Gemini, Perplexity)
+- **Parágrafo 1 (CRÍTICO):** Responda à pergunta principal em 40-60 palavras — IAs extraem este trecho como citação
+- Dados estatísticos verificáveis com fonte a cada 150-200 palavras
+- Citações de especialistas com nome e credencial
+- H2s formulados como perguntas naturais (como se pergunta ao ChatGPT)
+- Tabelas HTML para comparações (IAs extraem dados tabulares com precisão)
+- Definições claras no formato "X é..." para que IAs possam extrair
+- **Crawlers de IA suportados:** GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-SearchBot, PerplexityBot, Google-Extended, Bingbot, Applebot-Extended
 
 Para **AI Overviews (Google SGE)**: responda a pergunta principal nas primeiras 2 frases do artigo, de forma clara e direta.
 
@@ -619,6 +631,198 @@ Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora</
     isDefault: true,
     type: 'tutorial',
     targetFunction: 'article_generator',
+  },
+  {
+    id: 'rdm-specialist',
+    name: '⚖️ Agente Redator RDM V4',
+    description: 'Especializado RDM Advogados. Voz Dr. Rândalos Madeira, 5 CTAs posicionais, compliance OAB, 7 redes sociais, GEO São Paulo.',
+    prompt: `# ⚖️ AGENTE REDATOR RDM V4.0 — Filosofia "Madeira Sem Verniz"
+
+## 📊 DADOS DO ARTIGO
+- Título (H1): "\${title}"
+- Idioma: \${language}
+- Tamanho: \${articleLength}
+- Tom: Direto, sem verniz, acessível
+- Ponto de Vista: \${pov}
+
+## 🔴 PROIBIÇÕES ABSOLUTAS
+❌ NUNCA começar com "Neste artigo vamos explorar..."
+❌ NUNCA usar "Vale ressaltar que..."
+❌ NUNCA parágrafos com mais de 4 linhas
+❌ NUNCA placeholders — use URLs reais do projeto
+❌ NUNCA prometer resultado de causa (OAB proíbe)
+❌ NUNCA começar com definição jurídica
+
+## 🏗️ ARQUITETURA — 6 BLOCOS + 5 CTAs
+BLOCO 1 — GANCHO: situação real e dolorosa do leitor
+CTA #1 — URGÊNCIA: WhatsApp/site
+BLOCO 3 — H2s como perguntas do leitor + artigos de lei com tradução simples
+CTA #2 — AUTORIDADE: Dr. Rândalos + OAB/SP
+BLOCO 4 — Prazos, jurisprudência TST/STJ/STF
+CTA #3 — LEAD: Avaliação gratuita
+BLOCO 5 — Erros comuns (3-5)
+CTA #4 — COMUNIDADE + Redes Sociais
+BLOCO 6 — FAQ (5+) + CTA #5 FECHAMENTO + Google Maps
+
+## 🌍 GEO (IAs Generativas)
+- Parágrafo 1: resposta completa 40-60 palavras (citável por ChatGPT/Claude/Gemini/Perplexity)
+- Dados verificáveis a cada 150-200 palavras
+- H2s como perguntas naturais
+
+## 📤 JSON OBRIGATÓRIO
+{
+  "titulo": "Título com KW (50-60 chars)",
+  "slug": "slug-sem-acentos",
+  "meta_description": "150-160 chars keyword + CTA + urgência",
+  "palavra_chave_foco": "keyword",
+  "content_html": "[6 blocos + 5 CTAs HTML válido]",
+  "faq_schema": [{"question":"?","answer":"Resposta."}],
+  "tags": ["tag1","tag2","tag3","tag4","tag5"],
+  "image": {"prompt":"Fotojornalismo [tema], estilo Reuters, 8k","alt":"descrição+KW","title":"título"},
+  "disclaimer": "Conteúdo informativo. Não substitui consulta com advogado.",
+  "geo": {"cidade":"São Paulo","bairros":["Paulista","Tatuapé"],"mapa_url":"https://maps.google.com/?q=Av+Paulista+SP"},
+  "compliance_check": {"sem_placeholder_url":true,"tem_meta_description":true,"tem_5_ctas":true,"tem_faq":true}
+}`,
+    isDefault: true,
+    type: 'rdm',
+    targetFunction: 'article_generator',
+  },
+  {
+    id: 'blog-architect',
+    name: '🏗️ Construtor de Blogs & Clusters',
+    description: 'Arquitetura informacional com Topic Clusters, Pillar Pages, calendário editorial 4 semanas e Internal Linking Matrix.',
+    prompt: `# 🏗️ CONSTRUTOR DE BLOGS V4.0 — Topic Clusters + Pillar Pages
+
+## 📊 DADOS
+- Tema: "\${title}"
+- Idioma: \${language}
+- Tom: \${tone}
+
+## 📐 MÉTODO
+
+### Fase 1: Topic Clusters
+**PILLAR PAGE (3.000-10.000 palavras):** Guia definitivo, linkagem para TODOS os clusters, atualizada a cada 90 dias. Schema: Article + FAQPage + BreadcrumbList.
+**8-15 CLUSTER PAGES (1.000-2.500 palavras):** Subtemas com link obrigatório para pillar page + 2-3 links cruzados.
+
+### Fase 2: Adaptação por Nicho
+Advocacia: Trabalhista, Penal, Consumidor, Empresarial, Família, Telecom
+Marketing: SEO, Google Ads, Redes Sociais, Branding
+Saúde/Beleza: Procedimentos, cuidados, tendências regionais
+
+### Fase 3: Calendário (4 semanas)
+3-4 artigos/semana. Pillar Pages: revisão 90 dias. Clusters: revisão 6 meses.
+
+### Fase 4: Internal Linking Matrix
+3-5 links DE artigos existentes PARA novo. 3-5 links DO novo PARA existentes. Sempre linkar pillar page. Anchor text descritivo.
+
+## 📤 JSON OBRIGATÓRIO
+{
+  "pillar_page": {"titulo":"Guia de [Tema]","keyword":"keyword head","palavras":5000,"h2s":["H2 1","H2 2"]},
+  "clusters": [{"titulo":"Cluster 1","keyword":"long-tail","palavras":1500,"link_pillar":"ancora"}],
+  "calendario": [{"semana":1,"artigos":[{"titulo":"...","tipo":"cluster","prioridade":"alta"}]}],
+  "links_matrix": [{"de":"A","para":"B","ancora":"texto"}],
+  "schemas": ["Article","FAQPage","BreadcrumbList"]
+}`,
+    isDefault: true,
+    type: 'blog_architecture',
+    targetFunction: 'blog_architecture',
+  },
+  {
+    id: 'seo-auditor',
+    name: '🔍 Auditor SEO & Indexação',
+    description: 'Auditoria técnica: Core Web Vitals, Schema Markup, 9 Crawlers de IA, E-E-A-T, GEO, score 0-100, prioridades P0-P3.',
+    prompt: `# 🔍 AUDITOR SEO & INDEXAÇÃO V4.0
+
+## 📊 DADOS
+- Site/Tema: "\${title}"
+- Idioma: \${language}
+
+## 🔎 ESCOPO
+
+### 1. Indexação
+robots.txt, Sitemap.xml, IndexNow, llms.txt, canonical tags, soft 404s, redirect chains.
+**Crawlers de IA:** GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-SearchBot, PerplexityBot, Google-Extended, Bingbot, Applebot-Extended
+
+### 2. Core Web Vitals
+LCP ≤ 2,5s | INP ≤ 200ms | CLS ≤ 0,1
+Imagens WebP, lazy loading, CSS crítico, font-display:swap, GZIP/Brotli, CDN
+
+### 3. Schema Markup
+Homepage → Organization + LocalBusiness + WebSite
+Artigo → Article + BreadcrumbList + FAQPage
+Serviço → Service + BreadcrumbList + FAQPage
+
+### 4. E-E-A-T
+Autor com credenciais, fontes verificáveis, conteúdo atualizado, consistência cross-platform
+
+### 5. GEO (Visibilidade em IAs)
+Testar perguntas no ChatGPT/Claude/Gemini/Perplexity. Dados verificáveis, citações de especialistas, FAQPage schema.
+
+## 📊 RELATÓRIO JSON
+{
+  "score_geral": 75,
+  "semaforo": "amarelo",
+  "resumo": ["achado 1","achado 2"],
+  "problemas_p0": [{"id":"P0-001","descricao":"...","impacto":"...","correcao":"...","esforco":"2h"}],
+  "problemas_p1": [],
+  "problemas_p2": [],
+  "crawlers_ia": {"GPTBot":"permitido","ClaudeBot":"bloqueado"},
+  "core_web_vitals": {"lcp":"2.1s","inp":"150ms","cls":"0.05"},
+  "schemas_ok": ["Article"],
+  "schemas_faltando": ["BreadcrumbList"]
+}`,
+    isDefault: true,
+    type: 'seo_audit',
+    targetFunction: 'seo_audit',
+  },
+  {
+    id: 'metadata-schema',
+    name: '🏷️ Metadados & Schema Markup',
+    description: 'Title Tags, Meta Descriptions, OG Tags, Twitter Cards, JSON-LD Schema completo por tipo de página. Multi-marca.',
+    prompt: `# 🏷️ METADADOS & SCHEMA MARKUP V4.0
+
+## 📊 DADOS
+- Página: "\${title}"
+- Idioma: \${language}
+
+## 📋 REGRAS
+
+### Title Tag (50-60 chars)
+"[Keyword]: [Benefício] | [Marca]" — KW nos primeiros 30 chars. Localização + ano quando relevante.
+
+### Meta Description (150-160 chars)
+KW natural, CTA implícito, diferencial competitivo. Nunca repetir title.
+
+### OG Tags
+og:title, og:description, og:image (1200x630), og:url, og:type, og:locale (pt_BR), og:site_name
+
+### Twitter Card
+summary_large_image + title + description + image
+
+### Canonical URL
+Sempre definir, self-referencing, https://, consistência trailing slash.
+
+## 🔧 SCHEMAS JSON-LD POR TIPO
+Homepage → Organization + LocalBusiness + WebSite + SearchAction
+Artigo → Article + BreadcrumbList + FAQPage + Author
+Serviço → Service + BreadcrumbList + FAQPage
+Notícia → NewsArticle + BreadcrumbList + Author
+Localização → LocalBusiness + GeoCoordinates + OpeningHours
+
+## 📤 JSON OBRIGATÓRIO
+{
+  "title_tag": "Título (50-60 chars)",
+  "meta_description": "150-160 chars",
+  "canonical_url": "https://dominio.com/slug/",
+  "og_tags": {"title":"...","description":"...","image":"...","url":"...","type":"article","locale":"pt_BR"},
+  "twitter_card": {"card":"summary_large_image","title":"...","description":"...","image":"..."},
+  "meta_robots": "index, follow, max-snippet:-1, max-image-preview:large",
+  "json_ld": [{"@context":"https://schema.org","@type":"Article","headline":"..."}],
+  "validacao": {"title_length":55,"description_length":155,"schemas_validos":true}
+}`,
+    isDefault: true,
+    type: 'metadata_schema',
+    targetFunction: 'metadata_schema',
   },
 ];
 
