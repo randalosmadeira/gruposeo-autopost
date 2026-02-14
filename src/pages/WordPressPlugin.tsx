@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '3.2.2';
-const PLUGIN_LAST_UPDATE = '2026-02-13T14:30:00';
+const PLUGIN_VERSION = '3.2.4';
+const PLUGIN_LAST_UPDATE = '2026-02-14T15:30:00';
 
 const features = [
   {
@@ -91,6 +91,20 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '3.2.4',
+    date: '2026-02-14',
+    type: 'patch' as const,
+    changes: [
+      { type: 'feature', text: 'Method Validator: validação automática de assinaturas de métodos entre classes com ReflectionMethod' },
+      { type: 'feature', text: 'Wrapper safe_call() para chamadas estáticas seguras com fallback, prevenindo WSOD' },
+      { type: 'feature', text: 'Relatório de validação de métodos integrado ao endpoint /diagnostics' },
+      { type: 'fix', text: 'Migração de chamadas críticas em Social Admin e IndexNow para safe_call()' },
+      { type: 'fix', text: 'Correção de erros fatais na interface de administração social (v3.2.3)' },
+      { type: 'improvement', text: '20+ contratos de validação cobrindo todos os módulos críticos do plugin' },
+      { type: 'improvement', text: 'Cache de resultados de validação com transient (1h, invalidado por versão)' },
+    ],
+  },
   {
     version: '3.2.2',
     date: '2026-02-13',
@@ -383,6 +397,11 @@ export default function WordPressPluginPage() {
         { path: 'includes/class-cfrdm-llms-txt.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-llms-txt.php' },
         { path: 'includes/class-cfrdm-post-duplicator.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-post-duplicator.php' },
         { path: 'includes/class-cfrdm-sitemap-optimizer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-sitemap-optimizer.php' },
+        // v3.2.0+
+        { path: 'includes/class-cfrdm-ai-traffic-detector.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-traffic-detector.php' },
+        { path: 'includes/class-cfrdm-seo-checklist.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-seo-checklist.php' },
+        // v3.2.4
+        { path: 'includes/class-cfrdm-method-validator.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-method-validator.php' },
         // Assets
         { path: 'assets/css/admin.css', url: '/wordpress-plugin/contentfactory-rdm/assets/css/admin.css' },
         { path: 'assets/js/admin.js', url: '/wordpress-plugin/contentfactory-rdm/assets/js/admin.js' },
