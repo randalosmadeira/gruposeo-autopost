@@ -870,6 +870,7 @@ export type Database = {
           id: string
           is_connected: boolean
           links_prioritarios: string[] | null
+          marca: string | null
           name: string
           nicho: string | null
           palavras_secundarias: string[] | null
@@ -904,6 +905,7 @@ export type Database = {
           id?: string
           is_connected?: boolean
           links_prioritarios?: string[] | null
+          marca?: string | null
           name: string
           nicho?: string | null
           palavras_secundarias?: string[] | null
@@ -938,6 +940,7 @@ export type Database = {
           id?: string
           is_connected?: boolean
           links_prioritarios?: string[] | null
+          marca?: string | null
           name?: string
           nicho?: string | null
           palavras_secundarias?: string[] | null
