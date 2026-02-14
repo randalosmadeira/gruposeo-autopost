@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '3.2.4';
-const PLUGIN_LAST_UPDATE = '2026-02-14T15:30:00';
+const PLUGIN_VERSION = '3.2.5';
+const PLUGIN_LAST_UPDATE = '2026-02-14T16:10:00';
 
 const features = [
   {
@@ -91,6 +91,18 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '3.2.5',
+    date: '2026-02-14',
+    type: 'patch' as const,
+    changes: [
+      { type: 'fix', text: 'Correção do erro de cookie ao regenerar API Key (restNonce wp_rest)' },
+      { type: 'fix', text: 'Correção de 7 avisos do MethodValidator: alias methods para Social Poster, Content Queue, SEO Checklist e AI Traffic Detector' },
+      { type: 'feature', text: 'Filtro por status (Publicado/Rascunho/Pendente) na página de Indexação de Artigos' },
+      { type: 'feature', text: 'Coluna de status visual na tabela de artigos indexáveis' },
+      { type: 'improvement', text: 'Contagem detalhada de posts totais (publicados + rascunhos + pendentes) nos cards de estatísticas' },
+    ],
+  },
   {
     version: '3.2.4',
     date: '2026-02-14',
