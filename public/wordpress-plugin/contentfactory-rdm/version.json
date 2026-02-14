@@ -1,11 +1,11 @@
 {
-  "version": "3.2.3",
+  "version": "3.2.4",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.2.3 - Novo: Detecção automática de tráfego de IA (ChatGPT, Perplexity, Gemini, Claude, Meta AI, Apple Intelligence + 10 outros bots). Novo: Checklist visual de Fundação SEO com 15 verificações e score automático. Novo: Endpoints REST /ai-traffic e /seo-checklist.",
-  "released": "2026-02-13T19:00:00-03:00",
+  "changelog": "v3.2.4 - Fix: Corrigido erro fatal (E_ERROR) na página Social Admin causado por método get_queue_items() inexistente na classe CFRDM_Social_Poster. O método agora está implementado com suporte a filtros (limit, status, network).",
+  "released": "2026-02-14T11:00:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",

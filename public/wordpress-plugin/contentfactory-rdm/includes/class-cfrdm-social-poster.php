@@ -688,6 +688,37 @@ class CFRDM_Social_Poster {
     }
     
     /**
+     * Get queue items with optional filters
+     * 
+     * @param array $args Optional. Arguments: limit, status, network, order.
+     * @return array
+     */
+    public static function get_queue_items($args = array()) {
+        global $wpdb;
+        
+        $table = $wpdb->prefix . self::QUEUE_TABLE;
+        $limit = isset($args['limit']) ? intval($args['limit']) : 20;
+        $where = array('1=1');
+        $values = array();
+        
+        if (!empty($args['status'])) {
+            $where[] = 'status = %s';
+            $values[] = sanitize_text_field($args['status']);
+        }
+        
+        if (!empty($args['network'])) {
+            $where[] = 'network = %s';
+            $values[] = sanitize_text_field($args['network']);
+        }
+        
+        $where_clause = implode(' AND ', $where);
+        $sql = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY created_at DESC LIMIT %d";
+        $values[] = $limit;
+        
+        return $wpdb->get_results($wpdb->prepare($sql, $values));
+    }
+    
+    /**
      * Get queue stats
      */
     public static function get_queue_stats() {
