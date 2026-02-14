@@ -381,6 +381,7 @@ export default function ArticleGeneratorV2() {
         realtimeData: config.realtimeData,
         internalLinks: internalLinks.map(link => ({ anchor: link.anchor, url: link.url })),
         projectConfig: projectConfigData,
+        targetFunction: 'article_generator',
       });
     })();
 

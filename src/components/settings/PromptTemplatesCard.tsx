@@ -859,7 +859,7 @@ export function PromptTemplatesCard() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [originalTemplate, setOriginalTemplate] = useState<TemplateData | null>(null);
 
-  const { data: templates = [] } = useQuery({
+  const { data: templates = [], isLoading: isLoadingTemplates } = useQuery({
     queryKey: ['prompt-templates', user?.id],
     queryFn: async () => {
       if (!user) return [];
@@ -874,6 +874,48 @@ export function PromptTemplatesCard() {
     },
     enabled: !!user,
   });
+
+  // Auto-seed default templates into DB if user has none for a given target_function
+  const [hasSeeded, setHasSeeded] = useState(false);
+  useEffect(() => {
+    if (!user || isLoadingTemplates || hasSeeded) return;
+    
+    const seedDefaults = async () => {
+      // Get all target_functions the user already has templates for
+      const existingFunctions = new Set(
+        templates.map((t: any) => t.target_function).filter(Boolean)
+      );
+      
+      // Find default templates whose target_function is missing from user's DB
+      const missingDefaults = DEFAULT_TEMPLATES.filter(
+        dt => dt.targetFunction && !existingFunctions.has(dt.targetFunction)
+      );
+      
+      if (missingDefaults.length === 0) {
+        setHasSeeded(true);
+        return;
+      }
+      
+      // Insert missing defaults
+      const inserts = missingDefaults.map(dt => ({
+        user_id: user.id,
+        name: dt.name,
+        prompt: dt.prompt,
+        is_default: true,
+        template_type: dt.type || 'custom',
+        target_function: dt.targetFunction || null,
+        description: dt.description || null,
+      }));
+      
+      const { error } = await supabase.from('prompt_templates').insert(inserts);
+      if (!error) {
+        queryClient.invalidateQueries({ queryKey: ['prompt-templates'] });
+      }
+      setHasSeeded(true);
+    };
+    
+    seedDefaults();
+  }, [user, templates, isLoadingTemplates, hasSeeded, queryClient]);
 
   // Track unsaved changes
   useEffect(() => {
@@ -1096,7 +1138,7 @@ export function PromptTemplatesCard() {
   };
 
   const handleSave = () => {
-    if (!editingTemplate || editingTemplate.isDefault) return;
+    if (!editingTemplate) return;
     
     updateTemplate.mutate({
       id: editingTemplate.id,
@@ -1108,19 +1150,18 @@ export function PromptTemplatesCard() {
     });
   };
 
-  const allTemplates: TemplateData[] = [
-    ...DEFAULT_TEMPLATES,
-    ...templates.map((t: any) => ({
-      id: t.id,
-      name: t.name,
-      description: t.description || t.prompt?.slice(0, 80) + '...',
-      prompt: t.prompt,
-      isDefault: false,
-      type: t.template_type,
-      agentName: t.agent_name,
-      targetFunction: t.target_function,
-    })),
-  ];
+  // All templates come from DB only — no more decorative defaults
+  const allTemplates: TemplateData[] = templates.map((t: any) => ({
+    id: t.id,
+    name: t.name,
+    description: t.description || t.prompt?.slice(0, 80) + '...',
+    prompt: t.prompt,
+    isDefault: t.is_default || false,
+    type: t.template_type,
+    is_default: t.is_default,
+    agentName: t.agent_name,
+    targetFunction: t.target_function,
+  }));
 
   // Check if a user template is based on a default one
   const getRelatedDefaultTemplate = (type?: string) => {
@@ -1206,12 +1247,9 @@ export function PromptTemplatesCard() {
                       <Button
                         variant="link"
                         className="text-primary px-2"
-                        onClick={() => template.isDefault 
-                          ? handleCustomizeDefault(template) 
-                          : handleEditTemplate(template)
-                        }
+                        onClick={() => handleEditTemplate(template)}
                       >
-                        {template.isDefault ? 'Personalizar' : 'Editar'}
+                        Editar
                       </Button>
                       
                       <DropdownMenu>
@@ -1220,28 +1258,17 @@ export function PromptTemplatesCard() {
                             <MoreVertical className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {template.isDefault ? (
+                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleEditTemplate(template)}>
+                            <Pencil className="w-4 h-4 mr-2" />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDuplicateTemplate(template)}>
+                            <Copy className="w-4 h-4 mr-2" />
+                            Duplicar
+                          </DropdownMenuItem>
+                          {!template.isDefault && (
                             <>
-                              <DropdownMenuItem onClick={() => handleCustomizeDefault(template)}>
-                                <Pencil className="w-4 h-4 mr-2" />
-                                Criar versão personalizada
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleDuplicateTemplate(template)}>
-                                <Copy className="w-4 h-4 mr-2" />
-                                Duplicar
-                              </DropdownMenuItem>
-                            </>
-                          ) : (
-                            <>
-                              <DropdownMenuItem onClick={() => handleEditTemplate(template)}>
-                                <Pencil className="w-4 h-4 mr-2" />
-                                Editar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleDuplicateTemplate(template)}>
-                                <Copy className="w-4 h-4 mr-2" />
-                                Duplicar
-                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem 
                                 onClick={() => setDeleteConfirm(template.id)}
@@ -1299,15 +1326,13 @@ export function PromptTemplatesCard() {
             <div className="flex items-center justify-between">
               <div>
                 <DialogTitle className="text-lg">
-                  {editingTemplate?.isDefault ? 'Visualizar' : 'Editar'}: {editingTemplate?.name}
+                  Editar: {editingTemplate?.name}
                 </DialogTitle>
                 <DialogDescription className="text-sm text-muted-foreground mt-1">
-                  {editingTemplate?.isDefault 
-                    ? 'Este é um modelo padrão. Crie uma versão personalizada para editar.'
-                    : 'Edite o nome, descrição, vinculação e o prompt do modelo.'}
+                  Edite o nome, descrição, vinculação e o prompt do modelo.
                 </DialogDescription>
               </div>
-              {hasUnsavedChanges && !editingTemplate?.isDefault && (
+              {hasUnsavedChanges && (
                 <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                   Alterações não salvas
                 </Badge>
@@ -1324,7 +1349,6 @@ export function PromptTemplatesCard() {
                   id="template-name"
                   value={editingTemplate?.name || ''}
                   onChange={(e) => setEditingTemplate({ ...editingTemplate!, name: e.target.value })}
-                  disabled={editingTemplate?.isDefault}
                   placeholder="Nome do modelo de prompt"
                 />
               </div>
@@ -1337,7 +1361,6 @@ export function PromptTemplatesCard() {
                   id="agent-name"
                   value={editingTemplate?.agentName || ''}
                   onChange={(e) => setEditingTemplate({ ...editingTemplate!, agentName: e.target.value })}
-                  disabled={editingTemplate?.isDefault}
                   placeholder="Ex: Redator SEO, Jornalista, Analista..."
                 />
               </div>
@@ -1350,7 +1373,6 @@ export function PromptTemplatesCard() {
                 id="template-description"
                 value={editingTemplate?.description || ''}
                 onChange={(e) => setEditingTemplate({ ...editingTemplate!, description: e.target.value })}
-                disabled={editingTemplate?.isDefault}
                 placeholder="Breve descrição do que este prompt faz..."
               />
             </div>
@@ -1367,7 +1389,6 @@ export function PromptTemplatesCard() {
                   ...editingTemplate!, 
                   targetFunction: value === 'none' ? undefined : value 
                 })}
-                disabled={editingTemplate?.isDefault}
               >
                 <SelectTrigger id="target-function">
                   <SelectValue placeholder="Selecione onde este prompt será usado" />
@@ -1407,7 +1428,6 @@ export function PromptTemplatesCard() {
                               : "hover:border-primary/50"
                           )}
                           onClick={() => insertVariable(variable.name)}
-                          disabled={editingTemplate?.isDefault}
                         >
                           {variable.name}
                           {variable.required && <span className="ml-1 text-red-500">*</span>}
@@ -1444,7 +1464,7 @@ export function PromptTemplatesCard() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="template-prompt">Prompt</Label>
-                {!editingTemplate?.isDefault && getRelatedDefaultTemplate(editingTemplate?.type) && (
+                {getRelatedDefaultTemplate(editingTemplate?.type) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1464,7 +1484,6 @@ export function PromptTemplatesCard() {
                 rows={20}
                 maxLength={16000}
                 className="font-mono text-sm resize-y min-h-[300px]"
-                disabled={editingTemplate?.isDefault}
                 placeholder="Escreva seu prompt aqui..."
               />
               <p className={`text-xs ${(editingTemplate?.prompt?.length || 0) > 15000 ? 'text-amber-600' : 'text-muted-foreground'}`}>
@@ -1476,37 +1495,25 @@ export function PromptTemplatesCard() {
           {/* Actions */}
           <DialogFooter className="px-6 py-4 border-t flex-shrink-0">
             <div className="flex items-center justify-between w-full">
-              <div>
-                {editingTemplate?.isDefault && (
-                  <Button
-                    variant="outline"
-                    onClick={() => handleCustomizeDefault(editingTemplate)}
-                  >
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Criar versão personalizada
-                  </Button>
-                )}
-              </div>
+              <div />
               <div className="flex gap-2">
                 <Button variant="outline" onClick={handleCloseEditor}>
                   Cancelar
                 </Button>
-                {!editingTemplate?.isDefault && (
-                  <Button 
-                    onClick={handleSave}
-                    disabled={updateTemplate.isPending || !hasUnsavedChanges}
-                    className="min-w-[100px]"
-                  >
-                    {updateTemplate.isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4 mr-2" />
-                        Salvar
-                      </>
-                    )}
-                  </Button>
-                )}
+                <Button 
+                  onClick={handleSave}
+                  disabled={updateTemplate.isPending || !hasUnsavedChanges}
+                  className="min-w-[100px]"
+                >
+                  {updateTemplate.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Salvar
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           </DialogFooter>
