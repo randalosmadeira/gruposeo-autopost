@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '3.2.6';
-const PLUGIN_LAST_UPDATE = '2026-02-14T16:25:00';
+const PLUGIN_VERSION = '3.2.7';
+const PLUGIN_LAST_UPDATE = '2026-02-14T17:30:00';
 
 const features = [
   {
@@ -91,6 +91,17 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '3.2.7',
+    date: '2026-02-14',
+    type: 'minor' as const,
+    changes: [
+      { type: 'feature', text: 'Tabela de regras AI Source (Fonte IA / Campo / Operador / Valor) para detecção de sessões via ChatGPT, Claude, Perplexity, Gemini, Copilot, DeepSeek, Grok e Meta AI' },
+      { type: 'feature', text: 'Google Indexing API: submissão direta de URLs (posts, páginas, produtos) com controle de quota (200/dia) e auto-submit ao detectar tráfego de IA' },
+      { type: 'feature', text: 'Google Meu Negócio Auto-Poster: publica automaticamente no perfil GMB com limpeza de markup de page builders (Divi, WPBakery, Avada)' },
+      { type: 'improvement', text: 'Endpoints REST: /ai-source-rules, /ai-source-stats, /google-indexing/submit, /google-indexing/batch, /gmb/post, /gmb/history' },
+    ],
+  },
   {
     version: '3.2.6',
     date: '2026-02-14',

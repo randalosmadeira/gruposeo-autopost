@@ -3,7 +3,7 @@
  * Plugin Name: ContentFactory RDM
  * Plugin URI: https://gruposeo.marketing/contentfactory
  * Description: Integração avançada com ContentFactory para publicação automática de artigos, sincronização, otimização de imagens, links internos, geração de SEO via IA, indexação automática, social posting e queue system.
- * Version: 3.2.6
+ * Version: 3.2.7
  * Author: GRUPO SEO MARKETING
  * Author URI: https://gruposeo.marketing
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '3.2.6');
+define('CFRDM_VERSION', '3.2.7');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -90,6 +90,11 @@ function cfrdm_load_dependencies() {
     
     // v3.2.4 - Method Signature Validator (prevents fatal errors from missing/incompatible methods)
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-method-validator.php';
+    
+    // v3.2.7 - AI Source Rules, Google Indexing Submitter, GMB Auto-Poster
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-source-rules.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-google-indexing-submitter.php';
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-gmb-poster.php';
 }
 
 /**
@@ -182,6 +187,15 @@ class ContentFactory_RDM {
             CFRDM_SEO_Checklist::get_instance()->init();
         } catch (Exception $e) {
             error_log('ContentFactory v3.2.3 init error: ' . $e->getMessage());
+        }
+        
+        // Initialize v3.2.7 modules
+        try {
+            CFRDM_AI_Source_Rules::get_instance()->init();
+            CFRDM_Google_Indexing_Submitter::get_instance()->init();
+            CFRDM_GMB_Poster::get_instance()->init();
+        } catch (Exception $e) {
+            error_log('ContentFactory v3.2.7 init error: ' . $e->getMessage());
         }
         
         // Initialize v3.0.0 modules (cron callbacks + hooks)
