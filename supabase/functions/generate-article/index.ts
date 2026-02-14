@@ -178,6 +178,92 @@ function substituteTemplateVariables(template: string, config: ArticleConfig): s
     .replace(/\$\{context\}/g, config.additionalInfo || '');
 }
 
+// ====== AUTO-DETECT SPECIALIZED AGENT FROM KEYWORD/TITLE ======
+interface AgentDetectionResult {
+  detectedFunction: string;
+  confidence: number;
+  reason: string;
+}
+
+const AGENT_DETECTION_RULES: Array<{
+  targetFunction: string;
+  patterns: RegExp[];
+  keywords: string[];
+  label: string;
+}> = [
+  {
+    targetFunction: 'blog_architecture',
+    patterns: [
+      /topic\s*cluster/i, /pillar\s*page/i, /arquitetura\s*(de|do)\s*(blog|conteúdo|site)/i,
+      /calendário\s*editorial/i, /planej(ar|amento)\s*(de\s*)?(blog|conteúdo)/i,
+      /cluster\s*(de\s*)?conteúdo/i, /estratégia\s*(de\s*)?conteúdo/i,
+      /mapeamento\s*(de\s*)?(temas|tópicos|blog)/i, /internal\s*link(ing)?\s*matrix/i,
+    ],
+    keywords: ['topic cluster', 'pillar page', 'calendário editorial', 'arquitetura de blog',
+      'cluster de conteúdo', 'estratégia de conteúdo', 'planejamento de blog',
+      'mapeamento de temas', 'internal linking matrix', 'construir blog'],
+    label: 'Construtor de Blogs & Clusters',
+  },
+  {
+    targetFunction: 'seo_audit',
+    patterns: [
+      /audit(ar|oria)\s*(seo|técnica|de\s*site)/i, /core\s*web\s*vitals/i,
+      /indexação|indexing/i, /robots\.txt/i, /sitemap/i,
+      /crawl(er|abilidade|ability)/i, /diagnóstico\s*(seo|técnico)/i,
+      /performance\s*(do\s*)?(site|web)/i, /schema\s*valid(ation|ação)/i,
+      /e-?e-?a-?t/i, /visibilidade\s*(em|para)\s*(ia|ai|buscadores)/i,
+    ],
+    keywords: ['auditoria seo', 'audit seo', 'core web vitals', 'indexação',
+      'robots.txt', 'sitemap', 'crawlabilidade', 'diagnóstico seo',
+      'performance do site', 'schema validation', 'eeat', 'visibilidade ia',
+      'crawlers de ia', 'rastreadores de ia', 'lcp', 'inp', 'cls'],
+    label: 'Auditor SEO & Indexação',
+  },
+  {
+    targetFunction: 'metadata_schema',
+    patterns: [
+      /metadados|metadata/i, /schema\s*markup/i, /json-?ld/i,
+      /open\s*graph/i, /og\s*tags/i, /twitter\s*card/i,
+      /title\s*tag/i, /meta\s*description/i, /structured\s*data/i,
+      /rich\s*snippet/i, /dados\s*estruturados/i,
+    ],
+    keywords: ['metadados', 'metadata', 'schema markup', 'json-ld', 'open graph',
+      'og tags', 'twitter card', 'title tag', 'meta description', 'rich snippet',
+      'dados estruturados', 'structured data', 'schema seo'],
+    label: 'Metadados & Schema Markup',
+  },
+];
+
+function autoDetectAgent(keyword: string, title?: string): AgentDetectionResult {
+  const text = `${title || ''} ${keyword}`.toLowerCase().trim();
+  
+  for (const rule of AGENT_DETECTION_RULES) {
+    // Check regex patterns first (higher confidence)
+    for (const pattern of rule.patterns) {
+      if (pattern.test(text)) {
+        return {
+          detectedFunction: rule.targetFunction,
+          confidence: 0.9,
+          reason: `Pattern match for ${rule.label}`,
+        };
+      }
+    }
+    // Check keyword substring match (lower confidence)
+    for (const kw of rule.keywords) {
+      if (text.includes(kw)) {
+        return {
+          detectedFunction: rule.targetFunction,
+          confidence: 0.75,
+          reason: `Keyword match "${kw}" for ${rule.label}`,
+        };
+      }
+    }
+  }
+
+  // Default: article_generator
+  return { detectedFunction: 'article_generator', confidence: 1.0, reason: 'Default article generator' };
+}
+
 // Fetch user's prompt template from database
 async function fetchUserTemplate(
   supabase: ReturnType<typeof createClient>,
@@ -432,12 +518,28 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ====== AUTO-DETECT SPECIALIZED AGENT ======
+    let resolvedTargetFunction = config.targetFunction;
+    
+    if (!config.promptTemplateId && (!config.targetFunction || config.targetFunction === 'article_generator')) {
+      const detection = autoDetectAgent(config.keyword, config.title);
+      if (detection.detectedFunction !== 'article_generator') {
+        resolvedTargetFunction = detection.detectedFunction;
+        log.info("agent_auto_detected", {
+          detected: detection.detectedFunction,
+          confidence: detection.confidence,
+          reason: detection.reason,
+          keyword: config.keyword,
+        });
+      }
+    }
+
     // ====== FETCH USER'S PROMPT TEMPLATE FROM DATABASE ======
     const userTemplate = await fetchUserTemplate(
       supabase,
       user.id,
       config.promptTemplateId,
-      config.targetFunction,
+      resolvedTargetFunction,
     );
 
     // ====== STANDARD FLOW with Verniz DNA + Brand SEO+GEO injection ======
