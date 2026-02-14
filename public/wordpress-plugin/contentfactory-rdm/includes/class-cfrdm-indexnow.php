@@ -111,13 +111,24 @@ class CFRDM_IndexNow {
         }
         
         // Trigger meta audit on publish to ensure SEO meta is complete
-        if (class_exists('CFRDM_Meta_Auditor') && CFRDM_Meta_Auditor::is_enabled()) {
-            CFRDM_Meta_Auditor::get_instance()->audit_single_post($post_id);
+        if (class_exists('CFRDM_Meta_Auditor')) {
+            try {
+                if (CFRDM_Method_Validator::safe_call('CFRDM_Meta_Auditor', 'is_enabled', array(), false)) {
+                    $auditor = CFRDM_Meta_Auditor::get_instance();
+                    $auditor->audit_single_post($post_id);
+                }
+            } catch (\Throwable $e) {
+                CFRDM_Logger::warning('indexnow', 'Meta audit falhou: ' . $e->getMessage());
+            }
         }
         
         // Invalidate llms.txt cache
         if (class_exists('CFRDM_LLMS_Txt')) {
-            CFRDM_LLMS_Txt::get_instance()->invalidate_cache();
+            try {
+                CFRDM_LLMS_Txt::get_instance()->invalidate_cache();
+            } catch (\Throwable $e) {
+                CFRDM_Logger::warning('indexnow', 'LLMS cache invalidation falhou: ' . $e->getMessage());
+            }
         }
         
         CFRDM_Logger::success('indexnow', 'URL submetida para indexação + meta auditada', array(
