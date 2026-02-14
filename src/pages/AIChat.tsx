@@ -43,15 +43,22 @@ interface UploadedFile {
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 const ANALYZE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-file`;
 
-const quickActions = [
+interface QuickAction {
+  label: string;
+  icon: typeof Target;
+  prompt: string;
+  directAction?: { type: string; project_id: string };
+}
+
+const quickActions: QuickAction[] = [
   { label: 'Sugerir palavras-chave', icon: Target, prompt: 'Sugira 10 palavras-chave de cauda longa para o nicho de ' },
   { label: 'Criar título SEO', icon: Sparkles, prompt: 'Crie 5 títulos otimizados para SEO sobre ' },
   { label: 'Gerar outline', icon: FileText, prompt: 'Crie uma estrutura completa de artigo SEO sobre ' },
-  { label: 'Auditoria SEO completa', icon: Search, prompt: 'Execute uma auditoria SEO completa em todos os meus projetos WordPress agora e mostre os resultados reais.' },
+  { label: 'Auditoria SEO completa', icon: Search, prompt: 'Executando auditoria SEO completa em todos os projetos...', directAction: { type: 'run_all_projects_audit', project_id: 'all' } },
   { label: 'Links quebrados e 404', icon: AlertTriangle, prompt: 'Verifique os status das últimas correções de links quebrados, FAQs duplicadas e URLs em duplicidade.' },
   { label: 'Backlinks e linkagem', icon: Link, prompt: 'Mostre as sugestões de links internos pendentes e quantos backlinks já foram criados entre meus artigos.' },
   { label: 'Meta tags e SEO', icon: Shield, prompt: 'Quantas meta tags foram auditadas e corrigidas? Mostre os resultados reais das últimas execuções do Agente SEO.' },
-  { label: 'Sincronizar WordPress', icon: RefreshCw, prompt: 'Sincronize as estatísticas de todos os meus projetos WordPress e mostre os dados atualizados.' },
+  { label: 'Sincronizar WordPress', icon: RefreshCw, prompt: 'Sincronizando estatísticas WordPress...', directAction: { type: 'sync_wordpress_stats', project_id: 'all' } },
   { label: 'Estatísticas de artigos', icon: Globe, prompt: 'Mostre estatísticas completas: artigos gerados, publicados, prontos e com erro.' },
 ];
 
@@ -397,6 +404,64 @@ export default function AIChat() {
     }
   };
 
+  const executeDirectAction = async (action: QuickAction) => {
+    if (!action.directAction || isLoading) return;
+
+    const userMsg: Message = {
+      role: 'user',
+      content: action.label,
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, userMsg]);
+    setIsLoading(true);
+
+    // Show "executing" message
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: `⏳ **${action.prompt}**\n\nAguarde enquanto executo a ação...`,
+      timestamp: new Date(),
+    }]);
+
+    try {
+      const resp = await fetch(CHAT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          executeActions: [action.directAction],
+          context: { userId: user?.id },
+        }),
+      });
+      const result = await resp.json();
+      const actionResult = result.results?.[0]?.result || 'Ação executada sem retorno.';
+
+      // Replace the "executing" message with the result
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          role: 'assistant',
+          content: `**⚡ ${action.label} — Resultado:**\n\n${actionResult}`,
+          timestamp: new Date(),
+        };
+        return updated;
+      });
+    } catch (error) {
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          role: 'assistant',
+          content: `❌ Erro ao executar ${action.label}: ${error instanceof Error ? error.message : 'erro desconhecido'}`,
+          timestamp: new Date(),
+        };
+        return updated;
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const sendMessage = async (text?: string) => {
     const messageText = text || input.trim();
     if ((!messageText && pendingFiles.length === 0) || isLoading) return;
@@ -618,7 +683,13 @@ export default function AIChat() {
                   return (
                     <button
                       key={action.label}
-                      onClick={() => setInput(action.prompt)}
+                      onClick={() => {
+                        if (action.directAction) {
+                          executeDirectAction(action);
+                        } else {
+                          setInput(action.prompt);
+                        }
+                      }}
                       className="flex items-center gap-2 p-3 rounded-lg border border-border/50 bg-card hover:bg-accent/50 transition-colors text-left text-sm"
                     >
                       <Icon className="w-4 h-4 text-primary flex-shrink-0" />
