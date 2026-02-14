@@ -4,7 +4,7 @@ Tags: content, seo, articles, automation, ai, image-optimization, indexing, inde
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.2.2
+Stable tag: 3.2.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,6 +65,14 @@ Sim! Na versão 2.1, o plugin notifica automaticamente o Google e o Bing quando 
 Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject schema) e FAQs automaticamente.
 
 == Changelog ==
+
+= 3.2.4 =
+* **NOVO**: Method Validator com validação automática de assinaturas de métodos via ReflectionMethod
+* **NOVO**: Wrapper safe_call() para chamadas estáticas seguras com fallback (previne WSOD)
+* **NOVO**: Relatório de validação integrado ao endpoint /diagnostics
+* **CORRIGIDO**: Migração de chamadas críticas em Social Admin e IndexNow para safe_call()
+* **MELHORADO**: 20+ contratos de validação cobrindo todos os módulos críticos
+* **MELHORADO**: Cache de resultados com transient (1h, invalidado por versão)
 
 = 3.2.2 =
 * **CORRIGIDO**: Registro de 6 endpoints REST ausentes (indexnow-batch, meta-audit, update-seo-meta, refresh-sitemap, refresh-llms, set-ai-headers)
@@ -201,6 +209,9 @@ Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject s
 * **NOVO**: AI Content Enhancer
 
 == Upgrade Notice ==
+
+= 3.2.4 =
+Method Validator com safe_call() previne WSOD. 20+ contratos de validação. Recomendado para todos os usuários.
 
 = 3.2.2 =
 Correção de 6 endpoints REST ausentes e erros 404 no IndexNow. Verniz DNA v3.0 em todos os agentes. Recomendado para todos os usuários.

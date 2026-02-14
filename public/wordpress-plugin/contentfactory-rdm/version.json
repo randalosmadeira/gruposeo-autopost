@@ -4,8 +4,8 @@
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.2.4 - Fix: Corrigido erro fatal (E_ERROR) na página Social Admin causado por método get_queue_items() inexistente na classe CFRDM_Social_Poster. O método agora está implementado com suporte a filtros (limit, status, network).",
-  "released": "2026-02-14T11:00:00-03:00",
+  "changelog": "v3.2.4 - Method Validator com safe_call() para prevenção de WSOD. 20+ contratos de validação. Migração de chamadas críticas em Social Admin e IndexNow.",
+  "released": "2026-02-14T15:30:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",
@@ -25,6 +25,7 @@
     "rest_indexnow_batch",
     "rest_meta_audit",
     "ai_traffic_detector",
-    "seo_checklist"
+    "seo_checklist",
+    "method_validator"
   ]
 }
