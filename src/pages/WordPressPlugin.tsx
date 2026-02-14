@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '3.2.7';
-const PLUGIN_LAST_UPDATE = '2026-02-14T17:30:00';
+const PLUGIN_VERSION = '3.2.8';
+const PLUGIN_LAST_UPDATE = '2026-02-14T19:00:00';
 
 const features = [
   {
@@ -91,6 +91,18 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '3.2.8',
+    date: '2026-02-14',
+    type: 'patch' as const,
+    changes: [
+      { type: 'fix', text: 'Status "Desconectado" no dashboard agora verifica API Key (sempre gerada na ativação) em vez de cfrdm_api_url' },
+      { type: 'fix', text: 'Health check JS com fallback para endpoint /version e headers anti-cache (Cache-Control, Pragma, Expires)' },
+      { type: 'fix', text: 'Versão do plugin exibida no status de conexão' },
+      { type: 'fix', text: 'plugin-updates.json atualizado para permitir auto-update de v3.2.3+ para v3.2.8' },
+      { type: 'improvement', text: 'Guards defensivos e captura de \\Throwable em todos os blocos de inicialização do plugin' },
+    ],
+  },
   {
     version: '3.2.7',
     date: '2026-02-14',
