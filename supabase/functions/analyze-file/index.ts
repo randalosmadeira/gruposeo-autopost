@@ -244,6 +244,36 @@ function detectFileType(content: string, fileName: string): string {
     return "gsc";
   }
 
+  // Google Ads indicators
+  if (
+    lowerName.includes("google-ads") || lowerName.includes("googleads") || lowerName.includes("adwords") ||
+    lowerContent.includes("campaign") && lowerContent.includes("cost") && lowerContent.includes("conversions") ||
+    lowerContent.includes("ad group") || lowerContent.includes("quality score") ||
+    lowerContent.includes("cost per click") || lowerContent.includes("search impression share")
+  ) {
+    return "google_ads";
+  }
+
+  // Google AdSense indicators
+  if (
+    lowerName.includes("adsense") ||
+    lowerContent.includes("estimated earnings") || lowerContent.includes("page rpm") ||
+    lowerContent.includes("ad requests") || lowerContent.includes("matched ad requests") ||
+    lowerContent.includes("adsense") && lowerContent.includes("revenue")
+  ) {
+    return "adsense";
+  }
+
+  // Google Tag Manager indicators
+  if (
+    lowerName.includes("tag-manager") || lowerName.includes("tagmanager") || lowerName.includes("gtm") ||
+    lowerContent.includes("containerId") || lowerContent.includes("gtm-") ||
+    lowerContent.includes("\"tag\"") && lowerContent.includes("\"trigger\"") ||
+    lowerContent.includes("tagmanager")
+  ) {
+    return "gtm";
+  }
+
   // Ubersuggest indicators
   if (
     lowerName.includes("ubersuggest") ||
@@ -318,6 +348,31 @@ Responda em JSON com esta estrutura:
 - Páginas com queda de posição (comparar períodos)
 - Mobile usability issues
 - Core Web Vitals problems`;
+  } else if (fileType === "google_ads") {
+    specificInstructions = `\n\nEste é um relatório do Google Ads. Foque em:
+- Campanhas com alto CPC e baixa conversão (desperdício de budget)
+- Quality Score baixo e como melhorar
+- Keywords negativas faltando
+- Ad groups com CTR abaixo da média do setor
+- Oportunidades de extensões de anúncio
+- Otimização de lances e estratégias de bidding
+- Landing pages com baixa taxa de conversão`;
+  } else if (fileType === "adsense") {
+    specificInstructions = `\n\nEste é um relatório do Google AdSense. Foque em:
+- Páginas com melhor RPM e como replicar
+- Páginas com muitas impressões mas baixo RPM
+- Formatos de anúncio mais rentáveis
+- Otimização de posicionamento de ads
+- Análise de receita por canal/fonte de tráfego
+- Oportunidades de aumento de viewability`;
+  } else if (fileType === "gtm") {
+    specificInstructions = `\n\nEste é um export do Google Tag Manager. Foque em:
+- Tags não disparando ou com erros
+- Triggers duplicados ou conflitantes
+- Variáveis mal configuradas
+- Oportunidades de tracking faltando (conversões, scroll, cliques)
+- Performance impact das tags
+- Recomendações de organização e naming conventions`;
   } else if (fileType === "ubersuggest") {
     specificInstructions = `\n\nEste é um relatório do Ubersuggest. Foque em:
 - Keywords com melhor relação volume/dificuldade SEO
