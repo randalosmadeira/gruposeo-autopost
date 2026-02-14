@@ -245,7 +245,11 @@ export default function AIChat() {
     }
 
     const fileId = crypto.randomUUID();
-    const filePath = `${user.id}/${fileId}-${file.name}`;
+    // Sanitize filename: remove accents, replace spaces and special chars
+    const sanitizedName = file.name
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove accents
+      .replace(/[^a-zA-Z0-9._-]/g, '_'); // replace special chars with underscore
+    const filePath = `${user.id}/${fileId}-${sanitizedName}`;
     
     const uploadedFile: UploadedFile = {
       id: fileId,
