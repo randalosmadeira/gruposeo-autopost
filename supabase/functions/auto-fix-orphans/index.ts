@@ -179,7 +179,7 @@ async function processProjectOrphans(
   // ══════════════════════════════════════
   // PHASE 3: AI generates contextual links for each orphan batch
   // ══════════════════════════════════════
-  const orphanBatches = chunkArray(orphans, 5); // Process 5 orphans per AI call
+  const orphanBatches = chunkArray(orphans, 3); // Process 3 orphans per AI call (less truncation)
 
   for (const batch of orphanBatches) {
     try {
@@ -238,32 +238,42 @@ FORMATO JSON OBRIGATÓRIO:
           content: `Especialista SEO brasileiro em Internal Linking Matrix. Nicho: ${project.nicho || "geral"}. Retorne APENAS JSON válido, sem markdown.`,
         },
         { role: "user", content: prompt },
-      ], { maxTokens: 2000, temperature: 0.2 });
+      ], { maxTokens: 4000, temperature: 0.2 });
 
       const jsonStr = aiResult.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       let fixes;
       try {
         fixes = JSON.parse(jsonStr);
       } catch {
-        // Try to extract JSON from response - more resilient parsing
+        // Resilient: extract partial JSON even if truncated
         try {
-          const match = jsonStr.match(/\{[\s\S]*"fixes"\s*:\s*\[[\s\S]*?\]\s*\}/);
-          if (match) {
-            // Try to fix truncated JSON by closing open arrays/objects
-            let candidate = match[0];
-            const openBrackets = (candidate.match(/\[/g) || []).length;
-            const closeBrackets = (candidate.match(/\]/g) || []).length;
-            const openBraces = (candidate.match(/\{/g) || []).length;
-            const closeBraces = (candidate.match(/\}/g) || []).length;
-            candidate += "]".repeat(Math.max(0, openBrackets - closeBrackets));
-            candidate += "}".repeat(Math.max(0, openBraces - closeBraces));
-            fixes = JSON.parse(candidate);
-          } else {
-            console.warn(`[OrphanFixer] Could not parse AI response, skipping batch`);
+          // Find the start of fixes array
+          const fixesStart = jsonStr.indexOf('"fixes"');
+          if (fixesStart === -1) {
+            console.warn(`[OrphanFixer] No "fixes" key found, skipping batch`);
             continue;
           }
-        } catch {
-          console.warn(`[OrphanFixer] JSON repair failed, skipping batch`);
+          
+          // Take everything from the opening brace
+          let candidate = jsonStr.substring(jsonStr.lastIndexOf('{', fixesStart));
+          
+          // Close any unclosed brackets/braces
+          const opens = { '[': 0, '{': 0 };
+          const closes: Record<string, string> = { '[': ']', '{': '}' };
+          for (const ch of candidate) {
+            if (ch === '[' || ch === '{') opens[ch]++;
+            if (ch === ']') opens['[']--;
+            if (ch === '}') opens['{']--;
+          }
+          
+          // Remove trailing comma if present before closing
+          candidate = candidate.replace(/,\s*$/, '');
+          candidate += ']'.repeat(Math.max(0, opens['[']));
+          candidate += '}'.repeat(Math.max(0, opens['{']));
+          
+          fixes = JSON.parse(candidate);
+        } catch (e2) {
+          console.warn(`[OrphanFixer] JSON repair failed: ${e2 instanceof Error ? e2.message : e2}`);
           continue;
         }
       }
