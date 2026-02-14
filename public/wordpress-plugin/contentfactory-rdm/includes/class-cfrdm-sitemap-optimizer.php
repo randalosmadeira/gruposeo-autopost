@@ -65,6 +65,28 @@ class CFRDM_Sitemap_Optimizer {
     }
     
     /**
+     * Detect which sitemap URL is active on this site
+     */
+    public static function detect_sitemap_url() {
+        $site_url = get_site_url();
+        $candidates = array(
+            $site_url . '/sitemap_index.xml',  // Yoast / Rank Math
+            $site_url . '/sitemap.xml',          // Generic
+            $site_url . '/wp-sitemap.xml',       // WordPress core
+        );
+        
+        foreach ($candidates as $url) {
+            $response = wp_remote_head($url, array('timeout' => 5, 'sslverify' => false));
+            if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
+                return $url;
+            }
+        }
+        
+        // Fallback to WordPress core
+        return $site_url . '/wp-sitemap.xml';
+    }
+    
+    /**
      * Optimize sitemap query
      */
     public function optimize_query_args($args, $post_type) {
@@ -242,9 +264,10 @@ class CFRDM_Sitemap_Optimizer {
         $additions .= "User-agent: cohere-ai\n";
         $additions .= "Allow: /\n\n";
         
-        // Sitemaps
+        // Sitemaps — auto-detect which sitemap is active
+        $sitemap_url = self::detect_sitemap_url();
         $additions .= "# Sitemaps\n";
-        $additions .= "Sitemap: {$site_url}/wp-sitemap.xml\n";
+        $additions .= "Sitemap: {$sitemap_url}\n";
         $additions .= "Sitemap: {$site_url}/news-sitemap.xml\n\n";
         
         // llms.txt

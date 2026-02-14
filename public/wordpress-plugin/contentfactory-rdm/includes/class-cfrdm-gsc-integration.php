@@ -305,11 +305,18 @@ class CFRDM_GSC_Integration {
      * Get pages to inspect
      */
     private function get_pages_to_inspect($limit = 100) {
+        $post_types = array('post', 'page');
+        
+        // Include products if WooCommerce is active
+        if (post_type_exists('product')) {
+            $post_types[] = 'product';
+        }
+        
         $args = array(
-            'post_type' => 'post',
+            'post_type' => $post_types,
             'post_status' => 'publish',
             'posts_per_page' => $limit,
-            'orderby' => 'date',
+            'orderby' => 'modified',
             'order' => 'DESC',
             'fields' => 'ids',
         );
