@@ -53,6 +53,9 @@ interface ArticleConfig {
   // NEW: Agent pipeline flag and sector selection
   useAgentPipeline?: boolean;
   sectorType?: string;
+  // NEW: Prompt template selection
+  promptTemplateId?: string;
+  targetFunction?: string;
   // NEW: ZicaJuris project config
   projectConfig?: {
     nicho?: string;
@@ -155,6 +158,72 @@ REGRAS IMPORTANTES:
 // Check if config has advanced fields - safely handle undefined values
 function hasAdvancedConfig(config: ArticleConfig): boolean {
   return !!(config?.segment || config?.contentType || config?.intentType || config?.goal);
+}
+
+// Substitute template variables with actual values
+function substituteTemplateVariables(template: string, config: ArticleConfig): string {
+  const wordRange = wordCountRanges[config.wordCount] || wordCountRanges['medium'];
+  const pov = pointOfViewMap[config.pointOfView] || "segunda pessoa (você)";
+  
+  return template
+    .replace(/\$\{title\}/g, config.title || config.keyword || '')
+    .replace(/\$\{language\}/g, config.language || 'Português Brasileiro')
+    .replace(/\$\{idioma\}/g, config.language || 'Português Brasileiro')
+    .replace(/\$\{currentYear\}/g, String(new Date().getFullYear()))
+    .replace(/\$\{articleLength\}/g, `${wordRange.min}-${wordRange.max} palavras`)
+    .replace(/\$\{tone\}/g, config.tone || 'profissional')
+    .replace(/\$\{pov\}/g, pov)
+    .replace(/\$\{contextSection\}/g, config.sourcesContext || '')
+    .replace(/\$\{sourcesContext\}/g, config.sourcesContext || '')
+    .replace(/\$\{context\}/g, config.additionalInfo || '');
+}
+
+// Fetch user's prompt template from database
+async function fetchUserTemplate(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  templateId?: string,
+  targetFunction?: string,
+): Promise<string | null> {
+  try {
+    // Priority 1: specific template by ID
+    if (templateId) {
+      const { data } = await supabase
+        .from('prompt_templates')
+        .select('prompt')
+        .eq('id', templateId)
+        .eq('user_id', userId)
+        .single();
+      if (data?.prompt) return data.prompt;
+    }
+
+    // Priority 2: default template for the target function
+    const funcTarget = targetFunction || 'article_generator';
+    const { data } = await supabase
+      .from('prompt_templates')
+      .select('prompt')
+      .eq('user_id', userId)
+      .eq('target_function', funcTarget)
+      .eq('is_default', true)
+      .limit(1)
+      .maybeSingle();
+    
+    if (data?.prompt) return data.prompt;
+
+    // Priority 3: any template for the target function
+    const { data: fallback } = await supabase
+      .from('prompt_templates')
+      .select('prompt')
+      .eq('user_id', userId)
+      .eq('target_function', funcTarget)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    return fallback?.prompt || null;
+  } catch {
+    return null;
+  }
 }
 
 // Build prompt config for advanced system with safe defaults
@@ -363,11 +432,34 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ====== FETCH USER'S PROMPT TEMPLATE FROM DATABASE ======
+    const userTemplate = await fetchUserTemplate(
+      supabase,
+      user.id,
+      config.promptTemplateId,
+      config.targetFunction,
+    );
+
     // ====== STANDARD FLOW with Verniz DNA + Brand SEO+GEO injection ======
     let systemPrompt: string;
     let userPrompt: string;
 
-    if (hasAdvancedConfig(config)) {
+    if (userTemplate) {
+      // USE USER'S CUSTOM TEMPLATE with variable substitution
+      systemPrompt = substituteTemplateVariables(userTemplate, config) 
+        + '\n\n' + brandSEOGeoSection 
+        + '\n\n' + orchestration.vernizSection;
+      userPrompt = `Escreva um artigo completo e otimizado para SEO e GEO (IA Generativa) sobre: "${config.keyword}"
+${config.title ? `\nTítulo sugerido: "${config.title}"` : ''}
+${config.sourcesContext ? `\nContexto adicional:\n${config.sourcesContext}` : ''}
+
+Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
+      log.info("using_user_template_with_brand_geo", { 
+        brand: brandDetection.brand, 
+        templateId: config.promptTemplateId,
+        targetFunction: config.targetFunction,
+      });
+    } else if (hasAdvancedConfig(config)) {
       const promptConfig = buildPromptConfig(config);
       const prompts = buildAdvancedSEOPrompt(promptConfig);
       // Inject Brand SEO+GEO + Verniz DNA into advanced prompt

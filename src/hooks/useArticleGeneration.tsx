@@ -45,6 +45,9 @@ interface ArticleConfig {
   // Internal links
   internalLinks?: Array<{ anchor: string; url: string }>;
   sourcesContext?: string;
+  // Prompt template selection
+  promptTemplateId?: string;
+  targetFunction?: string;
   // ZicaJuris project config
   projectConfig?: {
     nicho?: string;
