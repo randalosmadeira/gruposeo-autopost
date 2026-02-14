@@ -154,7 +154,13 @@ Deno.serve(async (req) => {
       const analysisPrompt = buildAnalysisPrompt(detectedType, parsedContent, upload.file_name, projects || []);
 
       // Get AI orchestrator
-      const orchestrator = await getOrchestratorForUser(user.id, supabaseAdmin);
+      let orchestrator;
+      try {
+        orchestrator = await getOrchestratorForUser(user.id, supabaseAdmin);
+      } catch (orchErr) {
+        console.error("Failed to create orchestrator:", orchErr);
+        throw new Error("Falha ao inicializar IA para análise. Verifique suas configurações.");
+      }
 
       const aiMessages = [
         {
@@ -167,11 +173,23 @@ Priorize problemas por impacto potencial no tráfego.`,
         { role: "user" as const, content: analysisPrompt },
       ];
 
-      const response = await orchestrator.call("data_analysis", aiMessages, {
-        maxTokens: 8192,
-        temperature: 0.3,
-        preferredProvider: "gemini",
-      });
+      console.log(`[analyze-file] Calling AI for file ${upload.file_name} (${detectedType}), content length: ${parsedContent.length}`);
+
+      let response;
+      try {
+        response = await orchestrator.call("data_analysis", aiMessages, {
+          maxTokens: 8192,
+          temperature: 0.3,
+          preferredProvider: "gemini",
+        });
+      } catch (aiErr) {
+        console.error("[analyze-file] AI call failed:", aiErr);
+        throw new Error(`Falha na análise de IA: ${aiErr instanceof Error ? aiErr.message : "erro desconhecido"}`);
+      }
+
+      if (!response?.content) {
+        throw new Error("A IA não retornou conteúdo na análise.");
+      }
 
       // Parse AI response
       let analysisResult;

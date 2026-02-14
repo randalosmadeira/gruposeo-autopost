@@ -273,6 +273,8 @@ export default function AIChat() {
     }
 
     const fileId = crypto.randomUUID();
+    // Track current ID (changes from temp fileId to DB realId) - use string for flexibility
+    let currentId: string = fileId;
     // Sanitize filename: remove accents, replace spaces and special chars
     const sanitizedName = file.name
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove accents
@@ -295,7 +297,7 @@ export default function AIChat() {
         .from('analysis-uploads')
         .upload(filePath, file);
 
-      if (uploadError) throw new Error(uploadError.message);
+      if (uploadError) throw new Error(`Upload falhou: ${uploadError.message}`);
 
       // Create DB record
       const { data: dbRecord, error: dbError } = await supabase
@@ -312,19 +314,16 @@ export default function AIChat() {
         .select('id')
         .single();
 
-      if (dbError) throw new Error(dbError.message);
+      if (dbError) throw new Error(`Registro falhou: ${dbError.message}`);
 
-      // Update state
+      // Update state with real DB id
       const realId = dbRecord.id;
+      currentId = realId;
       setPendingFiles(prev => prev.map(f =>
-        f.id === fileId ? { ...f, id: realId, status: 'uploaded' } : f
+        f.id === fileId ? { ...f, id: realId, status: 'analyzing' } : f
       ));
 
-      // Trigger analysis
-      setPendingFiles(prev => prev.map(f =>
-        f.id === realId ? { ...f, status: 'analyzing' } : f
-      ));
-
+      // Get fresh session token
       const { data: { session: analyzeSession } } = await supabase.auth.getSession();
       const analyzeToken = analyzeSession?.access_token;
       if (!analyzeToken) throw new Error('Sessão expirada. Faça login novamente.');
@@ -340,8 +339,13 @@ export default function AIChat() {
       });
 
       if (!analyzeResp.ok) {
-        const errBody = await analyzeResp.json().catch(() => ({ error: `HTTP ${analyzeResp.status}` }));
-        throw new Error(errBody.error || `Erro ${analyzeResp.status} na análise`);
+        const errText = await analyzeResp.text();
+        let errMsg = `Erro ${analyzeResp.status} na análise`;
+        try {
+          const errJson = JSON.parse(errText);
+          errMsg = errJson.error || errMsg;
+        } catch { /* use default */ }
+        throw new Error(errMsg);
       }
 
       const result = await analyzeResp.json();
@@ -366,11 +370,12 @@ export default function AIChat() {
       return completedFile;
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : 'Erro desconhecido';
+      // Use currentId which tracks whether we're still on fileId or already on realId
       setPendingFiles(prev => prev.map(f =>
-        f.id === fileId ? { ...f, status: 'error', error: errMsg } : f
+        (f.id === currentId || f.id === fileId) ? { ...f, status: 'error', error: errMsg } : f
       ));
       toast({
-        title: 'Erro no upload',
+        title: 'Erro na análise do arquivo',
         description: errMsg,
         variant: 'destructive',
       });
