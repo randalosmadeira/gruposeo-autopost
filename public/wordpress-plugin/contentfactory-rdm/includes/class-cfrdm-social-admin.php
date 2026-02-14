@@ -624,7 +624,14 @@ class CFRDM_Social_Admin {
             }
         }
         
-        $result = CFRDM_Social_Poster::add_account($platform, $account_name, $encrypted_credentials);
+        $result = CFRDM_Social_Poster::add_account(array(
+            'network' => $platform,
+            'account_name' => $account_name,
+            'access_token' => $encrypted_credentials['access_token'] ?? null,
+            'refresh_token' => $encrypted_credentials['refresh_token'] ?? null,
+            'token_expires_at' => $encrypted_credentials['token_expires_at'] ?? null,
+            'settings' => $encrypted_credentials,
+        ));
         
         if ($result) {
             wp_send_json_success(array('id' => $result));
