@@ -226,7 +226,10 @@ export default function AIChat() {
   }, [user]);
 
   const uploadAndAnalyzeFile = async (file: File): Promise<UploadedFile | null> => {
-    if (!user) return null;
+    if (!user) {
+      toast({ title: 'Erro no upload', description: 'Faça login para enviar arquivos.', variant: 'destructive' });
+      return null;
+    }
 
     const format = getFileFormat(file.name);
     if (!ACCEPTED_EXTENSIONS.includes(format)) {
@@ -245,6 +248,17 @@ export default function AIChat() {
         variant: 'destructive',
       });
       return null;
+    }
+
+    // Ensure we have a valid session before uploading
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      // Try refreshing
+      const { error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) {
+        toast({ title: 'Sessão expirada', description: 'Por favor, faça login novamente.', variant: 'destructive' });
+        return null;
+      }
     }
 
     const fileId = crypto.randomUUID();
