@@ -168,10 +168,13 @@ function getFileFormat(name: string): string {
   if (ext === 'csv') return 'csv';
   if (ext === 'xlsx' || ext === 'xls') return 'xlsx';
   if (ext === 'pdf') return 'pdf';
+  if (ext === 'json') return 'json';
+  if (ext === 'xml') return 'xml';
   return ext;
 }
 
-const ACCEPTED_FORMATS = '.csv,.xlsx,.xls,.pdf,.tsv,.txt';
+const ACCEPTED_FORMATS = '.csv,.xlsx,.xls,.pdf,.tsv,.txt,.json,.xml';
+const ACCEPTED_EXTENSIONS = ['csv', 'xlsx', 'xls', 'pdf', 'tsv', 'txt', 'json', 'xml'];
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
 export default function AIChat() {
@@ -226,10 +229,10 @@ export default function AIChat() {
     if (!user) return null;
 
     const format = getFileFormat(file.name);
-    if (!['csv', 'xlsx', 'xls', 'pdf', 'tsv', 'txt'].includes(format)) {
+    if (!ACCEPTED_EXTENSIONS.includes(format)) {
       toast({
         title: 'Formato não suportado',
-        description: 'Envie arquivos CSV, XLSX, PDF ou TXT exportados do GSC/Ubersuggest.',
+        description: 'Envie arquivos CSV, XLSX, PDF, JSON, XML ou TXT exportados do GSC, Google Ads, AdSense ou Tag Manager.',
         variant: 'destructive',
       });
       return null;
@@ -585,7 +588,7 @@ export default function AIChat() {
                 </p>
                 <p className="text-xs text-primary/80 mt-2 flex items-center justify-center gap-1">
                   <Paperclip className="w-3 h-3" />
-                  Anexe arquivos do GSC, Ubersuggest ou ferramentas SEO para análise automática com IA
+                  Anexe arquivos do GSC, Google Ads, AdSense, Tag Manager ou Ubersuggest para análise automática com IA
                 </p>
                 {projects.length > 0 && (
                   <p className="text-xs text-primary mt-1">
@@ -759,7 +762,7 @@ export default function AIChat() {
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
-            Powered by Lovable AI · Anexe arquivos GSC, Ubersuggest (CSV/XLSX/PDF) para análise automática
+            Powered by Lovable AI · Anexe arquivos GSC, Google Ads, AdSense, Tag Manager (CSV/XLSX/PDF/JSON/XML) para análise automática
           </p>
         </div>
       </Card>
