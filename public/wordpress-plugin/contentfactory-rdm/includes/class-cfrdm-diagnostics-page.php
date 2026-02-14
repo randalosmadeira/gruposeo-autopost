@@ -362,7 +362,7 @@ class CFRDM_Diagnostics_Page {
             'Concluídos' => $completed ?? 0,
             'Falharam' => $failed ?? 0,
             'Auto-Fix habilitado' => CFRDM_AI_Auto_Fix::is_enabled() ? '✓ Sim' : '✗ Não',
-            'Confiança mínima' => (CFRDM_AI_Auto_Fix::get_min_confidence() * 100) . '%',
+            'Confiança mínima' => (CFRDM_AI_Auto_Fix::get_min_confidence() <= 1 ? round(CFRDM_AI_Auto_Fix::get_min_confidence() * 100) : round(CFRDM_AI_Auto_Fix::get_min_confidence())) . '%',
         );
         
         self::render_kv_table($stats);

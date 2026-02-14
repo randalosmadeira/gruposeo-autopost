@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '3.2.5';
-const PLUGIN_LAST_UPDATE = '2026-02-14T16:10:00';
+const PLUGIN_VERSION = '3.2.6';
+const PLUGIN_LAST_UPDATE = '2026-02-14T16:25:00';
 
 const features = [
   {
@@ -92,6 +92,16 @@ const installSteps = [
 
 const changelog = [
   {
+    version: '3.2.6',
+    date: '2026-02-14',
+    type: 'patch' as const,
+    changes: [
+      { type: 'fix', text: 'Correção de 10 cron jobs não agendados (social queue, content queue, GSC sync, AI fix, Ubersuggest, HTTPS scan, auto-update, content enhancer, logs cleanup, stuck jobs)' },
+      { type: 'fix', text: 'Bug de exibição "Confiança mínima 8000%" corrigido para 80% na página de Diagnóstico' },
+      { type: 'improvement', text: 'Módulos v3.0.0 (GSC, AI Auto-Fix, Ubersuggest, HTTPS, Auto-Update, Content Enhancer) agora inicializam no boot normal do plugin' },
+    ],
+  },
+  {
     version: '3.2.5',
     date: '2026-02-14',
     type: 'patch' as const,
@@ -99,8 +109,6 @@ const changelog = [
       { type: 'fix', text: 'Correção do erro de cookie ao regenerar API Key (restNonce wp_rest)' },
       { type: 'fix', text: 'Correção de 7 avisos do MethodValidator: alias methods para Social Poster, Content Queue, SEO Checklist e AI Traffic Detector' },
       { type: 'feature', text: 'Filtro por status (Publicado/Rascunho/Pendente) na página de Indexação de Artigos' },
-      { type: 'feature', text: 'Coluna de status visual na tabela de artigos indexáveis' },
-      { type: 'improvement', text: 'Contagem detalhada de posts totais (publicados + rascunhos + pendentes) nos cards de estatísticas' },
     ],
   },
   {

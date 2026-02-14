@@ -1,11 +1,11 @@
 {
-  "version": "3.2.5",
+  "version": "3.2.6",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.2.5 - Corrige 7 avisos do MethodValidator: adiciona métodos alias (remove_account, schedule_post, add_item, get_pending, get_results, get_stats) e corrige contrato de register_job.",
-  "released": "2026-02-14T16:10:00-03:00",
+  "changelog": "v3.2.6 - Corrige 10 cron jobs não agendados (social queue, content queue, GSC sync, AI fix queue, Ubersuggest, HTTPS scan, auto-update, content enhancer, logs cleanup, stuck jobs reset). Corrige bug de exibição de confiança mínima AI (8000% → 80%). Inicializa módulos v3.0.0 no boot normal do plugin.",
+  "released": "2026-02-14T16:25:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",
@@ -26,6 +26,7 @@
     "rest_meta_audit",
     "ai_traffic_detector",
     "seo_checklist",
-    "method_validator"
+    "method_validator",
+    "cron_auto_schedule"
   ]
 }
