@@ -723,24 +723,56 @@ async function submitIndexing(
       if (sitemapRefreshed) detailsList.push("Sitemap atualizado");
     } catch { /* ignore */ }
 
-    // 4) Ping Google sitemap
+    // 4) Ping Google sitemap (detect correct sitemap URL)
+    const siteRoot = baseUrl.replace(/\/blog\/?$/, "");
+    let detectedSitemapUrl = `${siteRoot}/wp-sitemap.xml`; // default WordPress core
     try {
-      const sitemapUrl = `${baseUrl.replace(/\/blog\/?$/, "")}/sitemap_index.xml`;
-      await fetch(`https://www.google.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`, {
-        method: "GET",
-      });
+      // Try to detect which sitemap exists
+      for (const candidate of [`${siteRoot}/wp-sitemap.xml`, `${siteRoot}/sitemap_index.xml`, `${siteRoot}/sitemap.xml`]) {
+        try {
+          const checkResp = await fetch(candidate, { method: "HEAD", signal: AbortSignal.timeout(5000) });
+          if (checkResp.ok) {
+            detectedSitemapUrl = candidate;
+            break;
+          }
+        } catch { /* try next */ }
+      }
+    } catch { /* use default */ }
+
+    try {
+      await fetch(`https://www.google.com/ping?sitemap=${encodeURIComponent(detectedSitemapUrl)}`, { method: "GET" });
       googlePinged = true;
-      detailsList.push("Google sitemap pinged");
+      detailsList.push(`Google sitemap pinged (${detectedSitemapUrl})`);
     } catch { /* ignore */ }
 
     // 5) Ping Bing sitemap
     try {
-      const sitemapUrl = `${baseUrl.replace(/\/blog\/?$/, "")}/sitemap_index.xml`;
-      await fetch(`https://www.bing.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`, {
-        method: "GET",
-      });
+      await fetch(`https://www.bing.com/ping?sitemap=${encodeURIComponent(detectedSitemapUrl)}`, { method: "GET" });
       detailsList.push("Bing sitemap pinged");
     } catch { /* ignore */ }
+
+    // 6) Submit to Google Indexing API via plugin (if GSC OAuth configured)
+    if (isPlugin && apiKey) {
+      try {
+        const gscIndexResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/google-indexing/batch`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CFRDM-API-Key": apiKey,
+          },
+          body: JSON.stringify({}), // empty = auto-collect recent URLs
+        });
+        if (gscIndexResp.ok) {
+          const gscData = await gscIndexResp.json();
+          if (gscData.results?.submitted > 0) {
+            submitted += gscData.results.submitted;
+            detailsList.push(`Google Indexing API: ${gscData.results.submitted} URLs submetidas (quota restante: ${gscData.quota_remaining})`);
+          }
+        }
+      } catch {
+        detailsList.push("Google Indexing API: indisponível (GSC OAuth não configurado)");
+      }
+    }
 
     // 6) Refresh llms.txt
     try {
@@ -883,24 +915,32 @@ async function optimizeAIDiscovery(
   } catch { /* ignore */ }
 
   // 4) Ping AI search engines / services for content freshness
-  const sitemapUrl = `${baseUrl.replace(/\/blog\/?$/, "")}/sitemap_index.xml`;
-  const llmsUrl = `${baseUrl.replace(/\/blog\/?$/, "")}/llms.txt`;
+  const siteRoot2 = baseUrl.replace(/\/blog\/?$/, "");
+  let sitemapUrl2 = `${siteRoot2}/wp-sitemap.xml`;
+  // Detect correct sitemap
+  for (const candidate of [`${siteRoot2}/wp-sitemap.xml`, `${siteRoot2}/sitemap_index.xml`, `${siteRoot2}/sitemap.xml`]) {
+    try {
+      const r = await fetch(candidate, { method: "HEAD", signal: AbortSignal.timeout(5000) });
+      if (r.ok) { sitemapUrl2 = candidate; break; }
+    } catch { /* next */ }
+  }
+  const llmsUrl = `${siteRoot2}/llms.txt`;
 
   // Ping Bing (feeds ChatGPT via Bing index)
   try {
-    await fetch(`https://www.bing.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`);
+    await fetch(`https://www.bing.com/ping?sitemap=${encodeURIComponent(sitemapUrl2)}`);
     actions.push("Bing pinged (ChatGPT source)");
   } catch { /* ignore */ }
 
   // Ping Google (feeds Gemini AI)
   try {
-    await fetch(`https://www.google.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`);
+    await fetch(`https://www.google.com/ping?sitemap=${encodeURIComponent(sitemapUrl2)}`);
     actions.push("Google pinged (Gemini source)");
   } catch { /* ignore */ }
 
   // Ping Yandex (broader AI coverage)
   try {
-    await fetch(`https://webmaster.yandex.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`);
+    await fetch(`https://webmaster.yandex.com/ping?sitemap=${encodeURIComponent(sitemapUrl2)}`);
     actions.push("Yandex pinged");
   } catch { /* ignore */ }
 
@@ -919,7 +959,7 @@ async function optimizeAIDiscovery(
         urlList: [
           `https://${host}/`,
           `https://${host}/llms.txt`,
-          sitemapUrl,
+          sitemapUrl2,
         ],
       }),
     });
@@ -1026,20 +1066,55 @@ async function runFullTechnicalAudit(
       }
     } catch { /* timeout */ }
 
-    // Check sitemap
+    // Check sitemap (try multiple common URLs)
     try {
-      const sitemapUrl = `${baseUrl.replace(/\/blog\/?$/, "")}/sitemap_index.xml`;
-      const sitemapResp = await fetch(sitemapUrl, { signal: AbortSignal.timeout(8000) });
-      if (!sitemapResp.ok) {
+      const siteRoot = baseUrl.replace(/\/blog\/?$/, "");
+      const sitemapCandidates = [
+        `${siteRoot}/wp-sitemap.xml`,        // WordPress core (default)
+        `${siteRoot}/sitemap_index.xml`,      // Yoast / Rank Math
+        `${siteRoot}/sitemap.xml`,            // Generic
+      ];
+      
+      let sitemapFound = false;
+      let lastStatus = 0;
+      for (const sitemapUrl of sitemapCandidates) {
+        try {
+          const sitemapResp = await fetch(sitemapUrl, { signal: AbortSignal.timeout(8000) });
+          lastStatus = sitemapResp.status;
+          if (sitemapResp.ok) {
+            sitemapFound = true;
+            break;
+          }
+        } catch { /* try next */ }
+      }
+      
+      if (!sitemapFound) {
         issues.push({
           id: "IDX-004", priority: "P0", category: "indexing",
           title: "Sitemap XML inacessível",
-          description: `sitemap_index.xml retornou status ${sitemapResp.status}`,
+          description: `Nenhum sitemap encontrado (wp-sitemap.xml, sitemap_index.xml, sitemap.xml). Último status: ${lastStatus}`,
           impact: "Motores de busca não conseguem descobrir páginas eficientemente.",
-          fix_instruction: "Verificar se plugin de SEO está gerando sitemap. Ativar no Rank Math/Yoast.", auto_fixed: false
+          fix_instruction: "Verificar se o WordPress core sitemap está habilitado (wp-sitemap.xml) ou se plugin de SEO (Rank Math/Yoast) está gerando sitemap_index.xml. No plugin ContentFactory, ativar o Sitemap Optimizer.", auto_fixed: false
         });
         categories.indexing.score -= 30;
         categories.indexing.issues++;
+
+        // Auto-fix: try refreshing sitemap via plugin
+        if (isPlugin && apiKey) {
+          try {
+            const fixResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-sitemap`, {
+              method: "POST",
+              headers: { "X-CFRDM-API-Key": apiKey },
+            });
+            if (fixResp.ok) {
+              issues[issues.length - 1].auto_fixed = true;
+              issues[issues.length - 1].description += " → Plugin tentou regenerar sitemap.";
+              totalFixed++;
+              categories.indexing.fixed++;
+              categories.indexing.score += 20;
+            }
+          } catch { /* */ }
+        }
       }
     } catch { /* timeout */ }
 
