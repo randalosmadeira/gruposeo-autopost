@@ -12,6 +12,7 @@ interface Article {
   status: 'draft' | 'generating' | 'ready' | 'published' | 'error';
   word_count: number | null;
   seo_score: number | null;
+  project_id?: string | null;
   projects?: { id: string; name: string } | null;
 }
 
