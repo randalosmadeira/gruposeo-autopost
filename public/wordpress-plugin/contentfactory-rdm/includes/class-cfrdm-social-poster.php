@@ -833,4 +833,21 @@ class CFRDM_Social_Poster {
             ));
         }
     }
+    
+    /**
+     * Alias for delete_account (backward compatibility with MethodValidator contracts)
+     */
+    public static function remove_account($id) {
+        return self::delete_account($id);
+    }
+    
+    /**
+     * Alias for queue_post (backward compatibility with MethodValidator contracts)
+     */
+    public static function schedule_post($data) {
+        $post_id = $data['post_id'] ?? 0;
+        $account_id = $data['account_id'] ?? 0;
+        $options = $data['options'] ?? array();
+        return self::queue_post($post_id, $account_id, $options);
+    }
 }
