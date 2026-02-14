@@ -1,11 +1,11 @@
 {
-  "version": "3.2.7",
+  "version": "3.2.8",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.2.7 - Adiciona tabela de regras AI Source (Fonte IA / Campo / Operador / Valor) para detecção de sessões vindas de ChatGPT, Claude, Perplexity, Gemini, Copilot, DeepSeek, Grok e Meta AI com auto-indexação. Integra Google Indexing API para submissão direta de URLs (posts, páginas, produtos) com controle de quota (200/dia). Adiciona Google Meu Negócio Auto-Poster com limpeza automática de markup de page builders (Divi, WPBakery, Avada), suporte multisite e templates customizáveis.",
-  "released": "2026-02-14T17:30:00-03:00",
+  "changelog": "v3.2.8 - Corrige status 'Desconectado' no dashboard do plugin (agora verifica API Key em vez de cfrdm_api_url). Health check com fallback para endpoint /version, headers anti-cache, e exibição da versão no status. Corrige plugin-updates.json para permitir auto-update nos sites.",
+  "released": "2026-02-14T17:45:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",
