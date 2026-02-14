@@ -22,7 +22,8 @@ class CFRDM_Admin {
             update_option('cfrdm_api_key', $api_key);
         }
         
-        $is_connected = !empty(get_option('cfrdm_api_url'));
+        // Connection is active when API key exists (platform connects via API key, not cfrdm_api_url)
+        $is_connected = !empty($api_key);
         $synced_articles = CFRDM_Articles::get_synced_articles(5);
         $attention_articles = CFRDM_Articles::get_attention_articles(5);
         $image_stats = CFRDM_Image_Optimizer::get_stats();
@@ -79,9 +80,9 @@ class CFRDM_Admin {
                         <div class="cfrdm-connection-status">
                             <span class="status-indicator <?php echo $is_connected ? 'online' : 'offline'; ?>"></span>
                             <span class="status-text">
-                                <?php echo $is_connected 
+                            <?php echo $is_connected 
                                     ? __('Conectado ao ContentFactory', 'contentfactory-rdm')
-                                    : __('Não conectado', 'contentfactory-rdm'); 
+                                    : __('API Key não configurada', 'contentfactory-rdm'); 
                                 ?>
                             </span>
                         </div>

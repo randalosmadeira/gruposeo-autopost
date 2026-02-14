@@ -451,8 +451,8 @@ class CFRDM_API {
             'success' => true,
             'version' => CFRDM_VERSION,
             'minimum_supported' => '3.0.0',
-            'is_current' => version_compare(CFRDM_VERSION, '3.2.1', '>='),
-            'released' => '2026-02-10',
+            'is_current' => version_compare(CFRDM_VERSION, '3.2.8', '>='),
+            'released' => '2026-02-14',
             'features' => array(
                 'gsc_integration' => version_compare(CFRDM_VERSION, '3.0.0', '>='),
                 'ai_auto_fix' => version_compare(CFRDM_VERSION, '3.0.0', '>='),
@@ -474,14 +474,24 @@ class CFRDM_API {
     }
     
     public static function health_check() {
-        return new WP_REST_Response(array(
+        $response = new WP_REST_Response(array(
             'success' => true,
             'message' => 'ContentFactory RDM Plugin is active',
             'version' => CFRDM_VERSION,
             'wordpress' => get_bloginfo('version'),
             'php' => PHP_VERSION,
+            'site_name' => get_bloginfo('name'),
+            'site_url' => get_site_url(),
+            'api_key_configured' => !empty(get_option('cfrdm_api_key')),
             'timestamp' => current_time('c'),
         ), 200);
+        
+        // Prevent caching of health check responses
+        $response->header('Cache-Control', 'no-cache, no-store, must-revalidate');
+        $response->header('Pragma', 'no-cache');
+        $response->header('Expires', '0');
+        
+        return $response;
     }
 
     /**

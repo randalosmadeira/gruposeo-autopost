@@ -657,18 +657,35 @@
             $.ajax({
                 url: cfrdmAdmin.restUrl + 'health',
                 method: 'GET',
-                timeout: 5000,
-                success: (response) => {
-                    this.updateConnectionStatus(response.success === true);
+                timeout: 8000,
+                cache: false,
+                headers: {
+                    'X-WP-Nonce': cfrdmAdmin.restNonce || '',
+                    'Cache-Control': 'no-cache'
                 },
-                error: () => {
-                    this.updateConnectionStatus(false);
+                success: (response) => {
+                    this.updateConnectionStatus(response.success === true, response.version);
+                },
+                error: (xhr) => {
+                    // Fallback: try version endpoint (also public)
+                    $.ajax({
+                        url: cfrdmAdmin.restUrl + 'version',
+                        method: 'GET',
+                        timeout: 5000,
+                        cache: false,
+                        success: (resp) => {
+                            this.updateConnectionStatus(resp.success === true, resp.version);
+                        },
+                        error: () => {
+                            this.updateConnectionStatus(false);
+                        }
+                    });
                 }
             });
         },
 
         // Update Connection Status
-        updateConnectionStatus: function(isConnected) {
+        updateConnectionStatus: function(isConnected, version) {
             const $card = $('.cfrdm-connection-card');
             const $indicator = $('.status-indicator');
             const $text = $('.status-text');
@@ -677,9 +694,13 @@
                  .addClass(isConnected ? 'connected' : 'disconnected');
             
             $indicator.removeClass('online offline')
-                      .addClass(isConnected ? 'online' : 'offline');
+                       .addClass(isConnected ? 'online' : 'offline');
             
-            $text.text(isConnected ? 'Conectado' : 'Desconectado');
+            let statusText = isConnected ? 'Conectado ao ContentFactory' : 'Desconectado';
+            if (isConnected && version) {
+                statusText += ' (v' + version + ')';
+            }
+            $text.text(statusText);
         },
 
         // Initialize Tooltips
