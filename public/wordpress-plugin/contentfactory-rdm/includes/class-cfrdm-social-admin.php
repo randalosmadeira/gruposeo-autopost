@@ -68,7 +68,7 @@ class CFRDM_Social_Admin {
             self::save_settings();
         }
         
-        $accounts = CFRDM_Social_Poster::get_accounts();
+        $accounts = CFRDM_Method_Validator::safe_call('CFRDM_Social_Poster', 'get_accounts', array(), array());
         $settings = get_option('cfrdm_social_settings', array());
         
         ?>
@@ -241,7 +241,7 @@ class CFRDM_Social_Admin {
                     </div>
                     <div class="cfrdm-card-body">
                         <?php 
-                        $queue_stats = CFRDM_Social_Poster::get_queue_stats();
+                        $queue_stats = CFRDM_Method_Validator::safe_call('CFRDM_Social_Poster', 'get_queue_stats', array(), array());
                         ?>
                         <div class="cfrdm-queue-stats">
                             <div class="stat-item pending">
@@ -264,7 +264,7 @@ class CFRDM_Social_Admin {
                         
                         <!-- Recent Queue Items -->
                         <?php 
-                        $recent_items = CFRDM_Social_Poster::get_queue_items(array('limit' => 10));
+                        $recent_items = CFRDM_Method_Validator::safe_call('CFRDM_Social_Poster', 'get_queue_items', array(array('limit' => 10)), array());
                         if (!empty($recent_items)):
                         ?>
                         <table class="wp-list-table widefat fixed striped" style="margin-top: 20px;">
@@ -624,14 +624,14 @@ class CFRDM_Social_Admin {
             }
         }
         
-        $result = CFRDM_Social_Poster::add_account(array(
+        $result = CFRDM_Method_Validator::safe_call('CFRDM_Social_Poster', 'add_account', array(array(
             'network' => $platform,
             'account_name' => $account_name,
             'access_token' => $encrypted_credentials['access_token'] ?? null,
             'refresh_token' => $encrypted_credentials['refresh_token'] ?? null,
             'token_expires_at' => $encrypted_credentials['token_expires_at'] ?? null,
             'settings' => $encrypted_credentials,
-        ));
+        )), false);
         
         if ($result) {
             wp_send_json_success(array('id' => $result));
@@ -650,7 +650,7 @@ class CFRDM_Social_Admin {
             wp_send_json_error('Permissão negada');
         }
         
-        $result = CFRDM_Social_Poster::process_queue(10);
+        $result = CFRDM_Method_Validator::safe_call('CFRDM_Social_Poster', 'process_queue', array(10), array('processed' => 0));
         
         wp_send_json_success(array(
             'message' => sprintf(__('%d posts processados', 'contentfactory-rdm'), $result['processed'] ?? 0),
