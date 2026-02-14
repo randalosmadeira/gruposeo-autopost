@@ -91,12 +91,9 @@ export function useArticles(projectId?: string) {
       return data;
     },
     enabled: !!user,
-    refetchInterval: 30000,
-    staleTime: 20000,
-    gcTime: 60000,
-    refetchOnWindowFocus: false,
-    retry: 3,
-    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
+    refetchInterval: 60000,   // 1 min instead of 30s
+    staleTime: 45000,
+    gcTime: 300000,
   });
 
   // Debounced real-time subscription to avoid constant re-fetches
@@ -116,11 +113,11 @@ export function useArticles(projectId?: string) {
           filter: `user_id=eq.${user.id}`,
         },
         () => {
-          // Debounce: wait 2s after last event before refetching
+          // Debounce: wait 3s after last event before refetching
           if (debounceRef.current) clearTimeout(debounceRef.current);
           debounceRef.current = setTimeout(() => {
             queryClient.invalidateQueries({ queryKey: ['articles'] });
-          }, 2000);
+          }, 3000);
         }
       )
       .subscribe();

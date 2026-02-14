@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 type HealthStatus = 'checking' | 'online' | 'offline' | 'degraded';
 
-export function useBackendHealth(intervalMs = 30000) {
+export function useBackendHealth(intervalMs = 60000) {
   const [status, setStatus] = useState<HealthStatus>('checking');
   const [latency, setLatency] = useState<number | null>(null);
   const consecutiveFailures = useRef(0);

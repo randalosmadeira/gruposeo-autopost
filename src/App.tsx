@@ -38,7 +38,17 @@ const InternalLinking = lazy(() => import("./pages/InternalLinking"));
 const AIChat = lazy(() => import("./pages/AIChat"));
 const SystemPrompts = lazy(() => import("./pages/SystemPrompts"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60000,       // 1 min - avoid refetching data that's still fresh
+      gcTime: 300000,          // 5 min - keep cache longer
+      refetchOnWindowFocus: false,
+      retry: 2,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    },
+  },
+});
 
 // Minimal loading fallback
 const PageLoader = () => (
