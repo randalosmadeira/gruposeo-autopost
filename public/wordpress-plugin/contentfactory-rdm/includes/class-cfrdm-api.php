@@ -417,6 +417,20 @@ class CFRDM_API {
             'callback' => array(__CLASS__, 'set_ai_headers'),
             'permission_callback' => array(__CLASS__, 'verify_api_key'),
         ));
+        
+        // ===== Fix AI Crawler Blocks in robots.txt =====
+        register_rest_route('cfrdm/v1', '/fix-ai-crawlers', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'fix_ai_crawlers'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // ===== Batch Inject FAQ Schema into published articles =====
+        register_rest_route('cfrdm/v1', '/batch-inject-faq-schema', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'batch_inject_faq_schema'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
     }
     
     public static function verify_api_key($request) {
@@ -2773,5 +2787,166 @@ class CFRDM_API {
         
         // WordPress core sitemap
         return $site_url . '/wp-sitemap.xml';
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // Fix AI Crawler Blocks in robots.txt
+    // ═══════════════════════════════════════════════════════════
+    public static function fix_ai_crawlers($request) {
+        if (!class_exists('CFRDM_Sitemap_Optimizer')) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Sitemap Optimizer module not loaded',
+            ), 500);
+        }
+        
+        $unblocked = CFRDM_Sitemap_Optimizer::fix_ai_crawler_blocks();
+        
+        // Also ensure the AI robots.txt option is enabled
+        update_option('cfrdm_ai_robots_txt_enabled', true);
+        
+        if (class_exists('CFRDM_Logger')) {
+            CFRDM_Logger::info('ai_crawlers', 'AI crawler blocks fixed via API', array(
+                'unblocked' => $unblocked,
+            ));
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'unblocked' => $unblocked,
+            'count' => count($unblocked),
+            'message' => count($unblocked) > 0 
+                ? 'Desbloqueados: ' . implode(', ', $unblocked) 
+                : 'Nenhum crawler bloqueado encontrado - regras Allow já ativas',
+        ), 200);
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // Batch Inject FAQ Schema into published articles
+    // ═══════════════════════════════════════════════════════════
+    public static function batch_inject_faq_schema($request) {
+        $params = $request->get_json_params();
+        $limit = min(absint($params['limit'] ?? 50), 100);
+        $post_type = sanitize_text_field($params['post_type'] ?? 'post');
+        
+        $posts = get_posts(array(
+            'post_type' => $post_type,
+            'post_status' => 'publish',
+            'posts_per_page' => $limit,
+            'orderby' => 'modified',
+            'order' => 'DESC',
+            'meta_query' => array(
+                'relation' => 'OR',
+                array(
+                    'key' => '_cfrdm_faq_schema',
+                    'compare' => 'NOT EXISTS',
+                ),
+                array(
+                    'key' => '_cfrdm_faq_schema',
+                    'value' => '',
+                ),
+            ),
+        ));
+        
+        $injected = 0;
+        $skipped = 0;
+        $errors = 0;
+        
+        foreach ($posts as $post) {
+            $content = $post->post_content;
+            
+            // Extract FAQ from content (look for patterns like H2/H3 + paragraph)
+            $faqs = self::extract_faqs_from_content($content, $post->post_title);
+            
+            if (empty($faqs)) {
+                $skipped++;
+                continue;
+            }
+            
+            // Build FAQPage schema
+            $faq_schema = array(
+                '@context' => 'https://schema.org',
+                '@type' => 'FAQPage',
+                'mainEntity' => array(),
+            );
+            
+            foreach ($faqs as $faq) {
+                $faq_schema['mainEntity'][] = array(
+                    '@type' => 'Question',
+                    'name' => $faq['question'],
+                    'acceptedAnswer' => array(
+                        '@type' => 'Answer',
+                        'text' => $faq['answer'],
+                    ),
+                );
+            }
+            
+            // Save as post meta
+            update_post_meta($post->ID, '_cfrdm_faq_schema', wp_json_encode($faq_schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            update_post_meta($post->ID, '_cfrdm_faq_count', count($faqs));
+            
+            // Inject schema into post content (at the end, before closing tags)
+            $schema_script = "\n<!-- FAQ Schema - ContentFactory RDM -->\n<script type=\"application/ld+json\">" 
+                . wp_json_encode($faq_schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) 
+                . "</script>\n";
+            
+            // Only inject if not already present
+            if (strpos($content, 'FAQPage') === false) {
+                wp_update_post(array(
+                    'ID' => $post->ID,
+                    'post_content' => $content . $schema_script,
+                ));
+            }
+            
+            $injected++;
+        }
+        
+        if (class_exists('CFRDM_Logger')) {
+            CFRDM_Logger::info('faq_schema', 'Batch FAQ Schema injection', array(
+                'injected' => $injected,
+                'skipped' => $skipped,
+                'errors' => $errors,
+            ));
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'injected' => $injected,
+            'skipped' => $skipped,
+            'errors' => $errors,
+            'total_processed' => count($posts),
+        ), 200);
+    }
+    
+    /**
+     * Extract FAQ questions/answers from post content
+     */
+    private static function extract_faqs_from_content($content, $title) {
+        $faqs = array();
+        
+        // Pattern 1: H2/H3 tags that are questions (contain ?)
+        if (preg_match_all('/<h[23][^>]*>(.*?\?)<\/h[23]>\s*<p>(.*?)<\/p>/si', $content, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $question = wp_strip_all_tags(trim($match[1]));
+                $answer = wp_strip_all_tags(trim($match[2]));
+                if (strlen($question) > 10 && strlen($answer) > 20) {
+                    $faqs[] = array('question' => $question, 'answer' => $answer);
+                }
+            }
+        }
+        
+        // Pattern 2: Strong/bold text followed by paragraph (common FAQ format)
+        if (empty($faqs) && preg_match_all('/<(?:strong|b)>(.*?\?)<\/(?:strong|b)>\s*(?:<br\s*\/?>)?\s*(.*?)(?=<(?:strong|b|h[23]|\/div))/si', $content, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $question = wp_strip_all_tags(trim($match[1]));
+                $answer = wp_strip_all_tags(trim($match[2]));
+                if (strlen($question) > 10 && strlen($answer) > 20) {
+                    $faqs[] = array('question' => $question, 'answer' => $answer);
+                }
+            }
+        }
+        
+        // Limit to 10 FAQs
+        return array_slice($faqs, 0, 10);
     }
 }

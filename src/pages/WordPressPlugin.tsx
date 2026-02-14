@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '3.2.9';
-const PLUGIN_LAST_UPDATE = '2026-02-14T20:30:00';
+const PLUGIN_VERSION = '3.3.0';
+const PLUGIN_LAST_UPDATE = '2026-02-14T22:30:00';
 
 const features = [
   {
@@ -92,6 +92,19 @@ const installSteps = [
 
 const changelog = [
   {
+    version: '3.3.0',
+    date: '2026-02-14',
+    type: 'minor' as const,
+    changes: [
+      { type: 'feature', text: 'Auto-fix: robots.txt agora remove automaticamente bloqueios de crawlers de IA (GPTBot, PerplexityBot, ClaudeBot)' },
+      { type: 'feature', text: 'Auto-fix: Injeção batch de FAQ Schema (FAQPage JSON-LD) em artigos publicados sem structured data' },
+      { type: 'feature', text: 'Novo endpoint REST: fix-ai-crawlers para correção remota via SEO Agent' },
+      { type: 'feature', text: 'Novo endpoint REST: batch-inject-faq-schema para injeção massiva de structured data' },
+      { type: 'improvement', text: 'robots.txt expandido com 12+ crawlers de IA permitidos (Applebot-Extended, CCBot, etc.)' },
+      { type: 'improvement', text: 'SEO Agent agora corrige automaticamente issues IDX-002 e GEO-001 do audit' },
+    ],
+  },
+  {
     version: '3.2.9',
     date: '2026-02-14',
     type: 'patch' as const,
@@ -99,7 +112,6 @@ const changelog = [
       { type: 'fix', text: 'Contrato do Method Validator para add_to_queue (max:3→5) previne warnings durante sincronização GSC' },
       { type: 'fix', text: 'detect_sitemap_url() agora usa cache transient (1h) evitando HTTP calls repetidos no robots.txt' },
       { type: 'improvement', text: 'GSC Integration com inspeção expandida (posts, pages, products) ordenada por data de modificação' },
-      { type: 'improvement', text: 'SEO Agent com detecção dinâmica de sitemap e submissão batch ao Google Indexing API' },
     ],
   },
   {

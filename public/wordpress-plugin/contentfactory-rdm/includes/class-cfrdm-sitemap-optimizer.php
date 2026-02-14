@@ -247,31 +247,37 @@ class CFRDM_Sitemap_Optimizer {
     }
     
     /**
-     * Enhance robots.txt
+     * Enhance robots.txt - Remove AI crawler blocks and add Allow rules
      */
     public function enhance_robots_txt($output, $public) {
         if (!$public) return $output;
         
         $site_url = get_site_url();
         
-        // Add AI crawler rules
-        $additions = "\n# AI Crawlers - ContentFactory RDM\n";
-        $additions .= "User-agent: GPTBot\n";
-        $additions .= "Allow: /\n\n";
-        $additions .= "User-agent: ChatGPT-User\n";
-        $additions .= "Allow: /\n\n";
-        $additions .= "User-agent: Claude-Web\n";
-        $additions .= "Allow: /\n\n";
-        $additions .= "User-agent: Anthropic-AI\n";
-        $additions .= "Allow: /\n\n";
-        $additions .= "User-agent: Google-Extended\n";
-        $additions .= "Allow: /\n\n";
-        $additions .= "User-agent: PerplexityBot\n";
-        $additions .= "Allow: /\n\n";
-        $additions .= "User-agent: Bytespider\n";
-        $additions .= "Allow: /\n\n";
-        $additions .= "User-agent: cohere-ai\n";
-        $additions .= "Allow: /\n\n";
+        // Strategic AI crawlers that MUST be allowed
+        $ai_crawlers = array(
+            'GPTBot', 'ChatGPT-User', 'Claude-Web', 'Anthropic-AI', 'ClaudeBot',
+            'Google-Extended', 'PerplexityBot', 'Bytespider', 'cohere-ai',
+            'Applebot-Extended', 'CCBot', 'FacebookExternalHit',
+        );
+        
+        // STEP 1: Remove any existing Disallow rules for AI crawlers
+        // This fixes IDX-002 when other plugins/themes block AI bots
+        foreach ($ai_crawlers as $bot) {
+            // Remove User-agent + Disallow blocks for this bot
+            $pattern = '/User-agent:\s*' . preg_quote($bot, '/') . '\s*\n\s*Disallow:\s*\/\s*\n?/i';
+            $output = preg_replace($pattern, '', $output);
+        }
+        
+        // Clean up any double newlines from removal
+        $output = preg_replace('/\n{3,}/', "\n\n", $output);
+        
+        // STEP 2: Add explicit Allow rules for all AI crawlers
+        $additions = "\n# AI Crawlers - ContentFactory RDM (auto-managed)\n";
+        foreach ($ai_crawlers as $bot) {
+            $additions .= "User-agent: {$bot}\n";
+            $additions .= "Allow: /\n\n";
+        }
         
         // Sitemaps — auto-detect which sitemap is active
         $sitemap_url = self::detect_sitemap_url();
@@ -284,5 +290,33 @@ class CFRDM_Sitemap_Optimizer {
         $additions .= "# llms.txt: {$site_url}/llms.txt\n";
         
         return $output . $additions;
+    }
+    
+    /**
+     * Fix AI crawler blocks in robots.txt (called via REST API)
+     * Returns list of crawlers that were unblocked
+     */
+    public static function fix_ai_crawler_blocks() {
+        // Force-enable the AI robots.txt option
+        update_option('cfrdm_ai_robots_txt_enabled', true);
+        
+        // Clear any cached robots.txt
+        delete_transient('cfrdm_detected_sitemap_url');
+        
+        // Check current robots.txt for blocked crawlers
+        $response = wp_remote_get(home_url('/robots.txt'), array('timeout' => 5));
+        $unblocked = array();
+        
+        if (!is_wp_error($response)) {
+            $content = wp_remote_retrieve_body($response);
+            $ai_bots = array('GPTBot', 'ClaudeBot', 'PerplexityBot', 'Google-Extended', 'ChatGPT-User', 'Anthropic-AI', 'Claude-Web');
+            foreach ($ai_bots as $bot) {
+                if (preg_match('/User-agent:\s*' . preg_quote($bot, '/') . '\s*\n\s*Disallow:\s*\//i', $content)) {
+                    $unblocked[] = $bot;
+                }
+            }
+        }
+        
+        return $unblocked;
     }
 }
