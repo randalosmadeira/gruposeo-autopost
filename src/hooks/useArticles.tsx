@@ -19,8 +19,7 @@ export function useArticles(projectId?: string) {
     featured_image_url, seo_score, word_count, project_id,
     published_at, published_url, scheduled_at, secondary_keywords,
     config, error_message, emotional_trigger, emotional_confidence,
-    created_at, updated_at, user_id,
-    projects ( id, name, domain )
+    created_at, updated_at, user_id
   `;
 
   const { data: articles, isLoading, error } = useQuery({
@@ -28,7 +27,6 @@ export function useArticles(projectId?: string) {
     queryFn: async () => {
       if (!user) return [];
       
-      // Single query with count - avoid recursive pagination for dashboard speed
       let query = supabase
         .from('articles')
         .select(selectFields)
@@ -41,10 +39,20 @@ export function useArticles(projectId?: string) {
       
       const { data, error } = await query;
       
-      if (error) throw error;
+      if (error) {
+        console.error('[useArticles] Query error:', error);
+        throw error;
+      }
+      
+      if (!data) {
+        console.warn('[useArticles] Query returned null data');
+        return [];
+      }
+
+      console.log(`[useArticles] Loaded ${data.length} articles`);
       
       // If we got exactly 1000, fetch remaining pages
-      if (data && data.length === 1000) {
+      if (data.length === 1000) {
         let allData = [...data];
         let from = 1000;
         const MAX_PAGES = 19;
@@ -62,7 +70,10 @@ export function useArticles(projectId?: string) {
           }
           
           const { data: moreData, error: moreError } = await nextQuery;
-          if (moreError) throw moreError;
+          if (moreError) {
+            console.error('[useArticles] Pagination error:', moreError);
+            break;
+          }
           
           if (moreData && moreData.length > 0) {
             allData = allData.concat(moreData);
@@ -77,14 +88,14 @@ export function useArticles(projectId?: string) {
         return allData;
       }
       
-      return data || [];
+      return data;
     },
     enabled: !!user,
     refetchInterval: 30000,
     staleTime: 20000,
     gcTime: 60000,
     refetchOnWindowFocus: false,
-    retry: 2,
+    retry: 3,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
   });
 
@@ -229,20 +240,17 @@ export function useArticle(id: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('articles')
-        .select(`
-          *,
-          projects (
-            id,
-            name,
-            domain
-          )
-        `)
+        .select('*')
         .eq('id', id)
         .maybeSingle();
       
-      if (error) throw error;
+      if (error) {
+        console.error('[useArticle] Query error:', error);
+        throw error;
+      }
       return data;
     },
     enabled: !!user && !!id,
+    retry: 3,
   });
 }
