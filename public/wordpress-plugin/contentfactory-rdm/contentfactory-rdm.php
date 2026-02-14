@@ -87,6 +87,9 @@ function cfrdm_load_dependencies() {
     // v3.2.3 - AI Traffic Detection & SEO Checklist
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-traffic-detector.php';
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-seo-checklist.php';
+    
+    // v3.2.4 - Method Signature Validator (prevents fatal errors from missing/incompatible methods)
+    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-method-validator.php';
 }
 
 /**
@@ -237,6 +240,7 @@ private function init_admin_hooks() {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
         add_action('admin_init', array($this, 'register_settings'));
+        add_action('admin_init', array('CFRDM_Method_Validator', 'validate'), 999);
 
         // AJAX handlers - load dependencies only when AJAX is called
         add_action('wp_ajax_cfrdm_clear_logs', array($this, 'handle_ajax_clear_logs'));
