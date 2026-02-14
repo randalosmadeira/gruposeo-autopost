@@ -3,7 +3,7 @@
  * Plugin Name: ContentFactory RDM
  * Plugin URI: https://gruposeo.marketing/contentfactory
  * Description: Integração avançada com ContentFactory para publicação automática de artigos, sincronização, otimização de imagens, links internos, geração de SEO via IA, indexação automática, social posting e queue system.
- * Version: 3.2.4
+ * Version: 3.2.6
  * Author: GRUPO SEO MARKETING
  * Author URI: https://gruposeo.marketing
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '3.2.4');
+define('CFRDM_VERSION', '3.2.6');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -182,6 +182,18 @@ class ContentFactory_RDM {
             CFRDM_SEO_Checklist::get_instance()->init();
         } catch (Exception $e) {
             error_log('ContentFactory v3.2.3 init error: ' . $e->getMessage());
+        }
+        
+        // Initialize v3.0.0 modules (cron callbacks + hooks)
+        try {
+            CFRDM_GSC_Integration::get_instance()->init();
+            CFRDM_AI_Auto_Fix::get_instance()->init();
+            CFRDM_Ubersuggest_Sync::get_instance()->init();
+            CFRDM_HTTPS_Enforcer::get_instance()->init();
+            CFRDM_Auto_Update::get_instance()->init();
+            CFRDM_AI_Content_Enhancer::get_instance()->init();
+        } catch (Exception $e) {
+            error_log('ContentFactory v3.0.0 init error: ' . $e->getMessage());
         }
         
         // Only load admin-specific hooks in admin context
@@ -806,6 +818,38 @@ private function init_admin_hooks() {
         }
         if (!wp_next_scheduled('cfrdm_fetch_news')) {
             wp_schedule_event(time(), 'twicedaily', 'cfrdm_fetch_news');
+        }
+        // Advanced module cron jobs
+        if (!wp_next_scheduled('cfrdm_process_social_queue')) {
+            wp_schedule_event(time(), 'every_15_minutes', 'cfrdm_process_social_queue');
+        }
+        if (!wp_next_scheduled('cfrdm_process_content_queue')) {
+            wp_schedule_event(time(), 'every_5_minutes', 'cfrdm_process_content_queue');
+        }
+        if (!wp_next_scheduled('cfrdm_cleanup_structured_logs')) {
+            wp_schedule_event(time(), 'daily', 'cfrdm_cleanup_structured_logs');
+        }
+        if (!wp_next_scheduled('cfrdm_reset_stuck_cron_jobs')) {
+            wp_schedule_event(time(), 'hourly', 'cfrdm_reset_stuck_cron_jobs');
+        }
+        // v3.0.0 module cron jobs
+        if (!wp_next_scheduled('cfrdm_gsc_sync')) {
+            wp_schedule_event(time(), 'every_6_hours', 'cfrdm_gsc_sync');
+        }
+        if (!wp_next_scheduled('cfrdm_process_fix_queue')) {
+            wp_schedule_event(time(), 'hourly', 'cfrdm_process_fix_queue');
+        }
+        if (!wp_next_scheduled('cfrdm_ubersuggest_sync')) {
+            wp_schedule_event(time(), 'daily', 'cfrdm_ubersuggest_sync');
+        }
+        if (!wp_next_scheduled('cfrdm_https_scan')) {
+            wp_schedule_event(time(), 'weekly', 'cfrdm_https_scan');
+        }
+        if (!wp_next_scheduled('cfrdm_check_updates')) {
+            wp_schedule_event(time(), 'daily', 'cfrdm_check_updates');
+        }
+        if (!wp_next_scheduled('cfrdm_enhance_content')) {
+            wp_schedule_event(time(), 'every_6_hours', 'cfrdm_enhance_content');
         }
     }
     
