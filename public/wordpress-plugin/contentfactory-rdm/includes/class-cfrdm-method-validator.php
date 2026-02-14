@@ -65,6 +65,10 @@ class CFRDM_Method_Validator {
 
             // AI Traffic Detector
             'CFRDM_AI_Traffic_Detector::get_stats'   => array('min' => 0, 'max' => 1),
+
+            // Social Poster - queue management
+            'CFRDM_Social_Poster::get_queue_stats'   => array('min' => 0, 'max' => 0),
+            'CFRDM_Social_Poster::process_queue'     => array('min' => 0, 'max' => 1),
         );
     }
 
