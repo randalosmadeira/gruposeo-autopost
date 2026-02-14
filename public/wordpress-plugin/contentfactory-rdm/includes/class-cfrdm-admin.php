@@ -1873,11 +1873,19 @@ class CFRDM_Admin {
         $order = isset($_GET['order']) ? strtoupper(sanitize_text_field($_GET['order'])) : 'DESC';
         $search = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
         $category_filter = isset($_GET['category']) ? intval($_GET['category']) : 0;
+        $status_filter = isset($_GET['post_status']) ? sanitize_text_field($_GET['post_status']) : 'publish';
         
-        // Query all published posts
+        // Allowed statuses
+        $allowed_statuses = array('publish', 'draft', 'pending', 'all');
+        if (!in_array($status_filter, $allowed_statuses)) {
+            $status_filter = 'publish';
+        }
+        $query_status = ($status_filter === 'all') ? array('publish', 'draft', 'pending') : $status_filter;
+        
+        // Query posts
         $args = array(
             'post_type' => array('post', 'page'),
-            'post_status' => 'publish',
+            'post_status' => $query_status,
             'posts_per_page' => $per_page,
             'offset' => $offset,
             'orderby' => $orderby,
@@ -1983,7 +1991,14 @@ class CFRDM_Admin {
                 <form method="get" action="">
                     <input type="hidden" name="page" value="cfrdm-indexation">
                     
-                    <div class="alignleft actions">
+                     <div class="alignleft actions">
+                        <select name="post_status">
+                            <option value="publish" <?php selected($status_filter, 'publish'); ?>><?php _e('Publicados', 'contentfactory-rdm'); ?></option>
+                            <option value="draft" <?php selected($status_filter, 'draft'); ?>><?php _e('Rascunhos', 'contentfactory-rdm'); ?></option>
+                            <option value="pending" <?php selected($status_filter, 'pending'); ?>><?php _e('Pendentes', 'contentfactory-rdm'); ?></option>
+                            <option value="all" <?php selected($status_filter, 'all'); ?>><?php _e('Todos os Status', 'contentfactory-rdm'); ?></option>
+                        </select>
+                        
                         <select name="category">
                             <option value=""><?php _e('Todas as Categorias', 'contentfactory-rdm'); ?></option>
                             <?php foreach ($categories as $cat): ?>
@@ -2023,6 +2038,7 @@ class CFRDM_Admin {
                         <th scope="col" class="manage-column"><?php _e('Categorias', 'contentfactory-rdm'); ?></th>
                         <th scope="col" class="manage-column"><?php _e('Tags', 'contentfactory-rdm'); ?></th>
                         <th scope="col" class="manage-column"><?php _e('Palavras', 'contentfactory-rdm'); ?></th>
+                        <th scope="col" class="manage-column"><?php _e('Status', 'contentfactory-rdm'); ?></th>
                         <th scope="col" class="manage-column"><?php _e('Links Int.', 'contentfactory-rdm'); ?></th>
                         <th scope="col" class="manage-column sortable <?php echo ($orderby === 'date') ? ($order === 'DESC' ? 'desc' : 'asc') : ''; ?>">
                             <a href="<?php echo esc_url(add_query_arg(array('orderby' => 'date', 'order' => ($orderby === 'date' && $order === 'DESC') ? 'ASC' : 'DESC'))); ?>">
@@ -2100,6 +2116,16 @@ class CFRDM_Admin {
                             </td>
                             <td><?php echo number_format_i18n($word_count); ?></td>
                             <td>
+                                <?php 
+                                $post_status = get_post_status();
+                                $status_labels = array('publish' => 'Publicado', 'draft' => 'Rascunho', 'pending' => 'Pendente');
+                                $status_colors = array('publish' => '#2e7d32', 'draft' => '#757575', 'pending' => '#e65100');
+                                $label = isset($status_labels[$post_status]) ? $status_labels[$post_status] : $post_status;
+                                $color = isset($status_colors[$post_status]) ? $status_colors[$post_status] : '#757575';
+                                ?>
+                                <span style="color: <?php echo $color; ?>; font-weight: 600;"><?php echo esc_html($label); ?></span>
+                            </td>
+                            <td>
                                 <?php if ($internal_link_count > 0): ?>
                                     <span class="dashicons dashicons-admin-links" style="color: #2e7d32;"></span>
                                     <?php echo $internal_link_count; ?>
@@ -2112,7 +2138,7 @@ class CFRDM_Admin {
                         <?php endwhile; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="8" class="no-items"><?php _e('Nenhum artigo encontrado.', 'contentfactory-rdm'); ?></td>
+                            <td colspan="9" class="no-items"><?php _e('Nenhum artigo encontrado.', 'contentfactory-rdm'); ?></td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
