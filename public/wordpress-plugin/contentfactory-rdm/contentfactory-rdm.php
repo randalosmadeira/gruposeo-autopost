@@ -92,9 +92,15 @@ function cfrdm_load_dependencies() {
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-method-validator.php';
     
     // v3.2.7 - AI Source Rules, Google Indexing Submitter, GMB Auto-Poster
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-source-rules.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-google-indexing-submitter.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-gmb-poster.php';
+    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-source-rules.php')) {
+        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-source-rules.php';
+    }
+    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-google-indexing-submitter.php')) {
+        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-google-indexing-submitter.php';
+    }
+    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-gmb-poster.php')) {
+        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-gmb-poster.php';
+    }
 }
 
 /**
@@ -173,40 +179,46 @@ class ContentFactory_RDM {
         
         // Initialize v3.1.0 modules (work in all contexts)
         try {
-            CFRDM_IndexNow::get_instance()->init();
-            CFRDM_LLMS_Txt::get_instance()->init();
-            CFRDM_Sitemap_Optimizer::get_instance()->init();
-            CFRDM_Meta_Auditor::get_instance()->init();
-        } catch (Exception $e) {
+            if (class_exists('CFRDM_IndexNow')) CFRDM_IndexNow::get_instance()->init();
+            if (class_exists('CFRDM_LLMS_Txt')) CFRDM_LLMS_Txt::get_instance()->init();
+            if (class_exists('CFRDM_Sitemap_Optimizer')) CFRDM_Sitemap_Optimizer::get_instance()->init();
+            if (class_exists('CFRDM_Meta_Auditor')) CFRDM_Meta_Auditor::get_instance()->init();
+        } catch (\Throwable $e) {
             error_log('ContentFactory v3.1.0 init error: ' . $e->getMessage());
         }
         
         // Initialize v3.2.3 modules
         try {
-            CFRDM_AI_Traffic_Detector::get_instance()->init();
-            CFRDM_SEO_Checklist::get_instance()->init();
-        } catch (Exception $e) {
+            if (class_exists('CFRDM_AI_Traffic_Detector')) CFRDM_AI_Traffic_Detector::get_instance()->init();
+            if (class_exists('CFRDM_SEO_Checklist')) CFRDM_SEO_Checklist::get_instance()->init();
+        } catch (\Throwable $e) {
             error_log('ContentFactory v3.2.3 init error: ' . $e->getMessage());
         }
         
         // Initialize v3.2.7 modules
         try {
-            CFRDM_AI_Source_Rules::get_instance()->init();
-            CFRDM_Google_Indexing_Submitter::get_instance()->init();
-            CFRDM_GMB_Poster::get_instance()->init();
-        } catch (Exception $e) {
+            if (class_exists('CFRDM_AI_Source_Rules')) {
+                CFRDM_AI_Source_Rules::get_instance()->init();
+            }
+            if (class_exists('CFRDM_Google_Indexing_Submitter')) {
+                CFRDM_Google_Indexing_Submitter::get_instance()->init();
+            }
+            if (class_exists('CFRDM_GMB_Poster')) {
+                CFRDM_GMB_Poster::get_instance()->init();
+            }
+        } catch (\Throwable $e) {
             error_log('ContentFactory v3.2.7 init error: ' . $e->getMessage());
         }
         
         // Initialize v3.0.0 modules (cron callbacks + hooks)
         try {
-            CFRDM_GSC_Integration::get_instance()->init();
-            CFRDM_AI_Auto_Fix::get_instance()->init();
-            CFRDM_Ubersuggest_Sync::get_instance()->init();
-            CFRDM_HTTPS_Enforcer::get_instance()->init();
-            CFRDM_Auto_Update::get_instance()->init();
-            CFRDM_AI_Content_Enhancer::get_instance()->init();
-        } catch (Exception $e) {
+            if (class_exists('CFRDM_GSC_Integration')) CFRDM_GSC_Integration::get_instance()->init();
+            if (class_exists('CFRDM_AI_Auto_Fix')) CFRDM_AI_Auto_Fix::get_instance()->init();
+            if (class_exists('CFRDM_Ubersuggest_Sync')) CFRDM_Ubersuggest_Sync::get_instance()->init();
+            if (class_exists('CFRDM_HTTPS_Enforcer')) CFRDM_HTTPS_Enforcer::get_instance()->init();
+            if (class_exists('CFRDM_Auto_Update')) CFRDM_Auto_Update::get_instance()->init();
+            if (class_exists('CFRDM_AI_Content_Enhancer')) CFRDM_AI_Content_Enhancer::get_instance()->init();
+        } catch (\Throwable $e) {
             error_log('ContentFactory v3.0.0 init error: ' . $e->getMessage());
         }
         
@@ -216,8 +228,8 @@ class ContentFactory_RDM {
             
             // Post Duplicator (admin only)
             try {
-                CFRDM_Post_Duplicator::get_instance()->init();
-            } catch (Exception $e) {
+                if (class_exists('CFRDM_Post_Duplicator')) CFRDM_Post_Duplicator::get_instance()->init();
+            } catch (\Throwable $e) {
                 error_log('ContentFactory Post Duplicator init error: ' . $e->getMessage());
             }
         }
@@ -690,32 +702,46 @@ private function init_admin_hooks() {
         
         // Create advanced module tables
         cfrdm_load_dependencies();
-        CFRDM_Structured_Logs::create_table();
-        CFRDM_Social_Poster::create_tables();
-        CFRDM_Cron_Scheduler::create_tables();
-        CFRDM_Content_Queue::create_table();
         
-        // v3.0.0 - Create AI Auto-Fix tables
-        CFRDM_AI_Auto_Fix::create_table();
-        CFRDM_Ubersuggest_Sync::create_table();
-        
-        // Initialize v3.0.0 modules AFTER cron intervals are registered
-        // Use try-catch to prevent fatal errors during activation
         try {
-            CFRDM_GSC_Integration::get_instance()->init();
-            CFRDM_AI_Auto_Fix::get_instance()->init();
-            CFRDM_Ubersuggest_Sync::get_instance()->init();
-            CFRDM_HTTPS_Enforcer::get_instance()->init();
-            CFRDM_Auto_Update::get_instance()->init();
-            CFRDM_AI_Content_Enhancer::get_instance()->init();
+            CFRDM_Structured_Logs::create_table();
+            CFRDM_Social_Poster::create_tables();
+            CFRDM_Cron_Scheduler::create_tables();
+            CFRDM_Content_Queue::create_table();
+            
+            // v3.0.0 - Create AI Auto-Fix tables
+            CFRDM_AI_Auto_Fix::create_table();
+            CFRDM_Ubersuggest_Sync::create_table();
+            
+            // v3.2.7 - Create GMB table
+            if (class_exists('CFRDM_GMB_Poster')) {
+                CFRDM_GMB_Poster::create_tables();
+            }
+        } catch (\Throwable $e) {
+            error_log('ContentFactory RDM table creation error: ' . $e->getMessage());
+        }
+        
+        // Initialize modules AFTER cron intervals are registered
+        try {
+            if (class_exists('CFRDM_GSC_Integration')) CFRDM_GSC_Integration::get_instance()->init();
+            if (class_exists('CFRDM_AI_Auto_Fix')) CFRDM_AI_Auto_Fix::get_instance()->init();
+            if (class_exists('CFRDM_Ubersuggest_Sync')) CFRDM_Ubersuggest_Sync::get_instance()->init();
+            if (class_exists('CFRDM_HTTPS_Enforcer')) CFRDM_HTTPS_Enforcer::get_instance()->init();
+            if (class_exists('CFRDM_Auto_Update')) CFRDM_Auto_Update::get_instance()->init();
+            if (class_exists('CFRDM_AI_Content_Enhancer')) CFRDM_AI_Content_Enhancer::get_instance()->init();
             
             // v3.1.0 modules
-            CFRDM_Meta_Auditor::get_instance()->init();
-            CFRDM_IndexNow::get_instance()->init();
-            CFRDM_LLMS_Txt::get_instance()->init();
-            CFRDM_Post_Duplicator::get_instance()->init();
-            CFRDM_Sitemap_Optimizer::get_instance()->init();
-        } catch (Exception $e) {
+            if (class_exists('CFRDM_Meta_Auditor')) CFRDM_Meta_Auditor::get_instance()->init();
+            if (class_exists('CFRDM_IndexNow')) CFRDM_IndexNow::get_instance()->init();
+            if (class_exists('CFRDM_LLMS_Txt')) CFRDM_LLMS_Txt::get_instance()->init();
+            if (class_exists('CFRDM_Post_Duplicator')) CFRDM_Post_Duplicator::get_instance()->init();
+            if (class_exists('CFRDM_Sitemap_Optimizer')) CFRDM_Sitemap_Optimizer::get_instance()->init();
+            
+            // v3.2.7 modules
+            if (class_exists('CFRDM_AI_Source_Rules')) CFRDM_AI_Source_Rules::get_instance()->init();
+            if (class_exists('CFRDM_Google_Indexing_Submitter')) CFRDM_Google_Indexing_Submitter::get_instance()->init();
+            if (class_exists('CFRDM_GMB_Poster')) CFRDM_GMB_Poster::get_instance()->init();
+        } catch (\Throwable $e) {
             error_log('ContentFactory RDM activation error: ' . $e->getMessage());
         }
         
