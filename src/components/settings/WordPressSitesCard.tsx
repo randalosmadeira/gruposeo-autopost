@@ -278,10 +278,11 @@ export function WordPressSitesCard() {
         title: 'Site adicionado!',
         description: 'O site WordPress foi adicionado com sucesso.',
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('[handleAddSite] Error:', error);
       toast({
         title: 'Erro ao adicionar site',
-        description: error instanceof Error ? error.message : 'Erro desconhecido',
+        description: error instanceof Error ? error.message : (error?.message || 'Erro desconhecido'),
         variant: 'destructive',
       });
     } finally {
@@ -358,14 +359,18 @@ export function WordPressSitesCard() {
         title: 'Site adicionado e conectado! ✓',
         description: `Conectado a: ${testData.site?.name || finalUrl}${testData.pluginVersion ? ` (Plugin v${testData.pluginVersion})` : ''}`,
       });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Erro desconhecido';
-      const isNetworkError = message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('fetch');
+    } catch (error: any) {
+      const message = error instanceof Error 
+        ? error.message 
+        : (error?.message || error?.error_description || error?.details || JSON.stringify(error) || 'Erro desconhecido');
+      const isNetworkError = message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('fetch') || message.includes('Load failed');
+      
+      console.error('[handleAddPluginSite] Error:', error);
       
       toast({
         title: 'Erro ao adicionar site',
         description: isNetworkError 
-          ? 'Servidor temporariamente indisponível. Verifique sua conexão e tente novamente em alguns minutos.'
+          ? 'Sessão expirada ou servidor indisponível. Recarregue a página e tente novamente.'
           : message,
         variant: 'destructive',
       });
