@@ -68,6 +68,12 @@ class CFRDM_Sitemap_Optimizer {
      * Detect which sitemap URL is active on this site
      */
     public static function detect_sitemap_url() {
+        // Cache result for 1 hour to avoid HTTP calls on every robots.txt request
+        $cached = get_transient('cfrdm_detected_sitemap_url');
+        if ($cached !== false) {
+            return $cached;
+        }
+        
         $site_url = get_site_url();
         $candidates = array(
             $site_url . '/sitemap_index.xml',  // Yoast / Rank Math
@@ -78,12 +84,15 @@ class CFRDM_Sitemap_Optimizer {
         foreach ($candidates as $url) {
             $response = wp_remote_head($url, array('timeout' => 5, 'sslverify' => false));
             if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
+                set_transient('cfrdm_detected_sitemap_url', $url, HOUR_IN_SECONDS);
                 return $url;
             }
         }
         
         // Fallback to WordPress core
-        return $site_url . '/wp-sitemap.xml';
+        $fallback = $site_url . '/wp-sitemap.xml';
+        set_transient('cfrdm_detected_sitemap_url', $fallback, HOUR_IN_SECONDS);
+        return $fallback;
     }
     
     /**
