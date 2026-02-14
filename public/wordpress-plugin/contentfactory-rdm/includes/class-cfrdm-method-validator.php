@@ -33,7 +33,7 @@ class CFRDM_Method_Validator {
             'CFRDM_Social_Poster::schedule_post'     => array('min' => 1, 'max' => 1),
 
             // AI Auto-Fix
-            'CFRDM_AI_Auto_Fix::add_to_queue'        => array('min' => 1, 'max' => 3),
+            'CFRDM_AI_Auto_Fix::add_to_queue'        => array('min' => 1, 'max' => 5),
             'CFRDM_AI_Auto_Fix::get_queue'           => array('min' => 0, 'max' => 1),
 
             // IndexNow

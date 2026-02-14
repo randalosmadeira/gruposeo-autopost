@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '3.2.8';
-const PLUGIN_LAST_UPDATE = '2026-02-14T19:00:00';
+const PLUGIN_VERSION = '3.2.9';
+const PLUGIN_LAST_UPDATE = '2026-02-14T20:30:00';
 
 const features = [
   {
@@ -91,6 +91,17 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '3.2.9',
+    date: '2026-02-14',
+    type: 'patch' as const,
+    changes: [
+      { type: 'fix', text: 'Contrato do Method Validator para add_to_queue (max:3→5) previne warnings durante sincronização GSC' },
+      { type: 'fix', text: 'detect_sitemap_url() agora usa cache transient (1h) evitando HTTP calls repetidos no robots.txt' },
+      { type: 'improvement', text: 'GSC Integration com inspeção expandida (posts, pages, products) ordenada por data de modificação' },
+      { type: 'improvement', text: 'SEO Agent com detecção dinâmica de sitemap e submissão batch ao Google Indexing API' },
+    ],
+  },
   {
     version: '3.2.8',
     date: '2026-02-14',
