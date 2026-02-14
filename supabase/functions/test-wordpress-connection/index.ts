@@ -117,9 +117,14 @@ Deno.serve(async (req) => {
 
     let baseUrl = wordpress_url.replace(/\/$/, "");
     
-    // Clean up URL: remove any existing wp-json paths that may have been incorrectly included
+    // Clean up URL: remove any existing wp-json or cfrdm paths that may have been incorrectly included
     baseUrl = baseUrl.replace(/\/wp-json(\/.*)?$/, "");
-    log.info("testing_connection", { baseUrl, use_plugin: !!use_plugin });
+    baseUrl = baseUrl.replace(/\/(cfrdm|wp)(\/.*)?$/, "");
+    
+    // Track if URL was modified for correctedUrl response
+    const originalUrl = wordpress_url.replace(/\/$/, "");
+    const urlWasCleaned = baseUrl !== originalUrl;
+    log.info("testing_connection", { baseUrl, originalUrl, urlWasCleaned, use_plugin: !!use_plugin });
 
     // Plugin-based authentication
     if (use_plugin && api_key) {
@@ -235,7 +240,7 @@ Deno.serve(async (req) => {
               site: pluginData.site,
               canPublish: true,
               discoveredPath: discovery.path || null,
-              correctedUrl: discovery.path ? `${wordpress_url.replace(/\/$/, "")}${discovery.path}` : null,
+              correctedUrl: (discovery.path || urlWasCleaned) ? baseUrl : null,
               pluginVersion,
               minimumVersion: MINIMUM_PLUGIN_VERSION,
               isOutdated,
@@ -391,7 +396,7 @@ Deno.serve(async (req) => {
           canPublish,
           user: userInfo ? { name: userInfo.name, roles: userInfo.roles } : null,
           discoveredPath: discovery.path || null,
-          correctedUrl: discovery.path ? `${wordpress_url.replace(/\/$/, "")}${discovery.path}` : null,
+          correctedUrl: (discovery.path || urlWasCleaned) ? baseUrl : null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
