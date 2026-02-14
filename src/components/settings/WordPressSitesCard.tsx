@@ -313,10 +313,15 @@ export function WordPressSitesCard() {
 
     setIsCreating(true);
     try {
+      // Clean URL: remove wp-json, cfrdm paths, and trailing slashes
+      let cleanUrl = pluginSiteUrl.replace(/\/$/, '');
+      cleanUrl = cleanUrl.replace(/\/wp-json(\/.*)?$/, '');
+      cleanUrl = cleanUrl.replace(/\/(cfrdm|wp)(\/.*)?$/, '');
+
       // Step 1: Test connection BEFORE saving
       const { data: testData, error: testError } = await supabase.functions.invoke('test-wordpress-connection', {
         body: {
-          wordpress_url: pluginSiteUrl,
+          wordpress_url: cleanUrl,
           use_plugin: true,
           api_key: pluginApiKey,
         },
