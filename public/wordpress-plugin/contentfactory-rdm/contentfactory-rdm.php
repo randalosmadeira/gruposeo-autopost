@@ -954,6 +954,7 @@ private function init_admin_hooks() {
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'restUrl' => rest_url('cfrdm/v1/'),
             'nonce' => wp_create_nonce('cfrdm_nonce'),
+            'restNonce' => wp_create_nonce('wp_rest'),
             'apiKey' => get_option('cfrdm_api_key'),
             'siteUrl' => get_site_url(),
             'strings' => array(
