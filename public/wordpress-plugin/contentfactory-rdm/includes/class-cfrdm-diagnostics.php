@@ -103,6 +103,20 @@ class CFRDM_Diagnostics {
 
         $decision = self::operational_hooks_decision($status, $issues);
 
+        // Method signature validation
+        $method_validation = null;
+        if (class_exists('CFRDM_Method_Validator')) {
+            $method_validation = CFRDM_Method_Validator::get_report();
+            if (!empty($method_validation['issues'])) {
+                foreach ($method_validation['issues'] as $mv_issue) {
+                    $issues['warnings'][] = '[MethodValidator] ' . $mv_issue['message'];
+                }
+                if ($status === self::STATUS_OK) {
+                    $status = self::STATUS_WARNING;
+                }
+            }
+        }
+
         return array(
             'success' => true,
             'status' => $status,
@@ -119,6 +133,7 @@ class CFRDM_Diagnostics {
             'page_builders' => $builders,
             'issues' => $issues,
             'operational_hooks' => $decision,
+            'method_validation' => $method_validation,
         );
     }
 
