@@ -1,11 +1,11 @@
 {
-  "version": "3.2.6",
+  "version": "3.2.7",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.2.6 - Corrige 10 cron jobs não agendados (social queue, content queue, GSC sync, AI fix queue, Ubersuggest, HTTPS scan, auto-update, content enhancer, logs cleanup, stuck jobs reset). Corrige bug de exibição de confiança mínima AI (8000% → 80%). Inicializa módulos v3.0.0 no boot normal do plugin.",
-  "released": "2026-02-14T16:25:00-03:00",
+  "changelog": "v3.2.7 - Adiciona tabela de regras AI Source (Fonte IA / Campo / Operador / Valor) para detecção de sessões vindas de ChatGPT, Claude, Perplexity, Gemini, Copilot, DeepSeek, Grok e Meta AI com auto-indexação. Integra Google Indexing API para submissão direta de URLs (posts, páginas, produtos) com controle de quota (200/dia). Adiciona Google Meu Negócio Auto-Poster com limpeza automática de markup de page builders (Divi, WPBakery, Avada), suporte multisite e templates customizáveis.",
+  "released": "2026-02-14T17:30:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",
@@ -27,6 +27,9 @@
     "ai_traffic_detector",
     "seo_checklist",
     "method_validator",
-    "cron_auto_schedule"
+    "cron_auto_schedule",
+    "ai_source_rules",
+    "google_indexing_submitter",
+    "gmb_auto_poster"
   ]
 }
