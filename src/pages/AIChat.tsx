@@ -65,21 +65,25 @@ const quickActions: QuickAction[] = [
 async function streamChat({
   messages,
   context,
+  accessToken,
   onDelta,
   onDone,
   onError,
 }: {
   messages: Array<{ role: string; content: string }>;
   context?: { projects: ProjectContext[]; articleCount?: number; userId?: string };
+  accessToken?: string;
   onDelta: (text: string) => void;
   onDone: () => void;
   onError: (error: string) => void;
 }) {
+  const token = accessToken || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   const resp = await fetch(CHAT_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      Authorization: `Bearer ${token}`,
+      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
     },
     body: JSON.stringify({ messages, context }),
   });
@@ -321,19 +325,28 @@ export default function AIChat() {
         f.id === realId ? { ...f, status: 'analyzing' } : f
       ));
 
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session: analyzeSession } } = await supabase.auth.getSession();
+      const analyzeToken = analyzeSession?.access_token;
+      if (!analyzeToken) throw new Error('Sessão expirada. Faça login novamente.');
+      
       const analyzeResp = await fetch(ANALYZE_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
+          Authorization: `Bearer ${analyzeToken}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({ uploadId: realId }),
       });
 
+      if (!analyzeResp.ok) {
+        const errBody = await analyzeResp.json().catch(() => ({ error: `HTTP ${analyzeResp.status}` }));
+        throw new Error(errBody.error || `Erro ${analyzeResp.status} na análise`);
+      }
+
       const result = await analyzeResp.json();
 
-      if (!analyzeResp.ok || !result.success) {
+      if (!result.success) {
         throw new Error(result.error || 'Erro na análise');
       }
 
@@ -382,12 +395,15 @@ export default function AIChat() {
   const cleanupCompletedFiles = async () => {
     if (!user) return;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session: cleanSession } } = await supabase.auth.getSession();
+      const cleanToken = cleanSession?.access_token;
+      if (!cleanToken) return;
       const resp = await fetch(ANALYZE_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
+          Authorization: `Bearer ${cleanToken}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({ action: 'cleanup' }),
       });
@@ -521,9 +537,11 @@ export default function AIChat() {
       .map(m => ({ role: m.role, content: m.content }));
 
     try {
+      const { data: { session: chatSession } } = await supabase.auth.getSession();
       await streamChat({
         messages: allMessages,
         context: { projects, articleCount, userId: user?.id },
+        accessToken: chatSession?.access_token || undefined,
         onDelta: (chunk) => {
           assistantSoFar += chunk;
           setMessages(prev => {
@@ -540,15 +558,18 @@ export default function AIChat() {
           if (actionMatch) {
             try {
               const actionData = JSON.parse(actionMatch[1].trim());
+              const { data: { session: actionSession } } = await supabase.auth.getSession();
+              const actionToken = actionSession?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
               const resp = await fetch(CHAT_URL, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+                  Authorization: `Bearer ${actionToken}`,
+                  apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
                 },
                 body: JSON.stringify({
                   executeActions: [actionData],
-                  context: { userId: user?.id },
+                  context: { projects, articleCount, userId: user?.id },
                 }),
               });
               const result = await resp.json();
