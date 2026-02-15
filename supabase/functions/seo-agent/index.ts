@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
 import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
 import { orchestrate, resolveVernizDNA } from "../_shared/verniz-orchestrator.ts";
+import { PLUGIN_VERSION } from "../_shared/plugin-version.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

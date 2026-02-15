@@ -24,8 +24,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '3.4.1';
-const PLUGIN_LAST_UPDATE = '2026-02-15T19:00:00';
+import { PLUGIN_VERSION, PLUGIN_LAST_UPDATE } from '@/lib/plugin-version';
 
 const features = [
   {

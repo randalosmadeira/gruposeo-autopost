@@ -563,7 +563,7 @@ export function WordPressSitesCard() {
                           Atualização Obrigatória do Plugin
                         </p>
                         <p className="text-xs text-amber-700 dark:text-amber-300">
-                          {health.updateMessage || `Versão instalada: v${health.pluginVersion}. Atualize para v3.2.7+ para acessar todas as funcionalidades.`}
+                          {health.updateMessage || `Versão instalada: v${health.pluginVersion}. Atualize para a versão mais recente para acessar todas as funcionalidades.`}
                         </p>
                       </div>
                       <Button

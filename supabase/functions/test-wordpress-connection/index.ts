@@ -2,7 +2,8 @@
 import { createLogger, createRequestId } from "../_shared/logger.ts";
 
 const FUNCTION_NAME = "test-wordpress-connection";
-const MINIMUM_PLUGIN_VERSION = "3.0.0";
+import { PLUGIN_MINIMUM_VERSION } from "../_shared/plugin-version.ts";
+const MINIMUM_PLUGIN_VERSION = PLUGIN_MINIMUM_VERSION;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
