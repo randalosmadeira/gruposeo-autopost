@@ -30,21 +30,33 @@ O sistema já possui um Agente SEO que roda automaticamente e executa:
 - **llms.txt**: Gera arquivo para descoberta por IAs (ChatGPT, Claude, Gemini)
 - O usuário pode acessar o painel do Agente SEO no **Dashboard** ou acionar manualmente
 
-### 🔌 Plugin WordPress (ContentFactory RDM v3.2.0+)
+### 🔌 Plugin WordPress (ContentFactory RDM v3.4.0)
 Módulos disponíveis no plugin instalado nos sites:
 - **AI Meta Auditor**: Audita e corrige automaticamente titles, meta descriptions, OG tags e Twitter Cards a cada 6h
 - **AI Auto-Fix**: Detecta e repara automaticamente:
-  • Links quebrados (erros 404) com redirecionamentos inteligentes
+  • Links quebrados (erros 404) com redirecionamentos inteligentes 301/302
   • FAQs duplicadas entre artigos
   • URLs ou artigos em duplicidade
   • Metas idênticas entre posts
+  • Bloqueios de crawlers de IA no robots.txt (GPTBot, ClaudeBot, PerplexityBot, etc.)
+  • Injeção batch de FAQ Schema (FAQPage JSON-LD) em artigos sem structured data
+- **Agente SEO Autônomo (v3.4.0)**:
+  • scan-seo-issues: detecta canonical faltando, URLs HTTP, H1 ausente, títulos duplicados, meta descriptions vazias
+  • autonomous-seo-fix: aplica correções batch (canonical, title, slug, HTTPS, delete, noindex, FAQ schema)
+  • autonomous-content-edit: modifica título WP, H1, H2, hero, insere imagens e força HTTPS no conteúdo
+  • manage-redirect: cria/exclui redirects 301/302 via Rank Math ou .htaccess
 - **Internal Links Engine**: Insere links internos e backlinks automaticamente baseado em regras de keywords e relevância semântica entre artigos
 - **IndexNow Integration**: Notifica Google, Bing e Yandex sobre alterações em tempo real
+- **Google Indexing API**: Submissão direta de URLs (200/dia) via Service Account
+- **Google Meu Negócio Auto-Poster**: Publica automaticamente no GMB com limpeza de page builders
+- **GSC Integration**: Inspeção expandida de posts, pages e products com sitemap dinâmico
 - **Sitemap Optimizer**: Gera e otimiza sitemaps XML com prioridades automáticas
 - **Schema Validator**: Valida JSON-LD para Article, FAQ, HowTo, Product e Review
 - **Image Optimizer**: Converte imagens para WebP com compressão inteligente
 - **HTTPS Enforcer**: Garante que todos os recursos internos usem HTTPS
 - **Post Duplicator**: Clona posts/páginas individualmente ou em lote
+- **AI Source Rules**: Detecção automática de tráfego de IA via User-Agent (16+ bots)
+- **SEO Checklist**: Checklist visual de Fundação SEO com 15 verificações automáticas
 - **Structured Logs**: Sistema de logs para diagnóstico em tempo real
 - **Diagnóstico**: Painel com status de 10 tabelas e 13 cron jobs + reparo automático
 
