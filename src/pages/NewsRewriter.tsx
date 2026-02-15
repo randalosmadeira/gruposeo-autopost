@@ -66,9 +66,9 @@ const COMBINED_NICHE_PRESETS = [
 
 // Article length options
 const ARTICLE_LENGTHS = [
-  { id: 'short', label: 'Curto', description: '400-600 palavras', wordRange: '400-600' },
-  { id: 'medium', label: 'Médio', description: '600-1000 palavras', wordRange: '600-1000' },
-  { id: 'long', label: 'Longo', description: '1000-1500 palavras', wordRange: '1000-1500' },
+  { id: 'medium', label: 'Padrão', description: '2.400-3.600 palavras', wordRange: '2400-3600' },
+  { id: 'long', label: 'Extenso', description: '3.600-5.200 palavras', wordRange: '3600-5200' },
+  { id: 'extra-long', label: 'Completo', description: '5.200-7.000 palavras', wordRange: '5200-7000' },
 ];
 
 // Analysis angle presets
