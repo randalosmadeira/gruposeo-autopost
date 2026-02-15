@@ -1,11 +1,11 @@
 {
-  "version": "3.4.0",
+  "version": "3.4.1",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.4.0 - Agente SEO Autônomo com execução real: scan-seo-issues detecta canonical faltando, URLs HTTP, H1 ausente, títulos duplicados, meta descriptions vazias. autonomous-seo-fix aplica correções batch (canonical, title, slug, HTTPS, delete, noindex, FAQ schema). autonomous-content-edit modifica título WP, H1, H2, hero, insere imagens e força HTTPS. manage-redirect cria/exclui redirects 301/302 via Rank Math ou .htaccess.",
-  "released": "2026-02-15T17:30:00-03:00",
+  "changelog": "v3.4.1 - Fix llms.txt: force-enable e regeneração imediata via refresh-llms endpoint. Agente SEO Autônomo agora auto-corrige artigos órfãos (sem backlinks) inserindo links internos automaticamente via IA. Todas as features anteriores mantidas.",
+  "released": "2026-02-15T19:00:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",
@@ -37,6 +37,8 @@
     "autonomous_seo_fix",
     "scan_seo_issues",
     "autonomous_content_edit",
-    "manage_redirect"
+    "manage_redirect",
+    "llms_txt_force_enable",
+    "orphan_auto_backlink"
   ]
 }
