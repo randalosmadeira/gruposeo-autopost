@@ -47,36 +47,55 @@ const features = [
     icon: Zap,
     title: 'Meta Auditor IA',
     description: 'Auditoria automática a cada 6h: verifica e corrige meta descriptions, OG tags e focus keywords.',
-    isNew: true,
+    badge: 'v3.1',
   },
   {
     icon: Webhook,
     title: 'IndexNow + Ping',
     description: 'Notificação instantânea ao Google, Bing e Yandex quando artigos são publicados ou atualizados.',
-    isNew: true,
+    badge: 'v3.1',
   },
   {
     icon: Settings,
     title: 'Descoberta por IA',
     description: 'Endpoints llms.txt + headers HTTP para ChatGPT, Claude e Gemini encontrarem seus artigos.',
-    isNew: true,
+    badge: 'v3.1',
   },
   {
     icon: FileText,
     title: 'Duplicador de Posts',
     description: 'Clone posts e páginas com um clique. Exclusão em massa de múltiplos posts selecionados.',
-    isNew: true,
+    badge: 'v3.1',
   },
   {
     icon: Zap,
     title: 'Sitemap Otimizado',
     description: 'Sitemap dinâmico com prioridades automáticas, News Sitemap e robots.txt para crawlers de IA.',
-    isNew: true,
+    badge: 'v3.1',
   },
   {
     icon: Shield,
     title: 'Atualização Segura',
     description: 'Pre-update checks, rollback automático e verificação de integridade pós-atualização.',
+    badge: 'v3.1',
+  },
+  {
+    icon: Zap,
+    title: 'Google Indexing API',
+    description: 'Submissão direta de URLs ao Google (200/dia) com auto-submit ao detectar tráfego de IA.',
+    badge: 'v3.2.7',
+  },
+  {
+    icon: Settings,
+    title: 'AI Source Rules',
+    description: 'Detecção de sessões via ChatGPT, Claude, Perplexity, Gemini, Copilot, DeepSeek e Grok.',
+    badge: 'v3.2.7',
+  },
+  {
+    icon: Webhook,
+    title: 'Auto-Fix Crawlers IA',
+    description: 'Correção automática de robots.txt e injeção batch de FAQ Schema em artigos sem structured data.',
+    badge: 'v3.3',
     isNew: true,
   },
 ];
@@ -576,8 +595,8 @@ export default function WordPressPluginPage() {
                   <feature.icon className="w-5 h-5 text-primary" />
                 </div>
                 <CardTitle className="text-base">{feature.title}</CardTitle>
-                {(feature as any).isNew && (
-                  <Badge className="text-[10px] px-1.5 py-0">v3.1</Badge>
+                {(feature as any).badge && (
+                  <Badge className={`text-[10px] px-1.5 py-0 ${(feature as any).isNew ? '' : 'bg-muted text-muted-foreground'}`}>{(feature as any).badge}</Badge>
                 )}
               </div>
             </CardHeader>
