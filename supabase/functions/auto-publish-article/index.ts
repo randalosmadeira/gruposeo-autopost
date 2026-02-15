@@ -249,9 +249,10 @@ Comece agora:`;
 
     log.info("article_updated", { title, wordCount: wordCountActual });
 
-    // If autoPublish is true, publish to WordPress
+    // If autoPublish is true, publish to WordPress (only if content is not empty)
     let publishResult = null;
-    if (autoPublish && project.wordpress_url && project.wordpress_app_password) {
+    const contentForPublish = (content || "").replace(/<!--[\s\S]*?-->/g, "").trim();
+    if (autoPublish && project.wordpress_url && project.wordpress_app_password && contentForPublish.length >= 50) {
       log.info("auto_publishing_to_wordpress");
 
       const isPluginAuth = project.wordpress_username === "__CFRDM_PLUGIN__";

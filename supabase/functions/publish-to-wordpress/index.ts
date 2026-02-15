@@ -531,6 +531,19 @@ Deno.serve(async (req) => {
       );
     }
 
+    // CRITICAL: Block publishing if content is empty/blank
+    const articleContent = (article.content || "").replace(/<!--[\s\S]*?-->/g, "").trim();
+    if (!articleContent || articleContent.length < 50) {
+      log.warn("publish_blocked_empty_content", { articleId, contentLength: articleContent.length });
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: "O artigo não possui conteúdo suficiente para publicação. Gere ou escreva o conteúdo antes de publicar." 
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Fetch project and verify ownership
     const { data: project, error: projectError } = await supabaseAdmin
       .from("projects")
@@ -626,15 +639,20 @@ Deno.serve(async (req) => {
     }
 
     if (result.success) {
-      await supabaseAdmin
+      const { error: updateError } = await supabaseAdmin
         .from("articles")
         .update({
-          status: "published",
+          status: "published" as any,
           published_at: new Date().toISOString(),
           published_url: result.postUrl,
         })
         .eq("id", articleId);
-      log.info("publish_success", { articleId, postId: result.postId });
+      
+      if (updateError) {
+        log.error("status_update_failed", { articleId, error: updateError.message });
+      } else {
+        log.info("publish_success", { articleId, postId: result.postId, statusUpdated: true });
+      }
     } else {
       log.warn("publish_failed", { articleId, error: result.error });
     }
