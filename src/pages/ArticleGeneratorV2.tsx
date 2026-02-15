@@ -382,6 +382,7 @@ export default function ArticleGeneratorV2() {
         internalLinks: internalLinks.map(link => ({ anchor: link.anchor, url: link.url })),
         projectConfig: projectConfigData,
         targetFunction: 'article_generator',
+        projectId: config.projectId || (selectedProject?.id) || undefined,
       });
     })();
 
