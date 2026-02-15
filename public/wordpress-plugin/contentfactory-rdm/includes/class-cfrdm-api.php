@@ -493,7 +493,7 @@ class CFRDM_API {
             'success' => true,
             'version' => CFRDM_VERSION,
             'minimum_supported' => '3.0.0',
-        'is_current' => version_compare(CFRDM_VERSION, '3.4.0', '>='),
+        'is_current' => version_compare(CFRDM_VERSION, '3.4.1', '>='),
             'released' => '2026-02-15',
             'features' => array(
                 'gsc_integration' => version_compare(CFRDM_VERSION, '3.0.0', '>='),
@@ -2745,16 +2745,36 @@ class CFRDM_API {
             return new WP_REST_Response(array('success' => false, 'error' => 'LLMS module not available'), 500);
         }
         
+        // Force-enable llms.txt if not already enabled
+        if (!get_option(CFRDM_LLMS_Txt::OPTION_ENABLED)) {
+            update_option(CFRDM_LLMS_Txt::OPTION_ENABLED, true);
+        }
+        
         $llms = CFRDM_LLMS_Txt::get_instance();
         $llms->invalidate_cache();
         
+        // Pre-generate both files immediately instead of waiting for next request
+        $llms_content = $llms->generate_llms_txt();
+        $llms_full_content = $llms->generate_llms_full_txt();
+        
+        // Re-init hooks in case it was disabled before
+        $llms->init();
+        
         if (class_exists('CFRDM_Logger')) {
-            CFRDM_Logger::info('llms', 'llms.txt cache invalidated via API');
+            CFRDM_Logger::info('llms', 'llms.txt force-enabled and regenerated via API', array(
+                'llms_size' => strlen($llms_content),
+                'llms_full_size' => strlen($llms_full_content),
+            ));
         }
         
         return new WP_REST_Response(array(
             'success' => true,
-            'message' => 'llms.txt cache invalidated - will be regenerated on next request',
+            'enabled' => true,
+            'message' => 'llms.txt force-enabled and regenerated',
+            'llms_txt_size' => strlen($llms_content),
+            'llms_full_txt_size' => strlen($llms_full_content),
+            'llms_url' => get_site_url() . '/llms.txt',
+            'llms_full_url' => get_site_url() . '/llms-full.txt',
         ), 200);
     }
     

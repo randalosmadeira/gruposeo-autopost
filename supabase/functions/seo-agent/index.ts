@@ -1205,11 +1205,13 @@ async function runFullTechnicalAudit(
         categories.geo.score -= 20;
         categories.geo.issues++;
 
-        // Auto-fix via plugin
+        // Auto-fix via plugin: force-enable and regenerate llms.txt
         if (isPlugin && apiKey) {
           try {
+            // Use refresh-llms which now force-enables the option
             const fixResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-llms`, {
-              method: "POST", headers: { "X-CFRDM-API-Key": apiKey },
+              method: "POST", headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+              body: JSON.stringify({ force_enable: true }),
             });
             if (fixResp.ok) {
               // Verify llms.txt is actually accessible now
@@ -1319,6 +1321,86 @@ async function runFullTechnicalAudit(
       });
       categories.content.score -= Math.min(orphans.length * 2, 25);
       categories.content.issues++;
+
+      // AUTO-FIX: Generate and apply internal links for orphan articles
+      if (isPlugin && apiKey && baseUrl) {
+        try {
+          const allForLinks = recentArticles.filter(a => (a.internal_links_count || 0) > 0 || (a.word_count || 0) > 1000);
+          if (allForLinks.length >= 2) {
+            const orphanBatch = orphans.slice(0, 8);
+            let orphanLinksApplied = 0;
+
+            for (const orphan of orphanBatch) {
+              // Find best matching articles by keyword/topic similarity
+              const candidates = allForLinks
+                .filter(a => a.wp_post_url !== orphan.wp_post_url)
+                .slice(0, 10);
+
+              if (candidates.length === 0) continue;
+
+              const candidateList = candidates.map(a =>
+                `- [${a.wp_post_title}](${a.wp_post_url}) | kw: ${a.primary_keyword || "N/A"}`
+              ).join("\n");
+
+              try {
+                const linkPrompt = `Artigo órfão SEM backlinks: "${orphan.wp_post_title}" (${orphan.wp_post_url}, kw: ${orphan.primary_keyword || "N/A"})
+
+Selecione os 3 melhores artigos para inserir um link PARA o artigo órfão. O anchor_text deve ter 2-4 palavras que provavelmente existem no corpo do artigo fonte.
+
+ARTIGOS CANDIDATOS:
+${candidateList}
+
+JSON: {"links":[{"source_url":"...","anchor_text":"...","relevance":85}]}`;
+
+                const aiResp = await orchestrator.call('seo_analysis', [
+                  { role: "system", content: "Especialista SEO brasileiro. Gere anchor texts CURTOS (2-4 palavras genéricas do tema). APENAS JSON." },
+                  { role: "user", content: linkPrompt },
+                ], { maxTokens: 500, temperature: 0.2 });
+
+                let jsonStr = aiResp.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+                const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+                if (jsonMatch) jsonStr = jsonMatch[0];
+                const parsed = JSON.parse(jsonStr);
+
+                for (const link of (parsed.links || [])) {
+                  const sourceArticle = candidates.find(a => a.wp_post_url === link.source_url);
+                  if (!sourceArticle?.wp_post_id) continue;
+
+                  try {
+                    const applyResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+                      body: JSON.stringify({
+                        post_id: sourceArticle.wp_post_id,
+                        anchor_text: link.anchor_text,
+                        target_url: orphan.wp_post_url,
+                      }),
+                    });
+                    if (applyResp.ok) {
+                      const applyData = await applyResp.json();
+                      if (applyData.success || applyData.applied) {
+                        orphanLinksApplied++;
+                      }
+                    }
+                  } catch { /* continue */ }
+                }
+              } catch (parseErr) {
+                console.error(`[SEO Agent] Orphan link parse error for "${orphan.wp_post_title}":`, parseErr);
+              }
+            }
+
+            if (orphanLinksApplied > 0) {
+              issues[issues.length - 1].auto_fixed = true;
+              issues[issues.length - 1].description += ` → Auto-fix: ${orphanLinksApplied} backlinks inseridos em artigos órfãos.`;
+              totalFixed++;
+              categories.content.fixed++;
+              categories.content.score += Math.min(orphanLinksApplied * 3, 20);
+            }
+          }
+        } catch (orphanFixErr) {
+          console.error(`[SEO Agent] [${project.name}] Orphan auto-fix error:`, orphanFixErr);
+        }
+      }
     }
 
     // Check for low SEO score articles
