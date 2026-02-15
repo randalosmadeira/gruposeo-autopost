@@ -132,7 +132,15 @@ Deno.serve(async (req) => {
         details.audit = auditResult;
 
         // ═══════════════════════════════════════════
-        // STEP 6: Summary
+        // STEP 6: Autonomous SEO Scan + Fix (v3.4.0)
+        // ═══════════════════════════════════════════
+        console.log(`[SEO Agent] [${project.name}] Step 6: Autonomous SEO Scan & Fix`);
+
+        const autonomousResult = await runAutonomousSEOFix(supabase, orchestrator, project, baseUrl, isPlugin, apiKey);
+        details.autonomous_fix = autonomousResult;
+
+        // ═══════════════════════════════════════════
+        // STEP 7: Summary
         // ═══════════════════════════════════════════
         const summaryParts = [];
         if (metaIssuesFixed > 0) summaryParts.push(`${metaIssuesFixed} metas corrigidos`);
@@ -144,6 +152,8 @@ Deno.serve(async (req) => {
         if (aiDiscoveryResult.actions?.length > 0) summaryParts.push(`${aiDiscoveryResult.actions.length} otimizações IA discovery`);
         if (auditResult.score > 0) summaryParts.push(`audit score: ${auditResult.score}/100`);
         if (auditResult.issues_fixed > 0) summaryParts.push(`${auditResult.issues_fixed} problemas corrigidos`);
+        if (autonomousResult.applied > 0) summaryParts.push(`${autonomousResult.applied} correções autônomas (${autonomousResult.types.join(", ")})`);
+        if (autonomousResult.redirects_created > 0) summaryParts.push(`${autonomousResult.redirects_created} redirects criados`);
 
         const summary = summaryParts.length > 0
           ? `✅ ${project.name}: ${summaryParts.join(", ")}`
@@ -1414,4 +1424,98 @@ async function runFullTechnicalAudit(
     issues_fixed: totalFixed,
     categories,
   };
+}
+
+// ═══════════════════════════════════════════════════════════
+// STEP 6: Autonomous SEO Scan + Fix (v3.4.0)
+// ═══════════════════════════════════════════════════════════
+async function runAutonomousSEOFix(
+  supabase: ReturnType<typeof createClient>,
+  orchestrator: ReturnType<typeof getOrchestrator>,
+  project: any,
+  baseUrl: string,
+  isPlugin: boolean,
+  apiKey: string,
+): Promise<{ scanned: number; issues_found: number; applied: number; redirects_created: number; types: string[]; details: string[] }> {
+  const detailsList: string[] = [];
+  const typesApplied: string[] = [];
+  let applied = 0;
+  let redirectsCreated = 0;
+
+  if (!baseUrl || !isPlugin || !apiKey) {
+    return { scanned: 0, issues_found: 0, applied: 0, redirects_created: 0, types: [], details: ["No WordPress connection"] };
+  }
+
+  try {
+    const scanResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/scan-seo-issues`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+      body: JSON.stringify({ limit: 200, checks: ["canonical", "https", "missing_h1", "duplicate_title", "missing_meta"] }),
+    });
+
+    if (!scanResp.ok) {
+      detailsList.push(`scan-seo-issues indisponível (${scanResp.status}) — plugin precisa v3.4.0`);
+      return { scanned: 0, issues_found: 0, applied: 0, redirects_created: 0, types: [], details: detailsList };
+    }
+
+    const scanData = await scanResp.json();
+    const scanned = scanData.scanned || 0;
+    const issuesFound = scanData.issues_found || 0;
+    const issuesList = scanData.issues || [];
+
+    console.log(`[SEO Agent] [${project.name}] Autonomous: ${scanned} scanned, ${issuesFound} issues`);
+
+    if (issuesFound === 0) {
+      return { scanned, issues_found: 0, applied: 0, redirects_created: 0, types: [], details: [`Scan limpo: ${scanned} posts OK`] };
+    }
+
+    const fixes: any[] = [];
+    for (const issue of issuesList) {
+      for (const iss of issue.issues) {
+        if (iss.type === "http_urls") fixes.push({ type: "force_https", post_id: issue.post_id });
+        else if (iss.type === "missing_canonical") {
+          const canonical = issue.url?.replace("http://", "https://");
+          if (canonical) fixes.push({ type: "canonical", post_id: issue.post_id, canonical_url: canonical });
+        }
+        else if (iss.type === "missing_h1") fixes.push({ type: "inject_faq_schema", post_id: issue.post_id });
+        else if (iss.type === "duplicate_title") detailsList.push(`⚠ Título duplicado: "${issue.title}" (${issue.post_id})`);
+      }
+    }
+
+    if (fixes.length > 0) {
+      for (let i = 0; i < fixes.length; i += 50) {
+        try {
+          const fixResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/autonomous-seo-fix`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+            body: JSON.stringify({ fixes: fixes.slice(i, i + 50) }),
+          });
+          if (fixResp.ok) {
+            const fixData = await fixResp.json();
+            applied += fixData.applied || 0;
+            for (const r of (fixData.results || [])) {
+              if (r.status === "applied" && !typesApplied.includes(r.type)) typesApplied.push(r.type);
+            }
+            detailsList.push(`Batch: ${fixData.applied} correções aplicadas`);
+          }
+        } catch (e) { console.error(`[SEO Agent] Autonomous batch error:`, e); }
+      }
+    }
+
+    if (applied > 0) {
+      const fixedUrls = issuesList.map((i: any) => i.url).filter(Boolean).slice(0, 100);
+      try {
+        await fetch(`${baseUrl}/wp-json/cfrdm/v1/indexnow-batch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+          body: JSON.stringify({ urls: fixedUrls }),
+        });
+        detailsList.push(`Re-indexação: ${fixedUrls.length} URLs corrigidas`);
+      } catch { /* ignore */ }
+    }
+
+    return { scanned, issues_found: issuesFound, applied, redirects_created: redirectsCreated, types: typesApplied, details: detailsList };
+  } catch (e) {
+    return { scanned: 0, issues_found: 0, applied: 0, redirects_created: 0, types: [], details: [`Error: ${e instanceof Error ? e.message : String(e)}`] };
+  }
 }

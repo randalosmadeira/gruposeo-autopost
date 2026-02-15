@@ -431,6 +431,34 @@ class CFRDM_API {
             'callback' => array(__CLASS__, 'batch_inject_faq_schema'),
             'permission_callback' => array(__CLASS__, 'verify_api_key'),
         ));
+        
+        // ===== v3.4.0 - Autonomous SEO Fix (batch corrections) =====
+        register_rest_route('cfrdm/v1', '/autonomous-seo-fix', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'autonomous_seo_fix'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // ===== v3.4.0 - Scan SEO Issues (canonical, HTTPS, duplicates) =====
+        register_rest_route('cfrdm/v1', '/scan-seo-issues', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'scan_seo_issues'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // ===== v3.4.0 - Autonomous Content Edit (title, H1, H2, content) =====
+        register_rest_route('cfrdm/v1', '/autonomous-content-edit', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'autonomous_content_edit'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // ===== v3.4.0 - Manage Redirects (301/302) =====
+        register_rest_route('cfrdm/v1', '/manage-redirect', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'manage_redirect'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
     }
     
     public static function verify_api_key($request) {
@@ -465,8 +493,8 @@ class CFRDM_API {
             'success' => true,
             'version' => CFRDM_VERSION,
             'minimum_supported' => '3.0.0',
-            'is_current' => version_compare(CFRDM_VERSION, '3.2.8', '>='),
-            'released' => '2026-02-14',
+        'is_current' => version_compare(CFRDM_VERSION, '3.4.0', '>='),
+            'released' => '2026-02-15',
             'features' => array(
                 'gsc_integration' => version_compare(CFRDM_VERSION, '3.0.0', '>='),
                 'ai_auto_fix' => version_compare(CFRDM_VERSION, '3.0.0', '>='),
@@ -2953,5 +2981,513 @@ class CFRDM_API {
         
         // Limit to 10 FAQs
         return array_slice($faqs, 0, 10);
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // v3.4.0 - Autonomous SEO Fix (batch corrections)
+    // Accepts an array of fixes: canonical, title, meta, redirect, delete
+    // ═══════════════════════════════════════════════════════════
+    public static function autonomous_seo_fix($request) {
+        $params = $request->get_json_params();
+        $fixes = isset($params['fixes']) ? (array) $params['fixes'] : array();
+        
+        if (empty($fixes)) {
+            return new WP_REST_Response(array('success' => false, 'error' => 'No fixes provided'), 400);
+        }
+        
+        $results = array();
+        $applied = 0;
+        $failed = 0;
+        $seo_plugin = self::detect_seo_plugin();
+        
+        foreach ($fixes as $fix) {
+            $type = sanitize_text_field($fix['type'] ?? '');
+            $post_id = absint($fix['post_id'] ?? 0);
+            
+            if (!$post_id || !$type) {
+                $results[] = array('type' => $type, 'post_id' => $post_id, 'status' => 'skipped', 'reason' => 'Missing type or post_id');
+                $failed++;
+                continue;
+            }
+            
+            $post = get_post($post_id);
+            if (!$post) {
+                $results[] = array('type' => $type, 'post_id' => $post_id, 'status' => 'error', 'reason' => 'Post not found');
+                $failed++;
+                continue;
+            }
+            
+            try {
+                switch ($type) {
+                    case 'canonical':
+                        $canonical = esc_url_raw($fix['canonical_url'] ?? '');
+                        if ($canonical) {
+                            if ($seo_plugin === 'rankmath') {
+                                update_post_meta($post_id, 'rank_math_canonical_url', $canonical);
+                            } elseif ($seo_plugin === 'yoast') {
+                                update_post_meta($post_id, '_yoast_wpseo_canonical', $canonical);
+                            }
+                            update_post_meta($post_id, '_cfrdm_canonical_url', $canonical);
+                            $results[] = array('type' => 'canonical', 'post_id' => $post_id, 'status' => 'applied', 'value' => $canonical);
+                            $applied++;
+                        }
+                        break;
+                        
+                    case 'meta_title':
+                        $title = sanitize_text_field($fix['value'] ?? '');
+                        if ($title) {
+                            if ($seo_plugin === 'rankmath') update_post_meta($post_id, 'rank_math_title', $title);
+                            elseif ($seo_plugin === 'yoast') update_post_meta($post_id, '_yoast_wpseo_title', $title);
+                            update_post_meta($post_id, '_cfrdm_seo_title', $title);
+                            $results[] = array('type' => 'meta_title', 'post_id' => $post_id, 'status' => 'applied');
+                            $applied++;
+                        }
+                        break;
+                        
+                    case 'meta_description':
+                        $desc = sanitize_text_field($fix['value'] ?? '');
+                        if ($desc) {
+                            if ($seo_plugin === 'rankmath') update_post_meta($post_id, 'rank_math_description', $desc);
+                            elseif ($seo_plugin === 'yoast') update_post_meta($post_id, '_yoast_wpseo_metadesc', $desc);
+                            update_post_meta($post_id, '_cfrdm_og_description', $desc);
+                            $results[] = array('type' => 'meta_description', 'post_id' => $post_id, 'status' => 'applied');
+                            $applied++;
+                        }
+                        break;
+                        
+                    case 'wp_title':
+                        $new_title = sanitize_text_field($fix['value'] ?? '');
+                        if ($new_title) {
+                            wp_update_post(array('ID' => $post_id, 'post_title' => $new_title));
+                            $results[] = array('type' => 'wp_title', 'post_id' => $post_id, 'status' => 'applied', 'value' => $new_title);
+                            $applied++;
+                        }
+                        break;
+                        
+                    case 'slug':
+                        $new_slug = sanitize_title($fix['value'] ?? '');
+                        if ($new_slug) {
+                            wp_update_post(array('ID' => $post_id, 'post_name' => $new_slug));
+                            $results[] = array('type' => 'slug', 'post_id' => $post_id, 'status' => 'applied', 'value' => $new_slug);
+                            $applied++;
+                        }
+                        break;
+                        
+                    case 'force_https':
+                        $content = $post->post_content;
+                        $new_content = str_replace('http://', 'https://', $content);
+                        if ($new_content !== $content) {
+                            wp_update_post(array('ID' => $post_id, 'post_content' => $new_content));
+                            $count = substr_count($content, 'http://') - substr_count($new_content, 'http://');
+                            $results[] = array('type' => 'force_https', 'post_id' => $post_id, 'status' => 'applied', 'urls_fixed' => $count);
+                            $applied++;
+                        } else {
+                            $results[] = array('type' => 'force_https', 'post_id' => $post_id, 'status' => 'skipped', 'reason' => 'No HTTP URLs found');
+                        }
+                        break;
+                        
+                    case 'delete':
+                        $force = isset($fix['force']) ? (bool) $fix['force'] : false;
+                        wp_delete_post($post_id, $force);
+                        $results[] = array('type' => 'delete', 'post_id' => $post_id, 'status' => 'applied');
+                        $applied++;
+                        break;
+                        
+                    case 'noindex':
+                        if ($seo_plugin === 'rankmath') update_post_meta($post_id, 'rank_math_robots', array('noindex'));
+                        elseif ($seo_plugin === 'yoast') update_post_meta($post_id, '_yoast_wpseo_meta-robots-noindex', '1');
+                        $results[] = array('type' => 'noindex', 'post_id' => $post_id, 'status' => 'applied');
+                        $applied++;
+                        break;
+                        
+                    case 'inject_faq_schema':
+                        $faqs = self::extract_faqs_from_content($post->post_content, $post->post_title);
+                        if (!empty($faqs)) {
+                            $faq_schema = array('@context' => 'https://schema.org', '@type' => 'FAQPage', 'mainEntity' => array());
+                            foreach ($faqs as $faq) {
+                                $faq_schema['mainEntity'][] = array(
+                                    '@type' => 'Question', 'name' => $faq['question'],
+                                    'acceptedAnswer' => array('@type' => 'Answer', 'text' => $faq['answer']),
+                                );
+                            }
+                            update_post_meta($post_id, '_cfrdm_faq_schema', wp_json_encode($faq_schema));
+                            $existing_schemas = json_decode(get_post_meta($post_id, '_cfrdm_json_ld_schemas', true) ?: '[]', true);
+                            $existing_schemas = array_filter($existing_schemas ?: array(), function($s) { return ($s['@type'] ?? '') !== 'FAQPage'; });
+                            $existing_schemas[] = $faq_schema;
+                            update_post_meta($post_id, '_cfrdm_json_ld_schemas', wp_json_encode($existing_schemas));
+                            $results[] = array('type' => 'inject_faq_schema', 'post_id' => $post_id, 'status' => 'applied', 'faq_count' => count($faqs));
+                            $applied++;
+                        } else {
+                            $results[] = array('type' => 'inject_faq_schema', 'post_id' => $post_id, 'status' => 'skipped', 'reason' => 'No FAQs found in content');
+                        }
+                        break;
+                        
+                    default:
+                        $results[] = array('type' => $type, 'post_id' => $post_id, 'status' => 'skipped', 'reason' => 'Unknown fix type');
+                        $failed++;
+                }
+            } catch (\Throwable $e) {
+                $results[] = array('type' => $type, 'post_id' => $post_id, 'status' => 'error', 'reason' => $e->getMessage());
+                $failed++;
+            }
+        }
+        
+        if (class_exists('CFRDM_Logger')) {
+            CFRDM_Logger::info('autonomous_fix', "Autonomous SEO Fix: {$applied} applied, {$failed} failed", array(
+                'applied' => $applied, 'failed' => $failed, 'total' => count($fixes),
+            ));
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'applied' => $applied,
+            'failed' => $failed,
+            'total' => count($fixes),
+            'results' => $results,
+        ), 200);
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // v3.4.0 - Scan SEO Issues across all posts
+    // Returns: missing canonicals, HTTP URLs, duplicate titles, missing H1, thin content
+    // ═══════════════════════════════════════════════════════════
+    public static function scan_seo_issues($request) {
+        $params = $request->get_json_params();
+        $limit = min(absint($params['limit'] ?? 100), 500);
+        $checks = isset($params['checks']) ? (array) $params['checks'] : array('canonical', 'https', 'thin_content', 'missing_h1', 'duplicate_title', 'missing_meta');
+        
+        $posts = get_posts(array(
+            'post_type' => array('post', 'page'),
+            'post_status' => 'publish',
+            'posts_per_page' => $limit,
+            'orderby' => 'modified',
+            'order' => 'DESC',
+        ));
+        
+        $seo_plugin = self::detect_seo_plugin();
+        $issues = array();
+        $titles_seen = array();
+        
+        foreach ($posts as $post) {
+            $post_issues = array();
+            
+            // Check HTTPS
+            if (in_array('https', $checks)) {
+                if (preg_match_all('/http:\/\/[^\s"\'<>]+/i', $post->post_content, $http_matches)) {
+                    $post_issues[] = array(
+                        'type' => 'http_urls',
+                        'count' => count($http_matches[0]),
+                        'urls' => array_slice($http_matches[0], 0, 5),
+                    );
+                }
+            }
+            
+            // Check canonical
+            if (in_array('canonical', $checks)) {
+                $has_canonical = false;
+                if ($seo_plugin === 'rankmath') $has_canonical = !empty(get_post_meta($post->ID, 'rank_math_canonical_url', true));
+                elseif ($seo_plugin === 'yoast') $has_canonical = !empty(get_post_meta($post->ID, '_yoast_wpseo_canonical', true));
+                if (!$has_canonical) {
+                    $post_issues[] = array('type' => 'missing_canonical');
+                }
+            }
+            
+            // Check missing H1
+            if (in_array('missing_h1', $checks)) {
+                if (!preg_match('/<h1[^>]*>/i', $post->post_content)) {
+                    $post_issues[] = array('type' => 'missing_h1');
+                }
+            }
+            
+            // Check thin content
+            if (in_array('thin_content', $checks)) {
+                $word_count = str_word_count(wp_strip_all_tags($post->post_content));
+                if ($word_count < 500) {
+                    $post_issues[] = array('type' => 'thin_content', 'word_count' => $word_count);
+                }
+            }
+            
+            // Check duplicate title
+            if (in_array('duplicate_title', $checks)) {
+                $title_key = mb_strtolower(trim($post->post_title));
+                if (isset($titles_seen[$title_key])) {
+                    $post_issues[] = array('type' => 'duplicate_title', 'duplicate_of' => $titles_seen[$title_key]);
+                }
+                $titles_seen[$title_key] = $post->ID;
+            }
+            
+            // Check missing meta description
+            if (in_array('missing_meta', $checks)) {
+                $has_meta = false;
+                if ($seo_plugin === 'rankmath') $has_meta = !empty(get_post_meta($post->ID, 'rank_math_description', true));
+                elseif ($seo_plugin === 'yoast') $has_meta = !empty(get_post_meta($post->ID, '_yoast_wpseo_metadesc', true));
+                if (!$has_meta) {
+                    $post_issues[] = array('type' => 'missing_meta_description');
+                }
+            }
+            
+            if (!empty($post_issues)) {
+                $issues[] = array(
+                    'post_id' => $post->ID,
+                    'title' => $post->post_title,
+                    'url' => get_permalink($post->ID),
+                    'slug' => $post->post_name,
+                    'issues' => $post_issues,
+                );
+            }
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'scanned' => count($posts),
+            'issues_found' => count($issues),
+            'seo_plugin' => $seo_plugin,
+            'issues' => $issues,
+        ), 200);
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // v3.4.0 - Autonomous Content Edit (title, H1, H2, hero, content)
+    // ═══════════════════════════════════════════════════════════
+    public static function autonomous_content_edit($request) {
+        $params = $request->get_json_params();
+        $post_id = absint($params['post_id'] ?? 0);
+        
+        if (!$post_id) {
+            return new WP_REST_Response(array('success' => false, 'error' => 'post_id required'), 400);
+        }
+        
+        $post = get_post($post_id);
+        if (!$post) {
+            return new WP_REST_Response(array('success' => false, 'error' => 'Post not found'), 404);
+        }
+        
+        $changes = array();
+        $update_data = array('ID' => $post_id);
+        
+        // Update WordPress title
+        if (isset($params['title'])) {
+            $update_data['post_title'] = sanitize_text_field($params['title']);
+            $changes[] = 'title';
+        }
+        
+        // Update slug
+        if (isset($params['slug'])) {
+            $update_data['post_name'] = sanitize_title($params['slug']);
+            $changes[] = 'slug';
+        }
+        
+        // Update excerpt
+        if (isset($params['excerpt'])) {
+            $update_data['post_excerpt'] = sanitize_textarea_field($params['excerpt']);
+            $changes[] = 'excerpt';
+        }
+        
+        // Content modifications
+        $content = $post->post_content;
+        $content_changed = false;
+        
+        // Replace H1
+        if (isset($params['h1'])) {
+            $new_h1 = sanitize_text_field($params['h1']);
+            if (preg_match('/<h1[^>]*>.*?<\/h1>/si', $content)) {
+                $content = preg_replace('/<h1[^>]*>.*?<\/h1>/si', '<h1>' . esc_html($new_h1) . '</h1>', $content, 1);
+            } else {
+                $content = '<h1>' . esc_html($new_h1) . '</h1>' . "\n" . $content;
+            }
+            $content_changed = true;
+            $changes[] = 'h1';
+        }
+        
+        // Replace specific H2 by index or old text
+        if (isset($params['replace_h2'])) {
+            foreach ((array) $params['replace_h2'] as $replacement) {
+                $old = $replacement['old'] ?? '';
+                $new = sanitize_text_field($replacement['new'] ?? '');
+                if ($old && $new) {
+                    $pattern = '/<h2[^>]*>' . preg_quote($old, '/') . '<\/h2>/si';
+                    $content = preg_replace($pattern, '<h2>' . esc_html($new) . '</h2>', $content, 1);
+                    $content_changed = true;
+                    $changes[] = 'h2';
+                }
+            }
+        }
+        
+        // Insert content at position
+        if (isset($params['insert_content'])) {
+            $insert = wp_kses_post($params['insert_content']['html'] ?? '');
+            $position = sanitize_text_field($params['insert_content']['position'] ?? 'end');
+            if ($insert) {
+                if ($position === 'start') {
+                    $content = $insert . "\n" . $content;
+                } elseif ($position === 'after_first_h2') {
+                    $content = preg_replace('/(<\/h2>)/i', '$1' . "\n" . $insert, $content, 1);
+                } else {
+                    $content .= "\n" . $insert;
+                }
+                $content_changed = true;
+                $changes[] = 'insert_content';
+            }
+        }
+        
+        // Force HTTPS in content
+        if (isset($params['force_https']) && $params['force_https']) {
+            $new_content = str_replace('http://', 'https://', $content);
+            if ($new_content !== $content) {
+                $content = $new_content;
+                $content_changed = true;
+                $changes[] = 'force_https';
+            }
+        }
+        
+        // Insert images
+        if (isset($params['insert_images'])) {
+            foreach ((array) $params['insert_images'] as $img) {
+                $src = esc_url($img['src'] ?? '');
+                $alt = esc_attr($img['alt'] ?? '');
+                $pos = $img['position'] ?? 'end';
+                if ($src) {
+                    $img_html = '<figure><img src="' . $src . '" alt="' . $alt . '" loading="lazy" width="800" height="450" /></figure>';
+                    if ($pos === 'start') $content = $img_html . "\n" . $content;
+                    elseif ($pos === 'after_first_h2') $content = preg_replace('/(<\/h2>)/i', '$1' . "\n" . $img_html, $content, 1);
+                    else $content .= "\n" . $img_html;
+                    $content_changed = true;
+                    $changes[] = 'insert_image';
+                }
+            }
+        }
+        
+        if ($content_changed) {
+            $update_data['post_content'] = $content;
+        }
+        
+        if (count($update_data) > 1) {
+            $result = wp_update_post($update_data, true);
+            if (is_wp_error($result)) {
+                return new WP_REST_Response(array('success' => false, 'error' => $result->get_error_message()), 500);
+            }
+        }
+        
+        // Update SEO meta if provided
+        $seo_plugin = self::detect_seo_plugin();
+        if (isset($params['meta_title'])) {
+            if ($seo_plugin === 'rankmath') update_post_meta($post_id, 'rank_math_title', sanitize_text_field($params['meta_title']));
+            elseif ($seo_plugin === 'yoast') update_post_meta($post_id, '_yoast_wpseo_title', sanitize_text_field($params['meta_title']));
+            $changes[] = 'meta_title';
+        }
+        if (isset($params['meta_description'])) {
+            if ($seo_plugin === 'rankmath') update_post_meta($post_id, 'rank_math_description', sanitize_text_field($params['meta_description']));
+            elseif ($seo_plugin === 'yoast') update_post_meta($post_id, '_yoast_wpseo_metadesc', sanitize_text_field($params['meta_description']));
+            $changes[] = 'meta_description';
+        }
+        if (isset($params['canonical_url'])) {
+            $canonical = esc_url_raw($params['canonical_url']);
+            if ($seo_plugin === 'rankmath') update_post_meta($post_id, 'rank_math_canonical_url', $canonical);
+            elseif ($seo_plugin === 'yoast') update_post_meta($post_id, '_yoast_wpseo_canonical', $canonical);
+            update_post_meta($post_id, '_cfrdm_canonical_url', $canonical);
+            $changes[] = 'canonical';
+        }
+        
+        if (class_exists('CFRDM_Logger')) {
+            CFRDM_Logger::success('autonomous_edit', sprintf('Autonomous content edit: %s', implode(', ', $changes)), array(
+                'post_id' => $post_id, 'changes' => $changes,
+            ), $post_id);
+        }
+        
+        return new WP_REST_Response(array(
+            'success' => true,
+            'post_id' => $post_id,
+            'changes' => $changes,
+            'new_url' => get_permalink($post_id),
+        ), 200);
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // v3.4.0 - Manage Redirects (301/302)
+    // ═══════════════════════════════════════════════════════════
+    public static function manage_redirect($request) {
+        $params = $request->get_json_params();
+        $from_url = sanitize_text_field($params['from_url'] ?? '');
+        $to_url = esc_url_raw($params['to_url'] ?? '');
+        $type = absint($params['type'] ?? 301);
+        $action = sanitize_text_field($params['action'] ?? 'create');
+        
+        if (empty($from_url) || (empty($to_url) && $action === 'create')) {
+            return new WP_REST_Response(array('success' => false, 'error' => 'from_url and to_url required'), 400);
+        }
+        
+        // Try Rank Math redirections first
+        if (class_exists('RankMath') || defined('RANK_MATH_VERSION')) {
+            $redirections = get_option('rank_math_redirections', array());
+            
+            if ($action === 'delete') {
+                $redirections = array_filter($redirections, function($r) use ($from_url) {
+                    return ($r['sources'][0]['pattern'] ?? '') !== $from_url;
+                });
+                update_option('rank_math_redirections', $redirections);
+                return new WP_REST_Response(array('success' => true, 'action' => 'deleted'), 200);
+            }
+            
+            // Create via Rank Math
+            $redirections[] = array(
+                'sources' => array(array('pattern' => $from_url, 'comparison' => 'exact')),
+                'url_to' => $to_url,
+                'header_code' => $type,
+                'status' => 'active',
+            );
+            update_option('rank_math_redirections', $redirections);
+            
+            return new WP_REST_Response(array('success' => true, 'method' => 'rankmath', 'from' => $from_url, 'to' => $to_url, 'type' => $type), 200);
+        }
+        
+        // Fallback: store in cfrdm options for .htaccess management
+        $redirects = get_option('cfrdm_redirects', array());
+        
+        if ($action === 'delete') {
+            unset($redirects[$from_url]);
+        } else {
+            $redirects[$from_url] = array('to' => $to_url, 'type' => $type, 'created' => current_time('mysql'));
+        }
+        
+        update_option('cfrdm_redirects', $redirects);
+        
+        // Write .htaccess rules
+        self::write_redirect_htaccess($redirects);
+        
+        return new WP_REST_Response(array('success' => true, 'method' => 'htaccess', 'from' => $from_url, 'to' => $to_url, 'type' => $type, 'total_redirects' => count($redirects)), 200);
+    }
+    
+    /**
+     * Write redirect rules to .htaccess
+     */
+    private static function write_redirect_htaccess($redirects) {
+        if (empty($redirects)) return;
+        
+        $htaccess_file = ABSPATH . '.htaccess';
+        if (!is_writable($htaccess_file)) return;
+        
+        $content = file_get_contents($htaccess_file);
+        
+        // Remove existing CFRDM redirect block
+        $content = preg_replace('/# BEGIN CFRDM Redirects.*?# END CFRDM Redirects\n?/s', '', $content);
+        
+        // Build new rules
+        $rules = "# BEGIN CFRDM Redirects\n<IfModule mod_rewrite.c>\nRewriteEngine On\n";
+        foreach ($redirects as $from => $data) {
+            $to = $data['to'];
+            $code = $data['type'] == 302 ? '[R=302,L]' : '[R=301,L]';
+            $from_escaped = preg_quote(ltrim($from, '/'), '/');
+            $rules .= "RewriteRule ^{$from_escaped}$ {$to} {$code}\n";
+        }
+        $rules .= "</IfModule>\n# END CFRDM Redirects\n";
+        
+        // Insert before WordPress rewrite rules
+        if (strpos($content, '# BEGIN WordPress') !== false) {
+            $content = str_replace('# BEGIN WordPress', $rules . "\n# BEGIN WordPress", $content);
+        } else {
+            $content = $rules . $content;
+        }
+        
+        file_put_contents($htaccess_file, $content);
     }
 }
