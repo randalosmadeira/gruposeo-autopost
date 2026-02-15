@@ -32,6 +32,7 @@ interface ArticleData {
   seo_title?: string;
   seo_description?: string;
   focus_keyword?: string;
+  schemas?: Record<string, unknown>[];
 }
 
 interface SchemaInjectionContext {
@@ -204,32 +205,45 @@ function buildHowToSchema(title: string, description: string, steps: Array<{ nam
 }
 
 /**
- * Inject all JSON-LD schemas into article content
+ * Build all JSON-LD schemas as an array of objects (NOT as script tags)
+ * WordPress REST API strips <script> tags, so schemas must be sent separately
  */
-function injectSchemas(content: string, ctx: SchemaInjectionContext): string {
-  const schemas: string[] = [];
+function buildAllSchemas(content: string, ctx: SchemaInjectionContext): Record<string, unknown>[] {
+  const schemas: Record<string, unknown>[] = [];
 
   // 1. Article schema (always)
-  schemas.push(`<script type="application/ld+json">\n${JSON.stringify(buildArticleSchema(ctx), null, 2)}\n</script>`);
+  schemas.push(buildArticleSchema(ctx));
 
   // 2. FAQPage schema (if FAQs detected)
   const faqs = extractFAQsFromContent(content);
   const faqSchema = buildFAQSchema(faqs);
-  if (faqSchema) {
-    schemas.push(`<script type="application/ld+json">\n${JSON.stringify(faqSchema, null, 2)}\n</script>`);
-  }
+  if (faqSchema) schemas.push(faqSchema);
 
   // 3. HowTo schema (if how-to steps detected)
   const howToSteps = extractHowToSteps(content);
   const howToSchema = buildHowToSchema(ctx.title, ctx.description, howToSteps);
-  if (howToSchema) {
-    schemas.push(`<script type="application/ld+json">\n${JSON.stringify(howToSchema, null, 2)}\n</script>`);
-  }
+  if (howToSchema) schemas.push(howToSchema);
 
   // 4. BreadcrumbList schema (always)
-  schemas.push(`<script type="application/ld+json">\n${JSON.stringify(buildBreadcrumbSchema(ctx), null, 2)}\n</script>`);
+  schemas.push(buildBreadcrumbSchema(ctx));
 
-  return content + "\n\n<!-- JSON-LD Structured Data by ContentFactory -->\n" + schemas.join("\n");
+  return schemas;
+}
+
+/**
+ * Strip any existing <script> tags (e.g. JSON-LD) from content
+ * WordPress REST API strips them and renders them as visible text
+ */
+function stripScriptTags(content: string): string {
+  // Remove <script type="application/ld+json">...</script> blocks
+  let cleaned = content.replace(/<script[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi, '');
+  // Remove <!-- JSON-LD --> comment blocks
+  cleaned = cleaned.replace(/<!--\s*JSON-LD[^>]*-->/gi, '');
+  // Remove any visible JSON-LD that was rendered as text (curly-quote or straight-quote patterns)
+  cleaned = cleaned.replace(/\{\s*[\u201C"]\@context[\u201D"]\s*:\s*[\u201C""]https?:\/\/schema\.org[\u201D""]\s*,[\s\S]*?\}\s*\}/g, '');
+  // Clean up excessive newlines left behind
+  cleaned = cleaned.replace(/\n{4,}/g, '\n\n');
+  return cleaned.trim();
 }
 
 async function publishViaPluginAPI(
@@ -280,6 +294,7 @@ async function publishViaPluginAPI(
       slug: article.slug,
       status: status === "publish" ? "publish" : "draft",
       cfrdm_id: article.cfrdm_id,
+      json_ld_schemas: article.schemas || [],
     };
 
     if (article.categories && article.categories.length > 0) {
@@ -588,7 +603,7 @@ Deno.serve(async (req) => {
       content: article.content || "",
       featuredImageUrl: article.featured_image_url,
       publishedAt,
-      authorName: config?.seo_title ? "Equipe Editorial" : "Equipe Editorial",
+      authorName: "Equipe Editorial",
       authorJobTitle: "Redator SEO",
       publisherName: siteUrl.replace(/https?:\/\/(www\.)?/, "").split("/")[0],
       publisherLogoUrl: `${siteUrl}/wp-content/uploads/logo.png`,
@@ -596,13 +611,16 @@ Deno.serve(async (req) => {
       categoryName: "",
     };
 
-    // Inject JSON-LD schemas into content
-    const enrichedContent = injectSchemas(article.content || "", schemaCtx);
-    console.log("JSON-LD schemas injected: Article + FAQPage + BreadcrumbList");
+    // Build schemas as separate objects (NOT injected into content)
+    const schemas = buildAllSchemas(article.content || "", schemaCtx);
+    console.log(`Built ${schemas.length} JSON-LD schemas separately`);
+
+    // CRITICAL: Strip any existing <script> tags or visible JSON-LD from content
+    const cleanContent = stripScriptTags(article.content || "");
 
     const articleData: ArticleData = {
       title: article.title || "Untitled",
-      content: enrichedContent,
+      content: cleanContent,
       excerpt: article.excerpt || "",
       slug: article.slug || "",
       featured_image_url: article.featured_image_url,
@@ -612,6 +630,7 @@ Deno.serve(async (req) => {
       seo_title: config?.seo_title,
       seo_description: config?.seo_description,
       focus_keyword: config?.focus_keyword || article.keyword,
+      schemas,
     };
 
     const isPluginAuth = project.wordpress_username === "__CFRDM_PLUGIN__";
