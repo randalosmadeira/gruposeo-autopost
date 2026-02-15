@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const PLUGIN_VERSION = '3.3.0';
-const PLUGIN_LAST_UPDATE = '2026-02-14T22:30:00';
+const PLUGIN_VERSION = '3.4.0';
+const PLUGIN_LAST_UPDATE = '2026-02-15T17:30:00';
 
 const features = [
   {
@@ -110,6 +110,18 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '3.4.0',
+    date: '2026-02-15',
+    type: 'major' as const,
+    changes: [
+      { type: 'feature', text: 'Agente SEO Autônomo com execução REAL: scan-seo-issues detecta canonical faltando, URLs HTTP, H1 ausente, títulos duplicados e meta descriptions vazias' },
+      { type: 'feature', text: 'Novo endpoint: autonomous-seo-fix aplica correções batch (canonical, title, slug, HTTPS, delete, noindex, FAQ schema) de forma autônoma' },
+      { type: 'feature', text: 'Novo endpoint: autonomous-content-edit modifica título WP, H1, H2, hero, insere imagens e força HTTPS no conteúdo' },
+      { type: 'feature', text: 'Novo endpoint: manage-redirect cria/exclui redirects 301/302 via Rank Math ou .htaccess automaticamente' },
+      { type: 'improvement', text: 'SEO Agent agora executa varredura + correção + re-indexação em um único ciclo autônomo verificado' },
+    ],
+  },
   {
     version: '3.3.0',
     date: '2026-02-14',
