@@ -61,7 +61,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { useArticles } from '@/hooks/useArticles';
+import { useArticlesList } from '@/hooks/useArticlesList';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
@@ -207,21 +207,17 @@ function SuccessModal({
   );
 }
 
-// Using BulkPublishModal from @/components/articles/BulkPublishModal
-
 export default function ArticlesList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { articles, isLoading, deleteArticle } = useArticles();
+  const { 
+    articles, total, totalPages, isLoading, 
+    filters, statusCounts, updateFilter, refreshArticles, deleteArticle 
+  } = useArticlesList();
   const { projects } = useProjects();
   const { toast } = useToast();
   
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [projectFilter, setProjectFilter] = useState('all');
   const [selectedArticles, setSelectedArticles] = useState<Set<string>>(new Set());
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(50);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -232,11 +228,6 @@ export default function ArticlesList() {
   
   // Recently published articles for highlight animation
   const [recentlyPublished, setRecentlyPublished] = useState<Set<string>>(new Set());
-  
-  // Sorting and date filter states
-  const [sortBy, setSortBy] = useState<'created_at' | 'scheduled_at'>('created_at');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
   
   // Bulk SEO Analysis state
   const [isBulkAnalyzing, setIsBulkAnalyzing] = useState(false);
@@ -249,111 +240,31 @@ export default function ArticlesList() {
   const [isBulkGeneratingImages, setIsBulkGeneratingImages] = useState(false);
   const [bulkImageProgress, setBulkImageProgress] = useState(0);
 
-  // Pre-filter articles by project, search, and date (everything EXCEPT status)
-  const baseFilteredArticles = useMemo(() => {
-    return articles.filter((a) => {
-      const matchesSearch = 
-        !search || 
-        a.title?.toLowerCase().includes(search.toLowerCase()) || 
-        a.keyword.toLowerCase().includes(search.toLowerCase());
-      
-      const matchesProject = projectFilter === 'all' || a.project_id === projectFilter;
-      
-      let matchesDate = true;
-      if (dateFilter) {
-        const articleDate = new Date(a.created_at);
-        matchesDate = 
-          articleDate.getFullYear() === dateFilter.getFullYear() &&
-          articleDate.getMonth() === dateFilter.getMonth() &&
-          articleDate.getDate() === dateFilter.getDate();
-      }
-      
-      return matchesSearch && matchesProject && matchesDate;
-    });
-  }, [articles, search, projectFilter, dateFilter]);
+  // Debounced search
+  const [searchInput, setSearchInput] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      updateFilter('search', searchInput);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchInput, updateFilter]);
 
-  // Status tabs - counts based on base-filtered articles (respects project/search/date)
-  const statusTabs = useMemo(() => {
-    const counts: Record<string, number> = { 
-      all: baseFilteredArticles.length,
-      published: 0,
-      scheduled: 0,
-      ready: 0,
-      generating: 0,
-      draft: 0,
-      error: 0,
-    };
-    
-    baseFilteredArticles.forEach(a => {
-      if (a.status === 'published') {
-        counts.published++;
-      } else if (a.status === 'ready') {
-        if (a.scheduled_at && new Date(a.scheduled_at) > new Date()) {
-          counts.scheduled++;
-        } else {
-          counts.ready++;
-        }
-      } else if (a.status === 'generating') {
-        counts.generating++;
-      } else if (a.status === 'draft') {
-        counts.draft++;
-      } else if (a.status === 'error') {
-        counts.error++;
-      }
-    });
-    
-    return [
-      { value: 'all', label: 'Todos', count: counts.all },
-      { value: 'published', label: 'Publicado', count: counts.published },
-      { value: 'scheduled', label: 'Agendado', count: counts.scheduled },
-      { value: 'ready', label: 'Finalizado', count: counts.ready },
-      { value: 'generating', label: 'Em criação', count: counts.generating },
-      { value: 'draft', label: 'Na Fila', count: counts.draft },
-      { value: 'error', label: 'Erro', count: counts.error },
-    ];
-  }, [baseFilteredArticles]);
-
-  // Filter by status and sort - uses baseFilteredArticles (already project/search/date filtered)
-  const filteredArticles = useMemo(() => {
-    let filtered = baseFilteredArticles.filter((a) => {
-      if (statusFilter === 'all') return true;
-      if (statusFilter === 'scheduled') {
-        return a.status === 'ready' && a.scheduled_at && new Date(a.scheduled_at) > new Date();
-      }
-      if (statusFilter === 'ready') {
-        return a.status === 'ready' && (!a.scheduled_at || new Date(a.scheduled_at) <= new Date());
-      }
-      return a.status === statusFilter;
-    });
-    
-    // Sort articles
-    filtered.sort((a, b) => {
-      const dateA = new Date(sortBy === 'scheduled_at' && a.scheduled_at ? a.scheduled_at : a.created_at).getTime();
-      const dateB = new Date(sortBy === 'scheduled_at' && b.scheduled_at ? b.scheduled_at : b.created_at).getTime();
-      return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
-    });
-    
-    return filtered;
-  }, [baseFilteredArticles, statusFilter, sortBy, sortOrder]);
-
-  // Pagination
-  const totalPages = Math.ceil(filteredArticles.length / itemsPerPage) || 1;
-  const paginatedArticles = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredArticles.slice(start, start + itemsPerPage);
-  }, [filteredArticles, currentPage, itemsPerPage]);
-
-  // Reset to page 1 when filters change
-  const handleFilterChange = (setter: (val: string) => void) => (val: string) => {
-    setter(val);
-    setCurrentPage(1);
-  };
+  // Status tabs
+  const statusTabs = useMemo(() => [
+    { value: 'all', label: 'Todos', count: statusCounts.all },
+    { value: 'published', label: 'Publicado', count: statusCounts.published },
+    { value: 'scheduled', label: 'Agendado', count: statusCounts.scheduled },
+    { value: 'ready', label: 'Finalizado', count: statusCounts.ready },
+    { value: 'generating', label: 'Em criação', count: statusCounts.generating },
+    { value: 'draft', label: 'Na Fila', count: statusCounts.draft },
+    { value: 'error', label: 'Erro', count: statusCounts.error },
+  ], [statusCounts]);
 
   const toggleSelectAll = () => {
-    if (selectedArticles.size === paginatedArticles.length) {
+    if (selectedArticles.size === articles.length) {
       setSelectedArticles(new Set());
     } else {
-      setSelectedArticles(new Set(paginatedArticles.map(a => a.id)));
+      setSelectedArticles(new Set(articles.map(a => a.id)));
     }
   };
 
@@ -374,23 +285,11 @@ export default function ArticlesList() {
   // Handle publish complete callback from BulkPublishModal
   const handlePublishComplete = (result: { success: number; failed: number }) => {
     setPublishResult(result);
-    
-    // Set recently published articles for highlight effect
-    const publishedIds = new Set(
-      Array.from(selectedArticles).slice(0, result.success)
-    );
+    const publishedIds = new Set(Array.from(selectedArticles).slice(0, result.success));
     setRecentlyPublished(publishedIds);
-    
-    // Show success modal
     setShowSuccessModal(true);
-    
-    // Clear selection
     clearSelection();
-    
-    // Remove highlight after 3 seconds
-    setTimeout(() => {
-      setRecentlyPublished(new Set());
-    }, 3000);
+    setTimeout(() => setRecentlyPublished(new Set()), 3000);
   };
 
   // Bulk delete
@@ -418,14 +317,14 @@ export default function ArticlesList() {
     });
   };
 
-  // Bulk SEO Analysis + Auto-Fix + Republish
+  // Bulk SEO Analysis
   const handleBulkSEOAnalysis = async () => {
     if (selectedArticles.size === 0) return;
     setIsBulkAnalyzing(true);
     setBulkAnalysisProgress(0);
 
     const ids = Array.from(selectedArticles);
-    const batchSize = 2; // smaller batches - content generation is heavy
+    const batchSize = 2;
     let processed = 0;
     let totalScore = 0;
     let optimizedCount = 0;
@@ -448,7 +347,6 @@ export default function ArticlesList() {
           });
 
           if (error) {
-            console.error('Batch error:', error);
             failedCount += batch.length;
             processed += batch.length;
             setBulkAnalysisProgress(processed);
@@ -461,28 +359,21 @@ export default function ArticlesList() {
           if (data?.results) {
             for (const r of data.results) {
               totalScore += r.score || 0;
-              if (r.generated) {
-                generatedCount++;
-              } else if (r.optimized) {
-                optimizedCount++;
-              }
+              if (r.generated) generatedCount++;
+              else if (r.optimized) optimizedCount++;
               if (r.error) failedCount++;
               
-              // Republish if article was already published
               if (r.optimized && r.status === 'published' && r.project_id) {
                 try {
                   const { error: pubError } = await supabase.functions.invoke('publish-to-wordpress', {
                     body: { articleId: r.article_id, projectId: r.project_id },
                   });
                   if (!pubError) republishedCount++;
-                } catch (pubErr) {
-                  console.error(`Republish failed for ${r.article_id}:`, pubErr);
-                }
+                } catch {}
               }
             }
           }
-        } catch (batchErr) {
-          console.error('Batch processing error:', batchErr);
+        } catch {
           failedCount += batch.length;
           processed += batch.length;
           setBulkAnalysisProgress(processed);
@@ -501,9 +392,8 @@ export default function ArticlesList() {
         description: `${parts.join('. ')}. Score médio: ${avgScore}/100.`,
       });
       
-      queryClient.invalidateQueries({ queryKey: ['articles'] });
-    } catch (e) {
-      console.error('Bulk SEO error:', e);
+      refreshArticles();
+    } catch {
       toast({ title: 'Erro na otimização em massa', description: 'Tente novamente.', variant: 'destructive' });
     } finally {
       setIsBulkAnalyzing(false);
@@ -524,7 +414,7 @@ export default function ArticlesList() {
 
     toast({
       title: `🖼️ Gerando imagens para ${ids.length} artigos...`,
-      description: 'Criando imagens cinematográficas com IA. Isso pode levar alguns minutos.',
+      description: 'Criando imagens cinematográficas com IA.',
     });
 
     try {
@@ -538,23 +428,10 @@ export default function ArticlesList() {
       for (const articleId of ids) {
         try {
           const article = articles.find(a => a.id === articleId);
-          if (!article?.title) {
-            failedCount++;
-            processed++;
-            setBulkImageProgress(processed);
-            continue;
-          }
-
-          // Skip if already has featured image
-          if (article.featured_image_url) {
-            processed++;
-            setBulkImageProgress(processed);
-            successCount++;
-            continue;
-          }
+          if (!article?.title) { failedCount++; processed++; setBulkImageProgress(processed); continue; }
+          if (article.featured_image_url) { processed++; setBulkImageProgress(processed); successCount++; continue; }
 
           const project = article.project_id ? projects.find(p => p.id === article.project_id) : null;
-          const segment = project?.nicho || 'general';
 
           const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-image`, {
             method: 'POST',
@@ -566,7 +443,7 @@ export default function ArticlesList() {
               title: article.title,
               keywords: article.keyword,
               context: article.excerpt || '',
-              segment,
+              segment: project?.nicho || 'general',
               style: 'photorealistic',
               aspectRatio: '16:9',
               quality: 'high',
@@ -577,31 +454,21 @@ export default function ArticlesList() {
           if (response.ok) {
             const data = await response.json();
             if (data.success && data.image) {
-              // Update article with generated image
               await supabase.from('articles').update({
                 featured_image_url: data.image,
                 image_prompt: data.prompt,
                 image_source: 'ai-bulk-generated',
               }).eq('id', articleId);
               successCount++;
-            } else {
-              failedCount++;
-            }
-          } else {
-            failedCount++;
-          }
-        } catch (err) {
-          console.error(`Image generation failed for ${articleId}:`, err);
+            } else failedCount++;
+          } else failedCount++;
+        } catch {
           failedCount++;
         }
 
         processed++;
         setBulkImageProgress(processed);
-
-        // Delay between requests to avoid rate limiting
-        if (processed < ids.length) {
-          await new Promise(resolve => setTimeout(resolve, 2500));
-        }
+        if (processed < ids.length) await new Promise(resolve => setTimeout(resolve, 2500));
       }
 
       toast({
@@ -609,9 +476,8 @@ export default function ArticlesList() {
         description: `${successCount} imagens geradas${failedCount > 0 ? `, ${failedCount} falharam` : ''}.`,
       });
 
-      queryClient.invalidateQueries({ queryKey: ['articles'] });
-    } catch (e) {
-      console.error('Bulk image generation error:', e);
+      refreshArticles();
+    } catch {
       toast({ title: 'Erro na geração em massa', description: 'Tente novamente.', variant: 'destructive' });
     } finally {
       setIsBulkGeneratingImages(false);
@@ -619,7 +485,6 @@ export default function ArticlesList() {
     }
   };
 
-  // Copy article link
   const handleCopyLink = (articleId: string) => {
     const article = articles.find(a => a.id === articleId);
     if (article?.published_url) {
@@ -628,21 +493,29 @@ export default function ArticlesList() {
     }
   };
 
-  // Get project name
   const getProjectName = (projectId: string | null) => {
     if (!projectId) return null;
     return projects.find(p => p.id === projectId)?.name;
   };
 
-  // Refresh handler - invalidate cache for instant update
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ['articles'] });
-    await queryClient.invalidateQueries({ queryKey: ['projects'] });
+    await refreshArticles();
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
-  if (isLoading) {
+  // Date filter helper
+  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
+  useEffect(() => {
+    if (dateFilter) {
+      const formatted = format(dateFilter, 'yyyy-MM-dd');
+      updateFilter('dateFilter', formatted);
+    } else {
+      updateFilter('dateFilter', undefined);
+    }
+  }, [dateFilter, updateFilter]);
+
+  if (isLoading && articles.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -661,7 +534,7 @@ export default function ArticlesList() {
               variant="secondary"
               className="bg-primary/10 text-primary text-sm px-2.5 py-0.5 font-medium"
             >
-              Total: {filteredArticles.length}
+              Total: {statusCounts.all}
             </Badge>
           </div>
           
@@ -684,23 +557,20 @@ export default function ArticlesList() {
               type="text"
               placeholder="Pesquisar artigos..."
               className="pl-10 pr-4 py-2 text-sm bg-background"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setCurrentPage(1);
-              }}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
           </div>
           
           {/* Project Filter */}
-          <Select value={projectFilter} onValueChange={handleFilterChange(setProjectFilter)}>
+          <Select value={filters.projectId} onValueChange={(val) => updateFilter('projectId', val)}>
             <SelectTrigger className="w-full lg:w-56 bg-background">
               <div className="flex items-center gap-2">
                 <Folder className="w-4 h-4 text-amber-500" />
                 <span className="text-sm truncate">
-                  {projectFilter === 'all' 
+                  {filters.projectId === 'all' 
                     ? 'Todos os projetos' 
-                    : getProjectName(projectFilter) || 'Projeto'}
+                    : getProjectName(filters.projectId) || 'Projeto'}
                 </span>
               </div>
             </SelectTrigger>
@@ -741,7 +611,6 @@ export default function ArticlesList() {
                     onClick={(e) => {
                       e.stopPropagation();
                       setDateFilter(undefined);
-                      setCurrentPage(1);
                     }}
                   />
                 )}
@@ -751,10 +620,7 @@ export default function ArticlesList() {
               <CalendarComponent
                 mode="single"
                 selected={dateFilter}
-                onSelect={(date) => {
-                  setDateFilter(date);
-                  setCurrentPage(1);
-                }}
+                onSelect={(date) => setDateFilter(date)}
                 initialFocus
                 className="pointer-events-auto"
               />
@@ -763,20 +629,20 @@ export default function ArticlesList() {
           
           {/* Sort Options */}
           <Select 
-            value={`${sortBy}-${sortOrder}`} 
+            value={`${filters.sortBy}-${filters.sortOrder}`} 
             onValueChange={(val) => {
               const [newSortBy, newSortOrder] = val.split('-') as ['created_at' | 'scheduled_at', 'asc' | 'desc'];
-              setSortBy(newSortBy);
-              setSortOrder(newSortOrder);
+              updateFilter('sortBy', newSortBy);
+              updateFilter('sortOrder', newSortOrder);
             }}
           >
             <SelectTrigger className="w-full lg:w-52 bg-background">
               <div className="flex items-center gap-2">
                 <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
                 <span className="text-sm">
-                  {sortBy === 'created_at' 
-                    ? (sortOrder === 'desc' ? 'Mais recentes' : 'Mais antigos')
-                    : (sortOrder === 'desc' ? 'Agendados (próx.)' : 'Agendados (dist.)')}
+                  {filters.sortBy === 'created_at' 
+                    ? (filters.sortOrder === 'desc' ? 'Mais recentes' : 'Mais antigos')
+                    : (filters.sortOrder === 'desc' ? 'Agendados (próx.)' : 'Agendados (dist.)')}
                 </span>
               </div>
             </SelectTrigger>
@@ -869,10 +735,10 @@ export default function ArticlesList() {
           {statusTabs.map((tab) => (
             <button
               key={tab.value}
-              onClick={() => handleFilterChange(setStatusFilter)(tab.value)}
+              onClick={() => updateFilter('status', tab.value)}
               className={cn(
                 "px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap",
-                statusFilter === tab.value
+                filters.status === tab.value
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
@@ -881,7 +747,7 @@ export default function ArticlesList() {
               {tab.count > 0 && (
                 <span className={cn(
                   "ml-2 px-1.5 py-0.5 text-xs rounded",
-                  statusFilter === tab.value
+                  filters.status === tab.value
                     ? "bg-primary-foreground/20 text-primary-foreground"
                     : "bg-muted text-muted-foreground"
                 )}>
@@ -905,18 +771,18 @@ export default function ArticlesList() {
       {/* Main Content - Table */}
       <div className="p-6">
         <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
-          {filteredArticles.length === 0 ? (
+          {articles.length === 0 && !isLoading ? (
             <div className="p-16 text-center">
               <FileText className="w-16 h-16 text-muted-foreground/40 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">
-                {articles.length === 0 ? 'Nenhum artigo criado' : 'Nenhum resultado encontrado'}
+                {statusCounts.all === 0 ? 'Nenhum artigo criado' : 'Nenhum resultado encontrado'}
               </h3>
               <p className="text-sm text-muted-foreground mb-6">
-                {articles.length === 0 
+                {statusCounts.all === 0 
                   ? 'Comece criando seu primeiro artigo com IA' 
                   : 'Tente ajustar os filtros de busca'}
               </p>
-              {articles.length === 0 && (
+              {statusCounts.all === 0 && (
                 <Button asChild>
                   <Link to="/articles/new">
                     <Plus className="w-4 h-4 mr-2" />
@@ -932,7 +798,7 @@ export default function ArticlesList() {
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
                     <TableHead className="w-12 px-6">
                       <Checkbox
-                        checked={selectedArticles.size === paginatedArticles.length && paginatedArticles.length > 0}
+                        checked={selectedArticles.size === articles.length && articles.length > 0}
                         onCheckedChange={toggleSelectAll}
                         className="w-4 h-4"
                       />
@@ -958,7 +824,7 @@ export default function ArticlesList() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedArticles.map((article) => {
+                  {articles.map((article) => {
                     const status = statusConfig[article.status] || statusConfig.draft;
                     const isRecentlyPublished = recentlyPublished.has(article.id);
                     
@@ -971,7 +837,6 @@ export default function ArticlesList() {
                           isRecentlyPublished && "bg-green-50 animate-pulse"
                         )}
                       >
-                        {/* Checkbox */}
                         <TableCell className="px-6 py-4">
                           <Checkbox
                             checked={selectedArticles.has(article.id)}
@@ -980,7 +845,6 @@ export default function ArticlesList() {
                           />
                         </TableCell>
                         
-                        {/* Thumbnail */}
                         <TableCell className="px-4 py-4">
                           <div className="w-20 h-14 rounded-lg overflow-hidden bg-muted">
                             {article.featured_image_url ? (
@@ -997,7 +861,6 @@ export default function ArticlesList() {
                           </div>
                         </TableCell>
                         
-                        {/* Title & Description */}
                         <TableCell className="px-4 py-4">
                           <div className="space-y-1 max-w-lg">
                             <h3 
@@ -1021,7 +884,6 @@ export default function ArticlesList() {
                           </div>
                         </TableCell>
                         
-                        {/* Project Column */}
                         <TableCell className="px-4 py-4">
                           {article.project_id ? (
                             <div className="flex items-center gap-2">
@@ -1035,7 +897,6 @@ export default function ArticlesList() {
                           )}
                         </TableCell>
                         
-                        {/* Status Badge */}
                         <TableCell className="px-4 py-4">
                           <Badge 
                             variant="outline"
@@ -1056,7 +917,6 @@ export default function ArticlesList() {
                           </Badge>
                         </TableCell>
                         
-                        {/* Date/Time Column */}
                         <TableCell className="px-4 py-4">
                           <div className="flex flex-col gap-0.5">
                             <div className="flex items-center gap-1.5 text-sm text-foreground">
@@ -1075,7 +935,6 @@ export default function ArticlesList() {
                           </div>
                         </TableCell>
                         
-                        {/* Actions Menu */}
                         <TableCell className="px-4 py-4">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -1125,7 +984,6 @@ export default function ArticlesList() {
 
               {/* Pagination Footer */}
               <div className="px-6 py-4 bg-muted/30 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
-                {/* Selection Counter */}
                 <div className="flex items-center gap-2">
                   <div className={cn(
                     "flex items-center justify-center w-8 h-8 text-sm font-medium rounded",
@@ -1136,14 +994,13 @@ export default function ArticlesList() {
                     {selectedArticles.size}
                   </div>
                   <span className="text-sm text-muted-foreground">
-                    de {filteredArticles.length} linha(s) selecionada(s)
+                    de {total} linha(s) selecionada(s)
                   </span>
                 </div>
                 
-                {/* Pagination Controls */}
                 <div className="flex flex-col sm:flex-row items-center gap-4">
                   <span className="text-sm text-muted-foreground">
-                    Página {currentPage} de {totalPages}
+                    Página {filters.page} de {totalPages}
                   </span>
                   
                   <div className="flex items-center gap-2">
@@ -1151,11 +1008,8 @@ export default function ArticlesList() {
                       Itens por página:
                     </span>
                     <Select
-                      value={String(itemsPerPage)}
-                      onValueChange={(val) => {
-                        setItemsPerPage(Number(val));
-                        setCurrentPage(1);
-                      }}
+                      value={String(filters.perPage)}
+                      onValueChange={(val) => updateFilter('perPage', Number(val))}
                     >
                       <SelectTrigger className="w-20 h-8 bg-background">
                         <SelectValue />
@@ -1171,18 +1025,16 @@ export default function ArticlesList() {
                   
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => setCurrentPage(p => p - 1)}
-                      disabled={currentPage === 1}
-                      className="p-2 hover:bg-muted rounded disabled:opacity-50 
-                                 disabled:cursor-not-allowed transition-colors"
+                      onClick={() => updateFilter('page', Math.max(1, filters.page - 1))}
+                      disabled={filters.page <= 1}
+                      className="p-1.5 rounded hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => setCurrentPage(p => p + 1)}
-                      disabled={currentPage === totalPages}
-                      className="p-2 hover:bg-muted rounded disabled:opacity-50 
-                                 disabled:cursor-not-allowed transition-colors"
+                      onClick={() => updateFilter('page', Math.min(totalPages, filters.page + 1))}
+                      disabled={filters.page >= totalPages}
+                      className="p-1.5 rounded hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
@@ -1194,59 +1046,47 @@ export default function ArticlesList() {
         </div>
       </div>
 
-      {/* Success Modal */}
+      {/* Modals */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão em massa</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir {selectedArticles.size} artigo(s)? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+              {isDeleting ? 'Excluindo...' : 'Confirmar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {showPublishModal && (
+        <BulkPublishModal
+          isOpen={showPublishModal}
+          onClose={() => setShowPublishModal(false)}
+          selectedArticles={Array.from(selectedArticles).map(id => {
+            const a = articles.find(art => art.id === id);
+            return { id, title: a?.title || '', project_id: a?.project_id || '' };
+          })}
+          projects={projects}
+          onPublishComplete={handlePublishComplete}
+        />
+      )}
+
       <SuccessModal
         isOpen={showSuccessModal}
         onClose={() => setShowSuccessModal(false)}
         successCount={publishResult.success}
         failedCount={publishResult.failed}
       />
-
-      {/* Bulk Publish Modal */}
-      <BulkPublishModal
-        isOpen={showPublishModal}
-        onClose={() => setShowPublishModal(false)}
-        selectedArticles={articles.filter(a => selectedArticles.has(a.id)).map(a => ({ 
-          id: a.id, 
-          title: a.title, 
-          project_id: a.project_id 
-        }))}
-        projects={projects}
-        onPublishComplete={handlePublishComplete}
-      />
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir artigos selecionados?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você está prestes a excluir {selectedArticles.size} artigo{selectedArticles.size > 1 ? 's' : ''}. 
-              Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleBulkDelete}
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Excluindo...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Excluir {selectedArticles.size} artigo{selectedArticles.size > 1 ? 's' : ''}
-                </>
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
