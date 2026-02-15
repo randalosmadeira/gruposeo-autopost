@@ -575,10 +575,15 @@ JSON:
       const aiContent = await orchestrator.call('seo_analysis', [
         { role: "system", content: "Especialista SEO. Gere anchor texts CURTOS (2-4 palavras). APENAS JSON." },
         { role: "user", content: prompt },
-      ], { maxTokens: 500, temperature: 0.2 });
+      ], { maxTokens: 800, temperature: 0.2 });
+
+      console.log(`[SEO Agent] [${project.name}] Link AI response for "${orphan.wp_post_title}" (${aiContent.length} chars)`);
 
       try {
-        const jsonStr = aiContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        let jsonStr = aiContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        // Try to extract JSON object if surrounded by text
+        const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+        if (jsonMatch) jsonStr = jsonMatch[0];
         const suggestions = JSON.parse(jsonStr);
 
         const urlToArticle = new Map(allArticles.map(a => [a.wp_post_url, a]));
@@ -644,7 +649,10 @@ JSON:
             } catch { /* continue */ }
           }
         }
-      } catch { /* skip parse errors */ }
+      } catch (parseErr) {
+        console.error(`[SEO Agent] [${project.name}] Link suggestion parse failed for orphan "${orphan.wp_post_title}":`, parseErr instanceof Error ? parseErr.message : parseErr);
+        console.error(`[SEO Agent] [${project.name}] Raw AI response (first 500 chars):`, aiContent?.substring(0, 500));
+      }
     }
   } catch (e) {
     console.error(`[SEO Agent] [${project.name}] Link analysis error:`, e);
@@ -697,8 +705,13 @@ async function submitIndexing(
 
         if (indexNowResp.ok) {
           const indexData = await indexNowResp.json();
-          submitted = indexData.submitted || urls.slice(0, 100).length;
-          detailsList.push(`IndexNow: ${submitted} URLs submetidas`);
+          // Only count actually submitted, not the request size
+          submitted = indexData.submitted || 0;
+          if (submitted > 0) {
+            detailsList.push(`IndexNow: ${submitted} URLs submetidas`);
+          } else {
+            detailsList.push(`IndexNow: plugin retornou sem submissões efetivas`);
+          }
         } else {
           // Fallback: Direct IndexNow API submission
           const directResult = await submitDirectIndexNow(baseUrl, urls.slice(0, 50), apiKey);
@@ -832,9 +845,11 @@ async function submitDirectIndexNow(siteUrl: string, urls: string[], apiKey?: st
 
     const status = resp.status;
     if (status === 200 || status === 202) {
+      console.log(`[IndexNow Direct] Success: ${urls.length} URLs submitted for ${host}`);
       return urls.length;
     }
-    console.warn(`[IndexNow Direct] Status ${status} for ${host}`);
+    // 403/422 = key validation failed (key.txt not found on server)
+    console.warn(`[IndexNow Direct] Status ${status} for ${host} — likely key validation failure (${key}.txt not accessible)`);
   } catch (e) {
     console.error("[IndexNow Direct] Error:", e);
   }
@@ -1037,9 +1052,19 @@ async function runFullTechnicalAudit(
         categories.indexing.issues++;
       } else {
         const robotsContent = await robotsResp.text();
-        const blockedCrawlers = ["GPTBot", "ClaudeBot", "PerplexityBot", "Google-Extended"].filter(
-          bot => robotsContent.includes(`User-agent: ${bot}`) && robotsContent.includes("Disallow: /")
-        );
+        // Parse robots.txt properly: check if each bot has its OWN Disallow: / rule
+        const robotsLines = robotsContent.split('\n').map(l => l.trim().toLowerCase());
+        const blockedCrawlers = ["GPTBot", "ClaudeBot", "PerplexityBot", "Google-Extended"].filter(bot => {
+          const botLower = bot.toLowerCase();
+          const botLineIdx = robotsLines.findIndex(l => l === `user-agent: ${botLower}`);
+          if (botLineIdx === -1) return false;
+          // Check subsequent lines until next User-agent for "disallow: /"
+          for (let i = botLineIdx + 1; i < robotsLines.length; i++) {
+            if (robotsLines[i].startsWith('user-agent:')) break;
+            if (robotsLines[i] === 'disallow: /') return true;
+          }
+          return false;
+        });
         if (blockedCrawlers.length > 0) {
           issues.push({
             id: "IDX-002", priority: "P1", category: "indexing",
@@ -1060,11 +1085,16 @@ async function runFullTechnicalAudit(
               });
               if (fixResp.ok) {
                 const fixData = await fixResp.json();
-                issues[issues.length - 1].auto_fixed = true;
-                issues[issues.length - 1].description += ` → Auto-fix: ${fixData.message}`;
-                totalFixed++;
-                categories.indexing.fixed++;
-                categories.indexing.score += 10 * blockedCrawlers.length;
+                // Only count as fixed if crawlers were actually unblocked
+                if (fixData.unblocked > 0 || fixData.fixed > 0) {
+                  issues[issues.length - 1].auto_fixed = true;
+                  issues[issues.length - 1].description += ` → Auto-fix: ${fixData.message || fixData.unblocked + ' crawlers desbloqueados'}`;
+                  totalFixed++;
+                  categories.indexing.fixed++;
+                  categories.indexing.score += 10 * blockedCrawlers.length;
+                } else {
+                  console.log(`[SEO Agent] [${project.name}] fix-ai-crawlers: no actual changes made (${JSON.stringify(fixData)})`);
+                }
               }
             } catch { /* plugin endpoint unavailable */ }
           }
@@ -1125,13 +1155,28 @@ async function runFullTechnicalAudit(
               headers: { "X-CFRDM-API-Key": apiKey },
             });
             if (fixResp.ok) {
-              issues[issues.length - 1].auto_fixed = true;
-              issues[issues.length - 1].description += " → Plugin tentou regenerar sitemap.";
-              totalFixed++;
-              categories.indexing.fixed++;
-              categories.indexing.score += 20;
+              // Verify sitemap is now accessible
+              let sitemapVerified = false;
+              for (const candidate of [`${siteRoot}/wp-sitemap.xml`, `${siteRoot}/sitemap_index.xml`, `${siteRoot}/sitemap.xml`]) {
+                try {
+                  const vr = await fetch(candidate, { method: "HEAD", signal: AbortSignal.timeout(5000) });
+                  if (vr.ok) { sitemapVerified = true; break; }
+                } catch { /* next */ }
+              }
+              if (sitemapVerified) {
+                issues[issues.length - 1].auto_fixed = true;
+                issues[issues.length - 1].description += " → Sitemap regenerado com sucesso.";
+                totalFixed++;
+                categories.indexing.fixed++;
+                categories.indexing.score += 20;
+              } else {
+                issues[issues.length - 1].description += " → Plugin tentou regenerar mas sitemap ainda inacessível.";
+                console.warn(`[SEO Agent] [${project.name}] Sitemap refresh: plugin returned OK but sitemap still not accessible`);
+              }
             }
-          } catch { /* */ }
+          } catch (e) {
+            console.error(`[SEO Agent] [${project.name}] Sitemap refresh failed:`, e);
+          }
         }
       }
     } catch { /* timeout */ }
@@ -1157,12 +1202,24 @@ async function runFullTechnicalAudit(
               method: "POST", headers: { "X-CFRDM-API-Key": apiKey },
             });
             if (fixResp.ok) {
-              issues[issues.length - 1].auto_fixed = true;
-              totalFixed++;
-              categories.geo.fixed++;
-              categories.geo.score += 15;
+              // Verify llms.txt is actually accessible now
+              try {
+                const verifyResp = await fetch(`${baseUrl.replace(/\/blog\/?$/, "")}/llms.txt`, { signal: AbortSignal.timeout(5000) });
+                if (verifyResp.ok) {
+                  issues[issues.length - 1].auto_fixed = true;
+                  totalFixed++;
+                  categories.geo.fixed++;
+                  categories.geo.score += 15;
+                } else {
+                  console.warn(`[SEO Agent] [${project.name}] llms.txt refresh claimed OK but file still not accessible (${verifyResp.status})`);
+                }
+              } catch {
+                console.warn(`[SEO Agent] [${project.name}] llms.txt verification timeout`);
+              }
             }
-          } catch { /* */ }
+          } catch (e) {
+            console.error(`[SEO Agent] [${project.name}] llms.txt fix failed:`, e);
+          }
         }
       }
     } catch { /* timeout */ }
