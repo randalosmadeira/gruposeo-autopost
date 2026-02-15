@@ -259,6 +259,35 @@ class ContentFactory_RDM {
         
         // Auto-post to social on publish
         add_action('publish_post', array($this, 'auto_queue_social_post'), 100, 2);
+        
+        // JSON-LD Schema output via wp_head (NOT in post content to avoid WordPress stripping <script> tags)
+        add_action('wp_head', array($this, 'output_json_ld_schemas'), 5);
+    }
+    
+    /**
+     * Output JSON-LD schemas stored in post meta via wp_head
+     * This prevents WordPress from stripping <script> tags when they're in post_content
+     */
+    public function output_json_ld_schemas() {
+        if (!is_singular('post')) return;
+        
+        $post_id = get_the_ID();
+        if (!$post_id) return;
+        
+        $schemas_json = get_post_meta($post_id, '_cfrdm_json_ld_schemas', true);
+        if (empty($schemas_json)) return;
+        
+        $schemas = json_decode($schemas_json, true);
+        if (!is_array($schemas) || empty($schemas)) return;
+        
+        echo "\n<!-- JSON-LD Structured Data by ContentFactory RDM -->\n";
+        foreach ($schemas as $schema) {
+            if (is_array($schema) && !empty($schema)) {
+                echo '<script type="application/ld+json">' . "\n";
+                echo wp_json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+                echo "\n</script>\n";
+            }
+        }
     }
     
 private function init_admin_hooks() {

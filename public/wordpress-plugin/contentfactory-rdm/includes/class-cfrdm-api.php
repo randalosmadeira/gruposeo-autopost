@@ -766,6 +766,11 @@ class CFRDM_API {
             update_post_meta($post_id, '_cfrdm_review_cons', $params['review_cons']);
         }
         
+        // Store JSON-LD schemas if provided (injected via wp_head, NOT in content)
+        if (!empty($params['json_ld_schemas']) && is_array($params['json_ld_schemas'])) {
+            update_post_meta($post_id, '_cfrdm_json_ld_schemas', wp_json_encode($params['json_ld_schemas']));
+        }
+        
         // Log action
         CFRDM_Webhooks::log('article_created', array(
             'post_id' => $post_id,
