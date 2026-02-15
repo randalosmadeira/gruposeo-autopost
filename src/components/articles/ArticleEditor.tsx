@@ -246,6 +246,16 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
   };
 
   const handlePublish = () => {
+    // Block publishing blank articles
+    const contentText = (editedArticle.content || '').replace(/<!--[\s\S]*?-->/g, '').trim();
+    if (!contentText || contentText.length < 50) {
+      toast({
+        title: 'Conteúdo insuficiente',
+        description: 'O artigo não possui conteúdo suficiente para publicação. Gere ou escreva o conteúdo antes de publicar.',
+        variant: 'destructive',
+      });
+      return;
+    }
     onPublish?.(editedArticle);
   };
 
