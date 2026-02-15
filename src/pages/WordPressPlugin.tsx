@@ -468,6 +468,10 @@ export default function WordPressPluginPage() {
         { path: 'includes/class-cfrdm-seo-checklist.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-seo-checklist.php' },
         // v3.2.4
         { path: 'includes/class-cfrdm-method-validator.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-method-validator.php' },
+        // v3.2.7+
+        { path: 'includes/class-cfrdm-ai-source-rules.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-source-rules.php' },
+        { path: 'includes/class-cfrdm-google-indexing-submitter.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-google-indexing-submitter.php' },
+        { path: 'includes/class-cfrdm-gmb-poster.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-gmb-poster.php' },
         // Assets
         { path: 'assets/css/admin.css', url: '/wordpress-plugin/contentfactory-rdm/assets/css/admin.css' },
         { path: 'assets/js/admin.js', url: '/wordpress-plugin/contentfactory-rdm/assets/js/admin.js' },
