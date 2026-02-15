@@ -41,9 +41,9 @@ const FREQUENCY_OPTIONS = [
 ];
 
 const ARTICLE_LENGTH_OPTIONS = [
-  { value: 'short', label: 'Curto', description: '400-600 palavras' },
-  { value: 'medium', label: 'Médio', description: '600-1000 palavras' },
-  { value: 'long', label: 'Longo', description: '1000-1500 palavras' },
+  { value: 'medium', label: 'Padrão', description: '2.400-3.600 palavras' },
+  { value: 'long', label: 'Extenso', description: '3.600-5.200 palavras' },
+  { value: 'extra-long', label: 'Completo', description: '5.200-7.000 palavras' },
 ];
 
 const DAYS_OPTIONS = [

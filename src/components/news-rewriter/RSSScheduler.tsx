@@ -343,9 +343,9 @@ export function RSSScheduler({ projectId }: RSSSchedulerProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="short">Curto (400-600)</SelectItem>
-                    <SelectItem value="medium">Médio (600-1000)</SelectItem>
-                    <SelectItem value="long">Longo (1000-1500)</SelectItem>
+                    <SelectItem value="medium">Padrão (2.400-3.600)</SelectItem>
+                    <SelectItem value="long">Extenso (3.600-5.200)</SelectItem>
+                    <SelectItem value="extra-long">Completo (5.200-7.000)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

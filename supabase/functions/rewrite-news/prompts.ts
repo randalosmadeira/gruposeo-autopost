@@ -544,9 +544,10 @@ export const NICHE_IMAGE_PROMPTS: Record<string, string> = {
 
 // Article length configurations - Updated for v3.0 (minimum 2400 words)
 export const ARTICLE_LENGTHS: Record<string, { min: number; max: number; label: string }> = {
-  short: { min: 800, max: 1500, label: "Curto (800-1500 palavras)" },
-  medium: { min: 1500, max: 2400, label: "Médio (1500-2400 palavras)" },
-  long: { min: 2400, max: 4000, label: "Longo (2400-4000 palavras)" },
+  short: { min: 2400, max: 3600, label: "Padrão (2400-3600 palavras)" },
+  medium: { min: 2400, max: 3600, label: "Padrão (2400-3600 palavras)" },
+  long: { min: 3600, max: 5200, label: "Extenso (3600-5200 palavras)" },
+  'extra-long': { min: 5200, max: 7000, label: "Completo (5200-7000 palavras)" },
 };
 
 // Niche labels for UI
