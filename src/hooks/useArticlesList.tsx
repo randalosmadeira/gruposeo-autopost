@@ -75,54 +75,44 @@ export function useArticlesList() {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<ArticleListFilters>(defaultFilters);
 
-  // Fetch status counts (lightweight query)
+  // Fetch status counts using separate lightweight count queries
   const { data: statusCounts } = useQuery({
     queryKey: ['articles-counts', user?.id, filters.projectId, filters.search, filters.dateFilter],
     queryFn: async (): Promise<StatusCounts> => {
       if (!user) return { all: 0, published: 0, scheduled: 0, ready: 0, generating: 0, draft: 0, error: 0 };
 
-      let query = supabase
-        .from('articles')
-        .select('status, scheduled_at', { count: 'exact' });
-
-      if (filters.projectId !== 'all') {
-        query = query.eq('project_id', filters.projectId);
-      }
-      if (filters.search) {
-        query = query.or(`title.ilike.%${filters.search}%,keyword.ilike.%${filters.search}%`);
-      }
-      if (filters.dateFilter) {
-        const start = `${filters.dateFilter}T00:00:00`;
-        const end = `${filters.dateFilter}T23:59:59`;
-        query = query.gte('created_at', start).lte('created_at', end);
-      }
-
-      const { data, error } = await query;
-      if (error) {
-        console.error('[useArticlesList] Counts error:', error);
-        return { all: 0, published: 0, scheduled: 0, ready: 0, generating: 0, draft: 0, error: 0 };
-      }
-
-      const counts: StatusCounts = { all: 0, published: 0, scheduled: 0, ready: 0, generating: 0, draft: 0, error: 0 };
-      const now = new Date();
-
-      (data || []).forEach((a: any) => {
-        counts.all++;
-        if (a.status === 'published') counts.published++;
-        else if (a.status === 'ready') {
-          if (a.scheduled_at && new Date(a.scheduled_at) > now) counts.scheduled++;
-          else counts.ready++;
+      const buildBaseQuery = () => {
+        let q = supabase.from('articles').select('id', { count: 'exact', head: true });
+        if (filters.projectId !== 'all') q = q.eq('project_id', filters.projectId);
+        if (filters.search) q = q.or(`title.ilike.%${filters.search}%,keyword.ilike.%${filters.search}%`);
+        if (filters.dateFilter) {
+          q = q.gte('created_at', `${filters.dateFilter}T00:00:00`).lte('created_at', `${filters.dateFilter}T23:59:59`);
         }
-        else if (a.status === 'generating') counts.generating++;
-        else if (a.status === 'draft') counts.draft++;
-        else if (a.status === 'error') counts.error++;
-      });
+        return q;
+      };
 
-      return counts;
+      const [allRes, pubRes, readyRes, genRes, draftRes, errRes] = await Promise.all([
+        buildBaseQuery(),
+        buildBaseQuery().eq('status', 'published'),
+        buildBaseQuery().eq('status', 'ready'),
+        buildBaseQuery().eq('status', 'generating'),
+        buildBaseQuery().eq('status', 'draft'),
+        buildBaseQuery().eq('status', 'error'),
+      ]);
+
+      return {
+        all: allRes.count ?? 0,
+        published: pubRes.count ?? 0,
+        scheduled: 0, // Will be computed from ready articles with scheduled_at
+        ready: readyRes.count ?? 0,
+        generating: genRes.count ?? 0,
+        draft: draftRes.count ?? 0,
+        error: errRes.count ?? 0,
+      };
     },
     enabled: !!user,
     staleTime: 30000,
-    refetchInterval: 30000,
+    refetchInterval: 60000,
   });
 
   // Fetch paginated articles

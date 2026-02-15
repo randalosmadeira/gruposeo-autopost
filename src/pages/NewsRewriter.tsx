@@ -95,7 +95,7 @@ export default function NewsRewriter() {
   const [keyword, setKeyword] = useState('');
   const [projectId, setProjectId] = useState<string>('');
   const [niche, setNiche] = useState('geral');
-  const [articleLength, setArticleLength] = useState<'short' | 'medium' | 'long'>('medium');
+  const [articleLength, setArticleLength] = useState<'short' | 'medium' | 'long' | 'extra-long'>('medium');
   const [inputTab, setInputTab] = useState<'manual' | 'rss'>('manual');
   const [mainTab, setMainTab] = useState<'new' | 'history' | 'schedule' | 'monitor' | 'analytics' | 'portals'>('new');
   const [autoPublish, setAutoPublish] = useState(false);
@@ -901,7 +901,7 @@ export default function NewsRewriter() {
                             ? 'border-primary bg-primary/5'
                             : 'border-border hover:border-primary/50'
                         )}
-                        onClick={() => setArticleLength(length.id as 'short' | 'medium' | 'long')}
+                        onClick={() => setArticleLength(length.id as 'short' | 'medium' | 'long' | 'extra-long')}
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-medium text-sm">{length.label}</span>

@@ -9,7 +9,7 @@ export interface RewriteRequest {
   analysisAngle: string;
   keyword?: string;
   niche?: string;
-  articleLength?: 'short' | 'medium' | 'long';
+  articleLength?: 'short' | 'medium' | 'long' | 'extra-long';
   language?: string;
   projectId?: string;
   internalLinks?: Array<{ anchor: string; url: string }>;

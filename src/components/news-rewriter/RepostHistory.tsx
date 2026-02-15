@@ -101,43 +101,28 @@ export function RepostHistory({ showRefresh = true, compact = false }: RepostHis
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-  const fetchHistory = async (isRefresh = false) => {
+  const fetchHistory = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
-      const PAGE_SIZE = 1000;
-      let allData: any[] = [];
-      let from = 0;
-      let hasMore = true;
+      const { data, error } = await supabase
+        .from('articles')
+        .select('id, title, created_at, status, config, featured_image_url, excerpt, published_url, published_at, keyword')
+        .filter('config->>type', 'eq', 'rewrite')
+        .order('created_at', { ascending: false })
+        .limit(200);
 
-      while (hasMore) {
-        const { data, error } = await supabase
-          .from('articles')
-          .select('id, title, created_at, status, config, featured_image_url, excerpt, published_url, published_at, keyword')
-          .eq('config->>type', 'rewrite')
-          .order('created_at', { ascending: false })
-          .range(from, from + PAGE_SIZE - 1);
+      if (error) throw error;
 
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          allData = allData.concat(data);
-          from += PAGE_SIZE;
-          hasMore = data.length === PAGE_SIZE;
-        } else {
-          hasMore = false;
-        }
-      }
-
-      setItems(allData as RepostHistoryItem[]);
+      setItems((data || []) as RepostHistoryItem[]);
     } catch (error) {
       console.error('Error fetching repost history:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchHistory();
