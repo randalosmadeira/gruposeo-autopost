@@ -112,7 +112,8 @@ REGRAS IMPORTANTES:
 - Use o tom "${config.tone}"
 - Use ${pov}
 - O artigo deve ter entre ${wordRange.min} e ${wordRange.max} palavras
-- Use formatação Markdown com headers (H2, H3), listas e negrito quando apropriado
+- Use APENAS HTML semântico: <h2>, <h3>, <p>, <strong>, <ul>, <li>, <ol>, <table>, <a href="...">
+- NUNCA use markdown: **negrito**, [link](url), ## título, - item
 - A palavra-chave principal "${config.keyword}" deve aparecer naturalmente no título, introdução, headers e conclusão
 - Otimize para SEO: use variações semânticas, escreva parágrafos curtos, use headers descritivos`;
 
