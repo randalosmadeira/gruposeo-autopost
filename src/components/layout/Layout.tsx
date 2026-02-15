@@ -1,8 +1,9 @@
+import { memo } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 
-export function Layout() {
+export const Layout = memo(function Layout() {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
@@ -14,4 +15,4 @@ export function Layout() {
       </div>
     </div>
   );
-}
+});

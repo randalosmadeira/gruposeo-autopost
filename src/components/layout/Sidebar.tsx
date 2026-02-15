@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { cn } from '@/lib/utils';
@@ -119,7 +119,7 @@ const bottomNavItems: NavItem[] = [
   { label: 'Perfil', icon: User, href: '/settings' },
 ];
 
-export function Sidebar() {
+export const Sidebar = memo(function Sidebar() {
   const [collapsed] = useState(true);
   const [expandedMenu, setExpandedMenu] = useState<string | null>('Artigos IA');
   const location = useLocation();
@@ -348,4 +348,4 @@ export function Sidebar() {
       </aside>
     </TooltipProvider>
   );
-}
+});

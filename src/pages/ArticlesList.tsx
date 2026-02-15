@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -123,7 +123,7 @@ const statusConfig: Record<string, {
 };
 
 // Success Modal Component
-function SuccessModal({ 
+const SuccessModal = memo(function SuccessModal({ 
   isOpen, 
   onClose, 
   successCount, 
@@ -205,7 +205,7 @@ function SuccessModal({
       </DialogContent>
     </Dialog>
   );
-}
+});
 
 export default function ArticlesList() {
   const navigate = useNavigate();
@@ -260,37 +260,36 @@ export default function ArticlesList() {
     { value: 'error', label: 'Erro', count: statusCounts.error },
   ], [statusCounts]);
 
-  const toggleSelectAll = () => {
+  const toggleSelectAll = useCallback(() => {
     if (selectedArticles.size === articles.length) {
       setSelectedArticles(new Set());
     } else {
       setSelectedArticles(new Set(articles.map(a => a.id)));
     }
-  };
+  }, [selectedArticles.size, articles]);
 
-  const toggleSelect = (id: string) => {
-    const newSelected = new Set(selectedArticles);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
-    setSelectedArticles(newSelected);
-  };
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedArticles(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
-  const clearSelection = () => {
+  const clearSelection = useCallback(() => {
     setSelectedArticles(new Set());
-  };
+  }, []);
 
   // Handle publish complete callback from BulkPublishModal
-  const handlePublishComplete = (result: { success: number; failed: number }) => {
+  const handlePublishComplete = useCallback((result: { success: number; failed: number }) => {
     setPublishResult(result);
     const publishedIds = new Set(Array.from(selectedArticles).slice(0, result.success));
     setRecentlyPublished(publishedIds);
     setShowSuccessModal(true);
     clearSelection();
     setTimeout(() => setRecentlyPublished(new Set()), 3000);
-  };
+  }, [selectedArticles, clearSelection]);
 
   // Bulk delete
   const handleBulkDelete = async () => {
@@ -485,18 +484,18 @@ export default function ArticlesList() {
     }
   };
 
-  const handleCopyLink = (articleId: string) => {
+  const handleCopyLink = useCallback((articleId: string) => {
     const article = articles.find(a => a.id === articleId);
     if (article?.published_url) {
       navigator.clipboard.writeText(article.published_url);
       toast({ title: 'Link copiado!' });
     }
-  };
+  }, [articles, toast]);
 
-  const getProjectName = (projectId: string | null) => {
+  const getProjectName = useCallback((projectId: string | null) => {
     if (!projectId) return null;
     return projects.find(p => p.id === projectId)?.name;
-  };
+  }, [projects]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);

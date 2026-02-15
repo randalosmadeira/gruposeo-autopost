@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Bell, Search, Plus, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 
-export function Header() {
+export const Header = memo(function Header() {
   const { user, signOut } = useAuth();
   const { profile } = useProfile();
   const displayName = profile?.full_name || user?.email?.split('@')[0] || 'Usuário';
@@ -55,4 +56,4 @@ export function Header() {
       </div>
     </header>
   );
-}
+});
