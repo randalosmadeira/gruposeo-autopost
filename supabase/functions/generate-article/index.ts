@@ -50,13 +50,12 @@ interface ArticleConfig {
   internalLinks?: Array<{ anchor: string; url: string }>;
   sourcesContext?: string;
   aiModel?: string;
-  // NEW: Agent pipeline flag and sector selection
   useAgentPipeline?: boolean;
   sectorType?: string;
-  // NEW: Prompt template selection
   promptTemplateId?: string;
   targetFunction?: string;
-  // NEW: ZicaJuris project config
+  // Project ID for auto-fetching internal links
+  projectId?: string;
   projectConfig?: {
     nicho?: string;
     compliance_rules?: string;
@@ -75,6 +74,113 @@ interface ArticleConfig {
     cta_conclusao?: string;
     cta_leads?: string;
   };
+}
+
+// Auto-fetch internal links from the project's WordPress article index
+async function autoFetchInternalLinks(
+  supabase: ReturnType<typeof createClient>,
+  projectId: string,
+  keyword: string,
+  userId: string,
+): Promise<Array<{ anchor: string; url: string; type?: string }>> {
+  const links: Array<{ anchor: string; url: string; type?: string }> = [];
+
+  try {
+    // 1. Fetch published articles from WordPress index (prioritize by relevance)
+    const { data: wpArticles } = await supabase
+      .from('wordpress_article_index')
+      .select('wp_post_title, wp_post_url, primary_keyword, word_count, wp_post_status')
+      .eq('project_id', projectId)
+      .eq('wp_post_status', 'publish')
+      .order('word_count', { ascending: false })
+      .limit(50);
+
+    if (wpArticles && wpArticles.length > 0) {
+      const keywordLower = keyword.toLowerCase();
+      
+      // Score each article by relevance to the current keyword
+      const scored = wpArticles.map(a => {
+        const titleLower = (a.wp_post_title || '').toLowerCase();
+        const pkLower = (a.primary_keyword || '').toLowerCase();
+        let score = 0;
+        
+        // Exact keyword match in title or primary_keyword
+        if (titleLower.includes(keywordLower) || pkLower.includes(keywordLower)) score += 10;
+        
+        // Word overlap
+        const kwWords = keywordLower.split(/\s+/);
+        const titleWords = titleLower.split(/\s+/);
+        const overlap = kwWords.filter(w => w.length > 3 && titleWords.some(tw => tw.includes(w))).length;
+        score += overlap * 3;
+        
+        // Pillar pages (longer content = more authority)
+        if ((a.word_count || 0) > 2000) score += 5;
+        
+        return { ...a, score };
+      });
+
+      // Sort by relevance, take top 15
+      scored.sort((a, b) => b.score - a.score);
+      const topArticles = scored.slice(0, 15);
+
+      for (const article of topArticles) {
+        const isPillar = (article.word_count || 0) > 2000;
+        links.push({
+          anchor: article.primary_keyword || article.wp_post_title,
+          url: article.wp_post_url,
+          type: isPillar ? 'pillar' : 'cluster',
+        });
+      }
+    }
+
+    // 2. Also fetch recent platform articles from the same project (published/ready)
+    const { data: platformArticles } = await supabase
+      .from('articles')
+      .select('title, slug, keyword, published_url, word_count, status')
+      .eq('project_id', projectId)
+      .in('status', ['published', 'ready'])
+      .not('published_url', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (platformArticles && platformArticles.length > 0) {
+      for (const article of platformArticles) {
+        if (!article.published_url) continue;
+        // Don't duplicate URLs already added from WP index
+        if (links.some(l => l.url === article.published_url)) continue;
+        
+        links.push({
+          anchor: article.keyword || article.title || '',
+          url: article.published_url,
+          type: 'recent',
+        });
+      }
+    }
+
+    // 3. Fetch keyword_link_rules for the project
+    const { data: linkRules } = await supabase
+      .from('keyword_link_rules')
+      .select('keyword, target_url, target_title, priority')
+      .eq('project_id', projectId)
+      .eq('is_active', true)
+      .order('priority', { ascending: false })
+      .limit(10);
+
+    if (linkRules && linkRules.length > 0) {
+      for (const rule of linkRules) {
+        if (links.some(l => l.url === rule.target_url)) continue;
+        links.push({
+          anchor: rule.keyword,
+          url: rule.target_url,
+          type: 'resource',
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[generate-article] Auto-fetch internal links error:', err);
+  }
+
+  return links;
 }
 
 // Word count ranges - supports both legacy and new values
@@ -151,6 +257,24 @@ REGRAS IMPORTANTES:
 
   if (config.customInstructions) {
     systemPrompt += `\n\nInstruções adicionais do usuário:\n${config.customInstructions}`;
+  }
+
+  // Auto-injected internal links (backlinks)
+  if (config.internalLinks && config.internalLinks.length > 0) {
+    const minLinks = Math.min(10, config.internalLinks.length);
+    systemPrompt += `\n\n## LINKS INTERNOS OBRIGATÓRIOS (BACKLINKS)
+Distribua os seguintes links NATURALMENTE ao longo do artigo. Use anchor text variado.
+Cada link deve usar: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora</a>
+
+LINKS DISPONÍVEIS (use no MÍNIMO ${minLinks} deles):
+${config.internalLinks.slice(0, 20).map((l, i) => `${i + 1}. "${l.anchor}" → ${l.url}`).join('\n')}
+
+REGRAS DE DISTRIBUIÇÃO:
+- 1-2 links na introdução (primeiros 2 parágrafos)
+- 4-6 links no corpo do artigo (distribuídos entre as seções H2)
+- 1-2 links na conclusão
+- VARIE o anchor text: use sinônimos, parciais e contextuais (não repita o mesmo texto)
+- Links devem ser CONTEXTUAIS: inseridos em frases que façam sentido semântico`;
   }
 
   return systemPrompt;
@@ -410,7 +534,25 @@ Deno.serve(async (req) => {
     // Load user's BYOK API keys into environment for this request
     await setEnvKeysForUser(user.id);
 
-    const { config } = await req.json() as { config: ArticleConfig };
+    const { config, projectId: bodyProjectId } = await req.json() as { config: ArticleConfig; projectId?: string };
+    const effectiveProjectId = config.projectId || bodyProjectId;
+
+    // ====== AUTO-FETCH INTERNAL LINKS from project if not manually provided ======
+    if (effectiveProjectId && (!config.internalLinks || config.internalLinks.length < 3)) {
+      log.info("auto_fetching_internal_links", { projectId: effectiveProjectId });
+      const autoLinks = await autoFetchInternalLinks(supabase, effectiveProjectId, config.keyword, user.id);
+      if (autoLinks.length > 0) {
+        // Merge with any manually provided links
+        const existingUrls = new Set((config.internalLinks || []).map(l => l.url));
+        const newLinks = autoLinks.filter(l => !existingUrls.has(l.url));
+        config.internalLinks = [...(config.internalLinks || []), ...newLinks];
+        log.info("internal_links_auto_injected", { 
+          manual: existingUrls.size, 
+          auto: newLinks.length, 
+          total: config.internalLinks.length 
+        });
+      }
+    }
 
     // ====== BRAND DETECTION: Auto-detect brand from project config ======
     const brandDetection = detectBrand(config.projectConfig ? {

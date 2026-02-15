@@ -48,6 +48,7 @@ interface ArticleConfig {
   // Prompt template selection
   promptTemplateId?: string;
   targetFunction?: string;
+  projectId?: string;
   // ZicaJuris project config
   projectConfig?: {
     nicho?: string;
