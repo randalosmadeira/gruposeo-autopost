@@ -146,12 +146,11 @@ ${site ? `**Site:** ${site}` : ''}
 ${site ? `<p><a href="${site}" target="_blank" rel="noopener noreferrer">${ctaConclusao || 'Acesse nosso site'}</a></p>` : ''}
 \`\`\`
 
-### ❌ FORMATO PROIBIDO (NUNCA usar):
-\`\`\`
-**ISSO É URGENTE? NÃO ESPERE.**  ← PROIBIDO
-[QUERO AVALIAR MEU CASO](https://...) ← PROIBIDO (markdown)
-👉 **[TEXTO](URL)** ← PROIBIDO (markdown com emoji)
-\`\`\``;
+### FORMATO PROIBIDO (NUNCA usar):
+- Negrito com asteriscos duplos
+- Links entre colchetes e parênteses
+- Emojis combinados com markdown
+- Qualquer sintaxe que não seja HTML puro`;
 }
 
 /**
