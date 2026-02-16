@@ -540,6 +540,18 @@ Deno.serve(async (req) => {
           image_source: imageSource,
           image_alt_text: imageAltText,
         },
+        // Madeira Neles viral package data
+        ...(isMadeiraNeles ? {
+          viralPackage: {
+            viralAnalysis: (parsed as any).viralAnalysis || null,
+            hooks: (parsed as any).hooks || [],
+            conceitoVisual: (parsed as any).conceitoVisual || null,
+            copyPost: (parsed as any).copyPost || null,
+            variacoes: (parsed as any).variacoes || null,
+            resumoExecutivo: (parsed as any).resumoExecutivo || null,
+            seo: parsed.seo || null,
+          },
+        } : {}),
         compliance: complianceCheck,
         emotional: {
           trigger: emotionalTrigger,

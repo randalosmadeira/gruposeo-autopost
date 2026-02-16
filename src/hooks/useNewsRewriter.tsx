@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import type { ViralPackage } from '@/components/news-rewriter/MadeiraNelesPainel';
 
 export interface RewriteRequest {
   sourceUrl: string;
@@ -105,6 +106,7 @@ export function useNewsRewriter() {
   const [lastResult, setLastResult] = useState<RewriteResult | null>(null);
   const [lastCompliance, setLastCompliance] = useState<ComplianceCheck | null>(null);
   const [lastAudit, setLastAudit] = useState<AuditResult | null>(null);
+  const [lastViralPackage, setLastViralPackage] = useState<ViralPackage | null>(null);
   const { toast } = useToast();
 
   const autoPublishToWordPress = useCallback(async (
@@ -166,6 +168,7 @@ export function useNewsRewriter() {
     setLastResult(null);
     setLastCompliance(null);
     setLastAudit(null);
+    setLastViralPackage(null);
 
     try {
       // Get auth token
@@ -235,6 +238,11 @@ export function useNewsRewriter() {
       
       setLastResult(result);
       setLastCompliance(compliance);
+
+      // Store viral package if Madeira Neles mode
+      if (data.viralPackage) {
+        setLastViralPackage(data.viralPackage as ViralPackage);
+      }
 
       // Perform audit
       setProgress('Auditando qualidade...');
@@ -308,6 +316,7 @@ export function useNewsRewriter() {
     lastResult,
     lastCompliance,
     lastAudit,
+    lastViralPackage,
     performAuditCheck,
   };
 }
