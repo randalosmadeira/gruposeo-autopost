@@ -9,9 +9,10 @@ import {
   Flame, Zap, Target, Palette, Copy, Eye, FileText,
   BarChart3, Clock, Hash, Sparkles, TrendingUp,
   Smartphone, Video, Layers, CheckCircle2, ExternalLink,
-  Gavel, Users, AlertTriangle,
+  Gavel, Users, AlertTriangle, ImageIcon, Loader2, Download,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useImageGeneration } from '@/hooks/useImageGeneration';
 
 export interface ViralPackage {
   viralAnalysis?: {
@@ -96,8 +97,25 @@ export function MadeiraNelesPainel({ viralPackage, articleId, articleTitle }: Pr
   const navigate = useNavigate();
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('resumo');
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const { generateImage, isGenerating } = useImageGeneration();
 
   const { viralAnalysis, hooks, conceitoVisual, copyPost, variacoes, resumoExecutivo, seo } = viralPackage;
+
+  const handleGenerateImage = async () => {
+    const prompt = conceitoVisual?.promptImagem;
+    if (!prompt) return;
+    const result = await generateImage({
+      title: articleTitle,
+      context: prompt,
+      segment: 'legal',
+      style: 'photorealistic',
+      aspectRatio: '1:1',
+    });
+    if (result?.image) {
+      setGeneratedImageUrl(result.image);
+    }
+  };
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -311,15 +329,67 @@ export function MadeiraNelesPainel({ viralPackage, articleId, articleTitle }: Pr
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-sm">Prompt de Imagem (IA)</CardTitle>
-                      <CopyButton text={conceitoVisual.promptImagem} field="prompt-img" />
+                      <div className="flex items-center gap-1">
+                        <CopyButton text={conceitoVisual.promptImagem} field="prompt-img" />
+                        <Button
+                          size="sm"
+                          className="h-7 gap-1.5 text-xs"
+                          onClick={handleGenerateImage}
+                          disabled={isGenerating}
+                        >
+                          {isGenerating ? (
+                            <><Loader2 className="w-3 h-3 animate-spin" />Gerando...</>
+                          ) : (
+                            <><ImageIcon className="w-3 h-3" />Gerar Imagem</>
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="space-y-3">
                     <ScrollArea className="h-[100px]">
                       <p className="text-xs font-mono bg-muted/50 p-3 rounded-lg whitespace-pre-wrap">
                         {conceitoVisual.promptImagem}
                       </p>
                     </ScrollArea>
+
+                    {generatedImageUrl && (
+                      <div className="space-y-2">
+                        <div className="relative rounded-lg overflow-hidden border border-border">
+                          <img
+                            src={generatedImageUrl}
+                            alt={`Imagem viral: ${articleTitle}`}
+                            className="w-full h-auto max-h-[400px] object-contain bg-muted/20"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs gap-1.5"
+                            onClick={() => {
+                              const a = document.createElement('a');
+                              a.href = generatedImageUrl;
+                              a.download = `viral-${articleId}.png`;
+                              a.click();
+                            }}
+                          >
+                            <Download className="w-3 h-3" />
+                            Baixar
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs gap-1.5"
+                            onClick={handleGenerateImage}
+                            disabled={isGenerating}
+                          >
+                            <ImageIcon className="w-3 h-3" />
+                            Gerar Nova
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
