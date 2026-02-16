@@ -5,9 +5,9 @@
  * Ao atualizar o plugin, basta alterar ESTE arquivo.
  */
 
-export const PLUGIN_VERSION = "3.4.1";
+export const PLUGIN_VERSION = "3.4.2";
 export const PLUGIN_MINIMUM_VERSION = "3.0.0";
-export const PLUGIN_RELEASED = "2026-02-15";
+export const PLUGIN_RELEASED = "2026-02-16";
 
 export const PLUGIN_FEATURES = [
   "auto_notifications",
@@ -43,6 +43,7 @@ export const PLUGIN_FEATURES = [
   "manage_redirect",
   "llms_txt_force_enable",
   "orphan_auto_backlink",
+  "sitemap_cross_domain_filter",
 ] as const;
 
 /**

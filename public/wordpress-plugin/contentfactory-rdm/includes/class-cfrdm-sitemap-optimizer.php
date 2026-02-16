@@ -42,6 +42,10 @@ class CFRDM_Sitemap_Optimizer {
         add_filter('wp_sitemaps_posts_query_args', array($this, 'optimize_query_args'), 10, 2);
         add_filter('wp_sitemaps_posts_entry', array($this, 'optimize_entry'), 10, 3);
         
+        // Filter out cross-domain URLs from all sitemap providers
+        add_filter('wp_sitemaps_taxonomies_entry', array($this, 'filter_cross_domain_entry'), 10, 3);
+        add_filter('wp_sitemaps_users_entry', array($this, 'filter_cross_domain_entry'), 10, 2);
+        
         // Add news sitemap
         add_action('init', array($this, 'register_news_sitemap'));
         
@@ -110,9 +114,20 @@ class CFRDM_Sitemap_Optimizer {
     }
     
     /**
-     * Add priority and changefreq to sitemap entries
+     * Add priority and changefreq to sitemap entries.
+     * Also filters out cross-domain URLs that don't belong to this site.
      */
     public function optimize_entry($entry, $post, $post_type) {
+        // Filter out URLs that don't belong to this domain (cross-domain contamination fix)
+        $site_host = parse_url(get_site_url(), PHP_URL_HOST);
+        if (isset($entry['loc'])) {
+            $entry_host = parse_url($entry['loc'], PHP_URL_HOST);
+            if ($entry_host && $entry_host !== $site_host) {
+                // Return empty entry to skip - WordPress will ignore entries without loc
+                return array();
+            }
+        }
+        
         // Calculate priority based on freshness and quality
         $priority = $this->calculate_priority($post);
         $changefreq = $this->calculate_changefreq($post);
@@ -177,6 +192,20 @@ class CFRDM_Sitemap_Optimizer {
     }
     
     /**
+     * Generic cross-domain filter for taxonomy/user sitemap entries
+     */
+    public function filter_cross_domain_entry($entry) {
+        if (isset($entry['loc'])) {
+            $site_host = parse_url(get_site_url(), PHP_URL_HOST);
+            $entry_host = parse_url($entry['loc'], PHP_URL_HOST);
+            if ($entry_host && $entry_host !== $site_host) {
+                return array();
+            }
+        }
+        return $entry;
+    }
+    
+    /**
      * Register news sitemap
      */
     public function register_news_sitemap() {
@@ -213,8 +242,16 @@ class CFRDM_Sitemap_Optimizer {
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
         $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">' . "\n";
         
+        $site_host = parse_url(get_site_url(), PHP_URL_HOST);
+        
         foreach ($posts as $post) {
             $url = get_permalink($post->ID);
+            
+            // Skip cross-domain URLs
+            $url_host = parse_url($url, PHP_URL_HOST);
+            if ($url_host && $url_host !== $site_host) {
+                continue;
+            }
             $date = get_the_date('c', $post);
             $title = htmlspecialchars($post->post_title, ENT_XML1, 'UTF-8');
             
