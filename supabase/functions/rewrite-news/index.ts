@@ -10,6 +10,11 @@ import {
   type JournalisticRewriteRequest,
   type JournalisticRewriteResponse 
 } from "./prompts.ts";
+import {
+  MADEIRA_NELES_SYSTEM_PROMPT,
+  MADEIRA_NELES_JSON_INSTRUCTIONS,
+  buildMadeiraNelessUserPrompt,
+} from "./madeira-neles-prompt.ts";
 import { createEmotionalImageSystem } from "../_shared/emotional/emotional-image-system.ts";
 import { orchestrate } from "../_shared/verniz-orchestrator.ts";
 import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
@@ -40,7 +45,7 @@ Deno.serve(async (req) => {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Parse request body first to check for internal call
-    let body: JournalisticRewriteRequest & { userId?: string };
+    let body: JournalisticRewriteRequest & { userId?: string; rewriteMode?: string };
     try {
       body = await req.json();
     } catch (parseError) {
@@ -126,8 +131,12 @@ Deno.serve(async (req) => {
       articleLength = 'medium',
       language = "pt-BR", 
       projectId,
-      internalLinks = []
+      internalLinks = [],
+      rewriteMode = 'standard',
     } = body;
+
+    const isMadeiraNeles = rewriteMode === 'madeira_neles';
+    log.info("rewrite_mode", { mode: rewriteMode, isMadeiraNeles });
 
     if (!sourceContent || !sourceName) {
       return new Response(
@@ -143,31 +152,42 @@ Deno.serve(async (req) => {
       contentLength: sourceContent.length 
     });
 
-    // Fetch user's custom prompt template for news_rewriter
-    let systemPromptToUse = JOURNALISTIC_SYSTEM_PROMPT;
+    // Select system prompt based on mode
+    let systemPromptToUse: string;
     let agentName: string | null = null;
     
-    const { data: customTemplate } = await supabaseAdmin
-      .from("prompt_templates")
-      .select("prompt, agent_name")
-      .eq("user_id", userId)
-      .eq("target_function", "news_rewriter")
-      .eq("is_default", false)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .single();
-    
-    if (customTemplate?.prompt) {
-      systemPromptToUse = customTemplate.prompt + "\n\n" + MANDATORY_JSON_OUTPUT_INSTRUCTIONS;
-      agentName = customTemplate.agent_name || null;
-      log.info("using_custom_prompt", { 
-        agentName,
-        promptLength: systemPromptToUse.length,
-        originalLength: customTemplate.prompt.length,
-        mandatoryInstructionsAppended: true
-      });
+    if (isMadeiraNeles) {
+      // Use dedicated Madeira Neles viral prompt
+      systemPromptToUse = MADEIRA_NELES_SYSTEM_PROMPT + "\n\n" + MADEIRA_NELES_JSON_INSTRUCTIONS;
+      agentName = "Agente Master Madeira Neles";
+      log.info("using_madeira_neles_prompt", { promptLength: systemPromptToUse.length });
     } else {
-      log.info("using_default_prompt");
+      // Standard: Fetch user's custom prompt template for news_rewriter
+      systemPromptToUse = JOURNALISTIC_SYSTEM_PROMPT;
+      
+      const { data: customTemplate } = await supabaseAdmin
+        .from("prompt_templates")
+        .select("prompt, agent_name")
+        .eq("user_id", userId)
+        .eq("target_function", "news_rewriter")
+        .eq("is_default", false)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (customTemplate?.prompt) {
+        systemPromptToUse = customTemplate.prompt + "\n\n" + MANDATORY_JSON_OUTPUT_INSTRUCTIONS;
+        agentName = customTemplate.agent_name || null;
+        log.info("using_custom_prompt", { 
+          agentName,
+          promptLength: systemPromptToUse.length,
+          originalLength: customTemplate.prompt.length,
+          mandatoryInstructionsAppended: true
+        });
+      } else {
+        systemPromptToUse += "\n\n" + MANDATORY_JSON_OUTPUT_INSTRUCTIONS;
+        log.info("using_default_prompt");
+      }
     }
 
     // ZicaJuris: Fetch project config for CTAs and social media injection
@@ -211,26 +231,36 @@ Deno.serve(async (req) => {
     systemPromptToUse += '\n\n' + orchestration.vernizSection;
     log.info("verniz_applied_to_rewrite", { nicho: orchestration.nichoDetectado.nicho, gatilho: orchestration.gatilho.gatilho, hasProjectConfig: !!projectConfig });
 
-    // Build user prompt with all configurations
-    const userPrompt = buildUserPrompt({
-      sourceUrl,
-      sourceContent,
-      sourceName,
-      analysisAngle,
-      keyword,
-      niche,
-      articleLength,
-      language,
-      internalLinks,
-    });
+    // Build user prompt based on mode
+    const userPrompt = isMadeiraNeles
+      ? buildMadeiraNelessUserPrompt({
+          sourceUrl,
+          sourceContent,
+          sourceName,
+          keyword,
+          language,
+          internalLinks,
+        })
+      : buildUserPrompt({
+          sourceUrl,
+          sourceContent,
+          sourceName,
+          analysisAngle,
+          keyword,
+          niche,
+          articleLength,
+          language,
+          internalLinks,
+        });
 
     // Call AI with the system prompt (custom or default)
+    const maxTokens = isMadeiraNeles ? 12000 : 8000;
     const aiResponse = await callAI(
       [
         { role: "system", content: systemPromptToUse },
         { role: "user", content: userPrompt },
       ],
-      { maxTokens: 8000 }
+      { maxTokens }
     );
 
     // Log raw response for debugging
