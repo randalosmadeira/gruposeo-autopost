@@ -15,6 +15,7 @@ export interface RewriteRequest {
   internalLinks?: Array<{ anchor: string; url: string }>;
   autoPublish?: boolean;
   emotionalTriggerOverride?: string;
+  rewriteMode?: 'standard' | 'madeira_neles';
 }
 
 export interface ComplianceCheck {
@@ -193,6 +194,7 @@ export function useNewsRewriter() {
             niche: request.niche || 'geral',
             articleLength: request.articleLength || 'medium',
             emotionalTriggerOverride: request.emotionalTriggerOverride || undefined,
+            rewriteMode: request.rewriteMode || 'standard',
           }),
         }
       );

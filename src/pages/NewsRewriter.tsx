@@ -36,6 +36,8 @@ import {
   Calendar,
   Wand2,
   Lightbulb,
+  Flame,
+  Gavel,
 } from 'lucide-react';
 import { useNewsRewriter, type RewriteResult, type ComplianceCheck } from '@/hooks/useNewsRewriter';
 import { useProjects } from '@/hooks/useProjects';
@@ -101,6 +103,7 @@ export default function NewsRewriter() {
   const [autoPublish, setAutoPublish] = useState(false);
   const [showAISuggestions, setShowAISuggestions] = useState(false);
   const [emotionalTriggerOverride, setEmotionalTriggerOverride] = useState<EmotionalTrigger | null>(null);
+  const [rewriteMode, setRewriteMode] = useState<'standard' | 'madeira_neles'>('standard');
 
   // Get current project info for AI analysis
   const currentProject = projects?.find(p => p.id === projectId);
@@ -232,12 +235,13 @@ export default function NewsRewriter() {
       sourceName,
       analysisAngle: getAnalysisAngle(),
       keyword: keyword || undefined,
-      niche,
+      niche: rewriteMode === 'madeira_neles' ? 'advocacia' : niche,
       articleLength,
       projectId: projectId && projectId !== 'none' ? projectId : undefined,
       language: 'pt-BR',
       autoPublish: autoPublish && projectId && projectId !== 'none',
       emotionalTriggerOverride: emotionalTriggerOverride || undefined,
+      rewriteMode,
     });
 
     if (result) {
@@ -342,6 +346,75 @@ export default function NewsRewriter() {
         {/* New Repost Tab */}
         {mainTab === 'new' && (
           <>
+            {/* Mode Selector: Standard vs Madeira Neles */}
+            <Card className={cn(
+              "border-2 transition-all cursor-pointer",
+              rewriteMode === 'madeira_neles' 
+                ? "border-orange-500 bg-gradient-to-r from-orange-500/10 to-background" 
+                : "border-border hover:border-primary/30"
+            )}>
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-10 h-10 rounded-lg flex items-center justify-center",
+                      rewriteMode === 'madeira_neles' ? "bg-orange-500/20" : "bg-primary/10"
+                    )}>
+                      {rewriteMode === 'madeira_neles' ? (
+                        <Flame className="w-5 h-5 text-orange-500" />
+                      ) : (
+                        <Newspaper className="w-5 h-5 text-primary" />
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-sm">
+                        {rewriteMode === 'madeira_neles' ? '🪵 Modo Madeira Neles' : 'Modo Padrão'}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {rewriteMode === 'madeira_neles' 
+                          ? 'Conteúdo viral jurídico com DNA "Sem Verniz" + pacote social media completo'
+                          : 'Repostagem jornalística SEO com compliance Lei 9.610/98'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant={rewriteMode === 'madeira_neles' ? 'default' : 'outline'}
+                      className={cn(
+                        "cursor-pointer text-xs",
+                        rewriteMode === 'standard' && "bg-primary/10 text-primary"
+                      )}
+                      onClick={() => setRewriteMode('standard')}
+                    >
+                      <Newspaper className="w-3 h-3 mr-1" />
+                      Padrão
+                    </Badge>
+                    <Badge 
+                      variant={rewriteMode === 'madeira_neles' ? 'default' : 'outline'}
+                      className={cn(
+                        "cursor-pointer text-xs",
+                        rewriteMode === 'madeira_neles' 
+                          ? "bg-orange-500 hover:bg-orange-600" 
+                          : "hover:bg-orange-500/10 hover:text-orange-500 hover:border-orange-500"
+                      )}
+                      onClick={() => setRewriteMode('madeira_neles')}
+                    >
+                      <Flame className="w-3 h-3 mr-1" />
+                      Madeira Neles 🔥
+                    </Badge>
+                  </div>
+                </div>
+                {rewriteMode === 'madeira_neles' && (
+                  <div className="mt-3 p-3 rounded-lg bg-orange-500/5 border border-orange-500/20">
+                    <p className="text-xs text-muted-foreground">
+                      <strong className="text-orange-500">Pacote completo:</strong> 5 hooks virais + conceito visual + copy de post + 
+                      stories (3-5 cards) + script de reels + carrossel (10 slides) + análise de viralidade + artigo SEO 2.400+ palavras
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Compliance Alert */}
             <Alert className="border-warning/50 bg-warning/10">
               <Scale className="h-4 w-4 text-warning" />
