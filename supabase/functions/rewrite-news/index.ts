@@ -254,7 +254,7 @@ Deno.serve(async (req) => {
         });
 
     // Call AI with the system prompt (custom or default)
-    const maxTokens = isMadeiraNeles ? 12000 : 8000;
+    const maxTokens = isMadeiraNeles ? 16000 : 8000;
     const aiResponse = await callAI(
       [
         { role: "system", content: systemPromptToUse },
