@@ -44,6 +44,7 @@ import { useProjects } from '@/hooks/useProjects';
 import { useUrlAnalysis } from '@/hooks/useUrlAnalysis';
 import { cn } from '@/lib/utils';
 import { RSSNewsImporter, type RSSItem, AutoAuditPanel, RepostHistory, RSSScheduler, MonitoredPortalsManager } from '@/components/news-rewriter';
+import { MadeiraNelesPainel } from '@/components/news-rewriter/MadeiraNelesPainel';
 import { EmotionalTriggerSelector, type EmotionalTrigger } from '@/components/shared/EmotionalTriggerBadge';
 import { FeedMonitorDashboard, ContentPerformanceAnalytics } from '@/components/feed-monitor';
 
@@ -85,7 +86,7 @@ const ANALYSIS_ANGLES = [
 
 export default function NewsRewriter() {
   const navigate = useNavigate();
-  const { rewriteNews, isRewriting, progress, lastResult, lastCompliance, lastAudit } = useNewsRewriter();
+  const { rewriteNews, isRewriting, progress, lastResult, lastCompliance, lastAudit, lastViralPackage } = useNewsRewriter();
   const { projects } = useProjects();
   
   // Form state
@@ -245,8 +246,10 @@ export default function NewsRewriter() {
     });
 
     if (result) {
-      // Navigate to edit the new article
-      navigate(`/articles/${result.id}/edit`);
+      // If standard mode, navigate to edit. If Madeira Neles, stay to show viral panel
+      if (rewriteMode !== 'madeira_neles') {
+        navigate(`/articles/${result.id}/edit`);
+      }
     }
   };
 
@@ -418,6 +421,15 @@ export default function NewsRewriter() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Madeira Neles Viral Package Panel */}
+            {lastViralPackage && lastResult && rewriteMode === 'madeira_neles' && (
+              <MadeiraNelesPainel
+                viralPackage={lastViralPackage}
+                articleId={lastResult.id}
+                articleTitle={lastResult.title}
+              />
+            )}
 
             {/* Compliance Alert */}
             <Alert className="border-warning/50 bg-warning/10">
