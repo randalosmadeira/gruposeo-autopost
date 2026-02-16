@@ -625,25 +625,80 @@ export async function callAIStream(
 }
 
 /**
- * Helper to extract JSON from AI response
+ * Helper to extract JSON from AI response - resilient to truncation
  */
 export function extractJSON<T>(text: string): T | null {
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  // Strip markdown code fences
+  let cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+  
+  // Try to find the outermost JSON object
+  const startIdx = cleaned.indexOf('{');
+  if (startIdx === -1) return null;
+  
+  let jsonStr = cleaned.substring(startIdx);
+  
+  // First attempt: find matching closing brace
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
-    try {
-      return JSON.parse(jsonMatch[0]) as T;
-    } catch {
-      let fixed = jsonMatch[0]
-        .replace(/,\s*}/g, '}')
-        .replace(/,\s*]/g, ']')
-        .replace(/'/g, '"');
-      try {
-        return JSON.parse(fixed) as T;
-      } catch {
-        return null;
-      }
-    }
+    jsonStr = jsonMatch[0];
   }
+  
+  // Try parsing as-is
+  const tryParse = (s: string): T | null => {
+    try { return JSON.parse(s) as T; } catch { return null; }
+  };
+  
+  let result = tryParse(jsonStr);
+  if (result) return result;
+  
+  // Fix common issues: trailing commas
+  let fixed = jsonStr
+    .replace(/,\s*}/g, '}')
+    .replace(/,\s*]/g, ']')
+    .replace(/'/g, '"');
+  result = tryParse(fixed);
+  if (result) return result;
+  
+  // Handle TRUNCATED JSON: auto-close unclosed brackets/braces
+  // This is critical for large AI responses that get cut off by token limits
+  let truncated = cleaned.substring(startIdx);
+  // Remove any trailing incomplete string (cut mid-value)
+  truncated = truncated.replace(/,\s*"[^"]*$/, ''); // remove trailing incomplete key
+  truncated = truncated.replace(/:\s*"[^"]*$/, ': ""'); // close incomplete string value
+  truncated = truncated.replace(/,\s*$/, ''); // remove trailing comma
+  
+  // Fix trailing commas before closing
+  truncated = truncated.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+  
+  // Count unclosed brackets and braces
+  let openBraces = 0, openBrackets = 0;
+  let inString = false, escape = false;
+  for (const ch of truncated) {
+    if (escape) { escape = false; continue; }
+    if (ch === '\\') { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') openBraces++;
+    else if (ch === '}') openBraces--;
+    else if (ch === '[') openBrackets++;
+    else if (ch === ']') openBrackets--;
+  }
+  
+  // Close any open structures
+  if (openBraces > 0 || openBrackets > 0) {
+    // Close open strings if we're inside one
+    if (inString) truncated += '"';
+    // Close brackets then braces
+    for (let i = 0; i < openBrackets; i++) truncated += ']';
+    for (let i = 0; i < openBraces; i++) truncated += '}';
+    
+    // Clean up before closing
+    truncated = truncated.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+    
+    result = tryParse(truncated);
+    if (result) return result;
+  }
+  
   return null;
 }
 

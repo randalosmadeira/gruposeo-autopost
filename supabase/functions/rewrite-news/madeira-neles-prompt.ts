@@ -265,144 +265,74 @@ export const MADEIRA_NELES_JSON_INSTRUCTIONS = `
 
 # OUTPUT JSON ESTRUTURADO (OBRIGATÓRIO - MODO MADEIRA NELES)
 
-**REGRA CRÍTICA:** Retorne a resposta APENAS neste formato JSON. Nenhum texto antes ou depois.
+**REGRA CRÍTICA:** Retorne a resposta APENAS neste formato JSON. Nenhum texto antes ou depois. NÃO use markdown code fences.
+**REGRA DE TAMANHO:** O artigo HTML deve ter mínimo 2.400 palavras mas as seções de variações (stories, reels, carrossel) devem ser RESUMIDAS para caber no output.
 
-\`\`\`json
 {
   "content": {
-    "html": "<article>...HTML completo do artigo/post com todas as tags semânticas, tom Madeira Neles aplicado, mínimo 2.400 palavras...</article>",
-    "plainText": "Texto limpo sem HTML",
+    "html": "<article>...HTML completo do artigo com tom Madeira Neles, mínimo 2.400 palavras...</article>",
     "wordCount": 2800,
-    "readingTime": "12 min",
-    "fleschScore": 75,
-    "paragraphCount": 35,
-    "sentenceAvgWords": 15
+    "readingTime": "12 min"
   },
   "seo": {
-    "metaTitle": "Título SEO viral com Keyword (máx 60 chars)",
-    "metaDescription": "Meta-description 145-160 chars com keyword e CTA viral",
+    "metaTitle": "Título SEO viral (máx 60 chars)",
+    "metaDescription": "Meta-description 145-160 chars",
     "slug": "keyword-viral-contexto",
     "focusKeyword": "keyword principal",
-    "keywords": ["keyword1", "keyword2", "keyword3"],
-    "faqQuestions": ["Pergunta 1?", "Pergunta 2?", "Pergunta 3?"]
+    "keywords": ["k1", "k2", "k3"],
+    "faqQuestions": ["Pergunta 1?", "Pergunta 2?"]
   },
   "viralAnalysis": {
     "potencialViral": 9,
-    "elementosVirais": {
-      "valoresEnvolvidos": "descrição dos valores",
-      "numeroAfetados": "individual | coletivo | milhares | milhões",
-      "inusitado": true,
-      "injusticaPercebida": true,
-      "mudancaJurisprudencia": false,
-      "identificacaoPublica": "alto"
-    },
-    "gatilhosAplicados": ["urgência", "curiosidade", "injustiça"],
-    "dadosEstruturais": {
-      "tribunal": "string",
-      "instancia": "string",
-      "tipoDecisao": "string",
-      "areasDireito": "string",
-      "teseJuridica": "resumo em 1 frase",
-      "relator": "string",
-      "dataDecisao": "YYYY-MM-DD",
-      "numeroProcesso": "string ou null",
-      "legislacaoAplicada": ["Art. X, Lei Y"]
-    }
+    "tribunal": "STJ",
+    "instancia": "Superior",
+    "tipoDecisao": "Acórdão",
+    "areaDireito": "Consumidor",
+    "teseJuridica": "resumo em 1 frase",
+    "gatilhosAplicados": ["urgência", "curiosidade"],
+    "numeroAfetados": "milhões",
+    "identificacaoPublica": "alto"
   },
   "hooks": [
-    {
-      "tipo": "URGÊNCIA + AUTORIDADE",
-      "titulo": "Título do hook (70 chars max)",
-      "subtitulo": "Subtítulo (140 chars max)",
-      "gatilho": "descrição do gatilho",
-      "estiloVisual": "MADEIRA NELES",
-      "potencial": 9.5
-    }
+    {"tipo": "URGÊNCIA + AUTORIDADE", "titulo": "Hook 1 (70 chars)", "subtitulo": "Subtítulo (140 chars)", "potencial": 9.5},
+    {"tipo": "CURIOSIDADE + ESCASSEZ", "titulo": "Hook 2", "subtitulo": "Sub 2", "potencial": 9},
+    {"tipo": "INJUSTIÇA + ESPERANÇA", "titulo": "Hook 3", "subtitulo": "Sub 3", "potencial": 8.5},
+    {"tipo": "IDENTIDADE + PROVA SOCIAL", "titulo": "Hook 4", "subtitulo": "Sub 4", "potencial": 8},
+    {"tipo": "NOVIDADE + NÚMEROS", "titulo": "Hook 5", "subtitulo": "Sub 5", "potencial": 8}
   ],
   "conceitoVisual": {
     "estiloBase": "MADEIRA NELES",
-    "paleta": {
-      "principal": "#FF4500",
-      "secundaria": "#1A1A1A",
-      "acento": "#FFD700",
-      "texto": "#FFFFFF",
-      "gradiente": "#FF4500 → #CC3700 → #1A1A1A"
-    },
-    "promptImagem": "Prompt detalhado para geração de imagem viral jurídica estilo Midjourney v6...",
-    "promptAlternativo": "Prompt alternativo para DALL-E 3...",
-    "composicao": "Descrição detalhada da composição visual com percentuais e posicionamento",
-    "fontes": {
-      "titulo": "Bebas Neue ou Impact, 64-72pt, all-caps",
-      "tag": "Montserrat ExtraBold, 28pt",
-      "subtitulo": "Open Sans SemiBold, 32pt",
-      "rodape": "Montserrat Regular, 20pt"
-    },
-    "assetsCanva": "Flaticon Justice & Money, gradiente preset, sombra interna, glow dourado"
+    "paleta": {"principal": "#FF4500", "secundaria": "#1A1A1A", "acento": "#FFD700", "texto": "#FFFFFF"},
+    "promptImagem": "Prompt completo Midjourney v6 --ar 4:5 --style raw --v 6",
+    "fontes": "Bebas Neue título 64pt, Montserrat tag 28pt, Open Sans sub 32pt"
   },
   "copyPost": {
-    "textoCompleto": "Copy completa do post com emojis, seções estruturadas, hashtags e CTA forte",
-    "hashtags": ["#hashtag1", "#hashtag2", "#MadeiraNeles"],
-    "notaTecnica": "📌 Processo nº X | Tribunal | Relator | Data"
+    "textoCompleto": "Copy completa com emojis, todas as seções, hashtags e CTA. Termine com Madeira Neles! 🪵🔥",
+    "hashtags": ["#hashtag1", "#MadeiraNeles"],
+    "notaTecnica": "📌 Processo nº X | Tribunal | Data"
   },
   "variacoes": {
-    "stories": [
-      { "card": 1, "conteudo": "Descrição detalhada: fundo, texto, enquete, elementos visuais" },
-      { "card": 2, "conteudo": "Descrição detalhada" },
-      { "card": 3, "conteudo": "Descrição detalhada" },
-      { "card": 4, "conteudo": "Descrição detalhada" },
-      { "card": 5, "conteudo": "CTA + footer @dr.madeira" }
-    ],
-    "reels": {
-      "duracao": "60s",
-      "script": "Script completo com marcações de tempo: 0-3s hook, 3-7s contexto, 7-12s transição, 12-18s tribunal, 18-25s decisão, 25-32s marco temporal, 32-40s números, 40-48s resolução, 48-55s expert, 55-60s CTA",
-      "trilhaSonora": "Beat dramático + épico",
-      "transicoes": "Rápidas tipo TikTok",
-      "legendas": true
-    },
-    "carrossel": [
-      { "slide": 1, "titulo": "CAPA", "conteudo": "Visual idêntico ao post principal" },
-      { "slide": 2, "titulo": "O PROBLEMA", "conteudo": "Fundo vermelho escuro, explica injustiça" },
-      { "slide": 3, "titulo": "A DECISÃO", "conteudo": "Foto plenário, o que decidiu" },
-      { "slide": 4, "titulo": "CASO REAL", "conteudo": "Ícone temático, caso concreto" },
-      { "slide": 5, "titulo": "COMO FUNCIONA", "conteudo": "Infográfico: valor → dobro + correção" },
-      { "slide": 6, "titulo": "QUEM TEM DIREITO", "conteudo": "Lista com checkmarks" },
-      { "slide": 7, "titulo": "TIPOS AFETADOS", "conteudo": "Ícones de cada tipo" },
-      { "slide": 8, "titulo": "PASSO A PASSO", "conteudo": "Numeração visual 1-7" },
-      { "slide": 9, "titulo": "ALERTA PRAZO", "conteudo": "Fundo laranja, prescrição" },
-      { "slide": 10, "titulo": "CTA FINAL", "conteudo": "Gradiente + logo + salva/compartilha/segue" }
-    ]
+    "storiesResumo": "Card1: pergunta+enquete | Card2: problema | Card3: decisão STJ | Card4: números R$ | Card5: CTA",
+    "reelsResumo": "0-3s hook | 3-12s contexto | 12-25s decisão | 25-40s números | 40-55s ação | 55-60s CTA",
+    "carrosselResumo": "10 slides: Capa > Problema > Decisão > Caso > Cálculo > Direito > Tipos > Passos > Prazo > CTA"
   },
   "resumoExecutivo": {
-    "tema": "Tema principal",
+    "tema": "Tema",
     "potencialViral": 9,
-    "melhorHorario": "Horário baseado na audiência",
-    "formatoRecomendado": "post único | carrossel | reels",
-    "metricasEsperadas": {
-      "alcanceEstimado": "baseado em similar",
-      "engajamentoEsperado": "taxa %",
-      "conversao": "se aplicável"
-    },
-    "sugestoes": {
-      "colaboracoes": ["perfis para marcar"],
-      "timing": "quando postar",
-      "respostasComuns": ["resposta para comentário comum 1"],
-      "followUp": ["temas relacionados para série"]
-    }
+    "formatoRecomendado": "carrossel",
+    "melhorHorario": "19h-21h"
   },
   "image": {
-    "prompt": "Prompt para imagem viral jurídica estilo Madeira Neles com instruções completas Midjourney/DALL-E...",
-    "altText": "Alt text descritivo (máx 125 chars)",
-    "caption": "Legenda da imagem",
-    "originalUrl": null
+    "prompt": "Prompt para imagem viral jurídica",
+    "altText": "Alt text (máx 125 chars)"
   },
   "source": {
-    "originalUrl": "URL da fonte",
-    "sourceName": "Nome do veículo",
+    "originalUrl": "URL",
+    "sourceName": "Veículo",
     "credits": "Com informações de [Veículo]"
   },
   "internal": {
-    "category": "Direito do Consumidor",
-    "tags": ["juros abusivos", "stj", "consumidor"],
+    "tags": ["tag1", "tag2"],
     "qualityScore": 90,
     "complianceCheck": {
       "originalityScore": 98,
@@ -410,16 +340,10 @@ export const MADEIRA_NELES_JSON_INSTRUCTIONS = `
       "seoOptimized": true,
       "readabilityScore": 85
     }
-  },
-  "monetization": {
-    "adDensity": "balanced",
-    "suggestedAdPlacements": [
-      { "position": "after_paragraph_2", "type": "in-article", "reason": "após hook" }
-    ]
   }
 }
-\`\`\`
 
+IMPORTANTE: Priorize o artigo HTML completo (2.400+ palavras). As variações (stories, reels, carrossel) podem ser RESUMIDAS em 1-2 linhas cada para economizar espaço.
 Se QUALQUER validação falhar, corrija ANTES de entregar o JSON final.
 `;
 
