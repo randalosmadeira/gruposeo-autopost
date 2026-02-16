@@ -1,11 +1,11 @@
 {
-  "version": "3.4.1",
+  "version": "3.4.2",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.4.1 - Fix llms.txt: force-enable e regeneração imediata via refresh-llms endpoint. Agente SEO Autônomo agora auto-corrige artigos órfãos (sem backlinks) inserindo links internos automaticamente via IA. Todas as features anteriores mantidas.",
-  "released": "2026-02-15T19:00:00-03:00",
+  "changelog": "v3.4.2 - Fix: Sitemap Optimizer agora filtra URLs cross-domain que não pertencem ao site, eliminando erros 'URL não permitido' no Google Search Console. Filtro aplicado em posts, taxonomias, users e news sitemap.",
+  "released": "2026-02-16T10:00:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",
@@ -39,6 +39,7 @@
     "autonomous_content_edit",
     "manage_redirect",
     "llms_txt_force_enable",
-    "orphan_auto_backlink"
+    "orphan_auto_backlink",
+    "sitemap_cross_domain_filter"
   ]
 }
