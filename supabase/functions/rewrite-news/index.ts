@@ -453,7 +453,8 @@ Deno.serve(async (req) => {
         image_style: imageStyle,
         image_source: imageSource,
         config: {
-          type: "rewrite",
+          type: isMadeiraNeles ? "rewrite_madeira_neles" : "rewrite",
+          rewrite_mode: rewriteMode,
           source_url: sourceUrl,
           source_name: sourceName,
           originality_score: complianceCheck.originalityScore,
@@ -482,6 +483,16 @@ Deno.serve(async (req) => {
             method: lastEmotionalResult?.emotionalAnalysis?.analysisMethod || 'keywords',
           },
           image_disclaimer: lastEmotionalResult?.disclaimer || null,
+          // Madeira Neles exclusive data
+          ...(isMadeiraNeles ? {
+            viral_analysis: (parsed as any).viralAnalysis || null,
+            hooks: (parsed as any).hooks || [],
+            conceito_visual: (parsed as any).conceitoVisual || null,
+            copy_post: (parsed as any).copyPost || null,
+            variacoes: (parsed as any).variacoes || null,
+            resumo_executivo: (parsed as any).resumoExecutivo || null,
+            faq_questions: parsed.seo?.faqQuestions || [],
+          } : {}),
         },
       })
       .select()

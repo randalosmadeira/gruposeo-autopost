@@ -378,30 +378,34 @@ export default function NewsRewriter() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge 
-                      variant={rewriteMode === 'madeira_neles' ? 'default' : 'outline'}
+                    <Button 
+                      type="button"
+                      size="sm"
+                      variant={rewriteMode === 'standard' ? 'default' : 'outline'}
                       className={cn(
-                        "cursor-pointer text-xs",
-                        rewriteMode === 'standard' && "bg-primary/10 text-primary"
+                        "text-xs h-8",
+                        rewriteMode === 'standard' && "bg-primary text-primary-foreground"
                       )}
-                      onClick={() => setRewriteMode('standard')}
+                      onClick={(e) => { e.stopPropagation(); setRewriteMode('standard'); }}
                     >
                       <Newspaper className="w-3 h-3 mr-1" />
                       Padrão
-                    </Badge>
-                    <Badge 
+                    </Button>
+                    <Button 
+                      type="button"
+                      size="sm"
                       variant={rewriteMode === 'madeira_neles' ? 'default' : 'outline'}
                       className={cn(
-                        "cursor-pointer text-xs",
+                        "text-xs h-8",
                         rewriteMode === 'madeira_neles' 
-                          ? "bg-orange-500 hover:bg-orange-600" 
+                          ? "bg-orange-500 hover:bg-orange-600 text-white border-orange-500" 
                           : "hover:bg-orange-500/10 hover:text-orange-500 hover:border-orange-500"
                       )}
-                      onClick={() => setRewriteMode('madeira_neles')}
+                      onClick={(e) => { e.stopPropagation(); setRewriteMode('madeira_neles'); }}
                     >
                       <Flame className="w-3 h-3 mr-1" />
                       Madeira Neles 🔥
-                    </Badge>
+                    </Button>
                   </div>
                 </div>
                 {rewriteMode === 'madeira_neles' && (
