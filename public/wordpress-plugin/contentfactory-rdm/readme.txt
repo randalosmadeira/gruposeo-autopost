@@ -4,7 +4,7 @@ Tags: content, seo, articles, automation, ai, image-optimization, indexing, inde
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.4.4
+Stable tag: 3.4.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,6 +65,12 @@ Sim! Na versão 2.1, o plugin notifica automaticamente o Google e o Bing quando 
 Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject schema) e FAQs automaticamente.
 
 == Changelog ==
+
+= 3.4.5 =
+* **NOVO**: Suporte a blocos Gutenberg para inserção de links internos
+* **NOVO**: Fallback append-to-end — nunca mais erro 422 para posts válidos
+* **NOVO**: Agentes SEO tratam 422 com retry automático via WP REST API
+* **CORRIGIDO**: Parâmetro source_post_id corrigido em todos os payloads de link
 
 = 3.4.4 =
 * **CORRIGIDO**: llms.txt agora grava arquivo físico na raiz como fallback para ambientes com cache/CDN
