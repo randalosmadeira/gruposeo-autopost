@@ -1756,7 +1756,7 @@ async function runAutonomousSEOFix(
         }
       }
     } catch (e) {
-      detailsList.push(`Cleanup duplicatas: endpoint indisponível (plugin v3.4.3 necessário)`);
+      detailsList.push(`Cleanup duplicatas: endpoint indisponível (plugin v3.4.4+ necessário)`);
     }
 
     return { scanned, issues_found: issuesFound, applied, redirects_created: redirectsCreated, types: typesApplied, details: detailsList };

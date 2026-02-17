@@ -4,7 +4,7 @@ Tags: content, seo, articles, automation, ai, image-optimization, indexing, inde
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.4.3
+Stable tag: 3.4.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,6 +65,11 @@ Sim! Na versão 2.1, o plugin notifica automaticamente o Google e o Bing quando 
 Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject schema) e FAQs automaticamente.
 
 == Changelog ==
+
+= 3.4.4 =
+* **CORRIGIDO**: llms.txt agora grava arquivo físico na raiz como fallback para ambientes com cache/CDN
+* **CORRIGIDO**: Resolve issue IDX-005 (llms.txt ausente) em auditorias SEO
+* **MELHORADO**: Endpoint refresh-llms usa regenerate() completo com escrita física
 
 = 3.4.3 =
 * **NOVO**: Redirect Manager com tabela dedicada e API REST completa
