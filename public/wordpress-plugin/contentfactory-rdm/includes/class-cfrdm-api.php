@@ -2751,19 +2751,24 @@ class CFRDM_API {
         }
         
         $llms = CFRDM_LLMS_Txt::get_instance();
-        $llms->invalidate_cache();
         
-        // Pre-generate both files immediately instead of waiting for next request
-        $llms_content = $llms->generate_llms_txt();
-        $llms_full_content = $llms->generate_llms_full_txt();
+        // Full regenerate including physical file fallback
+        $llms->regenerate();
+        
+        $llms_content = get_transient('cfrdm_llms_txt');
+        $llms_full_content = get_transient('cfrdm_llms_full_txt');
         
         // Re-init hooks in case it was disabled before
         $llms->init();
+        
+        // Check if physical files exist
+        $physical_exists = file_exists(ABSPATH . 'llms.txt');
         
         if (class_exists('CFRDM_Logger')) {
             CFRDM_Logger::info('llms', 'llms.txt force-enabled and regenerated via API', array(
                 'llms_size' => strlen($llms_content),
                 'llms_full_size' => strlen($llms_full_content),
+                'physical_file' => $physical_exists,
             ));
         }
         
@@ -2773,6 +2778,7 @@ class CFRDM_API {
             'message' => 'llms.txt force-enabled and regenerated',
             'llms_txt_size' => strlen($llms_content),
             'llms_full_txt_size' => strlen($llms_full_content),
+            'physical_file_written' => $physical_exists,
             'llms_url' => get_site_url() . '/llms.txt',
             'llms_full_url' => get_site_url() . '/llms-full.txt',
         ), 200);
