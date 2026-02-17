@@ -2300,7 +2300,7 @@ class CFRDM_API {
                 ), 200);
             }
             
-            // FALLBACK: Insert as "Leia também" when flexible match fails
+            // FALLBACK 1: Insert as "Leia também" when flexible match fails
             $fallback = self::insert_link_as_suggestion($post, $anchor_text, $target_url);
             if ($fallback['inserted']) {
                 return new WP_REST_Response(array(
@@ -2308,13 +2308,26 @@ class CFRDM_API {
                     'message' => sprintf(__('Link inserido como sugestão de leitura no post (ID: %d)', 'contentfactory-rdm'), $source_post_id),
                     'post_id' => $source_post_id,
                     'used_anchor' => $anchor_text,
-                    'method' => 'read_also',
+                    'method' => isset($fallback['method']) ? $fallback['method'] : 'read_also',
+                ), 200);
+            }
+            
+            // FALLBACK 2: Append to end (never return 422 for valid posts)
+            $append = self::append_link_to_end($post, $anchor_text, $target_url, 'forced_append');
+            if ($append['inserted']) {
+                return new WP_REST_Response(array(
+                    'success' => true,
+                    'message' => sprintf(__('Link adicionado ao final do post (ID: %d)', 'contentfactory-rdm'), $source_post_id),
+                    'post_id' => $source_post_id,
+                    'used_anchor' => $anchor_text,
+                    'method' => 'forced_append',
                 ), 200);
             }
             
             return new WP_REST_Response(array(
                 'success' => false,
-                'message' => __('Não foi possível inserir o link neste post', 'contentfactory-rdm'),
+                'message' => __('Conteúdo do post é muito curto ou vazio para inserção', 'contentfactory-rdm'),
+                'reason' => 'content_too_short',
             ), 422);
         }
         
@@ -2468,13 +2481,15 @@ class CFRDM_API {
     
     /**
      * Helper: Insert link as "Leia também" after 3rd paragraph
+     * Enhanced with Gutenberg block support and append-to-end fallback
      */
     private static function insert_link_as_suggestion($post, $anchor_text, $target_url) {
         $content = $post->post_content;
         
         // Don't add if already has too many "leia também" links
         if (substr_count(strtolower($content), 'leia também') >= 3) {
-            return array('inserted' => false);
+            // FALLBACK: Try appending at the very end instead of giving up
+            return self::append_link_to_end($post, $anchor_text, $target_url, 'related_reading');
         }
         
         // Don't add if already links to this URL
@@ -2482,35 +2497,36 @@ class CFRDM_API {
             return array('inserted' => false);
         }
         
-        // Find the 3rd closing </p> tag to insert after
-        $count = 0;
-        $insert_pos = false;
-        $offset = 0;
-        while (($pos = strpos($content, '</p>', $offset)) !== false) {
-            $count++;
-            $offset = $pos + 4;
-            if ($count === 3) {
-                $insert_pos = $pos + 4;
-                break;
-            }
+        // ── Strategy A: Standard </p> tag insertion ──
+        $insert_pos = self::find_paragraph_insert_position($content, 3);
+        
+        // ── Strategy B: Gutenberg block insertion (<!-- wp:paragraph -->) ──
+        if ($insert_pos === false) {
+            $insert_pos = self::find_gutenberg_insert_position($content, 3);
         }
         
-        // Fallback: insert after 2nd </p> or 1st
-        if ($insert_pos === false && $count >= 1) {
-            $count2 = 0;
-            $offset2 = 0;
-            while (($pos2 = strpos($content, '</p>', $offset2)) !== false) {
-                $count2++;
-                $offset2 = $pos2 + 4;
-                if ($count2 === min($count, 2)) {
-                    $insert_pos = $pos2 + 4;
-                    break;
+        // ── Strategy C: After any block-level closing tag ──
+        if ($insert_pos === false) {
+            $block_tags = array('</div>', '</section>', '</article>', '</blockquote>', '</ul>', '</ol>', '</table>');
+            $best_pos = false;
+            $tag_count = 0;
+            foreach ($block_tags as $tag) {
+                $offset = 0;
+                while (($pos = strpos($content, $tag, $offset)) !== false) {
+                    $tag_count++;
+                    $offset = $pos + strlen($tag);
+                    if ($tag_count >= 2) {
+                        $best_pos = $pos + strlen($tag);
+                        break 2;
+                    }
                 }
             }
+            $insert_pos = $best_pos;
         }
         
+        // ── Strategy D: Append to end of content ──
         if ($insert_pos === false) {
-            return array('inserted' => false);
+            return self::append_link_to_end($post, $anchor_text, $target_url, 'read_also');
         }
         
         $link_html = "\n<p><strong>📖 Leia também:</strong> <a href=\"" . esc_url($target_url) . "\" title=\"" . esc_attr($anchor_text) . "\">" . esc_html($anchor_text) . "</a></p>\n";
@@ -2532,6 +2548,88 @@ class CFRDM_API {
         }
         
         return array('inserted' => true);
+    }
+    
+    /**
+     * Find insert position after Nth </p> tag
+     */
+    private static function find_paragraph_insert_position($content, $target_count) {
+        $count = 0;
+        $offset = 0;
+        $last_pos = false;
+        while (($pos = strpos($content, '</p>', $offset)) !== false) {
+            $count++;
+            $offset = $pos + 4;
+            $last_pos = $pos + 4;
+            if ($count === $target_count) {
+                return $pos + 4;
+            }
+        }
+        // Return last found </p> if we have at least one
+        return $last_pos !== false ? $last_pos : false;
+    }
+    
+    /**
+     * Find insert position in Gutenberg block content
+     */
+    private static function find_gutenberg_insert_position($content, $target_count) {
+        $count = 0;
+        $offset = 0;
+        $last_pos = false;
+        $marker = '<!-- /wp:paragraph -->';
+        while (($pos = strpos($content, $marker, $offset)) !== false) {
+            $count++;
+            $end = $pos + strlen($marker);
+            $offset = $end;
+            $last_pos = $end;
+            if ($count === $target_count) {
+                return $end;
+            }
+        }
+        return $last_pos !== false ? $last_pos : false;
+    }
+    
+    /**
+     * Append link to end of post content (ultimate fallback)
+     */
+    private static function append_link_to_end($post, $anchor_text, $target_url, $method = 'appended') {
+        $content = $post->post_content;
+        
+        // Don't add if already links to this URL
+        if (strpos($content, $target_url) !== false) {
+            return array('inserted' => false);
+        }
+        
+        // Don't add if content is empty or too short
+        if (mb_strlen(strip_tags($content)) < 50) {
+            return array('inserted' => false);
+        }
+        
+        $is_gutenberg = strpos($content, '<!-- wp:') !== false;
+        
+        if ($is_gutenberg) {
+            $link_html = "\n<!-- wp:paragraph -->\n<p><strong>📖 Leia também:</strong> <a href=\"" . esc_url($target_url) . "\" title=\"" . esc_attr($anchor_text) . "\">" . esc_html($anchor_text) . "</a></p>\n<!-- /wp:paragraph -->\n";
+        } else {
+            $link_html = "\n<p><strong>📖 Leia também:</strong> <a href=\"" . esc_url($target_url) . "\" title=\"" . esc_attr($anchor_text) . "\">" . esc_html($anchor_text) . "</a></p>\n";
+        }
+        
+        $new_content = $content . $link_html;
+        
+        wp_update_post(array(
+            'ID' => $post->ID,
+            'post_content' => $new_content,
+        ));
+        
+        if (class_exists('CFRDM_Logger')) {
+            CFRDM_Logger::info(
+                CFRDM_Logger::CATEGORY_SYNC,
+                sprintf('Link appended (%s): %s → %s', $method, $anchor_text, $target_url),
+                array('post_id' => $post->ID, 'anchor' => $anchor_text, 'url' => $target_url, 'method' => $method),
+                $post->ID
+            );
+        }
+        
+        return array('inserted' => true, 'method' => $method);
     }
     
     // ═══════════════════════════════════════════════════════════
