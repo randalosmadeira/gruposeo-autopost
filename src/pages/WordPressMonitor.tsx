@@ -20,6 +20,7 @@ import {
   Settings
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { PLUGIN_VERSION } from '@/lib/plugin-version';
 import { supabase } from '@/integrations/supabase/client';
 import { useProjects } from '@/hooks/useProjects';
 import { useNavigate } from 'react-router-dom';
@@ -417,7 +418,7 @@ export default function WordPressMonitor() {
                           }}
                         >
                           <Download className="w-4 h-4 mr-2" />
-                          Baixar Plugin v3.2.4
+                          Baixar Plugin v{PLUGIN_VERSION}
                         </Button>
                         <Button 
                           variant="ghost" 
