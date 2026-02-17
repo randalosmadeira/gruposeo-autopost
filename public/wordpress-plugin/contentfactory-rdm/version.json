@@ -1,11 +1,11 @@
 {
-  "version": "3.4.3",
+  "version": "3.4.4",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.4.3 - Novo: Redirect Manager com limpeza automática de URLs duplicadas. Novo: AI SEO Generator para slugs, metas e títulos virais. Novo: GEO Schema Injection (LocalBusiness/Attorney/HealthAndBeautyBusiness). Fix: CFRDM_VERSION sincronizado em todo o sistema.",
-  "released": "2026-02-17T12:00:00-03:00",
+  "changelog": "v3.4.4 - Fix: llms.txt agora grava arquivo físico como fallback para ambientes com cache/CDN (resolve IDX-005). Melhoria: refresh-llms API agora usa regenerate() completo.",
+  "released": "2026-02-17T18:00:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",

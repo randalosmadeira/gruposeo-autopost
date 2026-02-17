@@ -300,11 +300,32 @@ class CFRDM_LLMS_Txt {
     }
     
     /**
-     * Regenerate cached files
+     * Regenerate cached files and write physical fallback files
      */
     public function regenerate() {
         $this->invalidate_cache();
-        $this->generate_llms_txt();
-        $this->generate_llms_full_txt();
+        $llms = $this->generate_llms_txt();
+        $llms_full = $this->generate_llms_full_txt();
+        
+        // Write physical files as fallback for cached/CDN environments
+        $this->write_physical_file('llms.txt', $llms);
+        $this->write_physical_file('llms-full.txt', $llms_full);
+    }
+    
+    /**
+     * Write a physical file to the WordPress root as CDN/cache fallback
+     */
+    private function write_physical_file($filename, $content) {
+        if (empty($content)) return;
+        
+        $root = ABSPATH;
+        $filepath = $root . $filename;
+        
+        // Only write if we have permission
+        if (!is_writable($root)) {
+            return;
+        }
+        
+        @file_put_contents($filepath, $content);
     }
 }
