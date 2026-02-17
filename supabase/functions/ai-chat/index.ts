@@ -332,19 +332,18 @@ async function executeAction(
     }
 
     case "apply_link_suggestions": {
-      // Get pending suggestions
-      const query = supabase
+      // Get ALL pending suggestions — zero artificial limits
+      let sugQuery = supabase
         .from("internal_link_suggestions")
         .select("id, anchor_text, target_url, relevance_score, project_id, source_wp_post_id")
         .eq("user_id", userId)
         .eq("status", "pending")
-        .gte("relevance_score", 70)
-        .order("relevance_score", { ascending: false })
-        .limit(20);
-      if (action.project_id && action.project_id !== "all") query.eq("project_id", action.project_id);
-      const { data: suggestions, error } = await query;
+        .gte("relevance_score", 60)
+        .order("relevance_score", { ascending: false });
+      if (action.project_id && action.project_id !== "all") sugQuery = sugQuery.eq("project_id", action.project_id);
+      const { data: suggestions, error } = await sugQuery;
       if (error) return `❌ Erro: ${error.message}`;
-      if (!suggestions || suggestions.length === 0) return "✅ Nenhuma sugestão pendente com relevância ≥70% para aplicar.";
+      if (!suggestions || suggestions.length === 0) return "✅ Nenhuma sugestão pendente com relevância ≥60% para aplicar.";
 
       // Get project info for WP API calls
       const projectIds = [...new Set(suggestions.map(s => s.project_id))];
@@ -355,117 +354,145 @@ async function executeAction(
 
       let applied = 0;
       let failed = 0;
+      let skipped = 0;
       const failReasons: string[] = [];
 
-      for (const suggestion of suggestions) {
-        const project = projects?.find(p => p.id === suggestion.project_id);
-        if (!project?.wordpress_url || !project?.wordpress_username || !project?.wordpress_app_password) {
-          failed++;
-          failReasons.push(`Projeto sem credenciais WP`);
-          continue;
-        }
+      // Process in batches of 10 for throughput
+      const batches: typeof suggestions[] = [];
+      for (let i = 0; i < suggestions.length; i += 10) {
+        batches.push(suggestions.slice(i, i + 10));
+      }
 
-        const isPlugin = project.wordpress_username === "__CFRDM_PLUGIN__";
-        const baseUrl = project.wordpress_url.replace(/\/wp-json\/cfrdm\/v1\/?$/, "").replace(/\/+$/, "");
+      for (const batch of batches) {
+        const batchPromises = batch.map(async (suggestion) => {
+          const project = projects?.find(p => p.id === suggestion.project_id);
+          if (!project?.wordpress_url || !project?.wordpress_username || !project?.wordpress_app_password) {
+            skipped++;
+            return;
+          }
 
-        // Resolve source_wp_post_id if null - find a relevant post from the index
-        let sourcePostId = suggestion.source_wp_post_id;
-        if (!sourcePostId && suggestion.project_id) {
-          // Find a post that could contain the anchor text by searching titles/keywords
-          const anchorWords = suggestion.anchor_text.split(/\s+/).filter((w: string) => w.length >= 4).slice(0, 3);
-          if (anchorWords.length > 0) {
-            const searchTerm = anchorWords.join(" ");
-            const { data: candidates } = await supabase
-              .from("wordpress_article_index")
-              .select("wp_post_id, wp_post_title")
-              .eq("project_id", suggestion.project_id)
-              .eq("wp_post_status", "publish")
-              .neq("wp_post_url", suggestion.target_url)
-              .textSearch("wp_post_title", searchTerm.split(" ").join(" | "), { type: "plain" })
-              .limit(5);
-            
-            if (candidates && candidates.length > 0) {
-              sourcePostId = candidates[0].wp_post_id;
-            } else {
-              // Fallback: pick any recent post that isn't the target
-              const { data: recent } = await supabase
+          const isPlugin = project.wordpress_username === "__CFRDM_PLUGIN__";
+          const baseUrl = project.wordpress_url.replace(/\/wp-json\/cfrdm\/v1\/?$/, "").replace(/\/+$/, "");
+
+          // Resolve source_wp_post_id if null
+          let sourcePostId = suggestion.source_wp_post_id;
+          if (!sourcePostId && suggestion.project_id) {
+            const anchorWords = suggestion.anchor_text.split(/\s+/).filter((w: string) => w.length >= 4).slice(0, 3);
+            if (anchorWords.length > 0) {
+              const { data: candidates } = await supabase
                 .from("wordpress_article_index")
                 .select("wp_post_id")
                 .eq("project_id", suggestion.project_id)
                 .eq("wp_post_status", "publish")
                 .neq("wp_post_url", suggestion.target_url)
-                .order("last_wp_modified_at", { ascending: false })
+                .order("word_count", { ascending: false })
                 .limit(1);
-              if (recent && recent.length > 0) {
-                sourcePostId = recent[0].wp_post_id;
+              if (candidates && candidates.length > 0) {
+                sourcePostId = candidates[0].wp_post_id;
               }
             }
           }
-        }
 
-        if (isPlugin) {
-          try {
-            // Try the dedicated apply endpoint first
-            let applyResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-CFRDM-API-Key": project.wordpress_app_password!,
-              },
-              body: JSON.stringify({
-                target_url: suggestion.target_url,
-                anchor_text: suggestion.anchor_text,
-                source_post_id: sourcePostId,
-              }),
-              signal: AbortSignal.timeout(15000),
-            });
-            
-            if (applyResp.ok) {
-              await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", suggestion.id);
-              applied++;
-            } else if (applyResp.status === 404) {
-              // Endpoint doesn't exist - try generate-internal-links as fallback
-              const genResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/generate-internal-links`, {
+          if (isPlugin) {
+            try {
+              const applyResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                   "X-CFRDM-API-Key": project.wordpress_app_password!,
                 },
-                body: JSON.stringify({ mode: "smart", max_links_per_post: 3 }),
-                signal: AbortSignal.timeout(30000),
+                body: JSON.stringify({
+                  target_url: suggestion.target_url,
+                  anchor_text: suggestion.anchor_text,
+                  source_post_id: sourcePostId || 0,
+                }),
+                signal: AbortSignal.timeout(20000),
               });
-              if (genResp.ok) {
-                // Mark all suggestions for this project as applied since generate-internal-links processes bulk
-                const projectSuggestionIds = suggestions.filter(s => s.project_id === project.id).map(s => s.id);
-                for (const sid of projectSuggestionIds) {
-                  await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", sid);
+
+              if (applyResp.ok) {
+                const data = await applyResp.json();
+                if (data.success !== false) {
+                  await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", suggestion.id);
+                  applied++;
+                } else {
+                  failed++;
+                  failReasons.push(`Post ${sourcePostId}: ${data.message || "falha desconhecida"}`);
                 }
-                const genData = await genResp.json();
-                applied += genData.links_added || projectSuggestionIds.length;
-                break; // Already processed all for this project
+              } else if (applyResp.status === 404) {
+                // Endpoint missing — try direct WP REST API to inject link into post content
+                if (sourcePostId) {
+                  try {
+                    // Get post content
+                    const getResp = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${sourcePostId}`, {
+                      headers: { "X-CFRDM-API-Key": project.wordpress_app_password! },
+                      signal: AbortSignal.timeout(10000),
+                    });
+                    if (getResp.ok) {
+                      const postData = await getResp.json();
+                      const content = postData.content?.rendered || postData.content?.raw || "";
+                      if (content && !content.includes(suggestion.target_url)) {
+                        // Insert "Leia também" after 3rd paragraph
+                        const paragraphs = content.split("</p>");
+                        const insertAt = Math.min(3, paragraphs.length - 1);
+                        const linkHtml = `<p class="cfrdm-internal-link"><strong>Leia também:</strong> <a href="${suggestion.target_url}" title="${suggestion.anchor_text}">${suggestion.anchor_text}</a></p>`;
+                        paragraphs.splice(insertAt, 0, linkHtml);
+                        const newContent = paragraphs.join("</p>");
+
+                        const updateResp = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${sourcePostId}`, {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                            "X-CFRDM-API-Key": project.wordpress_app_password!,
+                          },
+                          body: JSON.stringify({ content: newContent }),
+                          signal: AbortSignal.timeout(15000),
+                        });
+                        if (updateResp.ok) {
+                          await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", suggestion.id);
+                          applied++;
+                        } else {
+                          failed++;
+                          failReasons.push(`WP REST update falhou (${updateResp.status})`);
+                        }
+                      } else {
+                        // Already has the link
+                        await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", suggestion.id);
+                        applied++;
+                      }
+                    } else {
+                      failed++;
+                      failReasons.push(`WP REST GET post ${sourcePostId} falhou (${getResp.status})`);
+                    }
+                  } catch (wpErr) {
+                    failed++;
+                    failReasons.push(`WP REST fallback: ${wpErr instanceof Error ? wpErr.message : "erro"}`);
+                  }
+                } else {
+                  failed++;
+                  failReasons.push("Sem source_post_id para fallback direto");
+                }
               } else {
                 failed++;
-                failReasons.push(`generate-internal-links falhou (${genResp.status})`);
+                const errBody = await applyResp.text().catch(() => "");
+                failReasons.push(`apply retornou ${applyResp.status}: ${errBody.slice(0, 100)}`);
               }
-            } else {
+            } catch (e) {
               failed++;
-              const errBody = await applyResp.text().catch(() => "");
-              failReasons.push(`apply retornou ${applyResp.status}: ${errBody.slice(0, 100)}`);
+              failReasons.push(e instanceof Error ? e.message : "timeout");
             }
-          } catch (e) {
-            failed++;
-            failReasons.push(e instanceof Error ? e.message : "timeout");
+          } else {
+            await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", suggestion.id);
+            applied++;
           }
-        } else {
-          // Non-plugin: mark as applied (user must apply manually)
-          await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", suggestion.id);
-          applied++;
-        }
+        });
+
+        await Promise.all(batchPromises);
       }
 
       let result = `🔗 Resultado da aplicação:\n- ✅ ${applied} links aplicados com sucesso\n- ❌ ${failed} falharam\n- Total processado: ${suggestions.length}`;
+      if (skipped > 0) result += `\n- ⚠️ ${skipped} ignorados (sem credenciais WP)`;
       if (failReasons.length > 0) {
-        const uniqueReasons = [...new Set(failReasons)];
+        const uniqueReasons = [...new Set(failReasons)].slice(0, 10);
         result += `\n\n**Motivos das falhas:**\n${uniqueReasons.map(r => `- ${r}`).join("\n")}`;
       }
       return result;
