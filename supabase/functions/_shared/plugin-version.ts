@@ -5,9 +5,9 @@
  * Ao atualizar o plugin, basta alterar ESTE arquivo.
  */
 
-export const PLUGIN_VERSION = "3.4.2";
+export const PLUGIN_VERSION = "3.4.3";
 export const PLUGIN_MINIMUM_VERSION = "3.0.0";
-export const PLUGIN_RELEASED = "2026-02-16";
+export const PLUGIN_RELEASED = "2026-02-17";
 
 export const PLUGIN_FEATURES = [
   "auto_notifications",
@@ -44,6 +44,10 @@ export const PLUGIN_FEATURES = [
   "llms_txt_force_enable",
   "orphan_auto_backlink",
   "sitemap_cross_domain_filter",
+  "redirect_manager",
+  "duplicate_cleanup",
+  "geo_schema_injection",
+  "ai_seo_generator",
 ] as const;
 
 /**
@@ -66,6 +70,13 @@ Módulos disponíveis no plugin instalado nos sites:
   • autonomous-content-edit: modifica título WP, H1, H2, hero, insere imagens e força HTTPS no conteúdo
   • manage-redirect: cria/exclui redirects 301/302 via Rank Math ou .htaccess
   • orphan-auto-backlink: detecta artigos órfãos e insere backlinks internos via IA
+- **Redirect Manager (v${PLUGIN_VERSION})**:
+  • Gerenciamento completo de redirects 301/302 com tabela dedicada
+  • Limpeza automática de URLs duplicadas (sufixos -2, -3, etc.)
+  • Batch cleanup de lixo técnico (hello-world, parâmetros, arquivos de sistema)
+  • API REST para criação, listagem e exclusão de redirects
+- **AI SEO Generator**: Gera slugs, meta descriptions, focus keywords, tags e títulos virais via IA
+- **GEO Schema Injection**: Injeção automática de LocalBusiness/Attorney/HealthAndBeautyBusiness JSON-LD
 - **llms.txt Force-Enable**: Força ativação e regeneração imediata de llms.txt e llms-full.txt na raiz do site
 - **Internal Links Engine**: Insere links internos e backlinks automaticamente baseado em regras de keywords e relevância semântica entre artigos
 - **IndexNow Integration**: Notifica Google, Bing e Yandex sobre alterações em tempo real
