@@ -418,58 +418,90 @@ async function executeAction(
                   failed++;
                   failReasons.push(`Post ${sourcePostId}: ${data.message || "falha desconhecida"}`);
                 }
+              } else if (applyResp.status === 422) {
+                // 422 = post can't accept link (content structure issue) — mark rejected to avoid retrying
+                await supabase.from("internal_link_suggestions").update({ 
+                  status: "rejected", 
+                  rejected_reason: "Post não suporta inserção de link (422)" 
+                }).eq("id", suggestion.id);
+                failed++;
+                failReasons.push(`Post ${sourcePostId}: conteúdo não suporta inserção (422)`);
               } else if (applyResp.status === 404) {
-                // Endpoint missing — try direct WP REST API to inject link into post content
+                // Plugin endpoint missing — try direct WP REST API with plugin auth headers
                 if (sourcePostId) {
                   try {
-                    // Get post content
-                    const getResp = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${sourcePostId}`, {
-                      headers: { "X-CFRDM-API-Key": project.wordpress_app_password! },
+                    const pluginHeaders: Record<string, string> = {
+                      "Content-Type": "application/json",
+                      "X-CFRDM-API-Key": project.wordpress_app_password!,
+                    };
+                    // Get post content via plugin REST proxy
+                    const getResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/get-post/${sourcePostId}`, {
+                      headers: pluginHeaders,
                       signal: AbortSignal.timeout(10000),
                     });
+                    
+                    let postContent = "";
+                    let useStandardApi = false;
+                    
                     if (getResp.ok) {
                       const postData = await getResp.json();
-                      const content = postData.content?.rendered || postData.content?.raw || "";
-                      if (content && !content.includes(suggestion.target_url)) {
-                        // Insert "Leia também" after 3rd paragraph
-                        const paragraphs = content.split("</p>");
-                        const insertAt = Math.min(3, paragraphs.length - 1);
-                        const linkHtml = `<p class="cfrdm-internal-link"><strong>Leia também:</strong> <a href="${suggestion.target_url}" title="${suggestion.anchor_text}">${suggestion.anchor_text}</a></p>`;
-                        paragraphs.splice(insertAt, 0, linkHtml);
-                        const newContent = paragraphs.join("</p>");
+                      postContent = postData.content || postData.post_content || "";
+                    } else {
+                      // Fallback: standard WP REST (public for published posts)
+                      useStandardApi = true;
+                      const stdResp = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${sourcePostId}?_fields=content`, {
+                        signal: AbortSignal.timeout(10000),
+                      });
+                      if (stdResp.ok) {
+                        const stdData = await stdResp.json();
+                        postContent = stdData.content?.rendered || "";
+                      }
+                    }
+                    
+                    if (postContent && !postContent.includes(suggestion.target_url)) {
+                      const paragraphs = postContent.split("</p>");
+                      const insertAt = Math.min(3, paragraphs.length - 1);
+                      const linkHtml = `<p class="cfrdm-internal-link"><strong>Leia também:</strong> <a href="${suggestion.target_url}" title="${suggestion.anchor_text}">${suggestion.anchor_text}</a></p>`;
+                      paragraphs.splice(insertAt, 0, linkHtml);
+                      const newContent = paragraphs.join("</p>");
 
-                        const updateResp = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${sourcePostId}`, {
-                          method: "POST",
-                          headers: {
-                            "Content-Type": "application/json",
-                            "X-CFRDM-API-Key": project.wordpress_app_password!,
-                          },
-                          body: JSON.stringify({ content: newContent }),
-                          signal: AbortSignal.timeout(15000),
-                        });
-                        if (updateResp.ok) {
-                          await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", suggestion.id);
-                          applied++;
-                        } else {
-                          failed++;
-                          failReasons.push(`WP REST update falhou (${updateResp.status})`);
-                        }
-                      } else {
-                        // Already has the link
+                      // Update via plugin endpoint
+                      const updateResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/update-post`, {
+                        method: "POST",
+                        headers: pluginHeaders,
+                        body: JSON.stringify({ post_id: sourcePostId, content: newContent }),
+                        signal: AbortSignal.timeout(15000),
+                      });
+                      if (updateResp.ok) {
                         await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", suggestion.id);
                         applied++;
+                      } else {
+                        failed++;
+                        failReasons.push(`WP update post ${sourcePostId} falhou (${updateResp.status})`);
                       }
+                    } else if (postContent && postContent.includes(suggestion.target_url)) {
+                      // Already has the link — mark as applied
+                      await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", suggestion.id);
+                      applied++;
                     } else {
+                      // Post not found or empty
+                      await supabase.from("internal_link_suggestions").update({ 
+                        status: "rejected", 
+                        rejected_reason: `Post ${sourcePostId} não encontrado ou sem conteúdo` 
+                      }).eq("id", suggestion.id);
                       failed++;
-                      failReasons.push(`WP REST GET post ${sourcePostId} falhou (${getResp.status})`);
                     }
                   } catch (wpErr) {
                     failed++;
-                    failReasons.push(`WP REST fallback: ${wpErr instanceof Error ? wpErr.message : "erro"}`);
+                    failReasons.push(`Fallback: ${wpErr instanceof Error ? wpErr.message : "erro"}`);
                   }
                 } else {
+                  // No source post — mark rejected
+                  await supabase.from("internal_link_suggestions").update({ 
+                    status: "rejected", 
+                    rejected_reason: "Sem source_post_id" 
+                  }).eq("id", suggestion.id);
                   failed++;
-                  failReasons.push("Sem source_post_id para fallback direto");
                 }
               } else {
                 failed++;
