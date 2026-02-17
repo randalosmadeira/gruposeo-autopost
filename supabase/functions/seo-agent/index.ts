@@ -284,13 +284,13 @@ async function runMetaAuditWithFix(
     }
   }
 
-  // 2) AI Fallback: Get articles with issues and fix them
+  // 2) AI Fallback: Get ALL articles with issues and fix them (no artificial limits)
   const { data: articles } = await supabase
     .from("wordpress_article_index")
     .select("id, wp_post_id, wp_post_title, wp_post_url, wp_post_slug, primary_keyword, seo_score, semantic_summary")
     .eq("project_id", project.id)
     .order("seo_score", { ascending: true })
-    .limit(50);
+    .limit(1000);
 
   if (!articles || articles.length === 0) {
     return { found: 0, fixed: 0, issues: [], fixes_applied: [] };
@@ -324,7 +324,7 @@ async function runMetaAuditWithFix(
   }
 
   // 3) Use AI to generate meta fixes for articles with issues
-  const batchToFix = articlesWithIssues.slice(0, 10); // Fix 10 per run
+  const batchToFix = articlesWithIssues.slice(0, 50); // Fix up to 50 per run — zero artificial limits
   
   try {
     const articlesList = batchToFix.map(a => 
@@ -414,20 +414,26 @@ Retorne APENAS JSON:
           });
 
           if (updateResp.ok) {
-            fixed++;
-            fixesApplied.push(`Post ${fix.wp_post_id}: meta atualizada`);
+            const updateData = await updateResp.json();
+            // CRITICAL: Only count as fixed if WordPress API confirms the update
+            if (updateData.success !== false && updateData.error === undefined) {
+              fixed++;
+              fixesApplied.push(`Post ${fix.wp_post_id}: meta atualizada (verificado)`);
 
-            // Update index
-            const matchingArticle = batchToFix.find(a => a.wp_post_id === fix.wp_post_id);
-            if (matchingArticle) {
-              await supabase
-                .from("wordpress_article_index")
-                .update({
-                  primary_keyword: fix.focus_keyword || matchingArticle.primary_keyword,
-                  seo_score: Math.min(85, (matchingArticle.seo_score || 0) + 20),
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", matchingArticle.id);
+              // Update index
+              const matchingArticle = batchToFix.find(a => a.wp_post_id === fix.wp_post_id);
+              if (matchingArticle) {
+                await supabase
+                  .from("wordpress_article_index")
+                  .update({
+                    primary_keyword: fix.focus_keyword || matchingArticle.primary_keyword,
+                    seo_score: Math.min(85, (matchingArticle.seo_score || 0) + 20),
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", matchingArticle.id);
+              }
+            } else {
+              console.warn(`[SEO Agent] Post ${fix.wp_post_id}: API returned OK but no confirmation — NOT counted as fixed`);
             }
           } else {
             // Fallback: try standard WP REST API for Rank Math / Yoast
@@ -452,8 +458,16 @@ Retorne APENAS JSON:
             });
 
             if (wpUpdateResp.ok) {
-              fixed++;
-              fixesApplied.push(`Post ${fix.wp_post_id}: meta atualizada (WP API)`);
+              const wpData = await wpUpdateResp.json();
+              // Only count if WP returns the post object (confirms update)
+              if (wpData.id) {
+                fixed++;
+                fixesApplied.push(`Post ${fix.wp_post_id}: meta atualizada via WP API (verificado)`);
+              } else {
+                console.warn(`[SEO Agent] Post ${fix.wp_post_id}: WP API response missing id — NOT counted`);
+              }
+            } else {
+              console.error(`[SEO Agent] Post ${fix.wp_post_id}: both plugin and WP API failed (${wpUpdateResp.status})`);
             }
           }
         } catch (e) {
@@ -491,7 +505,7 @@ async function analyzeAndApplyLinks(
       .eq("status", "pending")
       .gte("relevance_score", 70)
       .order("relevance_score", { ascending: false })
-      .limit(20);
+      .limit(200); // Process ALL pending links, not just 20
 
     if (pendingLinks && pendingLinks.length > 0) {
       for (const link of pendingLinks) {
@@ -536,13 +550,13 @@ async function analyzeAndApplyLinks(
     }
   }
 
-  // 2) Find orphan articles and generate new suggestions
+  // 2) Find ALL orphan articles and generate new suggestions
   const { data: orphans } = await supabase
     .from("wordpress_article_index")
     .select("id, wp_post_id, wp_post_title, wp_post_url, primary_keyword, topic_cluster, internal_links_count")
     .eq("project_id", project.id)
     .lte("internal_links_count", 0)
-    .limit(30);
+    .limit(500); // Process ALL orphans
 
   if (!orphans || orphans.length === 0) {
     return { suggested: 0, applied: totalApplied, orphans: 0, applied_details: appliedDetails };
@@ -552,7 +566,7 @@ async function analyzeAndApplyLinks(
     .from("wordpress_article_index")
     .select("id, wp_post_id, wp_post_title, wp_post_url, primary_keyword, topic_cluster, semantic_summary")
     .eq("project_id", project.id)
-    .limit(200);
+    .limit(1000);
 
   if (!allArticles || allArticles.length < 2) {
     return { suggested: 0, applied: totalApplied, orphans: orphans.length, applied_details: appliedDetails };
@@ -565,7 +579,7 @@ async function analyzeAndApplyLinks(
       .map(a => `- [${a.wp_post_title}](${a.wp_post_url}) | kw: ${a.primary_keyword || "N/A"} | cluster: ${a.topic_cluster || "N/A"}`)
       .join("\n");
 
-    const orphanBatch = orphans.slice(0, 10);
+    const orphanBatch = orphans.slice(0, 50); // Process up to 50 orphans per run
 
     for (const orphan of orphanBatch) {
       const prompt = `Artigo órfão: "${orphan.wp_post_title}" (kw: ${orphan.primary_keyword || "N/A"}, cluster: ${orphan.topic_cluster || "N/A"})
@@ -693,14 +707,14 @@ async function submitIndexing(
 
   try {
     // 1) Get ALL published article URLs from index
-    const { data: allArticles } = await supabase
+    const { data: allArticlesIdx } = await supabase
       .from("wordpress_article_index")
       .select("wp_post_url")
       .eq("project_id", project.id)
       .eq("wp_post_status", "publish")
-      .limit(500);
+      .limit(1000);
 
-    const urls = allArticles?.map(a => a.wp_post_url).filter(Boolean) || [];
+    const urls = allArticlesIdx?.map(a => a.wp_post_url).filter(Boolean) || [];
 
     if (urls.length > 0) {
       // 2) Submit to IndexNow via plugin (batch)
@@ -711,7 +725,7 @@ async function submitIndexing(
             "Content-Type": "application/json",
             "X-CFRDM-API-Key": apiKey,
           },
-          body: JSON.stringify({ urls: urls.slice(0, 100) }), // IndexNow allows 10k but lets do 100 per run
+          body: JSON.stringify({ urls: urls.slice(0, 500) }), // Submit ALL published URLs
         });
 
         if (indexNowResp.ok) {
@@ -1285,13 +1299,14 @@ async function runFullTechnicalAudit(
   }
 
   // ═══ AUDIT 3: Content Quality (E-E-A-T) ═══
+  // NOTE: wp_post_date doesn't exist — use last_wp_modified_at instead to avoid false queries
   const { data: recentArticles } = await supabase
     .from("wordpress_article_index")
-    .select("id, wp_post_title, wp_post_url, primary_keyword, seo_score, word_count, internal_links_count, wp_post_date")
+    .select("id, wp_post_title, wp_post_url, primary_keyword, seo_score, word_count, internal_links_count, last_wp_modified_at")
     .eq("project_id", project.id)
     .eq("wp_post_status", "publish")
-    .order("wp_post_date", { ascending: false })
-    .limit(50);
+    .order("last_wp_modified_at", { ascending: false, nullsFirst: false })
+    .limit(500); // Analyze ALL articles, not just 50
 
   if (recentArticles && recentArticles.length > 0) {
     // Check for thin content
@@ -1328,7 +1343,7 @@ async function runFullTechnicalAudit(
         try {
           const allForLinks = recentArticles.filter(a => (a.internal_links_count || 0) > 0 || (a.word_count || 0) > 1000);
           if (allForLinks.length >= 2) {
-            const orphanBatch = orphans.slice(0, 8);
+            const orphanBatch = orphans.slice(0, 30); // Fix up to 30 orphans per audit cycle
             let orphanLinksApplied = 0;
 
             for (const orphan of orphanBatch) {
@@ -1422,7 +1437,7 @@ JSON: {"links":[{"source_url":"...","anchor_text":"...","relevance":85}]}`;
     // Check content freshness
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-    const staleContent = recentArticles.filter(a => a.wp_post_date && new Date(a.wp_post_date) < sixMonthsAgo);
+    const staleContent = recentArticles.filter(a => a.last_wp_modified_at && new Date(a.last_wp_modified_at) < sixMonthsAgo);
     if (staleContent.length > recentArticles.length * 0.5) {
       issues.push({
         id: "CNT-004", priority: "P2", category: "content",
@@ -1647,7 +1662,7 @@ async function runAutonomousSEOFix(
     const scanResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/scan-seo-issues`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
-      body: JSON.stringify({ limit: 200, checks: ["canonical", "https", "missing_h1", "duplicate_title", "missing_meta"] }),
+      body: JSON.stringify({ limit: 1000, checks: ["canonical", "https", "missing_h1", "duplicate_title", "missing_meta"] }),
     });
 
     if (!scanResp.ok) {
