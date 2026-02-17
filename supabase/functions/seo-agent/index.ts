@@ -141,7 +141,16 @@ Deno.serve(async (req) => {
         details.autonomous_fix = autonomousResult;
 
         // ═══════════════════════════════════════════
-        // STEP 7: Summary
+        // STEP 7: Full-Base Cross-Linking
+        // Scans ALL published articles and creates cross-references
+        // ═══════════════════════════════════════════
+        console.log(`[SEO Agent] [${project.name}] Step 7: Full-Base Cross-Linking`);
+
+        const crossLinkResult = await runFullBaseCrossLinking(supabase, orchestrator, project, baseUrl, isPlugin, apiKey);
+        details.cross_linking = crossLinkResult;
+        // ═══════════════════════════════════════════
+        // ═══════════════════════════════════════════
+        // STEP 8: Summary
         // ═══════════════════════════════════════════
         const summaryParts = [];
         if (metaIssuesFixed > 0) summaryParts.push(`${metaIssuesFixed} metas corrigidos`);
@@ -155,6 +164,8 @@ Deno.serve(async (req) => {
         if (auditResult.issues_fixed > 0) summaryParts.push(`${auditResult.issues_fixed} problemas corrigidos`);
         if (autonomousResult.applied > 0) summaryParts.push(`${autonomousResult.applied} correções autônomas (${autonomousResult.types.join(", ")})`);
         if (autonomousResult.redirects_created > 0) summaryParts.push(`${autonomousResult.redirects_created} redirects criados`);
+        if (crossLinkResult.cross_links_created > 0) summaryParts.push(`${crossLinkResult.cross_links_created} cross-links criados`);
+        if (crossLinkResult.articles_enriched > 0) summaryParts.push(`${crossLinkResult.articles_enriched} artigos enriquecidos`);
 
         const summary = summaryParts.length > 0
           ? `✅ ${project.name}: ${summaryParts.join(", ")}`
@@ -324,7 +335,7 @@ async function runMetaAuditWithFix(
   }
 
   // 3) Use AI to generate meta fixes for articles with issues
-  const batchToFix = articlesWithIssues.slice(0, 50); // Fix up to 50 per run — zero artificial limits
+  const batchToFix = articlesWithIssues.slice(0, 100); // Fix ALL — zero artificial limits
   
   try {
     const articlesList = batchToFix.map(a => 
@@ -556,7 +567,7 @@ async function analyzeAndApplyLinks(
     .select("id, wp_post_id, wp_post_title, wp_post_url, primary_keyword, topic_cluster, internal_links_count")
     .eq("project_id", project.id)
     .lte("internal_links_count", 0)
-    .limit(500); // Process ALL orphans
+    .limit(1000); // Process ALL orphans — zero artificial limits
 
   if (!orphans || orphans.length === 0) {
     return { suggested: 0, applied: totalApplied, orphans: 0, applied_details: appliedDetails };
@@ -579,7 +590,7 @@ async function analyzeAndApplyLinks(
       .map(a => `- [${a.wp_post_title}](${a.wp_post_url}) | kw: ${a.primary_keyword || "N/A"} | cluster: ${a.topic_cluster || "N/A"}`)
       .join("\n");
 
-    const orphanBatch = orphans.slice(0, 50); // Process up to 50 orphans per run
+    const orphanBatch = orphans.slice(0, 100); // Process ALL orphans per run
 
     for (const orphan of orphanBatch) {
       const prompt = `Artigo órfão: "${orphan.wp_post_title}" (kw: ${orphan.primary_keyword || "N/A"}, cluster: ${orphan.topic_cluster || "N/A"})
@@ -1343,7 +1354,7 @@ async function runFullTechnicalAudit(
         try {
           const allForLinks = recentArticles.filter(a => (a.internal_links_count || 0) > 0 || (a.word_count || 0) > 1000);
           if (allForLinks.length >= 2) {
-            const orphanBatch = orphans.slice(0, 30); // Fix up to 30 orphans per audit cycle
+            const orphanBatch = orphans.slice(0, 100); // Fix ALL orphans per audit cycle
             let orphanLinksApplied = 0;
 
             for (const orphan of orphanBatch) {
@@ -1754,8 +1765,226 @@ async function runAutonomousSEOFix(
   }
 }
 
+
 // ═══════════════════════════════════════════════════════════
-// STEP 7: Redirect Management (Subdomain Consolidation)
+// STEP 7: Full-Base Cross-Linking
+// Scans ALL published articles and creates bidirectional links
+// between semantically related content across the entire base
+// ═══════════════════════════════════════════════════════════
+async function runFullBaseCrossLinking(
+  supabase: ReturnType<typeof createClient>,
+  orchestrator: ReturnType<typeof getOrchestrator>,
+  project: any,
+  baseUrl: string,
+  isPlugin: boolean,
+  apiKey: string,
+): Promise<{ articles_analyzed: number; articles_enriched: number; cross_links_created: number; details: string[] }> {
+  const detailsList: string[] = [];
+  let articlesEnriched = 0;
+  let crossLinksCreated = 0;
+
+  if (!baseUrl || !isPlugin || !apiKey) {
+    return { articles_analyzed: 0, articles_enriched: 0, cross_links_created: 0, details: ["No WordPress connection"] };
+  }
+
+  // 1) Get ALL published articles
+  const { data: allArticles } = await supabase
+    .from("wordpress_article_index")
+    .select("id, wp_post_id, wp_post_title, wp_post_url, wp_post_slug, primary_keyword, secondary_keywords, topic_cluster, semantic_summary, internal_links_count, word_count, seo_score")
+    .eq("project_id", project.id)
+    .eq("wp_post_status", "publish")
+    .order("word_count", { ascending: false })
+    .limit(1000);
+
+  if (!allArticles || allArticles.length < 3) {
+    return { articles_analyzed: allArticles?.length || 0, articles_enriched: 0, cross_links_created: 0, details: ["Not enough articles for cross-linking"] };
+  }
+
+  // 2) Identify articles that need MORE links (< 3 internal links)
+  const articlesNeedingLinks = allArticles.filter(a => (a.internal_links_count || 0) < 3);
+  if (articlesNeedingLinks.length === 0) {
+    return { articles_analyzed: allArticles.length, articles_enriched: 0, cross_links_created: 0, details: ["All articles already have 3+ internal links"] };
+  }
+
+  console.log(`[SEO Agent] [${project.name}] Cross-linking: ${articlesNeedingLinks.length} articles need enrichment out of ${allArticles.length} total`);
+
+  // 3) Group articles by topic_cluster
+  const clusterMap = new Map<string, typeof allArticles>();
+  for (const article of allArticles) {
+    const cluster = article.topic_cluster || "geral";
+    if (!clusterMap.has(cluster)) clusterMap.set(cluster, []);
+    clusterMap.get(cluster)!.push(article);
+  }
+
+  // 4) Process in batches
+  const batches: (typeof allArticles)[] = [];
+  for (let i = 0; i < articlesNeedingLinks.length && i < 100; i += 5) {
+    batches.push(articlesNeedingLinks.slice(i, i + 5));
+  }
+
+  for (const batch of batches) {
+    try {
+      const articleDescriptions = batch.map(a => {
+        const cluster = a.topic_cluster || "geral";
+        const clusterPeers = (clusterMap.get(cluster) || [])
+          .filter(p => p.wp_post_url !== a.wp_post_url)
+          .slice(0, 10)
+          .map(p => `  - [${p.wp_post_title}](${p.wp_post_url}) | kw: ${p.primary_keyword || "N/A"}`)
+          .join("\n");
+
+        const otherClusters = Array.from(clusterMap.entries())
+          .filter(([k]) => k !== cluster)
+          .flatMap(([, v]) => v)
+          .slice(0, 10)
+          .map(p => `  - [${p.wp_post_title}](${p.wp_post_url}) | kw: ${p.primary_keyword || "N/A"} | cluster: ${p.topic_cluster || "N/A"}`)
+          .join("\n");
+
+        return `ARTIGO: "${a.wp_post_title}" (${a.wp_post_url})
+  Keyword: ${a.primary_keyword || "N/A"} | Cluster: ${cluster} | Links: ${a.internal_links_count || 0} | ${a.word_count || 0}p
+  MESMO CLUSTER:\n${clusterPeers || "  (nenhum)"}
+  OUTROS:\n${otherClusters || "  (nenhum)"}`;
+      }).join("\n\n---\n\n");
+
+      const prompt = `Gere cross-links internos para fortalecer autoridade semântica:
+
+${articleDescriptions}
+
+REGRAS:
+1. Para cada artigo, sugira 3-5 backlinks de outros artigos
+2. anchor_text: 2-4 palavras descritivas naturais
+3. 80% intra-cluster, 20% cross-cluster
+4. Relevância mínima: 75 — ZERO falsos positivos
+5. Posição: introdução/meio/conclusão
+
+JSON:
+{"cross_links":[{"target_url":"...","links":[{"source_url":"...","source_post_id":123,"anchor_text":"...","position":"meio","relevance":85,"reason":"..."}]}]}`;
+
+      const aiResult = await orchestrator.call("seo_analysis", [
+        { role: "system", content: `Especialista SEO brasileiro em Internal Linking. Nicho: ${project.nicho || "geral"}. APENAS JSON.` },
+        { role: "user", content: prompt },
+      ], { maxTokens: 4000, temperature: 0.2 });
+
+      let jsonStr = aiResult.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+      if (jsonMatch) jsonStr = jsonMatch[0];
+
+      let parsed;
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch {
+        try {
+          const opens = { '[': 0, '{': 0 };
+          for (const ch of jsonStr) {
+            if (ch === '[' || ch === '{') opens[ch]++;
+            if (ch === ']') opens['[']--;
+            if (ch === '}') opens['{']--;
+          }
+          jsonStr = jsonStr.replace(/,\s*$/, '');
+          jsonStr += ']'.repeat(Math.max(0, opens['[']));
+          jsonStr += '}'.repeat(Math.max(0, opens['{']));
+          parsed = JSON.parse(jsonStr);
+        } catch {
+          console.warn(`[SEO Agent] Cross-link JSON parse failed, skipping batch`);
+          continue;
+        }
+      }
+
+      if (!parsed?.cross_links || !Array.isArray(parsed.cross_links)) continue;
+
+      const urlToArticle = new Map(allArticles.map(a => [a.wp_post_url, a]));
+
+      for (const crossLink of parsed.cross_links) {
+        if (!crossLink.links || !Array.isArray(crossLink.links)) continue;
+        const targetArticle = urlToArticle.get(crossLink.target_url);
+        if (!targetArticle) continue;
+
+        let enrichedThis = false;
+
+        for (const link of crossLink.links) {
+          if (!link.source_url || !link.anchor_text || (link.relevance || 0) < 75) continue;
+
+          const sourceArticle = urlToArticle.get(link.source_url) ||
+            allArticles.find(a => a.wp_post_id === link.source_post_id);
+          if (!sourceArticle?.wp_post_id) continue;
+
+          await supabase.from("internal_link_suggestions").insert({
+            user_id: project.user_id,
+            project_id: project.id,
+            anchor_text: link.anchor_text,
+            target_url: crossLink.target_url,
+            relevance_score: link.relevance || 75,
+            status: "pending",
+            source_wp_post_id: sourceArticle.wp_post_id,
+            target_wp_post_id: targetArticle.wp_post_id,
+            position_suggestion: link.position || "meio",
+            anchor_context: `Cross-link: ${link.reason || "semantic relevance"}`,
+          });
+
+          if ((link.relevance || 0) >= 80) {
+            try {
+              const applyResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+                body: JSON.stringify({
+                  post_id: sourceArticle.wp_post_id,
+                  anchor_text: link.anchor_text,
+                  target_url: crossLink.target_url,
+                  position: link.position || "auto",
+                }),
+              });
+              if (applyResp.ok) {
+                const applyData = await applyResp.json();
+                if (applyData.success || applyData.applied) {
+                  crossLinksCreated++;
+                  enrichedThis = true;
+                  await supabase
+                    .from("internal_link_suggestions")
+                    .update({ status: "applied", applied_at: new Date().toISOString() })
+                    .eq("project_id", project.id)
+                    .eq("source_wp_post_id", sourceArticle.wp_post_id)
+                    .eq("target_url", crossLink.target_url)
+                    .eq("status", "pending");
+                  detailsList.push(`✅ "${link.anchor_text}" → ${targetArticle.wp_post_title}`);
+                }
+              }
+            } catch { /* continue */ }
+          }
+        }
+
+        if (enrichedThis) {
+          articlesEnriched++;
+          await supabase
+            .from("wordpress_article_index")
+            .update({ internal_links_count: (targetArticle.internal_links_count || 0) + 1, updated_at: new Date().toISOString() })
+            .eq("id", targetArticle.id);
+        }
+      }
+    } catch (e) {
+      console.error(`[SEO Agent] [${project.name}] Cross-link batch error:`, e);
+    }
+  }
+
+  // Re-index enriched articles
+  if (crossLinksCreated > 0) {
+    const enrichedUrls = articlesNeedingLinks.slice(0, crossLinksCreated + 10).map(a => a.wp_post_url).filter(Boolean);
+    if (enrichedUrls.length > 0) {
+      try {
+        await fetch(`${baseUrl}/wp-json/cfrdm/v1/indexnow-batch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+          body: JSON.stringify({ urls: enrichedUrls }),
+        });
+        detailsList.push(`Re-indexação: ${enrichedUrls.length} artigos enriquecidos`);
+      } catch { /* ignore */ }
+    }
+  }
+
+  console.log(`[SEO Agent] [${project.name}] Cross-linking: ${crossLinksCreated} links, ${articlesEnriched} enriched`);
+  return { articles_analyzed: allArticles.length, articles_enriched: articlesEnriched, cross_links_created: crossLinksCreated, details: detailsList };
+}
+
+// ═══════════════════════════════════════════════════════════
+// STEP 8: Redirect Management (Subdomain Consolidation)
 // ═══════════════════════════════════════════════════════════
 async function manageRedirects(
   baseUrl: string,

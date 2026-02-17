@@ -145,7 +145,7 @@ async function processProjectOrphans(
     .eq("wp_post_status", "publish")
     .lte("internal_links_count", 0)
     .order("word_count", { ascending: false }) // prioritize longer/important content
-    .limit(50);
+    .limit(1000); // Process ALL orphans — zero artificial limits
 
   if (!orphans || orphans.length === 0) {
     return { orphansFound: 0, orphansFixed: 0, linksSuggested: 0, linksApplied: 0, indexingSubmitted: 0, details: [] };
@@ -163,23 +163,23 @@ async function processProjectOrphans(
     .eq("project_id", project.id)
     .eq("wp_post_status", "publish")
     .order("word_count", { ascending: false })
-    .limit(300);
+    .limit(1000); // Full article base for maximum cross-linking
 
   if (!allArticles || allArticles.length < 2) {
     return { orphansFound, orphansFixed: 0, linksSuggested: 0, linksApplied: 0, indexingSubmitted: 0, details: ["Not enough articles for linking"] };
   }
 
   // Identify high-traffic/high-linkability articles as best link sources
+  // Use ALL published articles as potential link sources (no arbitrary cap)
   const linkSources = allArticles
-    .filter(a => (a.internal_links_count || 0) >= 1 && (a.word_count || 0) >= 500)
-    .slice(0, 100);
+    .filter(a => (a.internal_links_count || 0) >= 1 && (a.word_count || 0) >= 300);
 
   const urlToArticle = new Map(allArticles.map(a => [a.wp_post_url, a]));
 
   // ══════════════════════════════════════
   // PHASE 3: AI generates contextual links for each orphan batch
   // ══════════════════════════════════════
-  const orphanBatches = chunkArray(orphans, 3); // Process 3 orphans per AI call (less truncation)
+  const orphanBatches = chunkArray(orphans, 5); // Process 5 orphans per AI call for throughput
 
   for (const batch of orphanBatches) {
     try {
@@ -187,7 +187,7 @@ async function processProjectOrphans(
         .map(o => `• "${o.wp_post_title}" (URL: ${o.wp_post_url}, kw: ${o.primary_keyword || "N/A"}, cluster: ${o.topic_cluster || "N/A"}, ${o.word_count || 0} palavras)`)
         .join("\n");
 
-      const sourceDescriptions = linkSources.slice(0, 50)
+      const sourceDescriptions = linkSources.slice(0, 80)
         .map(a => `• [${a.wp_post_title}](${a.wp_post_url}) | kw: ${a.primary_keyword || "N/A"} | cluster: ${a.topic_cluster || "N/A"} | ${a.word_count || 0}p`)
         .join("\n");
 
@@ -467,7 +467,7 @@ FORMATO JSON OBRIGATÓRIO:
     .eq("status", "pending")
     .gte("relevance_score", 70)
     .order("relevance_score", { ascending: false })
-    .limit(30);
+    .limit(500); // Process ALL pending links
 
   if (pendingLinks && pendingLinks.length > 0) {
     for (const link of pendingLinks) {
