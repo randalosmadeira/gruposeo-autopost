@@ -91,6 +91,11 @@ function cfrdm_load_dependencies() {
     // v3.2.4 - Method Signature Validator (prevents fatal errors from missing/incompatible methods)
     require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-method-validator.php';
     
+    // v3.4.3 - Redirect Manager
+    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-redirect-manager.php')) {
+        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-redirect-manager.php';
+    }
+    
     // v3.2.7 - AI Source Rules, Google Indexing Submitter, GMB Auto-Poster
     if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-source-rules.php')) {
         require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-source-rules.php';
@@ -193,6 +198,15 @@ class ContentFactory_RDM {
             if (class_exists('CFRDM_SEO_Checklist')) CFRDM_SEO_Checklist::get_instance()->init();
         } catch (\Throwable $e) {
             error_log('ContentFactory v3.2.3 init error: ' . $e->getMessage());
+        }
+        
+        // Initialize v3.4.3 - Redirect Manager
+        try {
+            if (class_exists('CFRDM_Redirect_Manager')) {
+                CFRDM_Redirect_Manager::get_instance()->init();
+            }
+        } catch (\Throwable $e) {
+            error_log('ContentFactory Redirect Manager init error: ' . $e->getMessage());
         }
         
         // Initialize v3.2.7 modules
