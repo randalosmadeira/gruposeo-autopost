@@ -4,7 +4,7 @@ Tags: content, seo, articles, automation, ai, image-optimization, indexing, inde
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.3.0
+Stable tag: 3.4.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,6 +65,15 @@ Sim! Na versão 2.1, o plugin notifica automaticamente o Google e o Bing quando 
 Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject schema) e FAQs automaticamente.
 
 == Changelog ==
+
+= 3.4.3 =
+* **NOVO**: Redirect Manager com tabela dedicada e API REST completa
+* **NOVO**: Limpeza automática de URLs duplicadas (sufixos -2, -3, hello-world, parâmetros)
+* **NOVO**: AI SEO Generator — gera slugs, meta descriptions, focus keywords, tags e títulos virais via IA
+* **NOVO**: GEO Schema Injection — LocalBusiness, Attorney, HealthAndBeautyBusiness JSON-LD automáticos
+* **CORRIGIDO**: CFRDM_VERSION sincronizado em todos os arquivos (era 3.4.1 no define, 3.4.2 no header)
+* **MELHORADO**: PLUGIN_PROMPT_BLOCK atualizado com todos os novos módulos para agentes IA
+* **MELHORADO**: Agente SEO agora executa limpeza de duplicatas e injeção de GEO schemas autonomamente
 
 = 3.2.4 =
 * **NOVO**: Method Validator com validação automática de assinaturas de métodos via ReflectionMethod
