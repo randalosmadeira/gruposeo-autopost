@@ -324,6 +324,7 @@ FORMATO JSON OBRIGATÓRIO:
                   "X-CFRDM-API-Key": apiKey,
                 },
                 body: JSON.stringify({
+                  source_post_id: sourceArticle.wp_post_id,
                   post_id: sourceArticle.wp_post_id,
                   anchor_text: link.anchor_text,
                   target_url: fix.orphan_url,
@@ -347,6 +348,49 @@ FORMATO JSON OBRIGATÓRIO:
                     .eq("target_url", fix.orphan_url)
                     .eq("status", "pending");
                 }
+              } else if (applyResp.status === 422) {
+                // 422 = content doesn't support insertion — try WP REST API direct append
+                console.warn(`[OrphanFixer] Post ${sourceArticle.wp_post_id} returned 422, trying WP REST API fallback`);
+                try {
+                  const wpPost = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${sourceArticle.wp_post_id}`, {
+                    headers: { "X-CFRDM-API-Key": apiKey },
+                  });
+                  if (wpPost.ok) {
+                    const wpData = await wpPost.json();
+                    const currentContent = wpData.content?.raw || wpData.content?.rendered || "";
+                    if (currentContent.length > 50 && !currentContent.includes(fix.orphan_url)) {
+                      const linkHtml = `\n<p><strong>📖 Leia também:</strong> <a href="${fix.orphan_url}" title="${orphanArticle.wp_post_title}">${link.anchor_text}</a></p>\n`;
+                      const updateResp = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${sourceArticle.wp_post_id}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+                        body: JSON.stringify({ content: currentContent + linkHtml }),
+                      });
+                      if (updateResp.ok) {
+                        linksApplied++;
+                        fixedThisOrphan = true;
+                        fixDetails.push(`✅ (fallback) "${link.anchor_text}" appended to post ${sourceArticle.wp_post_id}`);
+                        await supabase
+                          .from("internal_link_suggestions")
+                          .update({ status: "applied", applied_at: new Date().toISOString() })
+                          .eq("project_id", project.id)
+                          .eq("source_wp_post_id", sourceArticle.wp_post_id)
+                          .eq("target_url", fix.orphan_url)
+                          .eq("status", "pending");
+                      }
+                    }
+                  }
+                } catch (fallbackErr) {
+                  console.warn(`[OrphanFixer] WP REST fallback also failed for post ${sourceArticle.wp_post_id}:`, fallbackErr);
+                }
+
+                // Mark as rejected to avoid re-trying indefinitely
+                await supabase
+                  .from("internal_link_suggestions")
+                  .update({ status: "rejected", rejected_reason: "422: content does not support insertion" })
+                  .eq("project_id", project.id)
+                  .eq("source_wp_post_id", sourceArticle.wp_post_id)
+                  .eq("target_url", fix.orphan_url)
+                  .eq("status", "pending");
               }
             } catch (e) {
               console.warn(`[OrphanFixer] Apply failed for post ${sourceArticle.wp_post_id}:`, e);

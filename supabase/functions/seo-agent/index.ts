@@ -530,6 +530,7 @@ async function analyzeAndApplyLinks(
               "X-CFRDM-API-Key": apiKey,
             },
             body: JSON.stringify({
+              source_post_id: link.source_wp_post_id,
               post_id: link.source_wp_post_id,
               anchor_text: link.anchor_text,
               target_url: link.target_url,
@@ -547,12 +548,20 @@ async function analyzeAndApplyLinks(
                 .update({ status: "applied", applied_at: new Date().toISOString() })
                 .eq("id", link.id);
             } else {
-              // Mark as failed to avoid retrying
               await supabase
                 .from("internal_link_suggestions")
-                .update({ status: "rejected", rejected_reason: applyData.reason || "anchor not found in content" })
+                .update({ status: "rejected", rejected_reason: applyData.reason || applyData.message || "anchor not found in content" })
                 .eq("id", link.id);
             }
+          } else if (applyResp.status === 422) {
+            // 422: Content doesn't support insertion — mark and move on
+            const errBody = await applyResp.json().catch(() => ({}));
+            const reason = errBody.reason || errBody.message || "content_unsupported";
+            console.warn(`[SEO Agent] Post ${link.source_wp_post_id} returned 422: ${reason}`);
+            await supabase
+              .from("internal_link_suggestions")
+              .update({ status: "rejected", rejected_reason: `422: ${reason}` })
+              .eq("id", link.id);
           }
         } catch (e) {
           console.error(`[SEO Agent] Apply link failed:`, e);
@@ -669,6 +678,7 @@ JSON:
                   "X-CFRDM-API-Key": apiKey,
                 },
                 body: JSON.stringify({
+                  source_post_id: sourceArticle.wp_post_id,
                   post_id: sourceArticle.wp_post_id,
                   anchor_text: suggestion.anchor_text,
                   target_url: suggestion.target_url,
@@ -681,6 +691,8 @@ JSON:
                   totalApplied++;
                   appliedDetails.push(`Auto-link: "${suggestion.anchor_text}" em post ${sourceArticle.wp_post_id}`);
                 }
+              } else if (applyResp.status === 422) {
+                console.warn(`[SEO Agent] Post ${sourceArticle.wp_post_id} 422 — content unsupported for link insertion`);
               }
             } catch { /* continue */ }
           }
