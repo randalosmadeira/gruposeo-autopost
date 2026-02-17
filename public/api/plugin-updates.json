@@ -1,13 +1,18 @@
 {
-  "latest_version": "3.4.3",
-  "version": "3.4.3",
+  "latest_version": "3.4.4",
+  "version": "3.4.4",
   "minimum_version": "3.0.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "## v3.4.3 (2026-02-17)\n\n### Redirect Manager + AI SEO + GEO Schema\n- Novo: Redirect Manager com tabela dedicada e API REST\n- Novo: Limpeza automática de URLs duplicadas (-2, -3, hello-world)\n- Novo: AI SEO Generator (slugs, metas, focus keywords, tags, títulos virais)\n- Novo: GEO Schema Injection (LocalBusiness/Attorney/HealthAndBeautyBusiness)\n- Fix: CFRDM_VERSION sincronizado em todo o sistema\n\n## v3.4.2 (2026-02-16)\n\n### Fix Sitemap Cross-Domain\n- Fix: Sitemap Optimizer filtra URLs cross-domain que não pertencem ao domínio do site\n- Elimina erros 'URL não permitido' no Google Search Console\n- Filtro em posts, taxonomias, users e news sitemap\n\n## v3.4.1 (2026-02-15)\n\n### Fix llms.txt + Orphan Backlinks\n- refresh-llms force-enable + regeneração imediata\n- Agente SEO auto-corrige artigos órfãos (CNT-002)\n\n## v3.4.0 (2026-02-15)\n\n### Agente SEO Autônomo\n- scan-seo-issues, autonomous-seo-fix, autonomous-content-edit, manage-redirect",
+  "changelog": "## v3.4.4 (2026-02-17)\n\n### Fix llms.txt Physical Fallback\n- Fix: llms.txt agora grava arquivo físico como fallback para ambientes com cache/CDN\n- Fix: Resolve issue IDX-005 (llms.txt ausente) em auditorias SEO\n- Melhoria: refresh-llms API usa regenerate() completo com escrita física\n\n## v3.4.3 (2026-02-17)\n\n### Redirect Manager + AI SEO + GEO Schema\n- Novo: Redirect Manager com tabela dedicada e API REST\n- Novo: Limpeza automática de URLs duplicadas (-2, -3, hello-world)\n- Novo: AI SEO Generator (slugs, metas, focus keywords, tags, títulos virais)\n- Novo: GEO Schema Injection (LocalBusiness/Attorney/HealthAndBeautyBusiness)\n- Fix: CFRDM_VERSION sincronizado em todo o sistema\n\n## v3.4.2 (2026-02-16)\n\n### Fix Sitemap Cross-Domain\n- Fix: Sitemap Optimizer filtra URLs cross-domain que não pertencem ao domínio do site\n- Elimina erros 'URL não permitido' no Google Search Console\n- Filtro em posts, taxonomias, users e news sitemap\n\n## v3.4.1 (2026-02-15)\n\n### Fix llms.txt + Orphan Backlinks\n- refresh-llms force-enable + regeneração imediata\n- Agente SEO auto-corrige artigos órfãos (CNT-002)\n\n## v3.4.0 (2026-02-15)\n\n### Agente SEO Autônomo\n- scan-seo-issues, autonomous-seo-fix, autonomous-content-edit, manage-redirect",
   "versions": {
+    "3.4.4": {
+      "released": "2026-02-17",
+      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
+      "features": ["llms_txt_physical_fallback"]
+    },
     "3.4.3": {
       "released": "2026-02-17",
       "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",

@@ -5,7 +5,7 @@
  * Ao atualizar o plugin, basta alterar ESTE arquivo.
  */
 
-export const PLUGIN_VERSION = "3.4.3";
+export const PLUGIN_VERSION = "3.4.4";
 export const PLUGIN_MINIMUM_VERSION = "3.0.0";
 export const PLUGIN_RELEASED = "2026-02-17";
 
@@ -48,6 +48,7 @@ export const PLUGIN_FEATURES = [
   "duplicate_cleanup",
   "geo_schema_injection",
   "ai_seo_generator",
+  "llms_txt_physical_fallback",
 ] as const;
 
 /**
@@ -77,7 +78,7 @@ Módulos disponíveis no plugin instalado nos sites:
   • API REST para criação, listagem e exclusão de redirects
 - **AI SEO Generator**: Gera slugs, meta descriptions, focus keywords, tags e títulos virais via IA
 - **GEO Schema Injection**: Injeção automática de LocalBusiness/Attorney/HealthAndBeautyBusiness JSON-LD
-- **llms.txt Force-Enable**: Força ativação e regeneração imediata de llms.txt e llms-full.txt na raiz do site
+- **llms.txt Force-Enable**: Força ativação e regeneração imediata de llms.txt e llms-full.txt na raiz do site, com escrita de arquivo físico como fallback para CDN/cache
 - **Internal Links Engine**: Insere links internos e backlinks automaticamente baseado em regras de keywords e relevância semântica entre artigos
 - **IndexNow Integration**: Notifica Google, Bing e Yandex sobre alterações em tempo real
 - **Google Indexing API**: Submissão direta de URLs (200/dia) via Service Account
