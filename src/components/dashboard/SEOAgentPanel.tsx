@@ -147,7 +147,7 @@ export function SEOAgentPanel() {
         <CardTitle className="text-lg flex items-center gap-2">
           <Bot className="w-5 h-5 text-primary" />
           Agente SEO Autônomo
-          <Badge variant="secondary" className="text-xs">v3.4.3</Badge>
+          <Badge variant="secondary" className="text-xs">v3.4.4</Badge>
         </CardTitle>
         <Button
           size="sm"
