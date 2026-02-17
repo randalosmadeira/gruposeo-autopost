@@ -1437,8 +1437,90 @@ JSON: {"links":[{"source_url":"...","anchor_text":"...","relevance":85}]}`;
     }
   }
 
-  // ═══ AUDIT 4: GEO Visibility ═══
-  // Check if articles have FAQ schema
+  // ═══ AUDIT 4: GEO Visibility + LocalBusiness Schema ═══
+  
+  // 4a) Check LocalBusiness/Attorney/HealthAndBeautyBusiness schema on homepage
+  if (baseUrl && isPlugin && apiKey) {
+    try {
+      const homepageResp = await fetch(`${baseUrl.replace(/\/blog\/?$/, "")}`, { signal: AbortSignal.timeout(10000) });
+      if (homepageResp.ok) {
+        const homepageHtml = await homepageResp.text();
+        const hasLocalBusiness = homepageHtml.includes('"LocalBusiness"') || 
+          homepageHtml.includes('"LegalService"') || 
+          homepageHtml.includes('"Attorney"') ||
+          homepageHtml.includes('"HealthAndBeautyBusiness"');
+        
+        if (!hasLocalBusiness) {
+          issues.push({
+            id: "GEO-003", priority: "P0", category: "geo",
+            title: "Schema LocalBusiness ausente na homepage",
+            description: "Nenhum schema de negócio local detectado. Essencial para SEO local e Google Maps.",
+            impact: "Sem LocalBusiness schema, o site não aparece no Map Pack do Google e perde citações em IAs.",
+            fix_instruction: "Injetar schema JSON-LD de LocalBusiness/LegalService/HealthAndBeautyBusiness na homepage.",
+            auto_fixed: false
+          });
+          categories.geo.score -= 25;
+          categories.geo.issues++;
+
+          // AUTO-FIX: Inject LocalBusiness schema via plugin
+          try {
+            // Detect brand type from project config
+            const nicho = (project.nicho || '').toLowerCase();
+            const domain = (project.domain || '').toLowerCase();
+            let schemaType = 'LocalBusiness';
+            if (nicho === 'juridico' || nicho === 'legal' || domain.includes('rdm') || domain.includes('advogad')) {
+              schemaType = 'LegalService';
+            } else if (nicho === 'beleza' || nicho === 'estetica' || domain.includes('tracy') || domain.includes('beauty')) {
+              schemaType = 'HealthAndBeautyBusiness';
+            } else if (nicho === 'marketing' || domain.includes('seo')) {
+              schemaType = 'ProfessionalService';
+            }
+
+            const localBusinessSchema: Record<string, unknown> = {
+              "@context": "https://schema.org",
+              "@type": schemaType,
+              "name": project.empresa_nome || project.name,
+              "url": `https://${project.domain || ''}`,
+            };
+            if (project.empresa_telefone) localBusinessSchema.telephone = project.empresa_telefone;
+            if (project.empresa_endereco) {
+              localBusinessSchema.address = {
+                "@type": "PostalAddress",
+                "streetAddress": project.empresa_endereco,
+                "addressLocality": "São Paulo",
+                "addressRegion": "SP",
+                "addressCountry": "BR",
+              };
+            }
+            if (project.social_google_maps) localBusinessSchema.hasMap = project.social_google_maps;
+            
+            const sameAs: string[] = [];
+            if (project.social_instagram) sameAs.push(project.social_instagram);
+            if (project.social_linkedin) sameAs.push(project.social_linkedin);
+            if (project.social_youtube) sameAs.push(project.social_youtube);
+            if (project.social_tiktok) sameAs.push(project.social_tiktok);
+            if (project.social_twitter) sameAs.push(project.social_twitter);
+            if (sameAs.length > 0) localBusinessSchema.sameAs = sameAs;
+
+            const injectResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/inject-homepage-schema`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+              body: JSON.stringify({ schema: localBusinessSchema }),
+            });
+            if (injectResp.ok) {
+              issues[issues.length - 1].auto_fixed = true;
+              issues[issues.length - 1].description += ` → Auto-fix: ${schemaType} schema injetado.`;
+              totalFixed++;
+              categories.geo.fixed++;
+              categories.geo.score += 20;
+            }
+          } catch { /* endpoint may not exist yet */ }
+        }
+      }
+    } catch { /* timeout */ }
+  }
+
+  // 4b) Check if articles have FAQ schema
   const { data: articlesWithConfig } = await supabase
     .from("articles")
     .select("id, config, status")
@@ -1455,7 +1537,7 @@ JSON: {"links":[{"source_url":"...","anchor_text":"...","relevance":85}]}`;
       issues.push({
         id: "GEO-001", priority: "P2", category: "geo",
         title: `${withoutFaq.length} artigos sem FAQ Schema`,
-        description: "Artigos publicados sem FAQPage schema estruturado.",
+        description: `Artigos publicados sem FAQPage schema estruturado.`,
         impact: "Perde oportunidade de rich snippets e citação por IAs generativas.",
         fix_instruction: "Ativar FAQ na geração de artigos e reprocessar artigos existentes.",
         auto_fixed: false
@@ -1491,6 +1573,38 @@ JSON: {"links":[{"source_url":"...","anchor_text":"...","relevance":85}]}`;
           await supabase.from("articles").update({ config: newConfig }).eq("id", article.id);
         }
       } catch { /* ignore */ }
+    }
+  }
+
+  // 4c) Check geo-targeting in recent articles
+  if (recentArticles && recentArticles.length > 0) {
+    const domain = (project.domain || '').toLowerCase();
+    const isLocalBusiness = domain.includes('rdm') || domain.includes('tracy') || 
+      (project.nicho || '').toLowerCase() === 'juridico' || 
+      (project.nicho || '').toLowerCase() === 'beleza';
+    
+    if (isLocalBusiness) {
+      const articlesWithGeo = recentArticles.filter(a => {
+        const title = (a.wp_post_title || '').toLowerCase();
+        return title.includes('são paulo') || title.includes('sp') || 
+               title.includes('zona leste') || title.includes('tatuapé') ||
+               title.includes('guarulhos') || title.includes('paulista');
+      });
+      
+      const geoPercentage = (articlesWithGeo.length / recentArticles.length) * 100;
+      
+      if (geoPercentage < 30) {
+        issues.push({
+          id: "GEO-002", priority: "P1", category: "geo",
+          title: `Apenas ${Math.round(geoPercentage)}% dos artigos têm geo-targeting no título`,
+          description: `Para negócios locais, recomenda-se que 50%+ dos artigos incluam localização no título.`,
+          impact: "Perde visibilidade em buscas locais ('advogado SP', 'estética zona leste').",
+          fix_instruction: "Incluir localização nos títulos: 'em São Paulo', 'na Zona Leste SP', etc.",
+          auto_fixed: false
+        });
+        categories.geo.score -= 15;
+        categories.geo.issues++;
+      }
     }
   }
 
@@ -1597,8 +1711,65 @@ async function runAutonomousSEOFix(
       } catch { /* ignore */ }
     }
 
+    // ═══ STEP 6b: Duplicate URL Cleanup + Redirect Creation ═══
+    try {
+      const cleanupResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/redirects/cleanup-duplicates`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+        body: JSON.stringify({ limit: 100, dry_run: false }),
+      });
+      if (cleanupResp.ok) {
+        const cleanupData = await cleanupResp.json();
+        if (cleanupData.redirects_created > 0) {
+          redirectsCreated += cleanupData.redirects_created;
+          typesApplied.push("duplicate_cleanup");
+          detailsList.push(`Duplicatas: ${cleanupData.redirects_created} redirects 301, ${cleanupData.noindex_applied} noindex`);
+        }
+        if (cleanupData.duplicates_found > 0) {
+          detailsList.push(`${cleanupData.duplicates_found} URLs duplicadas detectadas`);
+        }
+      }
+    } catch (e) {
+      detailsList.push(`Cleanup duplicatas: endpoint indisponível (plugin v3.4.3 necessário)`);
+    }
+
     return { scanned, issues_found: issuesFound, applied, redirects_created: redirectsCreated, types: typesApplied, details: detailsList };
   } catch (e) {
     return { scanned: 0, issues_found: 0, applied: 0, redirects_created: 0, types: [], details: [`Error: ${e instanceof Error ? e.message : String(e)}`] };
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// STEP 7: Redirect Management (Subdomain Consolidation)
+// ═══════════════════════════════════════════════════════════
+async function manageRedirects(
+  baseUrl: string,
+  isPlugin: boolean,
+  apiKey: string,
+  redirects: Array<{ source_url: string; target_url: string; category?: string; notes?: string }>,
+): Promise<{ created: number; errors: string[] }> {
+  const errors: string[] = [];
+  let created = 0;
+
+  if (!baseUrl || !isPlugin || !apiKey || redirects.length === 0) {
+    return { created: 0, errors: ["No connection or empty redirects"] };
+  }
+
+  try {
+    const resp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/redirects/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+      body: JSON.stringify({ redirects }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      created = data.created || 0;
+    } else {
+      errors.push(`Batch redirects failed: ${resp.status}`);
+    }
+  } catch (e) {
+    errors.push(`Redirect error: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  return { created, errors };
 }
