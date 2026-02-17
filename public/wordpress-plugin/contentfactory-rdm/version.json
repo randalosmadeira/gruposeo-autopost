@@ -44,6 +44,7 @@
     "redirect_manager",
     "duplicate_cleanup",
     "geo_schema_injection",
-    "ai_seo_generator"
+    "ai_seo_generator",
+    "llms_txt_physical_fallback"
   ]
 }
