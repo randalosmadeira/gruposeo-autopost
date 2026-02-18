@@ -5,7 +5,7 @@
  * Ao atualizar o plugin, basta alterar ESTE arquivo.
  */
 
-export const PLUGIN_VERSION = "3.4.6";
+export const PLUGIN_VERSION = "3.4.7";
 export const PLUGIN_MINIMUM_VERSION = "3.0.0";
 export const PLUGIN_RELEASED = "2026-02-18";
 
@@ -53,6 +53,7 @@ export const PLUGIN_FEATURES = [
   "indexnow_rate_limit",
   "anti_hallucination_v2",
   "full_ai_sync",
+  "safe_action_parsing",
 ] as const;
 
 /**

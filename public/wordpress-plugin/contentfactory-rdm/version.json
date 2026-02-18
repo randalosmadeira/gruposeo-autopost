@@ -1,11 +1,11 @@
 {
-  "version": "3.4.6",
+  "version": "3.4.7",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.4.6 - Atualização completa: Sincronização 100% de todas as funções IA, anti-alucinação reforçado, IndexNow com rate limiting e retry 429, todas as edge functions e agentes sincronizados com v3.4.6.",
-  "released": "2026-02-18T12:00:00-03:00",
+  "changelog": "v3.4.7 - Fix: Erro 'Unexpected token <' ao executar auditoria via Chat IA corrigido com parsing seguro de respostas. Todas as ações do chat agora tratam respostas HTML/timeout graciosamente.",
+  "released": "2026-02-18T14:00:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",
@@ -49,6 +49,7 @@
     "422_auto_recovery",
     "indexnow_rate_limit",
     "anti_hallucination_v2",
-    "full_ai_sync"
+    "full_ai_sync",
+    "safe_action_parsing"
   ]
 }

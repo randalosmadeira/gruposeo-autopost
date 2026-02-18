@@ -1,13 +1,18 @@
 {
-  "latest_version": "3.4.6",
-  "version": "3.4.6",
+  "latest_version": "3.4.7",
+  "version": "3.4.7",
   "minimum_version": "3.0.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "## v3.4.6 (2026-02-18)\n\n### Full AI Sync + Anti-Hallucination v2\n- Sync: Todas as edge functions e agentes IA sincronizados com v3.4.6\n- Fix: Anti-alucinação reforçado no Chat IA (proibição total de fabricar resultados)\n- Fix: IndexNow com rate limiting local (10/min) e retry exponencial para 429\n- Fix: Fila automática de URLs quando rate limit atingido\n- Melhoria: Todas as funções de geração, auditoria e SEO alinhadas\n\n## v3.4.5 (2026-02-17)\n\n### Auto-Recovery 422 + Gutenberg Support\n- Fix: Eliminação de erros 422 na inserção de links internos\n- Novo: Suporte a blocos Gutenberg para inserção de links\n- Novo: Fallback append-to-end para posts sem tags </p>\n- Novo: Agentes SEO tratam 422 com retry via WP REST API\n- Fix: Parâmetro source_post_id corrigido em todos os payloads\n\n## v3.4.4 (2026-02-17)\n\n### Fix llms.txt Physical Fallback\n- Fix: llms.txt agora grava arquivo físico como fallback para ambientes com cache/CDN\n- Fix: Resolve issue IDX-005 (llms.txt ausente) em auditorias SEO\n- Melhoria: refresh-llms API usa regenerate() completo com escrita física\n\n## v3.4.3 (2026-02-17)\n\n### Redirect Manager + AI SEO + GEO Schema\n- Novo: Redirect Manager com tabela dedicada e API REST\n- Novo: Limpeza automática de URLs duplicadas (-2, -3, hello-world)\n- Novo: AI SEO Generator (slugs, metas, focus keywords, tags, títulos virais)\n- Novo: GEO Schema Injection (LocalBusiness/Attorney/HealthAndBeautyBusiness)\n- Fix: CFRDM_VERSION sincronizado em todo o sistema",
+  "changelog": "## v3.4.7 (2026-02-18)\n\n### Safe Action Parsing\n- Fix: Erro 'Unexpected token <' ao executar auditoria via Chat IA\n- Fix: Parsing seguro de respostas de edge functions (text→JSON com fallback)\n- Fix: Respostas HTML/timeout agora exibem mensagem clara ao invés de erro técnico\n\n## v3.4.6 (2026-02-18)\n\n### Full AI Sync + Anti-Hallucination v2\n- Sync: Todas as edge functions e agentes IA sincronizados com v3.4.6\n- Fix: Anti-alucinação reforçado no Chat IA\n- Fix: IndexNow com rate limiting local (10/min) e retry exponencial para 429\n\n## v3.4.5 (2026-02-17)\n\n### Auto-Recovery 422 + Gutenberg Support\n- Fix: Eliminação de erros 422 na inserção de links internos\n- Novo: Suporte a blocos Gutenberg para inserção de links",
   "versions": {
+    "3.4.7": {
+      "released": "2026-02-18",
+      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
+      "features": ["safe_action_parsing"]
+    },
     "3.4.6": {
       "released": "2026-02-18",
       "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
@@ -27,21 +32,6 @@
       "released": "2026-02-17",
       "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
       "features": ["redirect_manager", "duplicate_cleanup", "geo_schema_injection", "ai_seo_generator"]
-    },
-    "3.4.2": {
-      "released": "2026-02-16",
-      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-      "features": ["sitemap_cross_domain_filter"]
-    },
-    "3.4.1": {
-      "released": "2026-02-15",
-      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-      "features": ["llms_txt_force_enable", "orphan_auto_backlink"]
-    },
-    "3.4.0": {
-      "released": "2026-02-15",
-      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-      "features": ["autonomous_seo_fix", "scan_seo_issues", "autonomous_content_edit", "manage_redirect"]
     }
   }
 }

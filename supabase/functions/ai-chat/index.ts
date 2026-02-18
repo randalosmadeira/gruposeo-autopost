@@ -177,7 +177,14 @@ async function executeAction(
           },
           body: JSON.stringify(body),
         });
-        const data = await resp.json();
+        const text = await resp.text();
+        let data: any;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          console.error(`[ai-chat] seo-agent returned non-JSON (status ${resp.status}):`, text.substring(0, 500));
+          return `❌ Erro ao executar auditoria: o agente SEO retornou uma resposta inválida (HTTP ${resp.status}). Tente novamente em alguns minutos ou acione manualmente pelo Dashboard.`;
+        }
         return data.success
           ? `✅ Auditoria SEO concluída! ${data.runs || 0} projeto(s) processado(s).\n\n${(data.results || []).map((r: any) =>
             `**${r.project}**: ${r.status === "completed" ? r.summary : `❌ ${r.error}`}`
