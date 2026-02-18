@@ -156,10 +156,18 @@ async function streamChat({
 }
 
 function stripActionBlocks(text: string): string {
-  // Remove ```action ... ``` blocks and variations (backtick action, `action, etc.)
+  // Remove all action block patterns:
+  // 1. ```action ... ```
+  // 2. `action ... ` (multiline)
+  // 3. `action\n{...}\n` (backtick on separate lines)
+  // 4. Raw JSON action blocks at end of message
+  // 5. Inline `action { ... }` single-line
   return text
-    .replace(/```action\s*\n?[\s\S]*?\n?```/gi, '')
-    .replace(/`action\s*\n?\{[\s\S]*?\}\s*\n?`/gi, '')
+    .replace(/```action[\s\S]*?```/gi, '')
+    .replace(/`action\s*\n[\s\S]*?\n\s*`/gi, '')
+    .replace(/`action\s*\{[\s\S]*?\}\s*`/gi, '')
+    .replace(/\n\s*`action\s*\n\s*\{[^}]*\}\s*\n\s*`/gi, '')
+    .replace(/\n\s*\{"\s*type"\s*:\s*"[^"]*"[^}]*\}\s*$/gi, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
