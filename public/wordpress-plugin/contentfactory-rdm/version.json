@@ -1,11 +1,11 @@
 {
-  "version": "3.4.7",
+  "version": "3.4.8",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.4.7 - Fix: Erro 'Unexpected token <' ao executar auditoria via Chat IA corrigido com parsing seguro de respostas. Todas as ações do chat agora tratam respostas HTML/timeout graciosamente.",
-  "released": "2026-02-18T14:00:00-03:00",
+  "changelog": "v3.4.8 - Fix: Blocos de ação (action blocks) agora são ocultados do chat e auto-executados silenciosamente. Parsing robusto com 3 padrões de detecção. Renderização Markdown melhorada com suporte a code blocks.",
+  "released": "2026-02-18T16:00:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",
@@ -50,6 +50,7 @@
     "indexnow_rate_limit",
     "anti_hallucination_v2",
     "full_ai_sync",
-    "safe_action_parsing"
+    "safe_action_parsing",
+    "action_block_auto_execute"
   ]
 }

@@ -1,13 +1,18 @@
 {
-  "latest_version": "3.4.7",
-  "version": "3.4.7",
+  "latest_version": "3.4.8",
+  "version": "3.4.8",
   "minimum_version": "3.0.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "## v3.4.7 (2026-02-18)\n\n### Safe Action Parsing\n- Fix: Erro 'Unexpected token <' ao executar auditoria via Chat IA\n- Fix: Parsing seguro de respostas de edge functions (text→JSON com fallback)\n- Fix: Respostas HTML/timeout agora exibem mensagem clara ao invés de erro técnico\n\n## v3.4.6 (2026-02-18)\n\n### Full AI Sync + Anti-Hallucination v2\n- Sync: Todas as edge functions e agentes IA sincronizados com v3.4.6\n- Fix: Anti-alucinação reforçado no Chat IA\n- Fix: IndexNow com rate limiting local (10/min) e retry exponencial para 429\n\n## v3.4.5 (2026-02-17)\n\n### Auto-Recovery 422 + Gutenberg Support\n- Fix: Eliminação de erros 422 na inserção de links internos\n- Novo: Suporte a blocos Gutenberg para inserção de links",
+  "changelog": "## v3.4.8 (2026-02-18)\n\n### Action Block Auto-Execute\n- Fix: Blocos de ação da IA agora são ocultados do chat e auto-executados\n- Fix: 3 padrões de detecção (```action, `action, raw JSON)\n- Fix: Renderização Markdown melhorada com suporte a code blocks\n\n## v3.4.7 (2026-02-18)\n\n### Safe Action Parsing\n- Fix: Erro 'Unexpected token <' ao executar auditoria via Chat IA\n- Fix: Parsing seguro de respostas de edge functions\n\n## v3.4.6 (2026-02-18)\n\n### Full AI Sync + Anti-Hallucination v2\n- Sync: Todas as edge functions e agentes IA sincronizados\n- Fix: Anti-alucinação reforçado no Chat IA\n- Fix: IndexNow com rate limiting local",
   "versions": {
+    "3.4.8": {
+      "released": "2026-02-18",
+      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
+      "features": ["action_block_auto_execute"]
+    },
     "3.4.7": {
       "released": "2026-02-18",
       "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
@@ -22,16 +27,6 @@
       "released": "2026-02-17",
       "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
       "features": ["422_auto_recovery", "gutenberg_link_support", "append_fallback"]
-    },
-    "3.4.4": {
-      "released": "2026-02-17",
-      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-      "features": ["llms_txt_physical_fallback"]
-    },
-    "3.4.3": {
-      "released": "2026-02-17",
-      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-      "features": ["redirect_manager", "duplicate_cleanup", "geo_schema_injection", "ai_seo_generator"]
     }
   }
 }
