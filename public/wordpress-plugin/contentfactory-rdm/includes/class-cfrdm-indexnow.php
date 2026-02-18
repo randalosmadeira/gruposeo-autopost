@@ -46,6 +46,12 @@ class CFRDM_IndexNow {
         // Generate key file endpoint
         add_action('init', array($this, 'serve_key_file'));
         
+        // Process queued URLs every 5 minutes
+        add_action('cfrdm_indexnow_process_queue', array($this, 'process_queue'));
+        if (!wp_next_scheduled('cfrdm_indexnow_process_queue')) {
+            wp_schedule_event(time(), 'five_minutes', 'cfrdm_indexnow_process_queue');
+        }
+        
         // Ensure key exists
         $this->ensure_key();
     }
@@ -138,11 +144,24 @@ class CFRDM_IndexNow {
     }
     
     /**
-     * Submit URL to IndexNow API
+     * Submit URL to IndexNow API with retry + backoff for 429
      */
-    public function submit_indexnow($url) {
+    public function submit_indexnow($url, $attempt = 0) {
         $key = self::get_key();
         if (empty($key)) return false;
+        
+        // Rate limit: max 10 submissions per minute
+        $throttle_key = 'cfrdm_indexnow_throttle';
+        $count = (int) get_transient($throttle_key);
+        if ($count >= 10) {
+            // Queue for later instead of hammering the API
+            $queued = get_option('cfrdm_indexnow_queue', array());
+            $urls = is_array($url) ? $url : array($url);
+            $queued = array_merge($queued, $urls);
+            update_option('cfrdm_indexnow_queue', array_unique($queued));
+            CFRDM_Logger::info('indexnow', 'URL enfileirada (rate limit local)', array('url' => $url));
+            return true;
+        }
         
         $host = parse_url(get_site_url(), PHP_URL_HOST);
         
@@ -153,7 +172,6 @@ class CFRDM_IndexNow {
             'urlList' => is_array($url) ? $url : array($url),
         );
         
-        // Submit to IndexNow API (Bing endpoint - redistributes to all partners)
         $response = wp_remote_post('https://api.indexnow.org/indexnow', array(
             'timeout' => 15,
             'headers' => array('Content-Type' => 'application/json'),
@@ -168,7 +186,35 @@ class CFRDM_IndexNow {
         }
         
         $status = wp_remote_retrieve_response_code($response);
-        return in_array($status, array(200, 202));
+        
+        // Handle 429 Too Many Requests with exponential backoff (max 3 retries)
+        if ($status === 429 && $attempt < 3) {
+            $delay = pow(2, $attempt + 1); // 2s, 4s, 8s
+            CFRDM_Logger::warning('indexnow', "429 recebido, retry #{$attempt} em {$delay}s", array('url' => $url));
+            sleep($delay);
+            return $this->submit_indexnow($url, $attempt + 1);
+        }
+        
+        if (in_array($status, array(200, 202))) {
+            set_transient($throttle_key, $count + 1, 60);
+            return true;
+        }
+        
+        CFRDM_Logger::warning('indexnow', "IndexNow retornou status {$status}", array('url' => $url, 'status' => $status));
+        return false;
+    }
+    
+    /**
+     * Process queued URLs (called via WP-Cron or manually)
+     */
+    public function process_queue() {
+        $queued = get_option('cfrdm_indexnow_queue', array());
+        if (empty($queued)) return;
+        
+        $batch = array_splice($queued, 0, 10);
+        update_option('cfrdm_indexnow_queue', $queued);
+        
+        $this->submit_indexnow($batch);
     }
     
     /**
