@@ -169,27 +169,41 @@ async function executeAction(
         if (action.type === "run_seo_audit" && action.project_id && action.project_id !== "all") {
           body.project_id = action.project_id;
         }
-        const resp = await fetch(`${supabaseUrl}/functions/v1/seo-agent`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${serviceKey}`,
-          },
-          body: JSON.stringify(body),
-        });
-        const text = await resp.text();
-        let data: any;
+        
+        // Fire-and-forget: don't await the full response (seo-agent can take 60s+)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s max wait
+        
         try {
-          data = JSON.parse(text);
-        } catch {
-          console.error(`[ai-chat] seo-agent returned non-JSON (status ${resp.status}):`, text.substring(0, 500));
-          return `❌ Erro ao executar auditoria: o agente SEO retornou uma resposta inválida (HTTP ${resp.status}). Tente novamente em alguns minutos ou acione manualmente pelo Dashboard.`;
+          const resp = await fetch(`${supabaseUrl}/functions/v1/seo-agent`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${serviceKey}`,
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          
+          const text = await resp.text();
+          let data: any;
+          try {
+            data = JSON.parse(text);
+          } catch {
+            console.error(`[ai-chat] seo-agent returned non-JSON (status ${resp.status}):`, text.substring(0, 500));
+            return `⚠️ A auditoria SEO foi iniciada mas retornou resposta inválida (HTTP ${resp.status}). Verifique o resultado no Dashboard em alguns minutos.`;
+          }
+          return data.success
+            ? `✅ Auditoria SEO concluída! ${data.runs || 0} projeto(s) processado(s).\n\n${(data.results || []).map((r: any) =>
+              `**${r.project}**: ${r.status === "completed" ? r.summary : `❌ ${r.error}`}`
+            ).join("\n")}`
+            : `❌ Erro: ${data.error || "falha desconhecida"}`;
+        } catch (abortErr) {
+          clearTimeout(timeoutId);
+          // The seo-agent is still running in the background
+          return `⏳ Auditoria SEO foi disparada com sucesso e está sendo executada em segundo plano. O processamento de todos os projetos pode levar alguns minutos.\n\nVocê pode acompanhar o progresso no **Dashboard → Agente SEO** ou perguntar "status da auditoria" em alguns minutos.`;
         }
-        return data.success
-          ? `✅ Auditoria SEO concluída! ${data.runs || 0} projeto(s) processado(s).\n\n${(data.results || []).map((r: any) =>
-            `**${r.project}**: ${r.status === "completed" ? r.summary : `❌ ${r.error}`}`
-          ).join("\n")}`
-          : `❌ Erro: ${data.error || "falha desconhecida"}`;
       } catch (e) {
         return `❌ Erro ao executar auditoria: ${e instanceof Error ? e.message : "erro desconhecido"}`;
       }
@@ -720,7 +734,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { messages, context, executeActions } = await req.json();
+    const { messages = [], context, executeActions } = await req.json();
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
