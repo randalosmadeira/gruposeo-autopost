@@ -155,8 +155,19 @@ async function streamChat({
   onDone();
 }
 
-function renderMarkdown(text: string) {
+function stripActionBlocks(text: string): string {
+  // Remove ```action ... ``` blocks and variations (backtick action, `action, etc.)
   return text
+    .replace(/```action\s*\n?[\s\S]*?\n?```/gi, '')
+    .replace(/`action\s*\n?\{[\s\S]*?\}\s*\n?`/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function renderMarkdown(text: string) {
+  const cleaned = stripActionBlocks(text);
+  return cleaned
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="bg-muted p-2 rounded text-sm overflow-x-auto my-2"><code>$2</code></pre>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`(.*?)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-sm">$1</code>')
@@ -559,7 +570,10 @@ export default function AIChat() {
         },
         onDone: async () => {
           // Detect and execute action blocks from AI response
-          const actionMatch = assistantSoFar.match(/```action\s*\n?([\s\S]*?)\n?```/);
+          // Match action blocks: ```action {...} ```, `action {...}`, or raw {type:...} at end
+          const actionMatch = assistantSoFar.match(/```action\s*\n?([\s\S]*?)\n?```/) 
+            || assistantSoFar.match(/`action\s*\n?(\{[\s\S]*?\})\s*\n?`/)
+            || assistantSoFar.match(/\n(\{"type"\s*:\s*"[^"]+?"[\s\S]*?\})\s*$/);
           if (actionMatch) {
             try {
               const actionData = JSON.parse(actionMatch[1].trim());
