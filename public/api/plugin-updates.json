@@ -1,32 +1,27 @@
 {
-  "latest_version": "3.4.8",
-  "version": "3.4.8",
+  "latest_version": "3.5.0",
+  "version": "3.5.0",
   "minimum_version": "3.0.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "## v3.4.8 (2026-02-18)\n\n### Action Block Auto-Execute\n- Fix: Blocos de ação da IA agora são ocultados do chat e auto-executados\n- Fix: 3 padrões de detecção (```action, `action, raw JSON)\n- Fix: Renderização Markdown melhorada com suporte a code blocks\n\n## v3.4.7 (2026-02-18)\n\n### Safe Action Parsing\n- Fix: Erro 'Unexpected token <' ao executar auditoria via Chat IA\n- Fix: Parsing seguro de respostas de edge functions\n\n## v3.4.6 (2026-02-18)\n\n### Full AI Sync + Anti-Hallucination v2\n- Sync: Todas as edge functions e agentes IA sincronizados\n- Fix: Anti-alucinação reforçado no Chat IA\n- Fix: IndexNow com rate limiting local",
+  "changelog": "## v3.5.0 (2026-02-19)\n\n### Site Crawler Engine (REAL HTTP checks)\n- NEW: Verificação real de links quebrados via HTTP HEAD (elimina falsos positivos)\n- NEW: Detector de redirect chains e loops com até 10 hops\n- NEW: Scanner de conteúdo duplicado via MD5 hash\n- NEW: Auditoria completa de títulos e meta descriptions\n- NEW: Análise de estrutura do site (páginas órfãs, anchor text, headings)\n- NEW: Auditoria de robots.txt e meta directives (noindex/nofollow)\n- NEW: Auditoria de imagens (alt text, dimensões)\n- NEW: Endpoint unificado full-site-crawl com score 0-100 e prioridades P0/P1/P2\n- NEW: Detecção de mixed content (HTTP em HTTPS)\n- NEW: Análise de URLs (maiúsculas, underscores, não-ASCII, longas)\n\n## v3.4.9 (2026-02-18)\n\n### Broken Links Verification\n- Fix: Links internos verificados via re-fetch após aplicação\n- Fix: Falsos positivos eliminados com verificação real\n\n## v3.4.8 (2026-02-18)\n\n### Action Block Auto-Execute\n- Fix: Blocos de ação da IA agora são ocultados do chat e auto-executados",
   "versions": {
+    "3.5.0": {
+      "released": "2026-02-19",
+      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
+      "features": ["site_crawler", "full_site_crawl", "real_broken_link_check", "redirect_chain_detector", "duplicate_content_scanner", "site_structure_analyzer", "image_audit", "directive_audit"]
+    },
+    "3.4.9": {
+      "released": "2026-02-18",
+      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
+      "features": ["real_link_verification"]
+    },
     "3.4.8": {
       "released": "2026-02-18",
       "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
       "features": ["action_block_auto_execute"]
-    },
-    "3.4.7": {
-      "released": "2026-02-18",
-      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-      "features": ["safe_action_parsing"]
-    },
-    "3.4.6": {
-      "released": "2026-02-18",
-      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-      "features": ["full_ai_sync", "anti_hallucination_v2", "indexnow_rate_limit"]
-    },
-    "3.4.5": {
-      "released": "2026-02-17",
-      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-      "features": ["422_auto_recovery", "gutenberg_link_support", "append_fallback"]
     }
   }
 }

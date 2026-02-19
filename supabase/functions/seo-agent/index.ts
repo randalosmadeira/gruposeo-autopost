@@ -427,21 +427,46 @@ Deno.serve(async (req) => {
         details.cross_linking = crossLinkResult;
 
         // ═══════════════════════════════════════════
-        // STEP 8: Broken Links & Redirects Audit (v3.4.9)
+        // STEP 8: Full Site Crawl (v3.5.0 — REAL HTTP checks)
         // ═══════════════════════════════════════════
-        console.log(`[SEO Agent] [${project.name}] Step 8: Broken Links & Redirects`);
+        console.log(`[SEO Agent] [${project.name}] Step 8: Full Site Crawl (real HTTP)`);
 
-        const brokenLinksResult = await detectBrokenLinks(supabase, project, baseUrl, isPlugin, apiKey);
+        let fullCrawlResult: Record<string, unknown> = {};
+        // Try the unified full-site-crawl endpoint first (v3.5.0+)
+        if (isPlugin && apiKey && baseUrl) {
+          try {
+            const crawlResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/full-site-crawl`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+              body: JSON.stringify({ limit: 300 }),
+              signal: AbortSignal.timeout(120000), // 2min timeout for full crawl
+            });
+            if (crawlResp.ok) {
+              fullCrawlResult = await crawlResp.json();
+              console.log(`[SEO Agent] [${project.name}] Full crawl completed: score=${(fullCrawlResult as any).overall_score}/100`);
+            }
+          } catch (e) {
+            console.log(`[SEO Agent] [${project.name}] Full site crawl endpoint unavailable, using individual checks`);
+          }
+        }
+
+        // If full crawl succeeded, extract results; otherwise fall back to individual helpers
+        const brokenLinksResult = (fullCrawlResult as any).broken_links || await detectBrokenLinks(supabase, project, baseUrl, isPlugin, apiKey);
+        const duplicateResult = (fullCrawlResult as any).duplicates || await detectDuplicateContent(supabase, project, baseUrl, isPlugin, apiKey);
+        const metadataAudit = (fullCrawlResult as any).titles_metas || await auditPageMetadata(baseUrl, isPlugin, apiKey, project);
+        const redirectAudit = (fullCrawlResult as any).redirects || await auditRedirects(baseUrl, isPlugin, apiKey);
+        
         details.broken_links = brokenLinksResult;
-
-        const duplicateResult = await detectDuplicateContent(supabase, project, baseUrl, isPlugin, apiKey);
         details.duplicate_content = duplicateResult;
-
-        const metadataAudit = await auditPageMetadata(baseUrl, isPlugin, apiKey, project);
         details.metadata_audit = metadataAudit;
-
-        const redirectAudit = await auditRedirects(baseUrl, isPlugin, apiKey);
         details.redirect_audit = redirectAudit;
+        
+        // New v3.5.0 data
+        if ((fullCrawlResult as any).site_structure) details.site_structure = (fullCrawlResult as any).site_structure;
+        if ((fullCrawlResult as any).directives) details.directives = (fullCrawlResult as any).directives;
+        if ((fullCrawlResult as any).images) details.images = (fullCrawlResult as any).images;
+        if ((fullCrawlResult as any).overall_score !== undefined) details.crawl_score = (fullCrawlResult as any).overall_score;
+        if ((fullCrawlResult as any).priority_issues) details.priority_issues = (fullCrawlResult as any).priority_issues;
 
         // ═══════════════════════════════════════════
         // STEP 9: Summary

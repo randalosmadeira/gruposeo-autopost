@@ -5,9 +5,9 @@
  * Ao atualizar o plugin, basta alterar ESTE arquivo.
  */
 
-export const PLUGIN_VERSION = "3.4.9";
+export const PLUGIN_VERSION = "3.5.0";
 export const PLUGIN_MINIMUM_VERSION = "3.0.0";
-export const PLUGIN_RELEASED = "2026-02-18";
+export const PLUGIN_RELEASED = "2026-02-19";
 
 export const PLUGIN_FEATURES = [
   "auto_notifications",
@@ -55,6 +55,14 @@ export const PLUGIN_FEATURES = [
   "full_ai_sync",
   "safe_action_parsing",
   "action_block_auto_execute",
+  "site_crawler",
+  "full_site_crawl",
+  "real_broken_link_check",
+  "redirect_chain_detector",
+  "duplicate_content_scanner",
+  "site_structure_analyzer",
+  "image_audit",
+  "directive_audit",
 ] as const;
 
 /**

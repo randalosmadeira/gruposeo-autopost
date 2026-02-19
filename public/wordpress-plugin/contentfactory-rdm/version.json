@@ -1,11 +1,11 @@
 {
-  "version": "3.4.8",
+  "version": "3.5.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.4.8 - Fix: Blocos de ação (action blocks) agora são ocultados do chat e auto-executados silenciosamente. Parsing robusto com 3 padrões de detecção. Renderização Markdown melhorada com suporte a code blocks.",
-  "released": "2026-02-18T16:00:00-03:00",
+  "changelog": "v3.5.0 - Site Crawler: Verificação REAL de links quebrados via HTTP HEAD, detector de redirect chains/loops, scanner de conteúdo duplicado (MD5), auditoria de títulos/metas/H1, análise de estrutura do site (órfãs, anchors, segurança), auditoria de robots/directives e imagens. Endpoint unificado full-site-crawl com score 0-100.",
+  "released": "2026-02-19T12:00:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",
@@ -51,6 +51,14 @@
     "anti_hallucination_v2",
     "full_ai_sync",
     "safe_action_parsing",
-    "action_block_auto_execute"
+    "action_block_auto_execute",
+    "site_crawler",
+    "full_site_crawl",
+    "real_broken_link_check",
+    "redirect_chain_detector",
+    "duplicate_content_scanner",
+    "site_structure_analyzer",
+    "image_audit",
+    "directive_audit"
   ]
 }

@@ -459,6 +459,64 @@ class CFRDM_API {
             'callback' => array(__CLASS__, 'manage_redirect'),
             'permission_callback' => array(__CLASS__, 'verify_api_key'),
         ));
+        
+        // ===== v3.5.0 - Site Crawler Endpoints =====
+        
+        // Scan broken links (real HTTP checks)
+        register_rest_route('cfrdm/v1', '/scan-broken-links', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'scan_broken_links'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Scan duplicate content
+        register_rest_route('cfrdm/v1', '/scan-duplicates', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'scan_duplicates'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Audit redirects (chains, loops)
+        register_rest_route('cfrdm/v1', '/redirects/audit', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'audit_redirects'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Analyze site structure (orphans, anchors, headings, security)
+        register_rest_route('cfrdm/v1', '/site-structure', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'analyze_site_structure'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Audit titles and meta descriptions
+        register_rest_route('cfrdm/v1', '/audit-titles-metas', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'audit_titles_metas'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Audit robots/directives
+        register_rest_route('cfrdm/v1', '/audit-directives', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'audit_directives'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Audit images (alt, dimensions)
+        register_rest_route('cfrdm/v1', '/audit-images', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'audit_images'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
+        
+        // Full site crawl (combines all audits)
+        register_rest_route('cfrdm/v1', '/full-site-crawl', array(
+            'methods' => 'POST',
+            'callback' => array(__CLASS__, 'full_site_crawl'),
+            'permission_callback' => array(__CLASS__, 'verify_api_key'),
+        ));
     }
     
     public static function verify_api_key($request) {
@@ -3614,4 +3672,133 @@ class CFRDM_API {
         
         file_put_contents($htaccess_file, $content);
     }
+    
+    // ═══════════════════════════════════════════════════════════
+    // v3.5.0 - Site Crawler Endpoints (REAL HTTP checks)
+    // ═══════════════════════════════════════════════════════════
+    
+    public static function scan_broken_links($request) {
+        if (!class_exists('CFRDM_Site_Crawler')) {
+            return new WP_REST_Response(['success' => false, 'error' => 'Site Crawler module not available'], 500);
+        }
+        $params = $request->get_json_params() ?: [];
+        $result = CFRDM_Site_Crawler::scan_broken_links($params);
+        return new WP_REST_Response($result, 200);
+    }
+    
+    public static function scan_duplicates($request) {
+        if (!class_exists('CFRDM_Site_Crawler')) {
+            return new WP_REST_Response(['success' => false, 'error' => 'Site Crawler module not available'], 500);
+        }
+        $params = $request->get_json_params() ?: [];
+        $result = CFRDM_Site_Crawler::scan_duplicates($params);
+        return new WP_REST_Response($result, 200);
+    }
+    
+    public static function audit_redirects($request) {
+        if (!class_exists('CFRDM_Site_Crawler')) {
+            return new WP_REST_Response(['success' => false, 'error' => 'Site Crawler module not available'], 500);
+        }
+        $params = $request->get_json_params() ?: [];
+        $result = CFRDM_Site_Crawler::audit_redirects($params);
+        return new WP_REST_Response($result, 200);
+    }
+    
+    public static function analyze_site_structure($request) {
+        if (!class_exists('CFRDM_Site_Crawler')) {
+            return new WP_REST_Response(['success' => false, 'error' => 'Site Crawler module not available'], 500);
+        }
+        $params = $request->get_json_params() ?: [];
+        $result = CFRDM_Site_Crawler::analyze_site_structure($params);
+        return new WP_REST_Response($result, 200);
+    }
+    
+    public static function audit_titles_metas($request) {
+        if (!class_exists('CFRDM_Site_Crawler')) {
+            return new WP_REST_Response(['success' => false, 'error' => 'Site Crawler module not available'], 500);
+        }
+        $params = $request->get_json_params() ?: [];
+        $result = CFRDM_Site_Crawler::audit_titles_and_metas($params);
+        return new WP_REST_Response($result, 200);
+    }
+    
+    public static function audit_directives($request) {
+        if (!class_exists('CFRDM_Site_Crawler')) {
+            return new WP_REST_Response(['success' => false, 'error' => 'Site Crawler module not available'], 500);
+        }
+        $result = CFRDM_Site_Crawler::audit_directives();
+        return new WP_REST_Response($result, 200);
+    }
+    
+    public static function audit_images($request) {
+        if (!class_exists('CFRDM_Site_Crawler')) {
+            return new WP_REST_Response(['success' => false, 'error' => 'Site Crawler module not available'], 500);
+        }
+        $params = $request->get_json_params() ?: [];
+        $result = CFRDM_Site_Crawler::audit_images($params);
+        return new WP_REST_Response($result, 200);
+    }
+    
+    /**
+     * Full site crawl — runs ALL audits and returns combined report.
+     */
+    public static function full_site_crawl($request) {
+        if (!class_exists('CFRDM_Site_Crawler')) {
+            return new WP_REST_Response(['success' => false, 'error' => 'Site Crawler module not available'], 500);
+        }
+        
+        $params = $request->get_json_params() ?: [];
+        $limit = intval($params['limit'] ?? 200);
+        
+        $report = [
+            'success'         => true,
+            'version'         => CFRDM_VERSION,
+            'crawled_at'      => current_time('c'),
+            'site_url'        => home_url(),
+            'broken_links'    => CFRDM_Site_Crawler::scan_broken_links(['limit' => $limit, 'check_redirects' => true, 'check_external' => true]),
+            'duplicates'      => CFRDM_Site_Crawler::scan_duplicates(['limit' => $limit, 'check_meta' => true]),
+            'redirects'       => CFRDM_Site_Crawler::audit_redirects($params),
+            'site_structure'  => CFRDM_Site_Crawler::analyze_site_structure(['limit' => $limit]),
+            'titles_metas'    => CFRDM_Site_Crawler::audit_titles_and_metas(['limit' => $limit]),
+            'directives'      => CFRDM_Site_Crawler::audit_directives(),
+            'images'          => CFRDM_Site_Crawler::audit_images(['limit' => $limit]),
+        ];
+        
+        // Calculate overall score
+        $deductions = 0;
+        $deductions += min(30, ($report['broken_links']['broken_found'] ?? 0) * 3);
+        $deductions += min(10, ($report['duplicates']['duplicates_found'] ?? 0) * 2);
+        $deductions += min(10, ($report['redirects']['chains'] ?? 0) * 2);
+        $deductions += min(15, ($report['redirects']['loops'] ?? 0) * 5);
+        $deductions += min(10, ($report['titles_metas']['missing_titles'] ?? 0) * 2);
+        $deductions += min(10, ($report['titles_metas']['missing_descriptions'] ?? 0));
+        $deductions += min(5, ($report['site_structure']['orphan_count'] ?? 0));
+        $deductions += min(5, ($report['images']['missing_alt'] ?? 0));
+        $deductions += min(5, ($report['directives']['noindex_count'] ?? 0) * 2);
+        
+        $report['overall_score'] = max(0, 100 - $deductions);
+        
+        // Priority classification
+        $p0 = [];
+        $p1 = [];
+        $p2 = [];
+        
+        if (($report['broken_links']['broken_found'] ?? 0) > 0) $p0[] = "🔴 {$report['broken_links']['broken_found']} links quebrados (404)";
+        if (($report['redirects']['loops'] ?? 0) > 0) $p0[] = "🔴 {$report['redirects']['loops']} redirect loops";
+        if (($report['titles_metas']['missing_titles'] ?? 0) > 5) $p0[] = "🔴 {$report['titles_metas']['missing_titles']} títulos ausentes";
+        
+        if (($report['redirects']['chains'] ?? 0) > 0) $p1[] = "⚠️ {$report['redirects']['chains']} redirect chains";
+        if (($report['duplicates']['duplicates_found'] ?? 0) > 0) $p1[] = "⚠️ {$report['duplicates']['duplicates_found']} conteúdos duplicados";
+        if (($report['duplicates']['thin_pages'] ?? 0) > 0) $p1[] = "⚠️ {$report['duplicates']['thin_pages']} páginas finas (<300p)";
+        if (($report['site_structure']['security_issues'] ?? []) && count($report['site_structure']['security_issues']) > 0) $p1[] = "⚠️ " . count($report['site_structure']['security_issues']) . " mixed content issues";
+        
+        if (($report['site_structure']['orphan_count'] ?? 0) > 0) $p2[] = "ℹ️ {$report['site_structure']['orphan_count']} páginas órfãs";
+        if (($report['images']['missing_alt'] ?? 0) > 0) $p2[] = "ℹ️ {$report['images']['missing_alt']} imagens sem alt";
+        if (($report['site_structure']['non_descriptive_anchors'] ?? 0) > 0) $p2[] = "ℹ️ {$report['site_structure']['non_descriptive_anchors']} anchors não-descritivas";
+        
+        $report['priority_issues'] = ['p0' => $p0, 'p1' => $p1, 'p2' => $p2];
+        
+        return new WP_REST_Response($report, 200);
+    }
 }
+
