@@ -5,7 +5,7 @@
  * Ao atualizar o plugin, basta alterar ESTE arquivo.
  */
 
-export const PLUGIN_VERSION = "3.4.8";
+export const PLUGIN_VERSION = "3.4.9";
 export const PLUGIN_MINIMUM_VERSION = "3.0.0";
 export const PLUGIN_RELEASED = "2026-02-18";
 
