@@ -86,7 +86,7 @@ interface Category {
 interface BulkPublishModalProps {
   isOpen: boolean;
   onClose: () => void;
-  selectedArticles: Array<{ id: string; title: string | null; project_id: string | null }>;
+  selectedArticles: Array<{ id: string; title: string | null; project_id: string | null; hasContent?: boolean; word_count?: number }>;
   projects: Array<{ id: string; name: string; domain: string; wordpress_url?: string | null }>;
   onPublishComplete: (result: { success: number; failed: number }) => void;
 }
@@ -168,11 +168,23 @@ export function BulkPublishModal({
     }
   }, []);
 
+  // Separate articles with and without content
+  const articlesWithoutContent = useMemo(() => 
+    selectedArticles.filter(a => a.hasContent === false),
+    [selectedArticles]
+  );
+  const articlesReadyToPublish = useMemo(() => 
+    selectedArticles.filter(a => a.hasContent !== false),
+    [selectedArticles]
+  );
+
   // Initialize articles with categories when modal opens
   useEffect(() => {
     if (isOpen) {
+      // Only include articles WITH content for publishing
+      const publishable = selectedArticles.filter(a => a.hasContent !== false);
       setArticlesWithCategories(
-        selectedArticles.map(a => ({
+        publishable.map(a => ({
           id: a.id,
           title: a.title || 'Sem título',
           selectedCategories: [],
@@ -558,7 +570,9 @@ export function BulkPublishModal({
                   Publicar artigos em massa
                 </DialogTitle>
                 <DialogDescription className="text-sm text-muted-foreground mt-1">
-                  Publique {selectedArticles.length} artigos selecionados de uma vez no destino escolhido.
+                  {articlesReadyToPublish.length > 0
+                    ? `Publicar ${articlesReadyToPublish.length} artigos com conteúdo no destino escolhido.`
+                    : 'Nenhum artigo com conteúdo gerado selecionado.'}
                 </DialogDescription>
               </div>
               {!isPublishing && (
@@ -571,12 +585,20 @@ export function BulkPublishModal({
               )}
             </div>
             
-            <div className="mt-3 flex items-center gap-2">
-              <Badge className="bg-primary/10 text-primary text-sm px-3 py-1">
-                {selectedArticles.length} artigos selecionados
-              </Badge>
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              {articlesReadyToPublish.length > 0 && (
+                <Badge className="bg-primary/10 text-primary text-sm px-3 py-1">
+                  {articlesReadyToPublish.length} prontos para publicar
+                </Badge>
+              )}
+              {articlesWithoutContent.length > 0 && (
+                <Badge className="bg-destructive/10 text-destructive text-sm px-3 py-1 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {articlesWithoutContent.length} sem conteúdo (ignorados)
+                </Badge>
+              )}
               {!isOnline && (
-                <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-sm px-3 py-1 flex items-center gap-1">
+                <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 text-sm px-3 py-1 flex items-center gap-1">
                   <WifiOff className="w-3 h-3" />
                   Sem conexão
                 </Badge>
@@ -631,8 +653,51 @@ export function BulkPublishModal({
               </div>
             )}
 
+            {/* No-content Warning Banner */}
+            {articlesWithoutContent.length > 0 && step !== 'publishing' && (
+              <div className="mb-4 p-4 bg-destructive/5 border border-destructive/20 rounded-lg animate-fade-in">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-destructive">
+                      {articlesWithoutContent.length} artigo(s) sem conteúdo gerado — serão ignorados
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Esses artigos foram criados mas o conteúdo ainda não foi gerado ou a geração falhou. 
+                      Aguarde a geração concluir ou acesse cada artigo para regenerar o conteúdo.
+                    </p>
+                    {articlesWithoutContent.length <= 5 && (
+                      <ul className="mt-2 space-y-0.5">
+                        {articlesWithoutContent.map(a => (
+                          <li key={a.id} className="text-xs text-muted-foreground flex items-center gap-1">
+                            <X className="w-3 h-3 text-destructive flex-shrink-0" />
+                            <span className="truncate">{a.title || 'Sem título'}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* No publishable articles warning */}
+            {articlesReadyToPublish.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <AlertCircle className="w-12 h-12 text-destructive/50 mb-4" />
+                <h3 className="text-lg font-semibold text-foreground mb-2">
+                  Nenhum artigo pronto para publicar
+                </h3>
+                <p className="text-sm text-muted-foreground max-w-sm">
+                  Todos os artigos selecionados estão sem conteúdo gerado. 
+                  Aguarde a geração ou gere manualmente antes de publicar.
+                </p>
+              </div>
+            )}
+
             {/* STEP 1: Destination */}
-            {step === 'destination' && (
+            {step === 'destination' && articlesReadyToPublish.length > 0 && (
+
               <div className="space-y-6 animate-fade-in">
                 {/* Platform Selection */}
                 <section>
@@ -1213,9 +1278,11 @@ export function BulkPublishModal({
             <DialogFooter className="px-6 py-4 border-t">
               <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-3">
                 <span className="text-sm text-muted-foreground">
-                  {step === 'destination' 
-                    ? `Pronto para publicar ${selectedArticles.length} artigos`
-                    : 'Revise as categorias antes de publicar'}
+                  {articlesReadyToPublish.length === 0
+                    ? '⚠️ Nenhum artigo com conteúdo para publicar'
+                    : step === 'destination' 
+                      ? `Pronto para publicar ${articlesReadyToPublish.length} artigo(s) com conteúdo`
+                      : 'Revise as categorias antes de publicar'}
                 </span>
                 <div className="flex gap-2">
                   {step === 'categories' && (
@@ -1224,9 +1291,9 @@ export function BulkPublishModal({
                     </Button>
                   )}
                   <Button variant="outline" onClick={handleClose}>
-                    Cancelar
+                    {articlesReadyToPublish.length === 0 ? 'Fechar' : 'Cancelar'}
                   </Button>
-                  {renderActionButton()}
+                  {articlesReadyToPublish.length > 0 && renderActionButton()}
                 </div>
               </div>
             </DialogFooter>
