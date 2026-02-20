@@ -61,7 +61,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { useArticlesList } from '@/hooks/useArticlesList';
+import { useArticlesList, articleHasContent } from '@/hooks/useArticlesList';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
@@ -1073,7 +1073,13 @@ export default function ArticlesList() {
           onClose={() => setShowPublishModal(false)}
           selectedArticles={Array.from(selectedArticles).map(id => {
             const a = articles.find(art => art.id === id);
-            return { id, title: a?.title || '', project_id: a?.project_id || '' };
+            return { 
+              id, 
+              title: a?.title || '', 
+              project_id: a?.project_id || '',
+              hasContent: a ? articleHasContent(a) : false,
+              word_count: a?.word_count ?? 0,
+            };
           })}
           projects={projects}
           onPublishComplete={handlePublishComplete}
