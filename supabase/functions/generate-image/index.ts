@@ -175,6 +175,7 @@ Deno.serve(async (req) => {
     }
     
     // Standard generation if emotional didn't produce result
+    let effectiveProvider = 'gemini'; // will be updated after generation
     if (!imageResult) {
       imagePrompt = buildImagePrompt(body);
       
@@ -210,11 +211,17 @@ Deno.serve(async (req) => {
       };
       const geminiAspectRatio = aspectRatioMap[body.aspectRatio || "16:9"] || "16:9";
 
-      imageResult = await generateGeminiImage(imagePrompt, {
+      const genResult = await generateGeminiImage(imagePrompt, {
         aspectRatio: geminiAspectRatio,
         provider,
         openaiQuality,
       });
+
+      if (genResult) {
+        imageResult = { imageData: genResult.imageData, mimeType: genResult.mimeType };
+        effectiveProvider = genResult.usedProvider || 'gemini';
+        log.info("image_provider_used", { provider: effectiveProvider, requested: provider });
+      }
     }
 
     if (!imageResult) {
@@ -232,17 +239,15 @@ Deno.serve(async (req) => {
       mimeType: imageResult.mimeType,
     });
 
-    // Log token usage
+    // Log token usage – use effectiveProvider (reflects actual fallback used)
     try {
       const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
       if (supabaseServiceKey) {
         const tokenLogger = createTokenLogger(user.id, supabaseUrl, supabaseServiceKey);
-        const actualModel = provider === 'openai' 
+        const actualProvider = (effectiveProvider || provider) as 'openai' | 'gemini';
+        const actualModel = actualProvider === 'openai'
           ? (openaiQuality === 'standard' ? 'dall-e-3-standard' : 'dall-e-3')
           : 'imagen-3.0-generate-002';
-        const actualProvider = provider === 'auto' 
-          ? (imageResult.mimeType === 'image/png' ? 'openai' : 'gemini')
-          : provider as 'openai' | 'gemini';
         
         await tokenLogger.logImage(
           actualProvider,
@@ -253,6 +258,7 @@ Deno.serve(async (req) => {
             aspectRatio: body.aspectRatio || '16:9',
             segment: body.segment || 'general',
             style: body.style || 'photorealistic',
+            fallback: effectiveProvider !== provider && provider !== 'auto' ? true : undefined,
           }
         );
       }
@@ -276,7 +282,8 @@ Deno.serve(async (req) => {
         alt: altText,
         title: imageTitle,
         prompt: imagePrompt,
-        model: "gemini-2.0-flash-exp",
+        model: effectiveProvider === 'openai' ? 'dall-e-3' : 'imagen-3.0-generate-002',
+        provider: effectiveProvider || 'gemini',
         request_id: requestId,
         ...(emotionalData && { emotional: emotionalData }),
       }),
