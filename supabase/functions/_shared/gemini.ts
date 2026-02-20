@@ -563,14 +563,22 @@ async function generateImageWithGemini(
 }
 
 /**
- * Generate image - GEMINI ONLY (Imagen 3)
- * All image generation goes through Gemini
+ * Generate image with automatic OpenAI → Gemini fallback.
+ *
+ * Provider logic:
+ *  - "openai"  → try OpenAI DALL-E 3, fall back to Gemini on any failure
+ *  - "gemini"  → use Gemini exclusively
+ *  - "auto"    → try OpenAI first (if key available), fall back to Gemini
+ *
+ * Returns the result plus which provider actually produced the image.
  */
 export async function generateGeminiImage(
   prompt: string,
   options: GeminiImageOptions = {}
-): Promise<{ imageData: string; mimeType: string } | null> {
+): Promise<{ imageData: string; mimeType: string; usedProvider?: string } | null> {
   const aspectRatio = options.aspectRatio || "16:9";
+  const provider = options.provider || "auto";
+
   const enhancedPrompt = `Create a professional, high-quality photograph for a blog article.
 
 ${prompt}
@@ -581,15 +589,39 @@ Requirements:
 - No text, watermarks, or logos
 - High resolution, sharp details, suitable for web publication
 - Professional business/editorial quality`;
-  
-  console.log("Image generation: using Gemini Imagen (exclusive provider)...");
-  const result = await generateImageWithGemini(enhancedPrompt, options);
-  
-  if (result) {
-    return result;
+
+  // ── Try OpenAI (DALL-E 3) when provider is "openai" or "auto" ──────────────
+  const shouldTryOpenAI = provider === "openai" || provider === "auto";
+  if (shouldTryOpenAI && hasOpenAIKey()) {
+    console.log("[ImageGen] Trying OpenAI DALL-E 3...");
+    try {
+      const openaiResult = await generateImageWithOpenAI(enhancedPrompt, options);
+      if (openaiResult) {
+        console.log("[ImageGen] OpenAI DALL-E 3 succeeded.");
+        return { ...openaiResult, usedProvider: "openai" };
+      }
+      console.log("[ImageGen] OpenAI returned no image – falling back to Gemini...");
+    } catch (openaiErr) {
+      console.warn("[ImageGen] OpenAI failed with error:", openaiErr instanceof Error ? openaiErr.message : openaiErr, "– falling back to Gemini...");
+    }
+  } else if (provider === "openai" && !hasOpenAIKey()) {
+    console.warn("[ImageGen] OpenAI provider requested but OPENAI_API_KEY not available – falling back to Gemini.");
   }
-  
-  console.log("Gemini image generation failed");
+
+  // ── Try Gemini Imagen ───────────────────────────────────────────────────────
+  if (provider !== "openai" || !hasOpenAIKey()) {
+    console.log("[ImageGen] Using Gemini Imagen...");
+  } else {
+    console.log("[ImageGen] Falling back to Gemini Imagen...");
+  }
+
+  const geminiResult = await generateImageWithGemini(enhancedPrompt, options);
+  if (geminiResult) {
+    console.log("[ImageGen] Gemini Imagen succeeded.");
+    return { ...geminiResult, usedProvider: "gemini" };
+  }
+
+  console.error("[ImageGen] All image providers failed.");
   return null;
 }
 
