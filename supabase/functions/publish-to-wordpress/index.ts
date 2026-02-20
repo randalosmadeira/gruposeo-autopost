@@ -527,7 +527,7 @@ Deno.serve(async (req) => {
     if (!articleId || !projectId) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing articleId or projectId" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -541,21 +541,23 @@ Deno.serve(async (req) => {
 
     if (articleError || !article) {
       return new Response(
-        JSON.stringify({ success: false, error: "Article not found or access denied" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ success: false, error: "Artigo não encontrado ou acesso negado" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // CRITICAL: Block publishing if content is empty/blank
+    // Return HTTP 200 with success:false so the client receives the actual error message
+    // (supabase.functions.invoke throws a generic error on non-2xx, hiding the real reason)
     const articleContent = (article.content || "").replace(/<!--[\s\S]*?-->/g, "").trim();
     if (!articleContent || articleContent.length < 50) {
       log.warn("publish_blocked_empty_content", { articleId, contentLength: articleContent.length });
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: "O artigo não possui conteúdo suficiente para publicação. Gere ou escreva o conteúdo antes de publicar." 
+          error: "Artigo sem conteúdo gerado. Aguarde a geração terminar ou abra o artigo para verificar." 
         }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -569,15 +571,15 @@ Deno.serve(async (req) => {
 
     if (projectError || !project) {
       return new Response(
-        JSON.stringify({ success: false, error: "Project not found or access denied" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ success: false, error: "Projeto não encontrado ou acesso negado" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     if (!project.wordpress_url || !project.wordpress_app_password) {
       return new Response(
-        JSON.stringify({ success: false, error: "WordPress credentials not configured for this project" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ success: false, error: "Credenciais WordPress não configuradas para este projeto" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
