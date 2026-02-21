@@ -17,12 +17,33 @@ REGRAS INEGOCIÁVEIS (REGRA ZERO)
 ═══════════════════════════════════════
 
 REGRA ZERO-A — META-DESCRIPTION OBRIGATÓRIA:
-- Sempre gere uma meta-description entre 145-160 caracteres (contando espaços)
+- Sempre gere uma meta-description entre 145-180 caracteres (contando espaços)
 - Deve conter a keyword principal nos primeiros 60 caracteres
 - Deve ter CTA implícito ou gancho emocional
-- Nunca ultrapasse 160 caracteres. Nunca fique abaixo de 145
+- A frase DEVE terminar com pontuação final (. ! ?) — NUNCA cortar no meio
+- Se a frase precisa de mais de 160 chars para terminar, USE ATÉ 180 — preferível frase completa a frase cortada
+- Nunca fique abaixo de 145 caracteres
 - Formato: [Keyword + contexto] + [benefício/gancho] + [CTA implícito]
-- Exemplo: "Reforma tributária 2026 muda regras do IR para CLT. Entenda os impactos no seu bolso e o que especialistas recomendam fazer agora"
+- Exemplo: "Reforma tributária 2026 muda regras do IR para CLT. Entenda os impactos no seu bolso e o que especialistas recomendam fazer agora."
+
+REGRA ZERO-A2 — TÍTULO SEO PERFEITO (OBRIGATÓRIO):
+- Limite: 55-80 caracteres (ideal 60-75)
+- Se o título precisa de mais de 60 caracteres para fazer sentido COMPLETO, USE ATÉ 80
+- NUNCA cortar o título no meio de uma palavra ou número
+- NUNCA deixar parênteses abertos sem fechar → "(20" é PROIBIDO → FECHAR ou REMOVER
+- NUNCA truncar números → "202" ao invés de "2026" é PROIBIDO → COMPLETAR ou REMOVER
+- NUNCA deixar caracteres soltos no final: ), (, |, :, - sem contexto
+- PROIBIDO emojis no título SEO
+- VALIDAR ANTES DE ENTREGAR: contar chars, verificar última palavra completa, parênteses fechados, números completos
+
+REGRA ZERO-A3 — LINKS INTERNOS OBRIGATÓRIOS (ZERO TOLERÂNCIA):
+- TODO conteúdo DEVE conter no MÍNIMO 10 links internos — regra INEGOCIÁVEL
+- NENHUM artigo pode ser entregue ou publicado sem links internos
+- Se links internos foram fornecidos, usar TODOS distribuídos naturalmente
+- Se nenhum link foi fornecido, SUGERIR 5-10 URLs internas no campo "internalSuggestions"
+- Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora descritivo</a>
+- NUNCA usar "clique aqui" como anchor text
+- Distribuição: 2 na introdução, 4-6 no corpo, 2 na conclusão
 
 REGRA ZERO-B — LEGIBILIDADE FLESCH:
 - Índice Flesch MÍNIMO: 60 (ideal: 70-100)
@@ -219,11 +240,14 @@ REGRA SEO 2 — LISTAS ESTRUTURADAS:
 - Cada item de lista: 1-3 linhas
 - Ajudam a conquistar featured snippets (posição zero)
 
-REGRA SEO 3 — LINKS INTERNOS:
-- Mínimo 3 links internos por artigo
-- Anchor text descritivo (nunca "clique aqui")
-- Distribuir naturalmente no corpo
+REGRA SEO 3 — LINKS INTERNOS (OBRIGATÓRIO — ZERO TOLERÂNCIA):
+- Mínimo 10 links internos por artigo — NENHUM conteúdo pode ser publicado sem links internos
+- Se links internos foram fornecidos, usar TODOS eles
+- Se nenhum link foi fornecido, SUGERIR 5-10 URLs internas no campo "internalSuggestions"
+- Anchor text descritivo (NUNCA "clique aqui", "saiba mais", "leia mais")
+- Distribuir naturalmente: 2 na introdução, 4-6 no corpo, 2 na conclusão
 - Priorize páginas de serviço, pillar pages e artigos relacionados
+- Links devem ser contextuais — inseridos em frases com sentido semântico
 
 REGRA SEO 4 — LINKS EXTERNOS (complementa REGRA ZERO-C):
 - Mínimo 2, ideal 3-5 por artigo
@@ -335,12 +359,13 @@ OTIMIZAÇÃO PARA IA (AIO):
 CHECKLIST DE QUALIDADE SEO (TODOS DEVEM SER ✅)
 ═══════════════════════════════════════
 
-- [ ] META-DESCRIPTION presente e com 145-160 caracteres (INEGOCIÁVEL)
+- [ ] META-DESCRIPTION presente e com 145-180 caracteres, frase COMPLETA (INEGOCIÁVEL)
+- [ ] TÍTULO: 55-80 chars, sem parênteses abertos, sem números truncados, sem emojis
 - [ ] H1 único no início com palavra-chave
 - [ ] 5-8 subtítulos H2 distribuídos
 - [ ] Mínimo 2 listas (bullet ou numeradas)
 - [ ] Mínimo 2 links externos autoritativos (INEGOCIÁVEL)
-- [ ] Links internos (quando fornecidos)
+- [ ] MÍNIMO 10 LINKS INTERNOS inseridos no conteúdo (INEGOCIÁVEL — ZERO TOLERÂNCIA)
 - [ ] Seção FAQ com 3-8 perguntas
 - [ ] CTAs sutis no meio e final
 - [ ] Conclusão estruturada
@@ -375,8 +400,8 @@ export const MANDATORY_JSON_OUTPUT_INSTRUCTIONS = `
     "sentenceAvgWords": 18
   },
   "seo": {
-    "metaTitle": "Título SEO com Keyword | Portal (máx 60 chars)",
-    "metaDescription": "Meta-description 145-160 chars com keyword nos primeiros 60 chars e CTA implícito",
+    "metaTitle": "Título SEO completo com Keyword (55-80 chars, sem parênteses abertos, sem números truncados)",
+    "metaDescription": "Meta-description 145-180 chars, frase COMPLETA com pontuação final, keyword nos primeiros 60 chars e CTA implícito",
     "slug": "keyword-principal-com-contexto-descritivo",
     "focusKeyword": "keyword principal exata",
     "keywords": ["keyword principal", "variação 1", "variação 2", "long tail 1", "long tail 2", "LSI keyword 1", "LSI keyword 2"],
@@ -510,17 +535,18 @@ export const MANDATORY_JSON_OUTPUT_INSTRUCTIONS = `
 
 VALIDAÇÕES AUTOMÁTICAS ANTES DA ENTREGA:
 1. ✅ wordCount >= 2400
-2. ✅ metaDescription length 145-160 chars
-3. ✅ fleschScore >= 60
-4. ✅ external links >= 2
-5. ✅ internal links >= 3
-6. ✅ FAQ count 3-8
-7. ✅ H1 count = 1
-8. ✅ H2 count >= 5
-9. ✅ No double spaces
-10. ✅ Heading hierarchy valid
-11. ✅ Source credited (no início, distribuído e no final)
-12. ✅ Conteúdo citado/referenciado ~40% com atribuição explícita
+2. ✅ metaDescription length 145-180 chars, frase COMPLETA com pontuação final
+3. ✅ metaTitle length 55-80 chars, COMPLETO, sem parênteses abertos, sem números truncados
+4. ✅ fleschScore >= 60
+5. ✅ external links >= 2
+6. ✅ INTERNAL LINKS >= 10 (OBRIGATÓRIO — ZERO TOLERÂNCIA)
+7. ✅ FAQ count 3-8
+8. ✅ H1 count = 1
+9. ✅ H2 count >= 5
+10. ✅ No double spaces
+11. ✅ Heading hierarchy valid
+12. ✅ Source credited (no início, distribuído e no final)
+13. ✅ Conteúdo citado/referenciado ~40% com atribuição explícita
 13. ✅ Conteúdo autoral/analítico ~60%
 14. ✅ Mínimo 4 citações diretas com aspas e crédito ao veículo
 15. ✅ Title rewritten >= 90%

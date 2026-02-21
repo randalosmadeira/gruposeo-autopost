@@ -720,8 +720,8 @@ Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
       userPrompt = `Escreva um artigo completo e otimizado para SEO e GEO (IA Generativa) sobre: "${config.keyword}"
 
 ⚠️ OBRIGATÓRIO - NÃO ESQUECER:
-1. PRIMEIRA LINHA: <!-- META_DESCRIPTION: [145-160 caracteres com keyword] -->
-2. SEGUNDA LINHA: <!-- TITLE_SEO: [máximo 60 caracteres] -->
+1. PRIMEIRA LINHA: <!-- META_DESCRIPTION: [145-180 caracteres, frase COMPLETA com pontuação final] -->
+2. SEGUNDA LINHA: <!-- TITLE_SEO: [55-80 caracteres, COMPLETO, sem parênteses abertos, sem números truncados] -->
 3. PARÁGRAFO 1: Resposta direta em 40-60 palavras (otimizado para extração por IAs)
 4. H2s como PERGUNTAS NATURAIS (formato GEO)
 5. Frases CURTAS: máximo 15 palavras cada (Flesch 70-100 OBRIGATÓRIO)
@@ -756,15 +756,18 @@ Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
     // Add critical enforcement reminder at the end of user prompt
     const enforcedUserPrompt = userPrompt + `
 
-⚠️ CHECKLIST FINAL ANTES DE RESPONDER:
-□ <!-- META_DESCRIPTION: ... --> presente na PRIMEIRA linha? (OBRIGATÓRIO)
-□ <!-- TITLE_SEO: ... --> presente na SEGUNDA linha? (OBRIGATÓRIO)
+⚠️ CHECKLIST FINAL ANTES DE RESPONDER (OBRIGATÓRIO):
+□ <!-- META_DESCRIPTION: ... --> presente na PRIMEIRA linha? (145-180 chars, frase COMPLETA)
+□ <!-- TITLE_SEO: ... --> presente na SEGUNDA linha? (55-80 chars, sem parênteses abertos, sem números truncados)
+□ TÍTULO: última palavra COMPLETA? Parênteses FECHADOS? Números COMPLETOS (4 dígitos para anos)?
+□ META: frase termina com pontuação (. ! ?)? Sem palavras cortadas?
 □ Frases com MÁXIMO 15 palavras cada? (Flesch 70-100)
 □ Parágrafos com MÁXIMO 3 linhas?
-□ Mínimo 10 links internos (se fornecidos) e MÁXIMO 3 links externos?
+□ MÍNIMO 10 LINKS INTERNOS presentes no conteúdo? (OBRIGATÓRIO — conteúdo sem links internos é REJEITADO)
+□ MÁXIMO 3 links externos?
 □ TODAS as redes sociais do projeto foram citadas?
 □ Linguagem simples que qualquer pessoa entende?
-Se algum item está faltando, CORRIJA antes de entregar.`;
+Se QUALQUER item está faltando, CORRIJA antes de entregar. Conteúdo sem links internos será REJEITADO.`;
 
     const streamResponse = await callAIStream(
       [
