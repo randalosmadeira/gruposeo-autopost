@@ -300,7 +300,19 @@ ${internalLinksStr}
 ═══ REGRAS INEGOCIÁVEIS (COMPLIANCE JORNALÍSTICO v3.0) ═══
 
 REGRA ZERO-A — META-DESCRIPTION OBRIGATÓRIA:
-- 145-160 caracteres, keyword nos primeiros 60 chars, CTA implícito
+- 145-180 caracteres, frase COMPLETA com pontuação final, keyword nos primeiros 60 chars, CTA implícito
+- NUNCA cortar a frase no meio — se precisa de mais de 160 chars, USE ATÉ 180
+
+REGRA ZERO-A2 — TÍTULO SEO PERFEITO:
+- 55-80 caracteres, frase COMPLETA
+- NUNCA deixar parênteses abertos, números truncados ou caracteres soltos no final
+- Se detectar "(20" → completar para "(2026)" ou remover parêntese
+- Se detectar palavra cortada → reformular o título inteiro
+
+REGRA ZERO-A3 — LINKS INTERNOS OBRIGATÓRIOS (ZERO TOLERÂNCIA):
+- TODO conteúdo DEVE conter no MÍNIMO 10 links internos
+- NENHUM artigo pode ser entregue sem links internos
+- Se links disponíveis, usar TODOS; se não, sugerir URLs internas
 
 REGRA ZERO-B — LEGIBILIDADE FLESCH:
 - Mínimo 60 (ideal 70-100). Frases máx 25 palavras. Parágrafos máx 4-7 linhas.
@@ -325,16 +337,16 @@ REGRAS SEO OBRIGATÓRIAS:
 7. Conclusão estruturada com CTA final
 8. Densidade de keyword 0.5%-2.5%
 9. Mínimo 1500 palavras
-10. Título entre 50-70 caracteres com keyword
+10. Título entre 55-80 caracteres com keyword (COMPLETO, sem parênteses abertos, sem números truncados)
 11. Gerar slug SEO-friendly
 12. Schema Article + FAQPage no JSON
 13. Incluir disclaimer de nicho quando aplicável
 
 FORMATO DA RESPOSTA - APENAS JSON VÁLIDO:
 {
-  "title": "título otimizado (50-70 chars)",
+  "title": "título otimizado (55-80 chars, COMPLETO, sem parênteses abertos, sem números truncados)",
   "slug": "slug-seo-friendly",
-  "meta_description": "meta description (145-165 chars)",
+  "meta_description": "meta description (145-180 chars, frase COMPLETA com pontuação final)",
   "content": "HTML COMPLETO do artigo com todos H2, H3, links internos, links externos, CTAs, FAQ",
   "image_prompt": "prompt em inglês para gerar imagem destacada relacionada ao tema"
 }`;
@@ -419,7 +431,9 @@ ${vernizDNA}
 
 ═══ REGRAS INEGOCIÁVEIS (COMPLIANCE JORNALÍSTICO v3.0) ═══
 
-REGRA ZERO-A — META-DESCRIPTION: 145-160 caracteres, keyword nos primeiros 60 chars, CTA implícito
+REGRA ZERO-A — META-DESCRIPTION: 145-180 caracteres, frase COMPLETA com pontuação final, keyword nos primeiros 60 chars
+REGRA ZERO-A2 — TÍTULO: 55-80 chars, sem parênteses abertos, sem números truncados, sem caracteres soltos
+REGRA ZERO-A3 — LINKS INTERNOS: MÍNIMO 10, ZERO TOLERÂNCIA — conteúdo sem links internos é REJEITADO
 REGRA ZERO-B — LEGIBILIDADE FLESCH >= 70:
 - Frases: MÁXIMO 25 palavras cada
 - Parágrafos: MÁXIMO 4-7 linhas
@@ -471,8 +485,8 @@ ${(article.content || "").substring(0, 12000)}
 RESPONDA APENAS COM JSON:
 {
   "optimized_content": "HTML completo reescrito com Flesch >= 70, HTML semântico, links, CTAs, FAQ",
-  "optimized_title": "título otimizado (50-70 chars)",
-  "optimized_meta": "meta description (145-165 chars com keyword nos primeiros 60 chars)"
+  "optimized_title": "título otimizado (55-80 chars, COMPLETO, sem parênteses abertos, sem números truncados)",
+  "optimized_meta": "meta description (145-180 chars, frase COMPLETA com pontuação final)"
 }`;
 
   const aiContent = await orchestrator.call('content_editing', [
@@ -487,7 +501,10 @@ Sua MISSÃO é reescrever conteúdo para atingir Flesch Reading Ease >= 70 segui
 - Zero espaços duplos, zero pontuação duplicada.
 - ADICIONE links internos como tags <a href>, CTAs com redes sociais, FAQ e conclusão que estejam faltando.
 - Mínimo 2 links externos para fontes autoritativas (.gov.br, .edu.br).
-- Meta-description: 145-160 chars com keyword nos primeiros 60 chars.
+- Meta-description: 145-180 chars, frase COMPLETA com pontuação final.
+- Título: 55-80 chars, COMPLETO, sem parênteses abertos, sem números truncados.
+- LINKS INTERNOS: OBRIGATÓRIO mínimo 10 — conteúdo sem links internos é REJEITADO.
+- VALIDAR antes de entregar: título completo, meta description completa, links internos presentes.
 - Responda APENAS com JSON válido.` },
     { role: 'user', content: prompt },
   ], { maxTokens: 16000, temperature: 0.3 });
@@ -589,9 +606,9 @@ function analyzeContent(content: string, cleanContent: string, article: any) {
       isOptimal: keywordDensity >= 0.5 && keywordDensity <= 2.5,
       titleHasKeyword, excerptHasKeyword,
     },
-    meta: {
-      titleLength: titleLen, titleOk: titleLen >= 50 && titleLen <= 70,
-      excerptLength: excerptLen, excerptOk: excerptLen >= 145 && excerptLen <= 165,
+  meta: {
+      titleLength: titleLen, titleOk: titleLen >= 55 && titleLen <= 80,
+      excerptLength: excerptLen, excerptOk: excerptLen >= 145 && excerptLen <= 180,
     },
   };
 }

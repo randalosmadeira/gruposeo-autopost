@@ -681,9 +681,21 @@ Você é um redator SEO sênior e especialista em link building com expertise em
 
 ### REGRA 1 - META-DESCRIPTION OBRIGATÓRIA
 - NUNCA entregue conteúdo sem meta-description
-- Formato: <!-- META_DESCRIPTION: [145-160 caracteres, com keyword e CTA] -->
-- Se não conseguir gerar uma boa, use: "Descubra tudo sobre [keyword]. Guia completo e atualizado com dicas práticas. Leia agora!"
-- VERIFICAR: se o campo META_DESCRIPTION está presente e tem entre 145-160 caracteres
+- Formato: <!-- META_DESCRIPTION: [145-180 caracteres, frase COMPLETA com keyword e CTA] -->
+- A frase DEVE terminar com pontuação final (. ! ?) — NUNCA cortar no meio
+- Se a frase precisa de mais de 160 chars para terminar, USE ATÉ 180
+- PROIBIDO emojis (🚨, 🔥, etc.) na meta description
+- VERIFICAR: meta-description presente, 145-180 chars, frase completa, sem emojis
+
+### REGRA 1B - LINKS INTERNOS OBRIGATÓRIOS (INEGOCIÁVEL — ZERO TOLERÂNCIA)
+- TODO conteúdo DEVE conter no MÍNIMO 10 links internos
+- NENHUM artigo pode ser entregue sem links internos — regra ZERO TOLERÂNCIA
+- Se links internos foram fornecidos, usar TODOS eles distribuídos naturalmente
+- Se nenhum link interno foi fornecido, SUGERIR 5-10 URLs internas baseadas no tema
+- Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora descritivo</a>
+- Distribuição: 2 na introdução, 4-6 no corpo, 2 na conclusão
+- NUNCA usar "clique aqui" como anchor text — sempre texto descritivo e contextual
+- VERIFICAR ANTES DE ENTREGAR: contar links <a href> internos — se < 10, ADICIONAR mais
 
 ### REGRA 2 - LEGIBILIDADE FLESCH 60-100 (MÍNIMO OBRIGATÓRIO: 60)
 
@@ -785,39 +797,51 @@ ${buildTechnicalRules()}
 ## 🏷️ LIMITES RIGOROSOS DE SEO (OBRIGATÓRIO)
 
 ### Título do Artigo (H1):
-- **MÁXIMO ABSOLUTO**: 60 caracteres (tolerável até 70, mas evite)
-- O Google trunca títulos acima de 60 caracteres nos resultados de busca
+- **LIMITE**: 55-80 caracteres (ideal 60-75)
+- Se o título precisa de mais de 60 caracteres para fazer sentido COMPLETO, USE ATÉ 80
+- NUNCA cortar o título no meio de uma palavra ou número
+- NUNCA deixar parênteses abertos sem fechar → "(20" é PROIBIDO → FECHAR ou REMOVER
+- NUNCA truncar números → "202" ao invés de "2026" é PROIBIDO → COMPLETAR ou REMOVER
+- NUNCA deixar caracteres soltos no final: ), (, |, :, - sem contexto
 - Inclua a palavra-chave primária no início do título
-- Use números quando possível ("7 Dicas", "Guia 2026")
-- Evite títulos genéricos - seja específico e atraente
+- Use números completos quando possível ("7 Dicas", "Guia 2026")
+- PROIBIDO emojis no título SEO
 
-**Exemplo:**
-✅ "Advogado Trabalhista SP: Guia Completo 2026" (45 caracteres)
-❌ "Tudo o que você precisa saber sobre como encontrar um advogado trabalhista em São Paulo" (89 caracteres)
+**VALIDAÇÃO OBRIGATÓRIA DO TÍTULO:**
+1. Conte os caracteres — se > 80, REDUZA reformulando (NUNCA cortando)
+2. Última palavra COMPLETA? Parênteses FECHADOS? Números COMPLETOS (4 dígitos para anos)?
+3. Se falhar, REFORMULE o título inteiro
+
+**Exemplos:**
+✅ "Advogado Trabalhista SP: Guia Completo de Direitos em 2026" (59 chars)
+✅ "Como Funciona a Rescisão Indireta: Guia Completo Para o Trabalhador" (68 chars)
+❌ "Advogado Trabalhista (20" — parêntese aberto, número truncado
+❌ "Guia Completo de SEO |" — caractere solto no final
 
 ### Meta Description:
-- **MÁXIMO ABSOLUTO**: 160 caracteres (tolerável até 170, mas evite)
-- Deve ser persuasiva e conter call-to-action implícito
-- Inclua a palavra-chave primária naturalmente
-- Descreva o benefício claro de ler o artigo
-- Use verbos de ação: "Descubra", "Aprenda", "Confira"
+- **LIMITE**: 145-180 caracteres (ideal 155-175)
+- A frase DEVE terminar com pontuação final (. ! ?) — NUNCA cortar no meio
+- Se a frase precisa de mais de 160 chars, USE ATÉ 180 — preferível frase completa
+- Inclua keyword nos primeiros 60 caracteres
+- PROIBIDO emojis na meta description
 
 **Formato obrigatório no início do artigo:**
 \`\`\`html
-<!-- META_DESCRIPTION: [Sua meta description aqui, máximo 160 caracteres] -->
-<!-- TITLE_SEO: [Título otimizado aqui, máximo 60 caracteres] -->
+<!-- META_DESCRIPTION: [145-180 caracteres, frase COMPLETA com pontuação final] -->
+<!-- TITLE_SEO: [55-80 caracteres, COMPLETO, sem parênteses abertos] -->
 \`\`\`
 
-## ✅ CHECKLIST FINAL DE QUALIDADE
+## ✅ CHECKLIST FINAL DE QUALIDADE (EXECUTAR OBRIGATORIAMENTE)
 
 Antes de finalizar, verifique:
-- [ ] **TÍTULO**: Máximo 60 caracteres (verificar contagem!)
-- [ ] **META DESCRIPTION**: Máximo 160 caracteres (verificar contagem!)
+- [ ] **TÍTULO**: 55-80 caracteres, COMPLETO, sem parênteses abertos, sem números truncados
+- [ ] **META DESCRIPTION**: 145-180 caracteres, frase COMPLETA com pontuação final
 - [ ] Palavra-chave primária aparece no primeiro parágrafo
 - [ ] Resposta direta à intenção de busca nos primeiros 150 palavras
 - [ ] Todos os H2s têm variações semânticas da keyword
 - [ ] Parágrafos com máximo 4 linhas (mobile-first)
-- [ ] Mínimo ${config.minInternalLinks || 10} links internos e MÁXIMO 3 links externos
+- [ ] **LINKS INTERNOS**: Mínimo ${config.minInternalLinks || 10} links internos (OBRIGATÓRIO — conteúdo sem links internos é REJEITADO)
+- [ ] MÁXIMO 3 links externos
 - [ ] Anchor text diversificado (não repetitivo)
 - [ ] Negrito usado estrategicamente (1-2 por parágrafo)
 - [ ] Tom adequado ao segmento ${config.segment}
@@ -850,22 +874,23 @@ ${config.nlpTerms.join(', ')}
 **IMPORTANTE**: Gere um artigo completo, pronto para publicação, em HTML semântico limpo, seguindo TODAS as diretrizes acima. O conteúdo deve ser indistinguível de um texto escrito por humano especialista, com fluidez natural e valor real para o leitor.
 
 **CRÍTICO - LIMITES SEO**: 
-- Título: MÁXIMO 60 caracteres
-- Meta Description: MÁXIMO 160 caracteres
+- Título: 55-80 caracteres, COMPLETO, sem parênteses abertos, sem números truncados
+- Meta Description: 145-180 caracteres, frase COMPLETA com pontuação final
+- Links Internos: MÍNIMO 10 — conteúdo sem links internos é REJEITADO
 Esses limites são INEGOCIÁVEIS para ranqueamento no Google.`;
 
   const userPrompt = `Escreva um artigo completo e otimizado para SEO sobre: "${config.keyword}"
 
-${config.title ? `Título sugerido: "${config.title}" (ajuste para máximo 60 caracteres se necessário)` : ''}
+${config.title ? `Título sugerido: "${config.title}" (ajuste para 55-80 caracteres se necessário, NUNCA corte — reformule)` : ''}
 
 ⚠️⚠️⚠️ REGRAS CRÍTICAS - VERIFICAR ANTES DE ENTREGAR ⚠️⚠️⚠️
 
 1. **META-DESCRIPTION**: A PRIMEIRA LINHA do artigo DEVE ser:
-   <!-- META_DESCRIPTION: [texto de 145-160 caracteres com keyword e CTA] -->
+   <!-- META_DESCRIPTION: [texto de 145-180 caracteres, frase COMPLETA com pontuação final] -->
    Se faltar, o artigo será REJEITADO.
 
 2. **TITLE_SEO**: A SEGUNDA LINHA deve ser:
-   <!-- TITLE_SEO: [título de máximo 60 caracteres] -->
+   <!-- TITLE_SEO: [título de 55-80 caracteres, COMPLETO, sem parênteses abertos, sem números truncados] -->
 
 3. **LEGIBILIDADE FLESCH MÍNIMO 60 (ideal 70-100)**:
    - Cada frase deve ter NO MÁXIMO 15 palavras
@@ -876,18 +901,23 @@ ${config.title ? `Título sugerido: "${config.title}" (ajuste para máximo 60 ca
    - Escreva como se falasse com um amigo de 14 anos
    - Score abaixo de 60 = CONTEÚDO REPROVADO, reescrever
 
-4. **LINKS EXTERNOS (MÍNIMO 2)**: Inclua 2-3 links reais para fontes oficiais
+4. **LINKS INTERNOS (OBRIGATÓRIO — ZERO TOLERÂNCIA)**:
+   - MÍNIMO 10 links internos — conteúdo sem links internos é REJEITADO
+   - Distribuir: 2 na introdução, 4-6 no corpo, 2 na conclusão
+   - NUNCA usar "clique aqui" como anchor text
+   - Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto descritivo</a>
+
+5. **LINKS EXTERNOS (MÍNIMO 2, MÁXIMO 3)**: Fontes oficiais (.gov, .edu)
    - Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto</a>
 
-5. **FORMATAÇÃO**: Sem espaços duplos, sem pontuação duplicada, H2>H3 correto
+6. **FORMATAÇÃO**: Sem espaços duplos, sem pontuação duplicada, H2>H3 correto
 
 **Estrutura obrigatória:**
-<!-- META_DESCRIPTION: [145-160 chars] -->
-<!-- TITLE_SEO: [máx 60 chars] -->
+<!-- META_DESCRIPTION: [145-180 chars, frase COMPLETA] -->
+<!-- TITLE_SEO: [55-80 chars, COMPLETO] -->
 
 <h2>Primeira seção</h2>
 <p>Frase curta e direta. Máximo 15 palavras.</p>
-<p>Outro parágrafo curto.</p>
 
 **Especificações:**
 - Segmento: ${config.segment}
@@ -898,7 +928,12 @@ ${config.includeFaq ? `- FAQ com ${config.faqCount} perguntas` : ''}
 ${config.includeConclusion ? '- Conclusão com resumo e CTA' : ''}
 ${config.includeTable ? '- Incluir tabela comparativa' : ''}
 
-**LEMBRE-SE**: Frases CURTAS. Palavras SIMPLES. Meta-description OBRIGATÓRIA.
+**CHECKLIST FINAL ANTES DE ENTREGAR:**
+□ Meta-description: 145-180 chars, frase COMPLETA? 
+□ Título: 55-80 chars, sem parênteses abertos, sem números truncados?
+□ MÍNIMO 10 LINKS INTERNOS presentes? (OBRIGATÓRIO)
+□ Frases CURTAS (máx 15 palavras)?
+□ Linguagem SIMPLES?
 
 Comece agora (HTML direto, sem backticks):`;
 
