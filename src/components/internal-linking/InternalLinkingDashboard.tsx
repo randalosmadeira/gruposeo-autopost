@@ -88,9 +88,11 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
     keywordRules,
     syncProgress,
     syncState,
+    realtimeCounts,
     fetchIndexedArticles,
     fetchTopicClusters,
     fetchKeywordRules,
+    fetchRealtimeCounts,
     triggerSync,
     syncAllProjects,
     forceValidateAll,
@@ -299,7 +301,7 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
               )}
             </div>
             <p className="text-muted-foreground">
-              {projectName || 'Projeto'} • {indexedArticles.length} artigos indexados
+              {projectName || 'Projeto'} • <span className="font-semibold text-foreground">{realtimeCounts.indexedArticles}</span> artigos indexados • <span className="font-semibold text-foreground">{realtimeCounts.topicClusters}</span> clusters
             </p>
           </div>
         </div>
@@ -366,7 +368,7 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
       />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
@@ -374,7 +376,7 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
                 <FileText className="w-6 h-6 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{indexedArticles.length}</p>
+                <p className="text-2xl font-bold">{realtimeCounts.indexedArticles}</p>
                 <p className="text-sm text-muted-foreground">Artigos Indexados</p>
               </div>
             </div>
@@ -388,7 +390,7 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
                 <Layers className="w-6 h-6 text-purple-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{topicClusters.length}</p>
+                <p className="text-2xl font-bold">{realtimeCounts.topicClusters}</p>
                 <p className="text-sm text-muted-foreground">Clusters Temáticos</p>
               </div>
             </div>
@@ -416,10 +418,36 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
                 <Link2 className="w-6 h-6 text-amber-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">
-                  {keywordRules.reduce((sum, r) => sum + r.times_applied, 0)}
-                </p>
-                <p className="text-sm text-muted-foreground">Links Aplicados</p>
+                <p className="text-2xl font-bold">{realtimeCounts.totalInternalLinks}</p>
+                <p className="text-sm text-muted-foreground">Links Internos</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-red-100 dark:bg-red-900/30">
+                <Link2 className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{realtimeCounts.articlesWithoutLinks}</p>
+                <p className="text-sm text-muted-foreground">Sem Links</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-cyan-100 dark:bg-cyan-900/30">
+                <Sparkles className="w-6 h-6 text-cyan-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{realtimeCounts.avgLinkability}%</p>
+                <p className="text-sm text-muted-foreground">Linkabilidade Média</p>
               </div>
             </div>
           </CardContent>
@@ -448,6 +476,7 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
             indexedArticles={indexedArticles}
             topicClusters={topicClusters}
             keywordRules={keywordRules}
+            realtimeCounts={realtimeCounts}
           />
         </TabsContent>
 
@@ -556,7 +585,7 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
             <CardHeader>
               <CardTitle>Clusters Temáticos</CardTitle>
               <CardDescription>
-                Agrupamentos automáticos de artigos por tema para linkagem contextual
+                Agrupamentos automáticos de artigos por tema com recomendações da IA
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -568,44 +597,89 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {topicClusters.map((cluster) => (
-                    <Card key={cluster.id} className="border-2">
-                      <CardContent className="pt-4">
-                        <div className="flex items-start justify-between mb-3">
-                          <h4 className="font-semibold">{cluster.name}</h4>
-                          <Badge variant="outline">{cluster.article_count} artigos</Badge>
-                        </div>
-                        
-                        <div className="mb-3">
-                          <div className="flex items-center justify-between text-sm mb-1">
-                            <span className="text-muted-foreground">Força do Cluster</span>
-                            <span className="font-medium">{cluster.cluster_strength}%</span>
-                          </div>
-                          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-purple-500 rounded-full"
-                              style={{ width: `${cluster.cluster_strength}%` }}
-                            />
-                          </div>
-                        </div>
+                  {topicClusters.map((cluster) => {
+                    // AI Recommendations per cluster
+                    const clusterArticles = indexedArticles.filter(a => a.topic_cluster === cluster.name);
+                    const articlesWithoutLinks = clusterArticles.filter(a => {
+                      // Check if the article has low linkability
+                      return (a.linkability_score || 0) < 30;
+                    });
+                    const needsMoreContent = cluster.article_count < 5;
+                    const lowStrength = cluster.cluster_strength < 40;
+                    const recommendations: string[] = [];
+                    
+                    if (needsMoreContent) recommendations.push(`Criar +${5 - cluster.article_count} artigos para fortalecer o cluster`);
+                    if (lowStrength) recommendations.push('Aumentar linkagem cruzada entre artigos do cluster');
+                    if (articlesWithoutLinks.length > 0) recommendations.push(`${articlesWithoutLinks.length} artigos precisam de mais links internos`);
+                    if (cluster.article_count > 0 && !cluster.primary_keywords?.length) recommendations.push('Definir keywords primárias para o cluster');
 
-                        {cluster.primary_keywords.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {cluster.primary_keywords.slice(0, 4).map((kw, i) => (
-                              <Badge key={i} variant="secondary" className="text-xs">
-                                {kw}
-                              </Badge>
-                            ))}
-                            {cluster.primary_keywords.length > 4 && (
-                              <Badge variant="secondary" className="text-xs">
-                                +{cluster.primary_keywords.length - 4}
-                              </Badge>
-                            )}
+                    return (
+                      <Card key={cluster.id} className="border-2">
+                        <CardContent className="pt-4">
+                          <div className="flex items-start justify-between mb-3">
+                            <h4 className="font-semibold">{cluster.name}</h4>
+                            <Badge variant="outline">{cluster.article_count} artigos</Badge>
                           </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
+                          
+                          <div className="mb-3">
+                            <div className="flex items-center justify-between text-sm mb-1">
+                              <span className="text-muted-foreground">Força do Cluster</span>
+                              <span className="font-medium">{cluster.cluster_strength}%</span>
+                            </div>
+                            <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full",
+                                  cluster.cluster_strength >= 70 ? "bg-green-500" :
+                                  cluster.cluster_strength >= 40 ? "bg-amber-500" : "bg-red-500"
+                                )}
+                                style={{ width: `${cluster.cluster_strength}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          {cluster.primary_keywords.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-3">
+                              {cluster.primary_keywords.slice(0, 4).map((kw, i) => (
+                                <Badge key={i} variant="secondary" className="text-xs">
+                                  {kw}
+                                </Badge>
+                              ))}
+                              {cluster.primary_keywords.length > 4 && (
+                                <Badge variant="secondary" className="text-xs">
+                                  +{cluster.primary_keywords.length - 4}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+
+                          {/* AI Recommendations */}
+                          {recommendations.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-border space-y-1.5">
+                              <div className="flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                                <Sparkles className="w-3.5 h-3.5" />
+                                Recomendações IA
+                              </div>
+                              {recommendations.map((rec, i) => (
+                                <p key={i} className="text-xs text-muted-foreground pl-5">
+                                  • {rec}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+
+                          {recommendations.length === 0 && (
+                            <div className="mt-3 pt-3 border-t border-border">
+                              <div className="flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Cluster otimizado
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
