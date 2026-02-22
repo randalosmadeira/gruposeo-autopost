@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
 import { orchestrate } from "../_shared/verniz-orchestrator.ts";
+import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,6 +31,9 @@ Deno.serve(async (req) => {
       }).auth.getUser();
 
       if (user) {
+        // Load BYOK keys into runtime registry for gemini.ts direct calls
+        await setEnvKeysForUser(user.id);
+
         const { data: settings } = await supabase
           .from("user_settings")
           .select("gemini_api_key, openai_api_key, anthropic_api_key")
@@ -42,7 +46,7 @@ Deno.serve(async (req) => {
             openai: settings.openai_api_key || undefined,
             anthropic: settings.anthropic_api_key || undefined,
           });
-          console.log("[AI SEO] BYOK keys loaded from user_settings");
+          console.log("[AI SEO] BYOK keys loaded for orchestrator + gemini.ts runtime");
         }
       }
     }
@@ -85,9 +89,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Fetch existing published articles for internal linking
+    // Fetch existing published articles for internal linking (from articles table)
     let internalLinksMap: Record<string, Array<{title: string, url: string}>> = {};
     for (const pid of projectIds) {
+      // Fetch from articles table
       const { data: publishedArticles } = await supabase
         .from("articles")
         .select("title, published_url, keyword")
@@ -96,11 +101,33 @@ Deno.serve(async (req) => {
         .not("published_url", "is", null)
         .limit(30);
       
-      if (publishedArticles) {
-        internalLinksMap[pid] = publishedArticles
-          .filter(a => a.published_url)
-          .map(a => ({ title: a.title || a.keyword, url: a.published_url! }));
-      }
+      const articleLinks = (publishedArticles || [])
+        .filter(a => a.published_url)
+        .map(a => ({ title: a.title || a.keyword, url: a.published_url! }));
+
+      // Also fetch from wordpress_article_index (indexed articles with richer data)
+      const { data: wpIndexArticles } = await supabase
+        .from("wordpress_article_index")
+        .select("wp_post_title, wp_post_url, primary_keyword, topic_cluster")
+        .eq("project_id", pid)
+        .eq("wp_post_status", "publish")
+        .order("linkability_score", { ascending: false })
+        .limit(50);
+
+      const wpLinks = (wpIndexArticles || [])
+        .filter(a => a.wp_post_url)
+        .map(a => ({ title: a.wp_post_title || a.primary_keyword || '', url: a.wp_post_url }));
+
+      // Merge and deduplicate by URL
+      const allLinks = [...articleLinks, ...wpLinks];
+      const seen = new Set<string>();
+      internalLinksMap[pid] = allLinks.filter(l => {
+        if (seen.has(l.url)) return false;
+        seen.add(l.url);
+        return true;
+      }).slice(0, 50);
+
+      console.log(`[AI SEO] Internal links for project ${pid}: ${internalLinksMap[pid].length} (articles: ${articleLinks.length}, wp_index: ${wpLinks.length})`);
     }
 
     const results = [];
