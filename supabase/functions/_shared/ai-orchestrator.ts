@@ -43,9 +43,9 @@ export type TaskType =
 // Provider configurations per task type - ordered by preference
 const AI_PROVIDERS: Record<string, AIProvider[]> = {
   article_generation: [
+    { name: 'gemini', model: 'gemini-2.5-flash', costPer1kTokens: 0.0005, maxTokens: 1000000, strengths: ['fast', 'creative', 'long-form'] },
     { name: 'anthropic', model: 'claude-sonnet-4-5-20250929', costPer1kTokens: 0.003, maxTokens: 200000, strengths: ['creative', 'long-form', 'nuanced'] },
     { name: 'openai', model: 'gpt-4o', costPer1kTokens: 0.005, maxTokens: 128000, strengths: ['versatile', 'instruction-following'] },
-    { name: 'gemini', model: 'gemini-2.5-pro', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['cost-effective', 'large-context'] },
   ],
   seo_analysis: [
     { name: 'gemini', model: 'gemini-2.0-flash', costPer1kTokens: 0.0001, maxTokens: 1000000, strengths: ['fast', 'analytical', 'cost-effective'] },
@@ -60,7 +60,7 @@ const AI_PROVIDERS: Record<string, AIProvider[]> = {
     { name: 'openai', model: 'gpt-4o-mini', costPer1kTokens: 0.00015, maxTokens: 128000, strengths: ['precise'] },
   ],
   content_editing: [
-    { name: 'gemini', model: 'gemini-2.5-pro', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['large-context', 'cost-effective'] },
+    { name: 'gemini', model: 'gemini-2.5-flash', costPer1kTokens: 0.0005, maxTokens: 1000000, strengths: ['fast', 'large-context', 'cost-effective'] },
     { name: 'anthropic', model: 'claude-sonnet-4-5-20250929', costPer1kTokens: 0.003, maxTokens: 200000, strengths: ['nuanced', 'careful'] },
     { name: 'openai', model: 'gpt-4o', costPer1kTokens: 0.005, maxTokens: 128000, strengths: ['versatile'] },
   ],
@@ -278,7 +278,23 @@ export class AIOrchestrator {
     }
 
     const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const finishReason = data.candidates?.[0]?.finishReason;
+    
+    if (finishReason === 'MAX_TOKENS') {
+      console.warn(`[AIOrchestrator] Gemini ${model} response truncated (MAX_TOKENS). Output length: ${text.length} chars`);
+      // Mark truncation so callers can handle it
+      (globalThis as any).__lastFinishReason = 'MAX_TOKENS';
+    } else {
+      (globalThis as any).__lastFinishReason = finishReason || 'STOP';
+    }
+    
+    if (!text) {
+      const blockReason = data.candidates?.[0]?.finishReason || data.promptFeedback?.blockReason;
+      throw new Error(`Gemini retornou resposta vazia. Reason: ${blockReason || 'unknown'}. Prompt pode ter sido bloqueado.`);
+    }
+    
+    return text;
   }
 
   /** Call OpenAI API */
