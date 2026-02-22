@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 import { useToast } from '@/hooks/use-toast';
@@ -79,6 +79,14 @@ export function useInternalLinking(projectId: string | null) {
     pluginNotFound: false,
     usedFallback: false,
   });
+  // Real-time accurate counts (from DB HEAD queries)
+  const [realtimeCounts, setRealtimeCounts] = useState({
+    indexedArticles: 0,
+    topicClusters: 0,
+    totalInternalLinks: 0,
+    articlesWithoutLinks: 0,
+    avgLinkability: 0,
+  });
 
   const addLog = useCallback((type: SyncLogEntry['type'], message: string, articleTitle?: string) => {
     setSyncProgress(prev => ({
@@ -86,6 +94,84 @@ export function useInternalLinking(projectId: string | null) {
       logs: [...prev.logs, { timestamp: new Date(), type, message, articleTitle }],
     }));
   }, []);
+
+  // Fetch accurate counts via HEAD queries
+  const fetchRealtimeCounts = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const [indexedRes, clustersRes, noLinksRes] = await Promise.all([
+        supabase
+          .from('wordpress_article_index')
+          .select('*', { count: 'exact', head: true })
+          .eq('project_id', projectId)
+          .eq('sync_status', 'synced'),
+        supabase
+          .from('topic_clusters')
+          .select('*', { count: 'exact', head: true })
+          .eq('project_id', projectId),
+        supabase
+          .from('wordpress_article_index')
+          .select('*', { count: 'exact', head: true })
+          .eq('project_id', projectId)
+          .eq('sync_status', 'synced')
+          .eq('internal_links_count', 0),
+      ]);
+
+      // Fetch avg linkability separately (need actual data for avg)
+      const { data: linkData } = await supabase
+        .from('wordpress_article_index')
+        .select('linkability_score, internal_links_count')
+        .eq('project_id', projectId)
+        .eq('sync_status', 'synced');
+
+      const totalLinks = (linkData || []).reduce((s, a) => s + (a.internal_links_count || 0), 0);
+      const avgLink = linkData && linkData.length > 0
+        ? Math.round(linkData.reduce((s, a) => s + (a.linkability_score || 0), 0) / linkData.length)
+        : 0;
+
+      setRealtimeCounts({
+        indexedArticles: indexedRes.count || 0,
+        topicClusters: clustersRes.count || 0,
+        totalInternalLinks: totalLinks,
+        articlesWithoutLinks: noLinksRes.count || 0,
+        avgLinkability: avgLink,
+      });
+    } catch (e) {
+      console.error('Error fetching realtime counts:', e);
+    }
+  }, [projectId]);
+
+  // Realtime subscription for wordpress_article_index and topic_clusters
+  useEffect(() => {
+    if (!projectId) return;
+    fetchRealtimeCounts();
+
+    const channel = supabase
+      .channel(`internal-linking-${projectId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'wordpress_article_index',
+        filter: `project_id=eq.${projectId}`,
+      }, () => {
+        fetchRealtimeCounts();
+        fetchIndexedArticles();
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'topic_clusters',
+        filter: `project_id=eq.${projectId}`,
+      }, () => {
+        fetchRealtimeCounts();
+        fetchTopicClusters();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [projectId, fetchRealtimeCounts]); // fetchIndexedArticles/fetchTopicClusters are stable
 
   // Fetch indexed articles for a project
   const fetchIndexedArticles = useCallback(async () => {
@@ -743,11 +829,13 @@ export function useInternalLinking(projectId: string | null) {
     keywordRules,
     syncProgress,
     syncState,
+    realtimeCounts,
     
     // Actions
     fetchIndexedArticles,
     fetchTopicClusters,
     fetchKeywordRules,
+    fetchRealtimeCounts,
     getLinkSuggestions,
     triggerSync,
     syncAllProjects,

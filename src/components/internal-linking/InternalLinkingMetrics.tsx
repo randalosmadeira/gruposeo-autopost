@@ -33,10 +33,19 @@ import {
 } from 'lucide-react';
 import type { IndexedArticle, TopicCluster, KeywordRule } from '@/hooks/useInternalLinking';
 
+interface RealtimeCounts {
+  indexedArticles: number;
+  topicClusters: number;
+  totalInternalLinks: number;
+  articlesWithoutLinks: number;
+  avgLinkability: number;
+}
+
 interface InternalLinkingMetricsProps {
   indexedArticles: IndexedArticle[];
   topicClusters: TopicCluster[];
   keywordRules: KeywordRule[];
+  realtimeCounts?: RealtimeCounts;
 }
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
@@ -45,13 +54,14 @@ export function InternalLinkingMetrics({
   indexedArticles,
   topicClusters,
   keywordRules,
+  realtimeCounts,
 }: InternalLinkingMetricsProps) {
   // Calculate metrics
   const metrics = useMemo(() => {
-    const totalArticles = indexedArticles.length;
-    const avgLinkabilityScore = totalArticles > 0
-      ? Math.round(indexedArticles.reduce((sum, a) => sum + (a.linkability_score || 0), 0) / totalArticles)
-      : 0;
+    const totalArticles = realtimeCounts?.indexedArticles || indexedArticles.length;
+    const avgLinkabilityScore = realtimeCounts?.avgLinkability || (indexedArticles.length > 0
+      ? Math.round(indexedArticles.reduce((sum, a) => sum + (a.linkability_score || 0), 0) / indexedArticles.length)
+      : 0);
 
     // Articles by cluster
     const articlesByCluster = topicClusters.map(c => ({
