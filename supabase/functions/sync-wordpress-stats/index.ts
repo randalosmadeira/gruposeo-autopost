@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
     log.info("project_found", { project_id: project.id, project_name: project.name });
 
     // Extract stats from body
-    const { stats, seo_health, internal_links_data, autocorrect_results, logs, timestamp } = body;
+    const { stats, seo_health, internal_links_data, autocorrect_results, logs, timestamp, plugin_version, seo_plugin, readability_summary } = body;
 
     // Prepare stats data
     const statsData = {
@@ -92,11 +92,17 @@ Deno.serve(async (req) => {
       broken_links: internal_links_data?.orphan_pages?.length || 0,
       articles_without_links: internal_links_data?.orphan_pages?.length || 0,
       auto_corrections_applied: autocorrect_results?.issues_fixed || 0,
-      missing_featured_images: 0,
-      pending_comments: 0,
-      approved_comments: stats?.comments || 0,
-      publishing_trend: [],
-      raw_data: { stats, seo_health, internal_links_data, autocorrect_results, logs_count: logs?.length || 0, synced_at: timestamp },
+      missing_featured_images: stats?.missing_featured_images || 0,
+      pending_comments: stats?.pending_comments || 0,
+      approved_comments: stats?.approved_comments || stats?.comments || 0,
+      publishing_trend: stats?.publishing_trend || [],
+      raw_data: { 
+        stats, seo_health, internal_links_data, autocorrect_results, 
+        logs_count: logs?.length || 0, synced_at: timestamp,
+        plugin_version: plugin_version || 'unknown',
+        seo_plugin: seo_plugin || 'none',
+        readability_summary: readability_summary || null,
+      },
       last_sync_at: new Date().toISOString(),
     };
 

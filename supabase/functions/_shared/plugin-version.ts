@@ -5,9 +5,9 @@
  * Ao atualizar o plugin, basta alterar ESTE arquivo.
  */
 
-export const PLUGIN_VERSION = "3.5.0";
+export const PLUGIN_VERSION = "3.6.0";
 export const PLUGIN_MINIMUM_VERSION = "3.0.0";
-export const PLUGIN_RELEASED = "2026-02-19";
+export const PLUGIN_RELEASED = "2026-02-22";
 
 export const PLUGIN_FEATURES = [
   "auto_notifications",
@@ -63,6 +63,14 @@ export const PLUGIN_FEATURES = [
   "site_structure_analyzer",
   "image_audit",
   "directive_audit",
+  "bulk_meta_update",
+  "readability_analysis_v2",
+  "ai_optimize_realtime",
+  "passive_voice_detector",
+  "transition_words_check",
+  "sentence_complexity_score",
+  "seo_plugin_compatibility",
+  "content_ai_suggestions",
 ] as const;
 
 /**
@@ -85,6 +93,19 @@ Módulos disponíveis no plugin instalado nos sites:
   • autonomous-content-edit: modifica título WP, H1, H2, hero, insere imagens e força HTTPS no conteúdo
   • manage-redirect: cria/exclui redirects 301/302 via Rank Math ou .htaccess
   • orphan-auto-backlink: detecta artigos órfãos e insere backlinks internos via IA
+- **Bulk Meta Update API (v${PLUGIN_VERSION})**: 
+  • REST endpoint para atualização em massa de SEO title, meta description, focus keyword e canonical URL
+  • Compatível com Rank Math e Yoast SEO (detecção automática do plugin instalado)
+  • Suporte a operações batch de até 100 posts por requisição
+- **Readability Analysis v2 (v${PLUGIN_VERSION})**:
+  • Detector de voz passiva com sugestão de reescrita em voz ativa
+  • Análise de palavras de transição (conectivos) para coesão textual
+  • Score de complexidade frasal (Flesch + Coleman-Liau + Gunning Fog)
+  • Análise Yoast-compatible de legibilidade com semáforo verde/laranja/vermelho
+- **AI Content Suggestions (v${PLUGIN_VERSION})**:
+  • Sugestões em tempo real de otimização baseadas em Rank Math + Yoast scoring
+  • Detecção automática de SEO plugin instalado (Rank Math, Yoast, All-in-One SEO)
+  • Sincronização bidirecional de focus keywords e meta dados
 - **Redirect Manager (v${PLUGIN_VERSION})**:
   • Gerenciamento completo de redirects 301/302 com tabela dedicada
   • Limpeza automática de URLs duplicadas (sufixos -2, -3, etc.)

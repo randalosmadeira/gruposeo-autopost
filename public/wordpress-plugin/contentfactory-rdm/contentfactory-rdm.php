@@ -3,7 +3,7 @@
  * Plugin Name: ContentFactory RDM
  * Plugin URI: https://gruposeo.marketing/contentfactory
  * Description: Integração avançada com ContentFactory para publicação automática de artigos, sincronização, otimização de imagens, links internos, geração de SEO via IA, indexação automática, social posting e queue system.
- * Version: 3.5.0
+ * Version: 3.6.0
  * Author: GRUPO SEO MARKETING
  * Author URI: https://gruposeo.marketing
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '3.5.0');
+define('CFRDM_VERSION', '3.6.0');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -99,6 +99,11 @@ function cfrdm_load_dependencies() {
     // v3.5.0 - Site Crawler (real HTTP-based SEO audit)
     if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-site-crawler.php')) {
         require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-site-crawler.php';
+    }
+    
+    // v3.6.0 - Bulk Meta Update API (Rank Math / Yoast compatible)
+    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-bulk-meta.php')) {
+        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-bulk-meta.php';
     }
     
     // v3.2.7 - AI Source Rules, Google Indexing Submitter, GMB Auto-Poster
@@ -212,6 +217,15 @@ class ContentFactory_RDM {
             }
         } catch (\Throwable $e) {
             error_log('ContentFactory Redirect Manager init error: ' . $e->getMessage());
+        }
+        
+        // Initialize v3.6.0 - Bulk Meta API
+        try {
+            if (class_exists('CFRDM_Bulk_Meta')) {
+                CFRDM_Bulk_Meta::get_instance()->init();
+            }
+        } catch (\Throwable $e) {
+            error_log('ContentFactory Bulk Meta init error: ' . $e->getMessage());
         }
         
         // Initialize v3.2.7 modules

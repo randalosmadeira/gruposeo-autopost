@@ -1,11 +1,11 @@
 {
-  "version": "3.5.0",
+  "version": "3.6.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.5.0 - Site Crawler: Verificação REAL de links quebrados via HTTP HEAD, detector de redirect chains/loops, scanner de conteúdo duplicado (MD5), auditoria de títulos/metas/H1, análise de estrutura do site (órfãs, anchors, segurança), auditoria de robots/directives e imagens. Endpoint unificado full-site-crawl com score 0-100.",
-  "released": "2026-02-19T12:00:00-03:00",
+  "changelog": "v3.6.0 - Bulk Meta Update API (Rank Math/Yoast compatible), Readability Analysis v2 (passive voice, transition words, sentence complexity), AI Content Suggestions em tempo real, detecção automática de SEO plugin instalado, score Coleman-Liau + Gunning Fog, compatibilidade bidirecional Rank Math + Yoast SEO.",
+  "released": "2026-02-22T12:00:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",
@@ -59,6 +59,14 @@
     "duplicate_content_scanner",
     "site_structure_analyzer",
     "image_audit",
-    "directive_audit"
+    "directive_audit",
+    "bulk_meta_update",
+    "readability_analysis_v2",
+    "ai_optimize_realtime",
+    "passive_voice_detector",
+    "transition_words_check",
+    "sentence_complexity_score",
+    "seo_plugin_compatibility",
+    "content_ai_suggestions"
   ]
 }
