@@ -592,8 +592,8 @@ async function optimizeExistingContent(article: any, analysis: any, project: any
   const orchestration = orchestrate(article.title || article.keyword, article.keyword, projectConfig);
   const vernizDNA = orchestration.vernizSection;
 
-  // Truncate content to avoid token overflow — keep first 8000 chars
-  const contentForAI = (article.content || "").substring(0, 8000);
+  // Truncate content to avoid token overflow — keep first 14000 chars
+  const contentForAI = (article.content || "").substring(0, 14000);
 
   const prompt = `Reescreva COMPLETAMENTE este artigo com SEO avançado.
 
@@ -630,12 +630,14 @@ TÍTULO ATUAL: ${article.title}
 CONTEÚDO A REESCREVER:
 ${contentForAI}
 
-RESPONDA APENAS COM JSON:
+RESPONDA APENAS COM JSON VÁLIDO (use EXATAMENTE estas chaves):
 {
-  "optimized_content": "HTML completo reescrito",
-  "optimized_title": "título otimizado (55-80 chars)",
-  "optimized_meta": "meta description (145-180 chars)"
-}`;
+  "content": "HTML COMPLETO reescrito do artigo inteiro",
+  "title": "título otimizado (55-80 chars)",
+  "meta_description": "meta description (145-180 chars)"
+}
+
+ATENÇÃO: Use as chaves "content", "title" e "meta_description" — NÃO mude os nomes.`;
 
   const aiContent = await orchestrator.call('content_editing', [
     { role: 'system', content: `Você é um editor SEO sênior. Reescreva conteúdo para Flesch ≥ 70 com frases curtas, voz ativa, HTML semântico.
@@ -646,19 +648,40 @@ Tags permitidas: p, strong, em, ul, ol, li, blockquote, a, table, h2-h6, section
 
   try {
     const parsed = extractJsonFromAIResponse(aiContent);
+    // Support multiple field name variants the AI might use
+    const extractedContent = parsed.optimized_content || parsed.content || parsed.html || parsed.article || null;
+    const extractedTitle = parsed.optimized_title || parsed.title || null;
+    const extractedMeta = parsed.optimized_meta || parsed.meta_description || parsed.excerpt || parsed.meta || null;
+    
+    console.log(`[AI SEO] Optimization extraction: content=${!!extractedContent} (${(extractedContent||'').length} chars), title=${!!extractedTitle}, meta=${!!extractedMeta}`);
+    
+    if (!extractedContent) {
+      console.error("[AI SEO] AI returned no content. Parsed keys:", Object.keys(parsed).join(', '));
+      throw new Error("A IA não retornou conteúdo otimizado. Tente novamente.");
+    }
+    
     return {
-      content: parsed.optimized_content || null,
-      title: parsed.optimized_title || null,
-      excerpt: parsed.optimized_meta || null,
+      content: extractedContent,
+      title: extractedTitle,
+      excerpt: extractedMeta,
     };
   } catch (parseErr) {
     console.error("[AI SEO] JSON extraction failed for optimizeExistingContent:", (parseErr as Error).message, "Raw length:", aiContent.length);
+    // Last resort: if AI returned raw HTML without JSON wrapper, try to use it directly
+    if (aiContent.includes('<h2') && aiContent.includes('<p') && aiContent.length > 500) {
+      console.warn("[AI SEO] Using raw AI response as HTML content (no JSON wrapper detected)");
+      return {
+        content: aiContent.trim(),
+        title: null,
+        excerpt: null,
+      };
+    }
     throw new Error("Erro ao processar resposta da IA na otimização. Tente novamente.");
   }
 }
 
 // === Content Analysis ===
-function analyzeContent(content: string, cleanContent: string, article: any) {
+function analyzeContent(content: string, cleanContent: string, article: any, project?: any) {
   const words = cleanContent.split(/\s+/).filter((w: string) => w.length > 0);
   const wordCount = words.length;
   const sentences = cleanContent.split(/[.!?]+/).filter((s: string) => s.trim().length > 0);
@@ -714,8 +737,12 @@ function analyzeContent(content: string, cleanContent: string, article: any) {
   const hasFAQ = /faq|perguntas frequentes|dúvidas comuns/i.test(cleanContent);
   const hasConclusion = /conclus[ãa]o|considerações finais|em suma/i.test(cleanContent);
   const hasCTA = /consulte|entre em contato|saiba mais|fale conosco|whatsapp|agende/i.test(cleanContent);
-  const internalLinksCount = (content.match(/<a[^>]+href=["'][^"']*(?!https?:\/\/)[^"']*["']/gi) || []).length;
-  const externalLinksCount = (content.match(/<a[^>]+href=["']https?:\/\//gi) || []).length;
+  const allLinks = content.match(/<a[^>]+href=["']https?:\/\/[^"']+["']/gi) || [];
+  const externalLinksArr = allLinks.filter((l: string) => !l.includes(project?.domain || '___'));
+  const internalLinksArr = allLinks.filter((l: string) => project?.domain && l.includes(project.domain));
+  const relativeLinks = content.match(/<a[^>]+href=["']\/[^"']*["']/gi) || [];
+  const internalLinksCount = internalLinksArr.length + relativeLinks.length;
+  const externalLinksCount = externalLinksArr.length;
 
   const paragraphs = content.match(/<p[^>]*>[\s\S]*?<\/p>/gi) || [];
   const longParagraphs = paragraphs.filter((p: string) => {
