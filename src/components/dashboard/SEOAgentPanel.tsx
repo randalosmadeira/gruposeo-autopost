@@ -94,7 +94,15 @@ export function SEOAgentPanel() {
   const totalIndexed = completedRuns.reduce((sum, r) => sum + (r.indexing_submitted || 0), 0);
   const totalRedirects = completedRuns.reduce((sum, r) => {
     const d = r.details as any;
-    return sum + (d?.autonomous_fix?.redirects_created || 0);
+    return sum + (d?.autonomous_fix?.redirects_created || 0) + (d?.broken_links_fix?.redirects_created || 0);
+  }, 0);
+  const totalBrokenFixed = completedRuns.reduce((sum, r) => {
+    const d = r.details as any;
+    return sum + (d?.broken_links_fix?.fixed || 0);
+  }, 0);
+  const totalBulkMeta = completedRuns.reduce((sum, r) => {
+    const d = r.details as any;
+    return sum + (d?.bulk_meta_fix?.fixed || 0);
   }, 0);
 
   // Extract audit data from latest completed run
@@ -112,6 +120,10 @@ export function SEOAgentPanel() {
       indexing: d?.indexing || {},
       metaAudit: d?.meta_audit || {},
       internalLinks: d?.internal_links || {},
+      brokenLinksFix: d?.broken_links_fix || {},
+      bulkMetaFix: d?.bulk_meta_fix || {},
+      brokenLinks: d?.broken_links || {},
+      sitemapOpt: d?.sitemap_optimization || {},
     };
   }, [completedRuns]);
 
@@ -147,7 +159,7 @@ export function SEOAgentPanel() {
         <CardTitle className="text-lg flex items-center gap-2">
           <Bot className="w-5 h-5 text-primary" />
           Agente SEO Autônomo
-          <Badge variant="secondary" className="text-xs">v3.4.5</Badge>
+          <Badge variant="secondary" className="text-xs">v3.6.0</Badge>
         </CardTitle>
         <Button
           size="sm"
@@ -165,21 +177,34 @@ export function SEOAgentPanel() {
       </CardHeader>
       <CardContent className="space-y-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
+           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview" className="text-xs">Resumo</TabsTrigger>
             <TabsTrigger value="audit" className="text-xs">Auditoria</TabsTrigger>
+            <TabsTrigger value="fixes" className="text-xs">Correções</TabsTrigger>
             <TabsTrigger value="actions" className="text-xs">Ações</TabsTrigger>
             <TabsTrigger value="history" className="text-xs">Histórico</TabsTrigger>
           </TabsList>
 
           {/* OVERVIEW TAB */}
           <TabsContent value="overview" className="space-y-3 mt-3">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {[
                 { icon: FileCheck, value: totalFixed, label: 'Metas Fix', color: 'text-green-500' },
                 { icon: Link2, value: totalLinks, label: 'Links Aplicados', color: 'text-blue-500' },
                 { icon: Search, value: totalIndexed, label: 'URLs Indexadas', color: 'text-amber-500' },
-                { icon: ArrowRight, value: totalRedirects, label: 'Redirects', color: 'text-purple-500' },
+                { icon: ArrowRight, value: totalRedirects, label: 'Redirects 301', color: 'text-purple-500' },
+              ].map((stat, i) => (
+                <div key={i} className="p-2.5 bg-muted/50 rounded-lg text-center">
+                  <stat.icon className={cn("w-4 h-4 mx-auto mb-1", stat.color)} />
+                  <p className="text-xl font-bold text-foreground">{stat.value}</p>
+                  <p className="text-[10px] text-muted-foreground">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { icon: AlertTriangle, value: totalBrokenFixed, label: '404s Corrigidos', color: 'text-red-500' },
+                { icon: Zap, value: totalBulkMeta, label: 'Títulos/Metas IA', color: 'text-cyan-500' },
                 { icon: TrendingUp, value: latestAudit?.score || 0, label: 'SEO Score', color: scoreColor(latestAudit?.score || 0) },
               ].map((stat, i) => (
                 <div key={i} className="p-2.5 bg-muted/50 rounded-lg text-center">
@@ -264,6 +289,98 @@ export function SEOAgentPanel() {
               <div className="text-center py-6 text-muted-foreground">
                 <Shield className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">Nenhum dado de auditoria. Execute o agente para diagnosticar.</p>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* FIXES TAB - New v3.6.0 */}
+          <TabsContent value="fixes" className="space-y-3 mt-3">
+            {latestAudit ? (
+              <ScrollArea className="max-h-[350px]">
+                <div className="space-y-3">
+                  {/* Broken Links Fixed */}
+                  {latestAudit.brokenLinks?.broken_found > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3 text-destructive" /> Links Quebrados (404)
+                      </p>
+                      <div className="flex items-center gap-2 p-2 bg-destructive/5 rounded-lg">
+                        <span className="text-lg font-bold text-destructive">{latestAudit.brokenLinks.broken_found}</span>
+                        <span className="text-xs text-muted-foreground">detectados</span>
+                        {latestAudit.brokenLinksFix?.fixed > 0 && (
+                          <>
+                            <ArrowRight className="w-3 h-3 text-muted-foreground" />
+                            <span className="text-lg font-bold text-green-500">{latestAudit.brokenLinksFix.fixed}</span>
+                            <span className="text-xs text-green-600">corrigidos com 301</span>
+                          </>
+                        )}
+                      </div>
+                      {latestAudit.brokenLinksFix?.details?.map((d: string, i: number) => (
+                        <p key={i} className="text-xs text-foreground bg-green-500/5 p-1.5 rounded">{d}</p>
+                      ))}
+                      {latestAudit.brokenLinks?.broken_urls?.slice(0, 5).map((b: any, i: number) => (
+                        <p key={`b-${i}`} className="text-xs text-muted-foreground truncate">
+                          🔴 {b.broken_url} ({b.status})
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Redirect Chains */}
+                  {latestAudit.brokenLinks?.redirects_found > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                        <ArrowRight className="w-3 h-3" /> Redirect Chains Simplificadas
+                      </p>
+                      <p className="text-xs text-foreground bg-amber-500/5 p-1.5 rounded">
+                        ⚠ {latestAudit.brokenLinks.redirects_found} cadeias de redirecionamento detectadas
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Bulk Meta Fix */}
+                  {latestAudit.bulkMetaFix?.fixed > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                        <FileCheck className="w-3 h-3" /> Títulos & Metas Otimizados via IA
+                      </p>
+                      <div className="flex items-center gap-2 p-2 bg-cyan-500/5 rounded-lg">
+                        <span className="text-lg font-bold text-cyan-500">{latestAudit.bulkMetaFix.fixed}</span>
+                        <span className="text-xs text-muted-foreground">títulos/metas corrigidos automaticamente</span>
+                      </div>
+                      {latestAudit.bulkMetaFix?.details?.map((d: string, i: number) => (
+                        <p key={i} className="text-xs text-foreground bg-cyan-500/5 p-1.5 rounded">{d}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Sitemap Optimization */}
+                  {latestAudit.sitemapOpt?.details?.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                        <Globe className="w-3 h-3" /> Otimização de Sitemap
+                      </p>
+                      {latestAudit.sitemapOpt.details.map((d: string, i: number) => (
+                        <p key={i} className="text-xs text-foreground bg-muted/50 p-1.5 rounded">🗺 {d}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* No fixes */}
+                  {!latestAudit.brokenLinks?.broken_found &&
+                   !latestAudit.bulkMetaFix?.fixed &&
+                   !latestAudit.sitemapOpt?.details?.length && (
+                    <div className="text-center py-4 text-muted-foreground text-sm">
+                      <Shield className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                      Execute o agente para detectar e corrigir problemas.
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            ) : (
+              <div className="text-center py-6 text-muted-foreground">
+                <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Execute o agente para ver correções automáticas.</p>
               </div>
             )}
           </TabsContent>

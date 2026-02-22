@@ -106,6 +106,12 @@ function cfrdm_load_dependencies() {
         require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-bulk-meta.php';
     }
     
+    // v3.6.0 - AI Auto SEO Fix (404 redirects, bulk title/meta correction)
+    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-auto-seo-fix.php')) {
+        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-auto-seo-fix.php';
+        CFRDM_AI_Auto_SEO_Fix::init();
+    }
+    
     // v3.2.7 - AI Source Rules, Google Indexing Submitter, GMB Auto-Poster
     if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-source-rules.php')) {
         require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-source-rules.php';
