@@ -456,7 +456,8 @@ async function generateImageWithGemini(
   prompt: string,
   options: GeminiImageOptions = {}
 ): Promise<{ imageData: string; mimeType: string } | null> {
-  const apiKey = Deno.env.get("GEMINI_API_KEY");
+  // Use runtime key registry (BYOK) then fall back to env
+  const apiKey = _runtimeKeys["GEMINI_API_KEY"] || Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) {
     console.log("Gemini API key not available for image generation");
     return null;
@@ -608,12 +609,8 @@ Requirements:
     console.warn("[ImageGen] OpenAI provider requested but OPENAI_API_KEY not available – falling back to Gemini.");
   }
 
-  // ── Try Gemini Imagen ───────────────────────────────────────────────────────
-  if (provider !== "openai" || !hasOpenAIKey()) {
-    console.log("[ImageGen] Using Gemini Imagen...");
-  } else {
-    console.log("[ImageGen] Falling back to Gemini Imagen...");
-  }
+  // ── Try Gemini Imagen (always as fallback or primary) ────────────────────
+  console.log("[ImageGen] Trying Gemini Imagen...");
 
   const geminiResult = await generateImageWithGemini(enhancedPrompt, options);
   if (geminiResult) {
