@@ -432,14 +432,13 @@ Deno.serve(async (req) => {
         console.log(`[SEO Agent] [${project.name}] Step 8: Full Site Crawl (real HTTP)`);
 
         let fullCrawlResult: Record<string, unknown> = {};
-        // Try the unified full-site-crawl endpoint first (v3.5.0+)
         if (isPlugin && apiKey && baseUrl) {
           try {
             const crawlResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/full-site-crawl`, {
               method: "POST",
               headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
               body: JSON.stringify({ limit: 300 }),
-              signal: AbortSignal.timeout(120000), // 2min timeout for full crawl
+              signal: AbortSignal.timeout(120000),
             });
             if (crawlResp.ok) {
               fullCrawlResult = await crawlResp.json();
@@ -450,7 +449,6 @@ Deno.serve(async (req) => {
           }
         }
 
-        // If full crawl succeeded, extract results; otherwise fall back to individual helpers
         const brokenLinksResult = (fullCrawlResult as any).broken_links || await detectBrokenLinks(supabase, project, baseUrl, isPlugin, apiKey);
         const duplicateResult = (fullCrawlResult as any).duplicates || await detectDuplicateContent(supabase, project, baseUrl, isPlugin, apiKey);
         const metadataAudit = (fullCrawlResult as any).titles_metas || await auditPageMetadata(baseUrl, isPlugin, apiKey, project);
@@ -461,7 +459,6 @@ Deno.serve(async (req) => {
         details.metadata_audit = metadataAudit;
         details.redirect_audit = redirectAudit;
         
-        // New v3.5.0 data
         if ((fullCrawlResult as any).site_structure) details.site_structure = (fullCrawlResult as any).site_structure;
         if ((fullCrawlResult as any).directives) details.directives = (fullCrawlResult as any).directives;
         if ((fullCrawlResult as any).images) details.images = (fullCrawlResult as any).images;
@@ -469,7 +466,267 @@ Deno.serve(async (req) => {
         if ((fullCrawlResult as any).priority_issues) details.priority_issues = (fullCrawlResult as any).priority_issues;
 
         // ═══════════════════════════════════════════
-        // STEP 9: Summary
+        // STEP 9: AUTO-FIX Broken Links (404 → 301 Redirects) v3.6.0
+        // ═══════════════════════════════════════════
+        console.log(`[SEO Agent] [${project.name}] Step 9: Auto-Fix Broken Links & 404s`);
+
+        let brokenLinksFixed = 0;
+        let redirectsAutoCreated = 0;
+        const brokenFixDetails: string[] = [];
+
+        if (brokenLinksResult.broken_found > 0 && isPlugin && apiKey && baseUrl) {
+          const brokenUrls = brokenLinksResult.broken_urls || [];
+          
+          // For each broken URL, try to find the best redirect target via AI
+          if (brokenUrls.length > 0) {
+            const { data: allPublished } = await supabase
+              .from("wordpress_article_index")
+              .select("wp_post_title, wp_post_url, primary_keyword, topic_cluster")
+              .eq("project_id", project.id)
+              .eq("wp_post_status", "publish")
+              .limit(500);
+
+            if (allPublished && allPublished.length > 0) {
+              const brokenBatch = brokenUrls.slice(0, 50);
+              const brokenList = brokenBatch.map((b: any) => `- ${b.broken_url} (status: ${b.status})`).join("\n");
+              const publishedList = allPublished.slice(0, 100).map(a => `- ${a.wp_post_url} | ${a.wp_post_title} | kw: ${a.primary_keyword || "N/A"}`).join("\n");
+
+              try {
+                const redirectPrompt = `URLs QUEBRADAS (404/410):
+${brokenList}
+
+ARTIGOS VÁLIDOS:
+${publishedList}
+
+Para cada URL quebrada, encontre o melhor artigo válido para redirecionar (301).
+Escolha com base na similaridade de tema, keyword e slug.
+Se não houver match relevante, redirecione para a homepage.
+
+JSON: {"redirects":[{"broken_url":"...","target_url":"...","reason":"..."}]}`;
+
+                const aiResult = await orchestrator.call("seo_analysis", [
+                  { role: "system", content: "Especialista SEO. Gere redirects 301 inteligentes para URLs quebradas. APENAS JSON." },
+                  { role: "user", content: redirectPrompt },
+                ], { maxTokens: 2000, temperature: 0.1 });
+
+                let jsonStr = aiResult.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+                const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+                if (jsonMatch) jsonStr = jsonMatch[0];
+                const parsed = JSON.parse(jsonStr);
+
+                if (parsed?.redirects && Array.isArray(parsed.redirects)) {
+                  const redirectsToCreate = parsed.redirects.map((r: any) => ({
+                    source_url: r.broken_url,
+                    target_url: r.target_url,
+                    category: "auto_404_fix",
+                    notes: `Auto-fix v3.6.0: ${r.reason || "AI-matched"}`,
+                  }));
+
+                  const redirectResult = await manageRedirects(baseUrl, isPlugin, apiKey, redirectsToCreate);
+                  redirectsAutoCreated = redirectResult.created;
+                  brokenLinksFixed = redirectResult.created;
+                  if (redirectResult.created > 0) {
+                    brokenFixDetails.push(`✅ ${redirectResult.created} redirects 301 criados para URLs 404`);
+                  }
+                }
+              } catch (e) {
+                console.error(`[SEO Agent] [${project.name}] Broken link AI fix error:`, e);
+              }
+            }
+          }
+        }
+
+        // Auto-fix redirect chains
+        if (brokenLinksResult.redirects_found > 0 && isPlugin && apiKey && baseUrl) {
+          const chains = brokenLinksResult.redirect_chains || [];
+          if (chains.length > 0) {
+            const chainRedirects = chains.map((c: any) => ({
+              source_url: c.url,
+              target_url: c.final_url,
+              category: "chain_fix",
+              notes: `Auto-fix: chain de ${c.chain_length} hops simplificada`,
+            }));
+            const chainResult = await manageRedirects(baseUrl, isPlugin, apiKey, chainRedirects);
+            if (chainResult.created > 0) {
+              redirectsAutoCreated += chainResult.created;
+              brokenFixDetails.push(`✅ ${chainResult.created} redirect chains simplificadas`);
+            }
+          }
+        }
+
+        details.broken_links_fix = { fixed: brokenLinksFixed, redirects_created: redirectsAutoCreated, details: brokenFixDetails };
+
+        // ═══════════════════════════════════════════
+        // STEP 10: AI Bulk Title & Meta Fix v3.6.0
+        // ═══════════════════════════════════════════
+        console.log(`[SEO Agent] [${project.name}] Step 10: AI Bulk Title & Meta Description Fix`);
+
+        let bulkMetasFixed = 0;
+        const bulkMetaDetails: string[] = [];
+
+        if (isPlugin && apiKey && baseUrl) {
+          // Get articles with meta issues from our index
+          const { data: metaIssueArticles } = await supabase
+            .from("wordpress_article_index")
+            .select("id, wp_post_id, wp_post_title, wp_post_url, wp_post_slug, primary_keyword, secondary_keywords, word_count, seo_score")
+            .eq("project_id", project.id)
+            .eq("wp_post_status", "publish")
+            .order("seo_score", { ascending: true })
+            .limit(500);
+
+          if (metaIssueArticles && metaIssueArticles.length > 0) {
+            // Filter articles needing title/meta fixes
+            const needsFix = metaIssueArticles.filter(a => {
+              const titleLen = (a.wp_post_title || "").length;
+              return titleLen > 70 || titleLen < 25 || (a.seo_score || 0) < 50;
+            });
+
+            if (needsFix.length > 0) {
+              const batchSize = 20;
+              for (let i = 0; i < Math.min(needsFix.length, 100); i += batchSize) {
+                const batch = needsFix.slice(i, i + batchSize);
+                const articlesList = batch.map(a => 
+                  `- post_id: ${a.wp_post_id} | Título: "${a.wp_post_title}" (${(a.wp_post_title || "").length} chars) | kw: ${a.primary_keyword || "N/A"} | score: ${a.seo_score || 0}`
+                ).join("\n");
+
+                try {
+                  const metaPrompt = `Corrija títulos e meta descriptions para estes artigos com problemas SEO:
+
+${articlesList}
+
+REGRAS INEGOCIÁVEIS:
+- meta_title: 55-65 caracteres, keyword no início, sem cortar palavras
+- meta_description: 145-160 caracteres, keyword nos primeiros 60 chars, CTA sutil
+- focus_keyword: se ausente, extrair do título
+- Flesch 60+: vocabulário simples e direto
+- Nicho: ${project.nicho || "geral"} | Empresa: ${project.empresa_nome || project.name}
+- LIMPAR: remover parênteses órfãos, anos truncados, caracteres especiais pendentes
+
+JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","focus_keyword":"..."}]}`;
+
+                  const aiResult = await orchestrator.call("seo_analysis", [
+                    { role: "system", content: "Especialista SEO brasileiro. Gere títulos e meta descriptions otimizadas. Máximo CTR. APENAS JSON válido." },
+                    { role: "user", content: metaPrompt },
+                  ], { maxTokens: 2000, temperature: 0.3 });
+
+                  let jsonStr = aiResult.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+                  const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+                  if (jsonMatch) jsonStr = jsonMatch[0];
+                  const parsed = JSON.parse(jsonStr);
+
+                  if (parsed?.fixes && Array.isArray(parsed.fixes)) {
+                    // Apply via bulk-meta-update endpoint
+                    const updates = parsed.fixes.map((fix: any) => ({
+                      post_id: fix.wp_post_id,
+                      meta_title: fix.meta_title,
+                      meta_description: fix.meta_description,
+                      focus_keyword: fix.focus_keyword,
+                    }));
+
+                    try {
+                      const bulkResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/bulk-meta-update`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+                        body: JSON.stringify({ updates }),
+                      });
+                      if (bulkResp.ok) {
+                        const bulkData = await bulkResp.json();
+                        const batchFixed = bulkData.updated || bulkData.success_count || 0;
+                        bulkMetasFixed += batchFixed;
+                        if (batchFixed > 0) {
+                          bulkMetaDetails.push(`✅ ${batchFixed} títulos/metas otimizados via IA`);
+                        }
+                      }
+                    } catch {
+                      // Fallback: apply individually via AI SEO endpoint
+                      for (const fix of parsed.fixes) {
+                        try {
+                          const singleResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/update-seo-meta`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+                            body: JSON.stringify({ post_id: fix.wp_post_id, meta_title: fix.meta_title, meta_description: fix.meta_description, focus_keyword: fix.focus_keyword }),
+                          });
+                          if (singleResp.ok) bulkMetasFixed++;
+                        } catch { /* continue */ }
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.error(`[SEO Agent] [${project.name}] Bulk meta AI fix error:`, e);
+                }
+              }
+            }
+          }
+        }
+
+        details.bulk_meta_fix = { fixed: bulkMetasFixed, details: bulkMetaDetails };
+        metaIssuesFixed += bulkMetasFixed;
+
+        // ═══════════════════════════════════════════
+        // STEP 11: Advanced Sitemap Optimization v3.6.0
+        // ═══════════════════════════════════════════
+        console.log(`[SEO Agent] [${project.name}] Step 11: Advanced Sitemap Optimization`);
+
+        const sitemapOptDetails: string[] = [];
+        if (isPlugin && apiKey && baseUrl) {
+          // Validate sitemap structure
+          try {
+            const siteRoot = baseUrl.replace(/\/blog\/?$/, "");
+            for (const sitemapUrl of [`${siteRoot}/wp-sitemap.xml`, `${siteRoot}/sitemap_index.xml`, `${siteRoot}/sitemap.xml`]) {
+              try {
+                const sResp = await fetch(sitemapUrl, { signal: AbortSignal.timeout(8000) });
+                if (sResp.ok) {
+                  const sContent = await sResp.text();
+                  const urlCount = (sContent.match(/<loc>/g) || []).length;
+                  sitemapOptDetails.push(`Sitemap encontrado: ${sitemapUrl} (${urlCount} URLs)`);
+                  
+                  // Check for 404 URLs in sitemap
+                  const locMatches = sContent.match(/<loc>(.*?)<\/loc>/g) || [];
+                  let dead404InSitemap = 0;
+                  const sampleUrls = locMatches.slice(0, 30).map(m => m.replace(/<\/?loc>/g, ""));
+                  for (const url of sampleUrls) {
+                    try {
+                      const checkResp = await fetch(url, { method: "HEAD", redirect: "manual", signal: AbortSignal.timeout(5000) });
+                      if (checkResp.status === 404 || checkResp.status === 410) dead404InSitemap++;
+                    } catch { /* skip */ }
+                  }
+                  if (dead404InSitemap > 0) {
+                    sitemapOptDetails.push(`⚠ ${dead404InSitemap} URLs mortas no sitemap (amostra de ${sampleUrls.length})`);
+                    // Try to refresh sitemap to remove dead URLs
+                    try {
+                      await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-sitemap`, {
+                        method: "POST",
+                        headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+                        body: JSON.stringify({ remove_404: true }),
+                      });
+                      sitemapOptDetails.push("✅ Sitemap refresh solicitado (remoção de 404s)");
+                    } catch { /* */ }
+                  }
+                  break;
+                }
+              } catch { /* try next */ }
+            }
+          } catch { /* */ }
+
+          // Ping all search engines
+          const siteRoot = baseUrl.replace(/\/blog\/?$/, "");
+          let bestSitemap = `${siteRoot}/wp-sitemap.xml`;
+          try {
+            for (const c of [`${siteRoot}/wp-sitemap.xml`, `${siteRoot}/sitemap_index.xml`, `${siteRoot}/sitemap.xml`]) {
+              try { const r = await fetch(c, { method: "HEAD", signal: AbortSignal.timeout(3000) }); if (r.ok) { bestSitemap = c; break; } } catch { /* next */ }
+            }
+            await Promise.all([
+              fetch(`https://www.google.com/ping?sitemap=${encodeURIComponent(bestSitemap)}`).catch(() => {}),
+              fetch(`https://www.bing.com/ping?sitemap=${encodeURIComponent(bestSitemap)}`).catch(() => {}),
+              fetch(`https://webmaster.yandex.com/ping?sitemap=${encodeURIComponent(bestSitemap)}`).catch(() => {}),
+            ]);
+            sitemapOptDetails.push("✅ Google, Bing e Yandex notificados sobre sitemap");
+          } catch { /* */ }
+        }
+        details.sitemap_optimization = { details: sitemapOptDetails };
+
+        // ═══════════════════════════════════════════
+        // STEP 12: Summary
         // ═══════════════════════════════════════════
         const summaryParts = [];
         if (metaIssuesFixed > 0) summaryParts.push(`${metaIssuesFixed} metas corrigidos`);
@@ -485,13 +742,15 @@ Deno.serve(async (req) => {
         if (autonomousResult.redirects_created > 0) summaryParts.push(`${autonomousResult.redirects_created} redirects criados`);
         if (crossLinkResult.cross_links_created > 0) summaryParts.push(`${crossLinkResult.cross_links_created} cross-links criados (verificados)`);
         if (crossLinkResult.articles_enriched > 0) summaryParts.push(`${crossLinkResult.articles_enriched} artigos enriquecidos`);
-        // v3.4.9 new metrics
         if (brokenLinksResult.broken_found > 0) summaryParts.push(`🔴 ${brokenLinksResult.broken_found} links quebrados (404)`);
+        if (brokenLinksFixed > 0) summaryParts.push(`✅ ${brokenLinksFixed} 404s corrigidos com redirects 301`);
+        if (redirectsAutoCreated > 0) summaryParts.push(`${redirectsAutoCreated} redirects auto-criados`);
         if (brokenLinksResult.redirects_found > 0) summaryParts.push(`⚠️ ${brokenLinksResult.redirects_found} cadeias de redirect`);
         if (duplicateResult.duplicates_found > 0) summaryParts.push(`${duplicateResult.duplicates_found} conteúdos duplicados`);
         if (duplicateResult.thin_pages > 0) summaryParts.push(`${duplicateResult.thin_pages} páginas finas (<300p)`);
         if (metadataAudit.missing_titles > 0) summaryParts.push(`${metadataAudit.missing_titles} títulos ausentes`);
         if (metadataAudit.missing_descriptions > 0) summaryParts.push(`${metadataAudit.missing_descriptions} meta desc ausentes`);
+        if (bulkMetasFixed > 0) summaryParts.push(`✅ ${bulkMetasFixed} títulos/metas corrigidos via IA`);
         if (redirectAudit.chains > 0) summaryParts.push(`${redirectAudit.chains} redirect chains`);
         if (redirectAudit.loops > 0) summaryParts.push(`🔴 ${redirectAudit.loops} redirect loops`);
 
