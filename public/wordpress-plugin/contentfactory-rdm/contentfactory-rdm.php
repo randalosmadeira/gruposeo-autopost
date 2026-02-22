@@ -295,6 +295,7 @@ class ContentFactory_RDM {
         add_action('cfrdm_process_content_queue', array($this, 'process_content_queue_callback'));
         add_action('cfrdm_cleanup_structured_logs', array($this, 'cleanup_structured_logs_callback'));
         add_action('cfrdm_reset_stuck_cron_jobs', array($this, 'reset_stuck_jobs_callback'));
+        add_action('cfrdm_run_self_healing', array($this, 'self_healing_callback'));
         
         // Auto-post to social on publish
         add_action('publish_post', array($this, 'auto_queue_social_post'), 100, 2);
@@ -1260,7 +1261,16 @@ private function init_admin_hooks() {
      */
     public function reset_stuck_jobs_callback() {
         cfrdm_load_dependencies();
-        CFRDM_Cron_Scheduler::reset_stuck_jobs(30);
+        CFRDM_Cron_Scheduler::reset_stuck_jobs(15);
+    }
+    
+    /**
+     * Self-healing: repair truncated history, stuck maintenance, missing jobs
+     */
+    public function self_healing_callback() {
+        cfrdm_load_dependencies();
+        $result = CFRDM_Cron_Scheduler::run_self_healing();
+        CFRDM_Logger::info('self_healing', 'Self-healing executado', $result);
     }
     
     /**

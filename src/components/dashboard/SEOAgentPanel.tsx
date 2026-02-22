@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -13,7 +13,7 @@ import {
   Bot, Play, CheckCircle2, AlertCircle, Loader2, Link2,
   Search, FileCheck, Clock, TrendingUp, Globe, Shield,
   AlertTriangle, ArrowRight, Trash2, ExternalLink, BarChart3,
-  MapPin, Zap, RefreshCw,
+  MapPin, Zap, RefreshCw, Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -59,6 +59,22 @@ export function SEOAgentPanel() {
     enabled: !!user?.id,
     refetchInterval: isRunning ? 5000 : 30000,
   });
+
+  // Real-time subscription for live updates
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel('seo-agent-realtime')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'seo_agent_runs',
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['seo-agent-runs'] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id, queryClient]);
 
   const runAgent = useMutation({
     mutationFn: async () => {

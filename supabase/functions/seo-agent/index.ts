@@ -305,6 +305,31 @@ Deno.serve(async (req) => {
 
     console.log(`[SEO Agent v${PLUGIN_VERSION}] Starting run: type=${runType}, user=${targetUserId || "all"}, project=${targetProjectId || "all"}`);
 
+    // ═══════════════════════════════════════════
+    // PRE-STEP: Auto-repair stuck/truncated runs
+    // ═══════════════════════════════════════════
+    const cutoff30min = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const { data: stuckRuns } = await supabase
+      .from("seo_agent_runs")
+      .select("id, project_id, started_at")
+      .eq("status", "running")
+      .lt("started_at", cutoff30min)
+      .limit(50);
+
+    if (stuckRuns && stuckRuns.length > 0) {
+      console.log(`[SEO Agent] Auto-repairing ${stuckRuns.length} stuck/truncated runs`);
+      for (const stuck of stuckRuns) {
+        await supabase
+          .from("seo_agent_runs")
+          .update({
+            status: "error",
+            completed_at: new Date().toISOString(),
+            error_message: "Auto-recuperado: run travado por >30min [self-healing v3.6.0]",
+          })
+          .eq("id", stuck.id);
+      }
+    }
+
     let query = supabase
       .from("projects")
       .select("id, user_id, name, domain, wordpress_url, wordpress_username, wordpress_app_password, seo_plugin, nicho, empresa_nome, empresa_telefone, empresa_endereco, empresa_whatsapp, social_instagram, social_youtube, social_linkedin, social_twitter, social_tiktok, social_google_maps, social_linktree, cta_comunidade, cta_conclusao, cta_leads, compliance_rules")

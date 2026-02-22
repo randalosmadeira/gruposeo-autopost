@@ -539,7 +539,7 @@ class CFRDM_Cron_Scheduler {
     }
     
     /**
-     * Reset stuck jobs
+     * Reset stuck jobs + repair truncated history
      */
     public static function reset_stuck_jobs($timeout_minutes = 30) {
         global $wpdb;
@@ -559,7 +559,7 @@ class CFRDM_Cron_Scheduler {
             $wpdb->update($history_table, array(
                 'status' => 'timeout',
                 'finished_at' => current_time('mysql'),
-                'error_message' => 'Job excedeu o tempo limite',
+                'error_message' => 'Job excedeu o tempo limite - auto-recuperado v3.6.0',
             ), array('id' => $entry['id']));
             
             // Release lock
@@ -568,7 +568,126 @@ class CFRDM_Cron_Scheduler {
             CFRDM_Logger::warning('cron_scheduler', 'Job travado resetado: ' . $entry['job_name']);
         }
         
-        return count($stuck);
+        // Repair truncated history (null finished_at, non-running status)
+        $truncated = $wpdb->query(
+            "UPDATE {$history_table} SET 
+                finished_at = COALESCE(finished_at, NOW()),
+                status = CASE 
+                    WHEN status = 'running' AND started_at < DATE_SUB(NOW(), INTERVAL 60 MINUTE) THEN 'timeout'
+                    WHEN status IS NULL OR status = '' THEN 'unknown'
+                    ELSE status 
+                END,
+                error_message = CASE 
+                    WHEN (status = 'running' AND started_at < DATE_SUB(NOW(), INTERVAL 60 MINUTE)) 
+                         OR status IS NULL OR status = '' 
+                    THEN CONCAT(COALESCE(error_message, ''), ' [auto-repair v3.6.0]')
+                    ELSE error_message 
+                END
+            WHERE (finished_at IS NULL AND status != 'running')
+               OR (status = 'running' AND started_at < DATE_SUB(NOW(), INTERVAL 60 MINUTE))
+               OR status IS NULL 
+               OR status = ''"
+        );
+        
+        if ($truncated > 0) {
+            CFRDM_Logger::info('cron_scheduler', "Histórico truncado reparado: {$truncated} registros");
+        }
+        
+        // Reset maintenance mode locks (WordPress transients)
+        self::clear_stale_maintenance_locks();
+        
+        // Auto-re-enable jobs disabled by consecutive errors (if errors are old)
+        $jobs_table = $wpdb->prefix . self::JOBS_TABLE;
+        $auto_recovered = $wpdb->query(
+            "UPDATE {$jobs_table} SET 
+                is_enabled = 1, 
+                consecutive_errors = 0,
+                last_error = CONCAT(COALESCE(last_error, ''), ' [auto-recovered v3.6.0]')
+            WHERE is_enabled = 0 
+              AND consecutive_errors > 0
+              AND last_run < DATE_SUB(NOW(), INTERVAL 2 HOUR)"
+        );
+        
+        if ($auto_recovered > 0) {
+            CFRDM_Logger::success('cron_scheduler', "Jobs auto-recuperados: {$auto_recovered}");
+        }
+        
+        return count($stuck) + $truncated + $auto_recovered;
+    }
+    
+    /**
+     * Clear stale maintenance/lock transients
+     */
+    private static function clear_stale_maintenance_locks() {
+        global $wpdb;
+        
+        // Delete expired CFRDM lock transients
+        $wpdb->query(
+            "DELETE FROM {$wpdb->options} 
+             WHERE option_name LIKE '_transient_cfrdm_cron_lock_%' 
+               AND option_name NOT LIKE '_transient_timeout_%'"
+        );
+        
+        // Delete expired timeout transients older than 1 hour
+        $wpdb->query($wpdb->prepare(
+            "DELETE a, b FROM {$wpdb->options} a
+             LEFT JOIN {$wpdb->options} b ON b.option_name = REPLACE(a.option_name, '_transient_timeout_', '_transient_')
+             WHERE a.option_name LIKE '_transient_timeout_cfrdm_%%'
+               AND a.option_value < %d",
+            time() - 3600
+        ));
+        
+        // Remove WordPress maintenance mode file if stale (>15 min)
+        $maintenance_file = ABSPATH . '.maintenance';
+        if (file_exists($maintenance_file)) {
+            $mtime = filemtime($maintenance_file);
+            if ($mtime && (time() - $mtime) > 900) {
+                @unlink($maintenance_file);
+                CFRDM_Logger::warning('cron_scheduler', 'Arquivo .maintenance travado removido (>15min)');
+            }
+        }
+    }
+    
+    /**
+     * Full self-healing diagnostic run
+     */
+    public static function run_self_healing() {
+        $result = array(
+            'stuck_reset' => self::reset_stuck_jobs(15),
+            'history_cleaned' => self::cleanup_history(30),
+            'tables_ok' => true,
+        );
+        
+        // Verify tables exist
+        global $wpdb;
+        $jobs_table = $wpdb->prefix . self::JOBS_TABLE;
+        $exists = $wpdb->get_var("SHOW TABLES LIKE '{$jobs_table}'");
+        if (!$exists) {
+            self::create_tables();
+            $result['tables_ok'] = false;
+            CFRDM_Logger::warning('cron_scheduler', 'Tabelas de cron recriadas pelo self-healing');
+        }
+        
+        // Re-register missing default jobs
+        $jobs = self::get_jobs();
+        $job_names = array_column($jobs, 'job_name');
+        $defaults = array(
+            'cfrdm_process_social_queue',
+            'cfrdm_sync_stats', 
+            'cfrdm_daily_cleanup',
+            'cfrdm_cleanup_logs',
+            'cfrdm_reset_stuck_jobs',
+            'cfrdm_self_healing',
+        );
+        
+        $missing = array_diff($defaults, $job_names);
+        if (!empty($missing)) {
+            self::register_default_jobs();
+            $result['jobs_restored'] = count($missing);
+            CFRDM_Logger::info('cron_scheduler', 'Jobs faltantes restaurados: ' . implode(', ', $missing));
+        }
+        
+        return $result;
     }
     
     /**
@@ -611,13 +730,22 @@ class CFRDM_Cron_Scheduler {
             array('timeout' => 60)
         );
         
-        // Reset stuck jobs (every 30 minutes)
+        // Reset stuck jobs (every 15 minutes)
         self::register_job(
             'cfrdm_reset_stuck_jobs',
             'cfrdm_reset_stuck_cron_jobs',
-            'every_30_minutes',
+            'every_15_minutes',
             array(),
             array('timeout' => 30)
+        );
+        
+        // Self-healing (every 2 hours)
+        self::register_job(
+            'cfrdm_self_healing',
+            'cfrdm_run_self_healing',
+            'every_2_hours',
+            array(),
+            array('timeout' => 120)
         );
     }
 }
