@@ -234,16 +234,25 @@ Deno.serve(async (req) => {
               const newAnalysis = analyzeContent(generated.content, newClean, updatedArticle);
               const newScore = Math.min(100, calculateScore(newAnalysis));
 
-              await supabase.from("articles").update({
+              const finalTitle = generated.title || article.keyword;
+              const finalExcerpt = generated.excerpt || `Saiba tudo sobre ${article.keyword}. Guia completo com dicas práticas e informações atualizadas.`;
+              
+              const { error: updateErr } = await supabase.from("articles").update({
                 content: generated.content,
-                title: generated.title || article.title,
-                excerpt: generated.excerpt || article.excerpt,
+                title: finalTitle,
+                excerpt: finalExcerpt,
                 slug: generated.slug || article.slug,
                 word_count: wordCount,
                 seo_score: newScore,
                 status: "ready",
                 image_prompt: generated.imagePrompt || null,
               }).eq("id", article.id);
+
+              if (updateErr) {
+                console.error(`[AI SEO] DB UPDATE FAILED for article ${article.id}:`, updateErr);
+                throw new Error(`Falha ao salvar artigo: ${updateErr.message}`);
+              }
+              console.log(`[AI SEO] ✅ Article ${article.id} saved: title="${finalTitle}", content=${generated.content.length} chars, score=${newScore}`);
 
               // Generate image if we have a prompt
               if (generated.imagePrompt) {
@@ -300,13 +309,22 @@ Deno.serve(async (req) => {
               if (wordCount > (article.word_count || 0)) changesMade.push(`Palavras: ${article.word_count || 0} → ${wordCount}`);
               if (changesMade.length === 0) changesMade.push('Conteúdo reescrito e otimizado');
 
-              await supabase.from("articles").update({
+              const finalOptTitle = optimized.title || article.title;
+              const finalOptExcerpt = optimized.excerpt || article.excerpt || `Descubra tudo sobre ${article.keyword}. Informações completas e atualizadas.`;
+              
+              const { error: optUpdateErr } = await supabase.from("articles").update({
                 content: optimized.content,
-                title: optimized.title || article.title,
-                excerpt: optimized.excerpt || article.excerpt,
+                title: finalOptTitle,
+                excerpt: finalOptExcerpt,
                 word_count: wordCount,
                 seo_score: newScore,
               }).eq("id", article.id);
+
+              if (optUpdateErr) {
+                console.error(`[AI SEO] DB UPDATE FAILED for optimize ${article.id}:`, optUpdateErr);
+                throw new Error(`Falha ao salvar otimização: ${optUpdateErr.message}`);
+              }
+              console.log(`[AI SEO] ✅ Article ${article.id} optimized: title="${finalOptTitle}", content=${optimized.content.length} chars, score=${newScore}`);
 
               // AUTO-REPUBLISH to WordPress if already published
               if (article.status === 'published' && article.published_url && project) {
@@ -506,6 +524,15 @@ async function generateFullContent(article: any, project: any, internalLinks: Ar
   const orchestration = orchestrate(article.title || keyword, keyword, projectConfig);
   const vernizDNA = orchestration.vernizSection;
 
+  // Social links for CTAs
+  const socialLinks: string[] = [];
+  if (project?.social_instagram) socialLinks.push(`Instagram: ${project.social_instagram}`);
+  if (project?.social_youtube) socialLinks.push(`YouTube: ${project.social_youtube}`);
+  if (project?.social_linkedin) socialLinks.push(`LinkedIn: ${project.social_linkedin}`);
+  if (project?.social_google_maps) socialLinks.push(`Google Maps: ${project.social_google_maps}`);
+  if (project?.empresa_whatsapp) socialLinks.push(`WhatsApp: ${project.empresa_whatsapp}`);
+  const socialStr = socialLinks.length > 0 ? socialLinks.join("\n") : "";
+
   const prompt = `Crie um artigo completo e otimizado para SEO sobre "${keyword}".
 
 DADOS DO PROJETO:
@@ -513,6 +540,7 @@ DADOS DO PROJETO:
 - Domínio: ${domain}
 - Nicho: ${nicho}
 - Tom: ${tom}
+${socialStr ? `\nREDES SOCIAIS (cite nos CTAs):\n${socialStr}` : ""}
 
 ${vernizDNA}
 
@@ -520,48 +548,85 @@ LINKS INTERNOS DISPONÍVEIS (USE no mínimo 10):
 ${internalLinksStr}
 
 ═══ REGRAS INEGOCIÁVEIS ═══
-- META-DESCRIPTION: 145-180 chars, frase COMPLETA com pontuação final
-- TÍTULO: 55-80 chars, COMPLETO, sem parênteses abertos
-- LINKS INTERNOS: MÍNIMO 10, ZERO TOLERÂNCIA
-- FLESCH >= 70: Frases máx 25 palavras, parágrafos 3-7 linhas
-- LINKS EXTERNOS: Mínimo 2 fontes autoritativas
-- Estrutura: H2 (mín 5) > H3 (mín 3)
-- FAQ: 5-8 perguntas
-- CTAs estratégicos
+1. TÍTULO: 55-80 chars, keyword no início, SEM ":" ou "Guia Completo"
+2. META-DESCRIPTION: 145-180 chars, frase COMPLETA com ponto final
+3. LINKS INTERNOS: MÍNIMO 10 como <a href="URL">texto âncora</a>
+4. LINKS EXTERNOS: Mínimo 2 fontes autoritativas (.gov.br, .edu.br, .org)
+5. FLESCH >= 70: Frases máx 25 palavras, parágrafos 3-7 linhas, voz ativa
+6. Estrutura: H2 (mín 5) > H3 (mín 3), HTML semântico
+7. FAQ: 5-8 perguntas com <h3> dentro de seção FAQ
+8. CTAs: 5 estratégicos (urgência, autoridade, lead, comunidade, fechamento)
+9. CONCLUSÃO: com CTA final e links de redes sociais
+10. MÍNIMO 1500 palavras de conteúdo
 
-FORMATO DA RESPOSTA - APENAS JSON VÁLIDO:
-{
-  "title": "título otimizado (55-80 chars)",
-  "slug": "slug-seo-friendly",
-  "meta_description": "meta description (145-180 chars)",
-  "content": "HTML COMPLETO do artigo",
-  "image_prompt": "prompt em inglês para imagem"
-}`;
+FORMATO DA RESPOSTA - JSON VÁLIDO COM ESTAS CHAVES EXATAS:
+{"title":"título aqui","slug":"slug-aqui","meta_description":"meta aqui","content":"<h2>...</h2><p>...</p>...","image_prompt":"prompt in english"}`;
 
-  const aiContent = await orchestrator.call('article_generation', [
-    { 
-      role: 'system', 
-      content: `Você é um jornalista sênior e especialista SEO. Escreva em pt-BR, filosofia "Madeira Sem Verniz" — linguagem simples e acessível.
-REGRAS: Flesch ≥ 70, frases ≤ 25 palavras, HTML semântico, mín 10 links internos, FAQ, CTAs, conclusão.
+  // Retry up to 2 times on truncation
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const maxTokens = attempt === 0 ? 16000 : 24000;
+    console.log(`[AI SEO] generateFullContent attempt ${attempt + 1} with maxTokens=${maxTokens}`);
+    
+    const aiContent = await orchestrator.call('article_generation', [
+      { 
+        role: 'system', 
+        content: `Você é um jornalista sênior e especialista SEO. Escreva em pt-BR.
+REGRAS ABSOLUTAS: Flesch ≥ 70, frases ≤ 25 palavras, HTML semântico, mín 10 links internos, FAQ, CTAs, conclusão.
 Tags permitidas: p, strong, em, ul, ol, li, blockquote, a, table, h2-h6, figure, figcaption, section, article.
-PROIBIDO: div, span, b, i. Responda APENAS com JSON válido.` 
-    },
-    { role: 'user', content: prompt },
-  ], { maxTokens: 16000, temperature: 0.5 });
+PROIBIDO: div, span, b, i. Responda APENAS com JSON válido com as chaves: title, slug, meta_description, content, image_prompt.` 
+      },
+      { role: 'user', content: prompt },
+    ], { maxTokens, temperature: 0.5 });
 
-  try {
-    const parsed = extractJsonFromAIResponse(aiContent);
-    return {
-      content: parsed.content || null,
-      title: parsed.title || null,
-      excerpt: parsed.meta_description || null,
-      slug: parsed.slug || null,
-      imagePrompt: parsed.image_prompt || null,
-    };
-  } catch (parseErr) {
-    console.error("[AI SEO] JSON extraction failed for generateFullContent:", (parseErr as Error).message, "Raw length:", aiContent.length);
-    throw new Error("Erro ao processar resposta da IA na geração. Tente novamente.");
+    const finishReason = (globalThis as any).__lastFinishReason;
+    console.log(`[AI SEO] AI response: ${aiContent.length} chars, finishReason: ${finishReason}`);
+
+    try {
+      const parsed = extractJsonFromAIResponse(aiContent);
+      const extractedContent = parsed.content || parsed.optimized_content || parsed.html || null;
+      const extractedTitle = parsed.title || null;
+      const extractedMeta = parsed.meta_description || parsed.meta || parsed.excerpt || null;
+      
+      console.log(`[AI SEO] Generation extraction: content=${!!extractedContent} (${(extractedContent||'').length} chars), title="${extractedTitle}", meta="${extractedMeta?.substring(0, 50)}"`);
+      
+      if (!extractedContent || extractedContent.length < 500) {
+        if (attempt === 0) {
+          console.warn(`[AI SEO] Content too short (${(extractedContent||'').length} chars), retrying with more tokens...`);
+          continue;
+        }
+        throw new Error("IA gerou conteúdo muito curto. Tente novamente.");
+      }
+      
+      // Validate title quality
+      let finalTitle = extractedTitle;
+      if (!finalTitle || finalTitle.length < 20 || finalTitle.includes(': Guia Completo')) {
+        finalTitle = null; // Will trigger title regeneration or keep keyword
+      }
+      
+      return {
+        content: extractedContent,
+        title: finalTitle,
+        excerpt: extractedMeta,
+        slug: parsed.slug || null,
+        imagePrompt: parsed.image_prompt || null,
+      };
+    } catch (parseErr) {
+      console.error(`[AI SEO] JSON extraction failed attempt ${attempt + 1}:`, (parseErr as Error).message, "Raw length:", aiContent.length);
+      if (attempt === 0 && finishReason === 'MAX_TOKENS') {
+        console.warn("[AI SEO] Truncation detected, retrying with more tokens...");
+        continue;
+      }
+      
+      // Last resort: if AI returned raw HTML
+      if (aiContent.includes('<h2') && aiContent.includes('<p') && aiContent.length > 1000) {
+        console.warn("[AI SEO] Using raw AI response as HTML content");
+        return { content: aiContent.trim(), title: null, excerpt: null, slug: null, imagePrompt: null };
+      }
+      throw new Error("Erro ao processar resposta da IA na geração. Tente novamente.");
+    }
   }
+  
+  throw new Error("Geração falhou após 2 tentativas. Verifique créditos e tente novamente.");
 }
 
 // === OPTIMIZE existing content ===
@@ -595,31 +660,34 @@ async function optimizeExistingContent(article: any, analysis: any, project: any
   // Truncate content to avoid token overflow — keep first 14000 chars
   const contentForAI = (article.content || "").substring(0, 14000);
 
-  const prompt = `Reescreva COMPLETAMENTE este artigo com SEO avançado.
+  const issuesList: string[] = [];
+  if (!analysis.flesch.passed) issuesList.push(`Flesch: ${analysis.flesch.score} (REPROVADO, mín 60)`);
+  if (analysis.structure.h2Count < 5) issuesList.push(`H2s: ${analysis.structure.h2Count} (mín 5)`);
+  if (!analysis.structure.hasFAQ) issuesList.push(`FAQ: FALTANDO`);
+  if (!analysis.structure.hasCTA) issuesList.push(`CTA: FALTANDO`);
+  if (analysis.structure.internalLinks < 10) issuesList.push(`Links internos: ${analysis.structure.internalLinks} (mín 10)`);
+  if (analysis.structure.externalLinks < 2) issuesList.push(`Links externos: ${analysis.structure.externalLinks} (mín 2)`);
+  if (!analysis.structure.hasConclusion) issuesList.push(`Conclusão: FALTANDO`);
+  if (analysis.structure.longParagraphs > 0) issuesList.push(`Parágrafos longos: ${analysis.structure.longParagraphs}`);
+  if (!analysis.meta.titleOk) issuesList.push(`Título: ${analysis.meta.titleLength} chars (ideal 55-80)`);
+  if (!analysis.meta.excerptOk) issuesList.push(`Meta: ${analysis.meta.excerptLength} chars (ideal 145-180)`);
+
+  const prompt = `Reescreva COMPLETAMENTE este artigo corrigindo TODOS os problemas listados.
 
 ${vernizDNA}
 
-═══ PROBLEMAS DETECTADOS ═══
-- Flesch: ${analysis.flesch.score} (${analysis.flesch.passed ? "OK" : "REPROVADO"})
-- Média palavras/frase: ${analysis.flesch.avgWordsPerSentence || "N/A"}
-- H2s: ${analysis.structure.h2Count} (mín 5)
-- FAQ: ${analysis.structure.hasFAQ ? "OK" : "FALTANDO"}
-- CTA: ${analysis.structure.hasCTA ? "OK" : "FALTANDO"}
-- Links internos: ${analysis.structure.internalLinks} (mín 10)
-- Links externos: ${analysis.structure.externalLinks} (mín 2)
-- Parágrafos longos: ${analysis.structure.longParagraphs}
-- Conclusão: ${analysis.structure.hasConclusion ? "OK" : "FALTANDO"}
+═══ PROBLEMAS ENCONTRADOS (CORRIJA TODOS) ═══
+${issuesList.length > 0 ? issuesList.map(i => `❌ ${i}`).join("\n") : "Nenhum problema crítico"}
 
-═══ REGRAS DE CORREÇÃO ═══
-1. Flesch ≥ 70: frases ≤ 25 palavras, parágrafos 3-7 linhas
-2. Vocabulário simples, voz ativa 70%+
-3. Mín 10 links internos como <a href="URL">
-4. Mín 2 links externos autoritativos
-5. FAQ com 5-8 perguntas se ausente
-6. CTAs estratégicos se ausentes
-7. Conclusão com CTA final
-8. Título: 55-80 chars, COMPLETO
-9. Meta: 145-180 chars, frase COMPLETA
+═══ REGRAS DE CORREÇÃO OBRIGATÓRIAS ═══
+1. Flesch ≥ 70: frases ≤ 25 palavras, parágrafos 3-7 linhas, voz ativa
+2. Mín 10 links internos como <a href="URL">texto âncora contextual</a>
+3. Mín 2 links externos autoritativos (.gov.br, .edu.br, .org)
+4. FAQ com 5-8 perguntas se ausente
+5. CTAs estratégicos em todo o artigo
+6. Conclusão com CTA final
+7. Título: 55-80 chars, SEM ":" no final, SEM "Guia Completo"
+8. Meta: 145-180 chars, frase COMPLETA com ponto final
 
 LINKS INTERNOS PARA INSERIR:
 ${internalLinksStr}
@@ -630,54 +698,61 @@ TÍTULO ATUAL: ${article.title}
 CONTEÚDO A REESCREVER:
 ${contentForAI}
 
-RESPONDA APENAS COM JSON VÁLIDO (use EXATAMENTE estas chaves):
-{
-  "content": "HTML COMPLETO reescrito do artigo inteiro",
-  "title": "título otimizado (55-80 chars)",
-  "meta_description": "meta description (145-180 chars)"
-}
+RESPONDA APENAS COM JSON — use EXATAMENTE estas chaves:
+{"content":"HTML COMPLETO reescrito","title":"título otimizado 55-80 chars","meta_description":"meta 145-180 chars"}`;
 
-ATENÇÃO: Use as chaves "content", "title" e "meta_description" — NÃO mude os nomes.`;
-
-  const aiContent = await orchestrator.call('content_editing', [
-    { role: 'system', content: `Você é um editor SEO sênior. Reescreva conteúdo para Flesch ≥ 70 com frases curtas, voz ativa, HTML semântico.
-ADICIONE links internos, CTAs, FAQ e conclusão faltantes. Responda APENAS com JSON válido.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const maxTokens = attempt === 0 ? 16000 : 24000;
+    console.log(`[AI SEO] optimizeExistingContent attempt ${attempt + 1} with maxTokens=${maxTokens}`);
+    
+    const aiContent = await orchestrator.call('content_editing', [
+      { role: 'system', content: `Você é um editor SEO sênior. Reescreva conteúdo para Flesch ≥ 70 com frases curtas, voz ativa, HTML semântico.
+ADICIONE links internos, CTAs, FAQ e conclusão faltantes. Responda APENAS com JSON válido com chaves: content, title, meta_description.
 Tags permitidas: p, strong, em, ul, ol, li, blockquote, a, table, h2-h6, section, article, figure, figcaption.` },
-    { role: 'user', content: prompt },
-  ], { maxTokens: 16000, temperature: 0.3 });
+      { role: 'user', content: prompt },
+    ], { maxTokens, temperature: 0.3 });
 
-  try {
-    const parsed = extractJsonFromAIResponse(aiContent);
-    // Support multiple field name variants the AI might use
-    const extractedContent = parsed.optimized_content || parsed.content || parsed.html || parsed.article || null;
-    const extractedTitle = parsed.optimized_title || parsed.title || null;
-    const extractedMeta = parsed.optimized_meta || parsed.meta_description || parsed.excerpt || parsed.meta || null;
-    
-    console.log(`[AI SEO] Optimization extraction: content=${!!extractedContent} (${(extractedContent||'').length} chars), title=${!!extractedTitle}, meta=${!!extractedMeta}`);
-    
-    if (!extractedContent) {
-      console.error("[AI SEO] AI returned no content. Parsed keys:", Object.keys(parsed).join(', '));
-      throw new Error("A IA não retornou conteúdo otimizado. Tente novamente.");
-    }
-    
-    return {
-      content: extractedContent,
-      title: extractedTitle,
-      excerpt: extractedMeta,
-    };
-  } catch (parseErr) {
-    console.error("[AI SEO] JSON extraction failed for optimizeExistingContent:", (parseErr as Error).message, "Raw length:", aiContent.length);
-    // Last resort: if AI returned raw HTML without JSON wrapper, try to use it directly
-    if (aiContent.includes('<h2') && aiContent.includes('<p') && aiContent.length > 500) {
-      console.warn("[AI SEO] Using raw AI response as HTML content (no JSON wrapper detected)");
+    const finishReason = (globalThis as any).__lastFinishReason;
+    console.log(`[AI SEO] Optimize response: ${aiContent.length} chars, finishReason: ${finishReason}`);
+
+    try {
+      const parsed = extractJsonFromAIResponse(aiContent);
+      const extractedContent = parsed.optimized_content || parsed.content || parsed.html || parsed.article || null;
+      const extractedTitle = parsed.optimized_title || parsed.title || null;
+      const extractedMeta = parsed.optimized_meta || parsed.meta_description || parsed.excerpt || parsed.meta || null;
+      
+      console.log(`[AI SEO] Optimization extraction: content=${!!extractedContent} (${(extractedContent||'').length} chars), title="${extractedTitle}", meta="${extractedMeta?.substring(0, 50)}"`);
+      
+      if (!extractedContent || extractedContent.length < 500) {
+        if (attempt === 0) {
+          console.warn(`[AI SEO] Optimized content too short (${(extractedContent||'').length} chars), retrying...`);
+          continue;
+        }
+        throw new Error("A IA não retornou conteúdo otimizado suficiente.");
+      }
+      
       return {
-        content: aiContent.trim(),
-        title: null,
-        excerpt: null,
+        content: extractedContent,
+        title: extractedTitle,
+        excerpt: extractedMeta,
       };
+    } catch (parseErr) {
+      console.error(`[AI SEO] JSON extraction failed attempt ${attempt + 1}:`, (parseErr as Error).message);
+      if (attempt === 0 && finishReason === 'MAX_TOKENS') {
+        console.warn("[AI SEO] Truncation detected, retrying with more tokens...");
+        continue;
+      }
+      
+      // Last resort: raw HTML
+      if (aiContent.includes('<h2') && aiContent.includes('<p') && aiContent.length > 1000) {
+        console.warn("[AI SEO] Using raw AI response as HTML content (no JSON wrapper)");
+        return { content: aiContent.trim(), title: null, excerpt: null };
+      }
+      throw new Error("Erro ao processar resposta da IA na otimização. Tente novamente.");
     }
-    throw new Error("Erro ao processar resposta da IA na otimização. Tente novamente.");
   }
+  
+  throw new Error("Otimização falhou após 2 tentativas.");
 }
 
 // === Content Analysis ===
