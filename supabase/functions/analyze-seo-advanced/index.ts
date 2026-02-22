@@ -8,6 +8,88 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// === ROBUST JSON EXTRACTION (anti-truncation) ===
+function extractJsonFromAIResponse(response: string): any {
+  // Step 1: Clean markdown wrappers
+  let cleaned = response
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/g, "")
+    .trim();
+
+  // Step 2: Try direct parse
+  try {
+    return JSON.parse(cleaned);
+  } catch { /* continue */ }
+
+  // Step 3: Find JSON boundaries
+  const jsonStart = cleaned.search(/[\{\[]/);
+  if (jsonStart === -1) throw new Error("No JSON found in AI response");
+  cleaned = cleaned.substring(jsonStart);
+
+  // Step 4: Detect truncation
+  const openBraces = (cleaned.match(/{/g) || []).length;
+  const closeBraces = (cleaned.match(/}/g) || []).length;
+  
+  if (openBraces > closeBraces) {
+    console.warn(`[AI SEO] Truncated JSON detected: ${openBraces} open vs ${closeBraces} close braces. Repairing...`);
+    
+    // Fix common truncation: unclosed strings
+    // Check if we're inside a string value
+    let inString = false;
+    let lastQuoteIdx = -1;
+    for (let i = 0; i < cleaned.length; i++) {
+      if (cleaned[i] === '"' && (i === 0 || cleaned[i-1] !== '\\')) {
+        inString = !inString;
+        lastQuoteIdx = i;
+      }
+    }
+    
+    if (inString && lastQuoteIdx > 0) {
+      // Close the string
+      cleaned = cleaned + '"';
+    }
+    
+    // Add missing close braces
+    const diff = openBraces - (cleaned.match(/}/g) || []).length;
+    cleaned = cleaned + '}'.repeat(diff);
+  }
+
+  // Step 5: Fix common JSON issues
+  cleaned = cleaned
+    .replace(/,\s*}/g, "}")
+    .replace(/,\s*]/g, "]")
+    .replace(/[\x00-\x1F\x7F]/g, (c) => c === '\n' ? '\\n' : c === '\t' ? '\\t' : '');
+
+  try {
+    return JSON.parse(cleaned);
+  } catch { /* continue to regex fallback */ }
+
+  // Step 6: Regex field extraction as last resort
+  console.warn("[AI SEO] JSON parse failed after repair. Trying regex extraction...");
+  
+  const fields: Record<string, string> = {};
+  const fieldNames = [
+    'content', 'optimized_content', 'title', 'optimized_title', 
+    'meta_description', 'optimized_meta', 'slug', 'image_prompt'
+  ];
+  
+  for (const field of fieldNames) {
+    // Match field: "value" (handles multiline content)
+    const regex = new RegExp(`"${field}"\\s*:\\s*"([\\s\\S]*?)(?:(?<!\\\\)"\\s*(?:,|}))`);
+    const match = cleaned.match(regex);
+    if (match?.[1]) {
+      fields[field] = match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+    }
+  }
+  
+  if (Object.keys(fields).length > 0) {
+    console.log(`[AI SEO] Recovered ${Object.keys(fields).length} fields via regex: ${Object.keys(fields).join(', ')}`);
+    return fields;
+  }
+  
+  throw new Error("Could not extract JSON from AI response");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -25,13 +107,15 @@ Deno.serve(async (req) => {
     // --- BYOK: Fetch user's API keys from user_settings ---
     const authHeader = req.headers.get("authorization") || "";
     const token = authHeader.replace("Bearer ", "");
+    let userId: string | null = null;
+    
     if (token) {
       const { data: { user } } = await createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY") || serviceKey, {
         global: { headers: { Authorization: `Bearer ${token}` } },
       }).auth.getUser();
 
       if (user) {
-        // Load BYOK keys into runtime registry for gemini.ts direct calls
+        userId = user.id;
         await setEnvKeysForUser(user.id);
 
         const { data: settings } = await supabase
@@ -74,13 +158,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch project data for context (links, CTAs, social media)
+    // Fetch project data for context
     const projectIds = [...new Set(articles.map(a => a.project_id).filter(Boolean))];
     let projectsMap: Record<string, any> = {};
     if (projectIds.length > 0) {
       const { data: projects } = await supabase
         .from("projects")
-        .select("id, name, domain, wordpress_url, nicho, tom_padrao, compliance_rules, links_prioritarios, social_instagram, social_youtube, social_linkedin, social_twitter, social_tiktok, social_google_maps, social_linktree, cta_leads, cta_conclusao, cta_comunidade, empresa_nome, empresa_whatsapp, empresa_telefone, empresa_endereco")
+        .select("id, name, domain, wordpress_url, wordpress_username, wordpress_app_password, nicho, tom_padrao, compliance_rules, links_prioritarios, social_instagram, social_youtube, social_linkedin, social_twitter, social_tiktok, social_google_maps, social_linktree, cta_leads, cta_conclusao, cta_comunidade, empresa_nome, empresa_whatsapp, empresa_telefone, empresa_endereco")
         .in("id", projectIds);
       if (projects) {
         for (const p of projects) {
@@ -89,10 +173,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Fetch existing published articles for internal linking (from articles table)
+    // Fetch existing published articles for internal linking
     let internalLinksMap: Record<string, Array<{title: string, url: string}>> = {};
     for (const pid of projectIds) {
-      // Fetch from articles table
       const { data: publishedArticles } = await supabase
         .from("articles")
         .select("title, published_url, keyword")
@@ -105,7 +188,6 @@ Deno.serve(async (req) => {
         .filter(a => a.published_url)
         .map(a => ({ title: a.title || a.keyword, url: a.published_url! }));
 
-      // Also fetch from wordpress_article_index (indexed articles with richer data)
       const { data: wpIndexArticles } = await supabase
         .from("wordpress_article_index")
         .select("wp_post_title, wp_post_url, primary_keyword, topic_cluster")
@@ -118,7 +200,6 @@ Deno.serve(async (req) => {
         .filter(a => a.wp_post_url)
         .map(a => ({ title: a.wp_post_title || a.primary_keyword || '', url: a.wp_post_url }));
 
-      // Merge and deduplicate by URL
       const allLinks = [...articleLinks, ...wpLinks];
       const seen = new Set<string>();
       internalLinksMap[pid] = allLinks.filter(l => {
@@ -127,7 +208,7 @@ Deno.serve(async (req) => {
         return true;
       }).slice(0, 50);
 
-      console.log(`[AI SEO] Internal links for project ${pid}: ${internalLinksMap[pid].length} (articles: ${articleLinks.length}, wp_index: ${wpLinks.length})`);
+      console.log(`[AI SEO] Internal links for project ${pid}: ${internalLinksMap[pid].length}`);
     }
 
     const results = [];
@@ -149,7 +230,8 @@ Deno.serve(async (req) => {
             if (generated.content) {
               const newClean = generated.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
               const wordCount = newClean.split(/\s+/).filter((w: string) => w.length > 0).length;
-              const newAnalysis = analyzeContent(generated.content, newClean, { ...article, title: generated.title || article.title, excerpt: generated.excerpt || article.excerpt });
+              const updatedArticle = { ...article, title: generated.title || article.title, excerpt: generated.excerpt || article.excerpt };
+              const newAnalysis = analyzeContent(generated.content, newClean, updatedArticle);
               const newScore = Math.min(100, calculateScore(newAnalysis));
 
               await supabase.from("articles").update({
@@ -163,14 +245,14 @@ Deno.serve(async (req) => {
                 image_prompt: generated.imagePrompt || null,
               }).eq("id", article.id);
 
-              // Generate image if we have an image prompt
+              // Generate image if we have a prompt
               if (generated.imagePrompt) {
                 try {
                   await supabase.functions.invoke("generate-image", {
                     body: { articleId: article.id, prompt: generated.imagePrompt },
                   });
                 } catch (imgErr) {
-                  console.error(`[AI SEO] Image generation failed for ${article.id}:`, imgErr);
+                  console.error(`[AI SEO] Image generation failed:`, imgErr);
                 }
               }
 
@@ -181,6 +263,12 @@ Deno.serve(async (req) => {
                 score: newScore,
                 optimized: true,
                 generated: true,
+                analysis: newAnalysis,
+                ai: {
+                  overall_grade: newScore >= 80 ? 'A' : newScore >= 60 ? 'B' : newScore >= 40 ? 'C' : 'D',
+                  changes_made: ['Artigo completo gerado do zero', 'Título SEO otimizado', 'Meta description criada', 'Links internos inseridos', 'FAQ e CTAs adicionados'],
+                  new_flesch_estimate: newAnalysis.flesch.score,
+                },
                 project_id: article.project_id,
                 published_url: article.published_url,
                 status: "ready",
@@ -196,8 +284,21 @@ Deno.serve(async (req) => {
             if (optimized.content) {
               const newClean = optimized.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
               const wordCount = newClean.split(/\s+/).filter((w: string) => w.length > 0).length;
-              const newAnalysis = analyzeContent(optimized.content, newClean, { ...article, title: optimized.title || article.title, excerpt: optimized.excerpt || article.excerpt });
+              const updatedArticle = { ...article, title: optimized.title || article.title, excerpt: optimized.excerpt || article.excerpt };
+              const newAnalysis = analyzeContent(optimized.content, newClean, updatedArticle);
               const newScore = Math.min(100, calculateScore(newAnalysis));
+
+              // Build changes list
+              const changesMade: string[] = [];
+              if (optimized.title && optimized.title !== article.title) changesMade.push(`Título: "${optimized.title}"`);
+              if (optimized.excerpt && optimized.excerpt !== article.excerpt) changesMade.push(`Meta description atualizada (${optimized.excerpt.length} chars)`);
+              if (newAnalysis.flesch.score > localAnalysis.flesch.score) changesMade.push(`Flesch: ${localAnalysis.flesch.score} → ${newAnalysis.flesch.score}`);
+              if (newAnalysis.structure.internalLinks > localAnalysis.structure.internalLinks) changesMade.push(`Links internos: ${localAnalysis.structure.internalLinks} → ${newAnalysis.structure.internalLinks}`);
+              if (newAnalysis.structure.hasFAQ && !localAnalysis.structure.hasFAQ) changesMade.push('FAQ adicionado');
+              if (newAnalysis.structure.hasCTA && !localAnalysis.structure.hasCTA) changesMade.push('CTAs inseridos');
+              if (newAnalysis.structure.hasConclusion && !localAnalysis.structure.hasConclusion) changesMade.push('Conclusão adicionada');
+              if (wordCount > (article.word_count || 0)) changesMade.push(`Palavras: ${article.word_count || 0} → ${wordCount}`);
+              if (changesMade.length === 0) changesMade.push('Conteúdo reescrito e otimizado');
 
               await supabase.from("articles").update({
                 content: optimized.content,
@@ -207,6 +308,26 @@ Deno.serve(async (req) => {
                 seo_score: newScore,
               }).eq("id", article.id);
 
+              // AUTO-REPUBLISH to WordPress if already published
+              if (article.status === 'published' && article.published_url && project) {
+                try {
+                  console.log(`[AI SEO] Auto-republishing optimized article ${article.id} to WordPress...`);
+                  await supabase.functions.invoke("publish-to-wordpress", {
+                    body: {
+                      articleId: article.id,
+                      projectId: article.project_id,
+                      updateExisting: true,
+                    },
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  changesMade.push('✅ Republicado no WordPress automaticamente');
+                  console.log(`[AI SEO] Auto-republish success for article ${article.id}`);
+                } catch (pubErr) {
+                  console.error(`[AI SEO] Auto-republish failed for ${article.id}:`, pubErr);
+                  changesMade.push('⚠️ Republicação automática falhou — publique manualmente');
+                }
+              }
+
               results.push({
                 article_id: article.id,
                 title: optimized.title || article.title,
@@ -214,6 +335,16 @@ Deno.serve(async (req) => {
                 score: newScore,
                 optimized: true,
                 generated: false,
+                analysis: newAnalysis,
+                ai: {
+                  overall_grade: newScore >= 80 ? 'A' : newScore >= 60 ? 'B' : newScore >= 40 ? 'C' : 'D',
+                  changes_made: changesMade,
+                  optimized_title: optimized.title || undefined,
+                  optimized_meta: optimized.excerpt || undefined,
+                  new_flesch_estimate: newAnalysis.flesch.score,
+                  critical_issues: newAnalysis.flesch.score < 60 ? ['Flesch ainda abaixo de 60 — requer outra passada'] : [],
+                  improvements: buildImprovements(newAnalysis),
+                },
                 project_id: article.project_id,
                 published_url: article.published_url,
                 status: article.status,
@@ -223,7 +354,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Fallback: analysis only
+        // Fallback: analysis only (no optimization)
         const localAnalysis = analyzeContent(content, cleanContent, article);
         const score = Math.min(100, calculateScore(localAnalysis));
         await supabase.from("articles").update({ seo_score: score }).eq("id", article.id);
@@ -235,6 +366,20 @@ Deno.serve(async (req) => {
           score,
           optimized: false,
           generated: false,
+          analysis: localAnalysis,
+          ai: {
+            overall_grade: score >= 80 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : 'D',
+            critical_issues: buildCriticalIssues(localAnalysis),
+            improvements: buildImprovements(localAnalysis),
+            flesch_tips: localAnalysis.flesch.score < 70 ? [
+              `Flesch atual: ${localAnalysis.flesch.score}. Alvo: ≥70.`,
+              `Média atual: ${localAnalysis.flesch.avgWordsPerSentence} palavras/frase. Alvo: ≤25.`,
+              'Quebre frases longas em frases curtas de até 25 palavras.',
+              'Use vocabulário simples e voz ativa.',
+            ] : [],
+            seo_tips: buildSEOTips(localAnalysis),
+            content_tips: buildContentTips(localAnalysis),
+          },
           project_id: article.project_id,
           published_url: article.published_url,
           status: article.status,
@@ -249,6 +394,8 @@ Deno.serve(async (req) => {
           optimized: false,
           generated: false,
           error: e instanceof Error ? e.message : "unknown",
+          analysis: null,
+          ai: { error: e instanceof Error ? e.message : "unknown" },
           project_id: article.project_id,
           status: article.status,
         });
@@ -262,11 +409,68 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error("[AI SEO Analysis] Error:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Unknown error" }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
+
+// === Build helper functions for analysis results ===
+function buildCriticalIssues(analysis: any): string[] {
+  const issues: string[] = [];
+  if (analysis.flesch.score < 60) issues.push(`Flesch ${analysis.flesch.score} — abaixo do mínimo (60). Conteúdo difícil de ler.`);
+  if (analysis.structure.h2Count < 3) issues.push(`Apenas ${analysis.structure.h2Count} H2s — mínimo recomendado: 5.`);
+  if (analysis.structure.internalLinks < 2) issues.push(`Apenas ${analysis.structure.internalLinks} links internos — sem linkagem interna o Google não rastreia.`);
+  if (!analysis.structure.hasFAQ) issues.push('FAQ ausente — perde featured snippets.');
+  if (!analysis.meta.titleOk) issues.push(`Título com ${analysis.meta.titleLength} chars (ideal: 55-80).`);
+  if (!analysis.meta.excerptOk) issues.push(`Meta description com ${analysis.meta.excerptLength} chars (ideal: 145-180).`);
+  return issues;
+}
+
+function buildImprovements(analysis: any): Array<{area: string, priority: string, suggestion: string, impact: string}> {
+  const improvements: Array<{area: string, priority: string, suggestion: string, impact: string}> = [];
+  
+  if (analysis.flesch.score < 70) {
+    improvements.push({ area: 'Legibilidade', priority: 'alta', suggestion: `Flesch ${analysis.flesch.score}. Reduza frases para máx 25 palavras e use vocabulário simples.`, impact: 'Score SEO +15-20 pontos' });
+  }
+  if (analysis.structure.internalLinks < 10) {
+    improvements.push({ area: 'Links Internos', priority: 'alta', suggestion: `Apenas ${analysis.structure.internalLinks} links internos. Adicione no mínimo 10 links contextuais.`, impact: 'Crawlability e authority +20%' });
+  }
+  if (!analysis.structure.hasFAQ) {
+    improvements.push({ area: 'FAQ', priority: 'alta', suggestion: 'Adicione seção FAQ com 5-8 perguntas para capturar featured snippets.', impact: 'CTR +30% via rich snippets' });
+  }
+  if (!analysis.structure.hasCTA) {
+    improvements.push({ area: 'CTA', priority: 'média', suggestion: 'Adicione CTAs estratégicos (urgência, autoridade, lead, comunidade, fechamento).', impact: 'Conversão +15%' });
+  }
+  if (!analysis.keyword.titleHasKeyword) {
+    improvements.push({ area: 'Keyword no Título', priority: 'alta', suggestion: `A keyword "${analysis.keyword.keyword}" não está no título. Inclua-a nos primeiros 60 chars.`, impact: 'Ranking +10-15 posições' });
+  }
+  if (analysis.structure.longParagraphs > 0) {
+    improvements.push({ area: 'Parágrafos', priority: 'média', suggestion: `${analysis.structure.longParagraphs} parágrafos muito longos. Quebre em 4-7 linhas.`, impact: 'Legibilidade mobile +25%' });
+  }
+  if (analysis.structure.externalLinks < 1) {
+    improvements.push({ area: 'Links Externos', priority: 'média', suggestion: 'Adicione 2-3 links para fontes autoritativas (.gov.br, .edu.br).', impact: 'Trust signal +10%' });
+  }
+  
+  return improvements;
+}
+
+function buildSEOTips(analysis: any): string[] {
+  const tips: string[] = [];
+  if (!analysis.keyword.isOptimal) tips.push(`Densidade da keyword: ${analysis.keyword.density}%. Ideal: 0.5%-2.5%.`);
+  if (!analysis.keyword.excerptHasKeyword) tips.push('Inclua a keyword na meta description.');
+  if (analysis.structure.wordCount < 1500) tips.push(`Artigo com ${analysis.structure.wordCount} palavras. Ideal: ≥1500 para rankeamento.`);
+  return tips;
+}
+
+function buildContentTips(analysis: any): string[] {
+  const tips: string[] = [];
+  if (!analysis.structure.hasConclusion) tips.push('Adicione uma conclusão com CTA final.');
+  if (analysis.structure.h3Count < 3) tips.push(`Apenas ${analysis.structure.h3Count} H3s. Use subtópicos para melhor escaneabilidade.`);
+  if (analysis.readability_v2?.passive_voice_pct > 15) tips.push(`${analysis.readability_v2.passive_voice_pct}% voz passiva. Reduza para <15% usando voz ativa.`);
+  if (analysis.readability_v2?.transition_words_pct < 30) tips.push(`${analysis.readability_v2.transition_words_pct}% de palavras de transição. Aumente para ≥30%.`);
+  return tips;
+}
 
 // === GENERATE full content for empty articles ===
 async function generateFullContent(article: any, project: any, internalLinks: Array<{title: string, url: string}>, orchestrator: any) {
@@ -280,7 +484,6 @@ async function generateFullContent(article: any, project: any, internalLinks: Ar
     ? internalLinks.slice(0, 15).map(l => `- "${l.title}": ${l.url}`).join("\n")
     : "Nenhum link interno disponível";
 
-  // Build projectConfig for Verniz orchestrator (CTAs + Social + Company data)
   const projectConfig = project ? {
     nicho: project.nicho || undefined,
     compliance_rules: project.compliance_rules || undefined,
@@ -300,16 +503,8 @@ async function generateFullContent(article: any, project: any, internalLinks: Ar
     cta_leads: project.cta_leads || undefined,
   } : undefined;
 
-  // Use Verniz orchestrator to inject DNA with 5-CTA structure + social links
   const orchestration = orchestrate(article.title || keyword, keyword, projectConfig);
   const vernizDNA = orchestration.vernizSection;
-
-  console.log("[AI SEO] Verniz DNA applied to generateFullContent", {
-    nicho: orchestration.nichoDetectado.nicho,
-    gatilho: orchestration.gatilho.gatilho,
-    hasProjectConfig: !!projectConfig,
-    hasCtas: !!(project?.cta_comunidade || project?.cta_conclusao || project?.cta_leads),
-  });
 
   const prompt = `Crie um artigo completo e otimizado para SEO sobre "${keyword}".
 
@@ -324,84 +519,38 @@ ${vernizDNA}
 LINKS INTERNOS DISPONÍVEIS (USE no mínimo 10):
 ${internalLinksStr}
 
-═══ REGRAS INEGOCIÁVEIS (COMPLIANCE JORNALÍSTICO v3.0) ═══
-
-REGRA ZERO-A — META-DESCRIPTION OBRIGATÓRIA:
-- 145-180 caracteres, frase COMPLETA com pontuação final, keyword nos primeiros 60 chars, CTA implícito
-- NUNCA cortar a frase no meio — se precisa de mais de 160 chars, USE ATÉ 180
-
-REGRA ZERO-A2 — TÍTULO SEO PERFEITO:
-- 55-80 caracteres, frase COMPLETA
-- NUNCA deixar parênteses abertos, números truncados ou caracteres soltos no final
-- Se detectar "(20" → completar para "(2026)" ou remover parêntese
-- Se detectar palavra cortada → reformular o título inteiro
-
-REGRA ZERO-A3 — LINKS INTERNOS OBRIGATÓRIOS (ZERO TOLERÂNCIA):
-- TODO conteúdo DEVE conter no MÍNIMO 10 links internos
-- NENHUM artigo pode ser entregue sem links internos
-- Se links disponíveis, usar TODOS; se não, sugerir URLs internas
-
-REGRA ZERO-B — LEGIBILIDADE FLESCH:
-- Mínimo 60 (ideal 70-100). Frases máx 25 palavras. Parágrafos máx 4-7 linhas.
-- Vocabulário simples e acessível. Voz ativa prioritária (70%+).
-- Teste: "Um leitor de 15 anos entenderia isso?" Se não, simplifique.
-
-REGRA ZERO-C — LINKS EXTERNOS (mínimo 2):
-- Fontes .gov.br, .edu.br, portais consolidados
-- rel="noopener noreferrer" target="_blank"
-
-REGRA ZERO-D — FORMATAÇÃO SEO LIMPA:
-- Zero espaços duplos. Hierarquia H1>H2>H3 rigorosa.
-- Sem tags vazias, sem divs. HTML semântico: <article>, <section>, <figure>
-
-REGRAS SEO OBRIGATÓRIAS:
-1. Estrutura: H1 único > H2 (mín 5) > H3 (mín 3)
-2. Mínimo 2 listas estruturadas (ul/ol) para featured snippets
-3. Mínimo 10 links internos (usando os links acima como <a href="URL">texto âncora</a>)
-4. Máximo 3 links externos de autoridade
-5. FAQ com 5-8 perguntas (schema FAQPage)
-6. 5 CTAs estratégicos: Urgência, Autoridade, Lead, Comunidade, Fechamento
-7. Conclusão estruturada com CTA final
-8. Densidade de keyword 0.5%-2.5%
-9. Mínimo 1500 palavras
-10. Título entre 55-80 caracteres com keyword (COMPLETO, sem parênteses abertos, sem números truncados)
-11. Gerar slug SEO-friendly
-12. Schema Article + FAQPage no JSON
-13. Incluir disclaimer de nicho quando aplicável
+═══ REGRAS INEGOCIÁVEIS ═══
+- META-DESCRIPTION: 145-180 chars, frase COMPLETA com pontuação final
+- TÍTULO: 55-80 chars, COMPLETO, sem parênteses abertos
+- LINKS INTERNOS: MÍNIMO 10, ZERO TOLERÂNCIA
+- FLESCH >= 70: Frases máx 25 palavras, parágrafos 3-7 linhas
+- LINKS EXTERNOS: Mínimo 2 fontes autoritativas
+- Estrutura: H2 (mín 5) > H3 (mín 3)
+- FAQ: 5-8 perguntas
+- CTAs estratégicos
 
 FORMATO DA RESPOSTA - APENAS JSON VÁLIDO:
 {
-  "title": "título otimizado (55-80 chars, COMPLETO, sem parênteses abertos, sem números truncados)",
+  "title": "título otimizado (55-80 chars)",
   "slug": "slug-seo-friendly",
-  "meta_description": "meta description (145-180 chars, frase COMPLETA com pontuação final)",
-  "content": "HTML COMPLETO do artigo com todos H2, H3, links internos, links externos, CTAs, FAQ",
-  "image_prompt": "prompt em inglês para gerar imagem destacada relacionada ao tema"
+  "meta_description": "meta description (145-180 chars)",
+  "content": "HTML COMPLETO do artigo",
+  "image_prompt": "prompt em inglês para imagem"
 }`;
 
   const aiContent = await orchestrator.call('article_generation', [
     { 
       role: 'system', 
-      content: `Você é um jornalista profissional sênior e especialista SEO do Grupo SEO Marketing. Escreva em português brasileiro seguindo a filosofia "Madeira Sem Verniz" — linguagem simples e acessível para TODOS os públicos.
-
-REGRAS ABSOLUTAS:
-- Flesch Reading Ease >= 70 (frases curtas máx 25 palavras, parágrafos 3-4 linhas)
-- Vocabulário simples: "dívida" não "inadimplência", "decisão" não "jurisprudência"
-- Voz ativa prioritária (mín 70% das frases)
-- HTML semântico: <article>, <section>, <figure>, <blockquote> (PROIBIDO: <div>, <span>, <b>, <i>)
-- Tags permitidas: p, strong, em, ul, ol, li, blockquote, a, table, h2-h6, figure, figcaption
-- Links: sempre target="_blank" rel="noopener noreferrer"
-- Zero espaços duplos, zero pontuação duplicada
-- Inclua OBRIGATORIAMENTE links internos como tags <a> HTML, CTAs com redes sociais, FAQ e conclusão
-- Nicho: ${nicho}. Adapte tom e vocabulário conforme especialização.
-- Responda APENAS com JSON válido.` 
+      content: `Você é um jornalista sênior e especialista SEO. Escreva em pt-BR, filosofia "Madeira Sem Verniz" — linguagem simples e acessível.
+REGRAS: Flesch ≥ 70, frases ≤ 25 palavras, HTML semântico, mín 10 links internos, FAQ, CTAs, conclusão.
+Tags permitidas: p, strong, em, ul, ol, li, blockquote, a, table, h2-h6, figure, figcaption, section, article.
+PROIBIDO: div, span, b, i. Responda APENAS com JSON válido.` 
     },
     { role: 'user', content: prompt },
   ], { maxTokens: 16000, temperature: 0.5 });
 
-  const jsonStr = aiContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-  
   try {
-    const parsed = JSON.parse(jsonStr);
+    const parsed = extractJsonFromAIResponse(aiContent);
     return {
       content: parsed.content || null,
       title: parsed.title || null,
@@ -410,8 +559,8 @@ REGRAS ABSOLUTAS:
       imagePrompt: parsed.image_prompt || null,
     };
   } catch (parseErr) {
-    console.error("[AI SEO] JSON parse error:", parseErr, "Raw:", jsonStr.substring(0, 500));
-    throw new Error("Failed to parse AI response");
+    console.error("[AI SEO] JSON extraction failed for generateFullContent:", (parseErr as Error).message, "Raw length:", aiContent.length);
+    throw new Error("Erro ao processar resposta da IA na geração. Tente novamente.");
   }
 }
 
@@ -421,7 +570,6 @@ async function optimizeExistingContent(article: any, analysis: any, project: any
     ? internalLinks.slice(0, 15).map(l => `- "${l.title}": ${l.url}`).join("\n")
     : "Nenhum link interno disponível";
 
-  // Build projectConfig for Verniz orchestrator (CTAs + Social + Company data)
   const projectConfig = project ? {
     nicho: project.nicho || undefined,
     compliance_rules: project.compliance_rules || undefined,
@@ -441,146 +589,75 @@ async function optimizeExistingContent(article: any, analysis: any, project: any
     cta_leads: project.cta_leads || undefined,
   } : undefined;
 
-  // Use Verniz orchestrator to inject DNA with 5-CTA structure + social links
   const orchestration = orchestrate(article.title || article.keyword, article.keyword, projectConfig);
   const vernizDNA = orchestration.vernizSection;
 
-  console.log("[AI SEO] Verniz DNA applied to optimizeExistingContent", {
-    nicho: orchestration.nichoDetectado.nicho,
-    gatilho: orchestration.gatilho.gatilho,
-    hasProjectConfig: !!projectConfig,
-    hasCtas: !!(project?.cta_comunidade || project?.cta_conclusao || project?.cta_leads),
-  });
+  // Truncate content to avoid token overflow — keep first 8000 chars
+  const contentForAI = (article.content || "").substring(0, 8000);
 
-  const prompt = `Reescreva COMPLETAMENTE este artigo seguindo as diretrizes do Agente Repostagem Jornalística v3.0.
+  const prompt = `Reescreva COMPLETAMENTE este artigo com SEO avançado.
 
 ${vernizDNA}
 
-═══ REGRAS INEGOCIÁVEIS (COMPLIANCE JORNALÍSTICO v3.0) ═══
-
-REGRA ZERO-A — META-DESCRIPTION: 145-180 caracteres, frase COMPLETA com pontuação final, keyword nos primeiros 60 chars
-REGRA ZERO-A2 — TÍTULO: 55-80 chars, sem parênteses abertos, sem números truncados, sem caracteres soltos
-REGRA ZERO-A3 — LINKS INTERNOS: MÍNIMO 10, ZERO TOLERÂNCIA — conteúdo sem links internos é REJEITADO
-REGRA ZERO-B — LEGIBILIDADE FLESCH >= 70:
-- Frases: MÁXIMO 25 palavras cada
-- Parágrafos: MÁXIMO 4-7 linhas
-- Vocabulário direto e acessível, voz ativa (70%+)
-- Teste: "Um leitor de 15 anos entenderia?" Se não, simplifique
-REGRA ZERO-C — LINKS EXTERNOS: Mínimo 2 fontes autoritativas (.gov.br, .edu.br)
-REGRA ZERO-D — FORMATAÇÃO: Zero espaços duplos, hierarquia H2>H3 rigorosa, HTML semântico
-
-## ESCALA FLESCH (OBRIGATÓRIA):
-- 90-100: Muito Fácil (5º ano) — ideal
-- 70-80: Bastante Fácil (8º ano) — mínimo aceitável
-- 60-70: Padrão (8º-9º ano) — tolerável
-- <60: REPROVADO — rejeitar e reescrever
-
-## PROBLEMAS DETECTADOS:
-- Flesch ATUAL: ${analysis.flesch.score} (${analysis.flesch.passed ? "OK" : "REPROVADO - REESCREVER TUDO"})
-- Média palavras/frase: ${analysis.flesch.avgWordsPerSentence || "N/A"} (máx 25)
-- H2s: ${analysis.structure.h2Count} (mín 5), H3s: ${analysis.structure.h3Count} (mín 3)
-- FAQ: ${analysis.structure.hasFAQ ? "OK" : "FALTANDO - ADICIONAR"}
-- CTA: ${analysis.structure.hasCTA ? "OK" : "FALTANDO - ADICIONAR CTAs"}
+═══ PROBLEMAS DETECTADOS ═══
+- Flesch: ${analysis.flesch.score} (${analysis.flesch.passed ? "OK" : "REPROVADO"})
+- Média palavras/frase: ${analysis.flesch.avgWordsPerSentence || "N/A"}
+- H2s: ${analysis.structure.h2Count} (mín 5)
+- FAQ: ${analysis.structure.hasFAQ ? "OK" : "FALTANDO"}
+- CTA: ${analysis.structure.hasCTA ? "OK" : "FALTANDO"}
 - Links internos: ${analysis.structure.internalLinks} (mín 10)
 - Links externos: ${analysis.structure.externalLinks} (mín 2)
 - Parágrafos longos: ${analysis.structure.longParagraphs}
 - Conclusão: ${analysis.structure.hasConclusion ? "OK" : "FALTANDO"}
 
-## REGRAS DE REESCRITA PARA FLESCH ≥ 70:
-1. CADA frase: NO MÁXIMO 25 palavras
-2. CADA parágrafo: NO MÁXIMO 4-7 linhas
-3. Vocabulário simples: "fazer" não "implementar", "depois" não "subsequentemente", "sobre" não "no que diz respeito"
-4. Voz ativa sempre: "O cliente assinou o contrato" não "O contrato foi assinado pelo cliente"
-5. Quebre frases compostas em frases simples separadas por ponto final
-6. Elimine orações subordinadas longas
-7. Termos técnicos SEMPRE explicados entre parênteses
-8. Prefira listas com bullets a parágrafos densos
-9. HTML semântico: <article>, <section>, <figure> (PROIBIDO: <div>, <span>, <b>, <i>)
-10. Tags permitidas: p, strong, em, ul, ol, li, blockquote, a, table, h2-h6
+═══ REGRAS DE CORREÇÃO ═══
+1. Flesch ≥ 70: frases ≤ 25 palavras, parágrafos 3-7 linhas
+2. Vocabulário simples, voz ativa 70%+
+3. Mín 10 links internos como <a href="URL">
+4. Mín 2 links externos autoritativos
+5. FAQ com 5-8 perguntas se ausente
+6. CTAs estratégicos se ausentes
+7. Conclusão com CTA final
+8. Título: 55-80 chars, COMPLETO
+9. Meta: 145-180 chars, frase COMPLETA
 
-## LINKS INTERNOS PARA INSERIR (mín 10):
+LINKS INTERNOS PARA INSERIR:
 ${internalLinksStr}
 
-
-## DADOS DO ARTIGO:
 KEYWORD: ${article.keyword}
 TÍTULO ATUAL: ${article.title}
 
-## CONTEÚDO HTML A REESCREVER:
-${(article.content || "").substring(0, 12000)}
+CONTEÚDO A REESCREVER:
+${contentForAI}
 
 RESPONDA APENAS COM JSON:
 {
-  "optimized_content": "HTML completo reescrito com Flesch >= 70, HTML semântico, links, CTAs, FAQ",
-  "optimized_title": "título otimizado (55-80 chars, COMPLETO, sem parênteses abertos, sem números truncados)",
-  "optimized_meta": "meta description (145-180 chars, frase COMPLETA com pontuação final)"
+  "optimized_content": "HTML completo reescrito",
+  "optimized_title": "título otimizado (55-80 chars)",
+  "optimized_meta": "meta description (145-180 chars)"
 }`;
 
   const aiContent = await orchestrator.call('content_editing', [
-    { role: 'system', content: `Você é um jornalista profissional sênior e editor especialista em legibilidade e SEO do Grupo SEO Marketing (Agente Repostagem Jornalística v3.0).
-
-Sua MISSÃO é reescrever conteúdo para atingir Flesch Reading Ease >= 70 seguindo a filosofia "Madeira Sem Verniz":
-- Frases de NO MÁXIMO 25 palavras. Parágrafos de 3-7 linhas.
-- Linguagem simples e direta para TODOS os públicos.
-- Vocabulário acessível: "dívida" não "inadimplência", "decisão" não "jurisprudência".
-- Voz ativa prioritária (mínimo 70% das frases).
-- HTML semântico: <article>, <section>, <figure>, <blockquote>. PROIBIDO: <div>, <span>, <b>, <i>.
-- Zero espaços duplos, zero pontuação duplicada.
-- ADICIONE links internos como tags <a href>, CTAs com redes sociais, FAQ e conclusão que estejam faltando.
-- Mínimo 2 links externos para fontes autoritativas (.gov.br, .edu.br).
-- Meta-description: 145-180 chars, frase COMPLETA com pontuação final.
-- Título: 55-80 chars, COMPLETO, sem parênteses abertos, sem números truncados.
-- LINKS INTERNOS: OBRIGATÓRIO mínimo 10 — conteúdo sem links internos é REJEITADO.
-- VALIDAR antes de entregar: título completo, meta description completa, links internos presentes.
-- Responda APENAS com JSON válido.` },
+    { role: 'system', content: `Você é um editor SEO sênior. Reescreva conteúdo para Flesch ≥ 70 com frases curtas, voz ativa, HTML semântico.
+ADICIONE links internos, CTAs, FAQ e conclusão faltantes. Responda APENAS com JSON válido.
+Tags permitidas: p, strong, em, ul, ol, li, blockquote, a, table, h2-h6, section, article, figure, figcaption.` },
     { role: 'user', content: prompt },
   ], { maxTokens: 16000, temperature: 0.3 });
 
-  const jsonStr = aiContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-  
   try {
-    const parsed = JSON.parse(jsonStr);
+    const parsed = extractJsonFromAIResponse(aiContent);
     return {
       content: parsed.optimized_content || null,
       title: parsed.optimized_title || null,
       excerpt: parsed.optimized_meta || null,
     };
   } catch (parseErr) {
-    console.warn("[AI SEO] JSON parse failed, attempting extraction...", (parseErr as Error).message);
-    
-    // Try to extract JSON from partial/malformed response
-    const jsonMatch = jsonStr.match(/\{[\s\S]*"optimized_content"\s*:\s*"[\s\S]*?"(?:,[\s\S]*?)?\}/);
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return {
-          content: parsed.optimized_content || null,
-          title: parsed.optimized_title || null,
-          excerpt: parsed.optimized_meta || null,
-        };
-      } catch { /* fall through */ }
-    }
-    
-    // Last resort: extract fields individually via regex
-    const contentMatch = jsonStr.match(/"optimized_content"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"optimized_title"|$)/);
-    const titleMatch = jsonStr.match(/"optimized_title"\s*:\s*"([^"]+)"/);
-    const metaMatch = jsonStr.match(/"optimized_meta"\s*:\s*"([^"]+)"/);
-    
-    if (contentMatch?.[1]) {
-      console.log("[AI SEO] Recovered content via regex extraction");
-      return {
-        content: contentMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"'),
-        title: titleMatch?.[1] || null,
-        excerpt: metaMatch?.[1] || null,
-      };
-    }
-    
-    console.error("[AI SEO] Could not recover JSON. Raw length:", jsonStr.length, "First 300:", jsonStr.substring(0, 300));
-    throw new Error("Erro ao processar resposta da IA. Tente novamente.");
+    console.error("[AI SEO] JSON extraction failed for optimizeExistingContent:", (parseErr as Error).message, "Raw length:", aiContent.length);
+    throw new Error("Erro ao processar resposta da IA na otimização. Tente novamente.");
   }
 }
 
-// === Content Analysis (v2 - with Readability Analysis inspired by Rank Math + Yoast) ===
+// === Content Analysis ===
 function analyzeContent(content: string, cleanContent: string, article: any) {
   const words = cleanContent.split(/\s+/).filter((w: string) => w.length > 0);
   const wordCount = words.length;
@@ -591,22 +668,17 @@ function analyzeContent(content: string, cleanContent: string, article: any) {
   const avgSyllablesPerWord = syllableCount / Math.max(wordCount, 1);
   const fleschScore = Math.max(0, Math.min(100, Math.round(206.835 - 1.015 * avgWordsPerSentence - 84.6 * avgSyllablesPerWord)));
 
-  // Coleman-Liau Index
   const charCount = cleanContent.replace(/\s+/g, '').length;
   const L = (charCount / Math.max(wordCount, 1)) * 100;
   const S = (sentenceCount / Math.max(wordCount, 1)) * 100;
   const colemanLiau = Math.max(0, Math.round((0.0588 * L - 0.296 * S - 15.8) * 10) / 10);
-
-  // Gunning Fog Index
   const complexWords = words.filter((w: string) => countSyllables(w) >= 3).length;
   const gunningFog = Math.max(0, Math.round(0.4 * (avgWordsPerSentence + 100 * (complexWords / Math.max(wordCount, 1))) * 10) / 10);
 
-  // Passive voice detection (Portuguese)
   const passiveRegex = /\b(?:foi|foram|é|são|era|eram|será|serão|sido|sendo)\s+\w+(?:ado|ada|ados|adas|ido|ida|idos|idas|to|ta|tos|tas)\b/gi;
   const passiveMatches = cleanContent.match(passiveRegex) || [];
   const passivePercentage = Math.round((passiveMatches.length / sentenceCount) * 100 * 10) / 10;
 
-  // Transition words detection (Portuguese)
   const transitionWords = [
     'além disso', 'portanto', 'contudo', 'entretanto', 'porém', 'todavia',
     'no entanto', 'assim', 'dessa forma', 'por isso', 'consequentemente',
@@ -623,22 +695,18 @@ function analyzeContent(content: string, cleanContent: string, article: any) {
   }
   const transitionPercentage = Math.round((transitionCount / sentenceCount) * 100 * 10) / 10;
 
-  // Long sentences (>25 words)
   const longSentences = sentences.filter((s: string) => s.trim().split(/\s+/).length > 25).length;
   const longSentencePct = Math.round((longSentences / sentenceCount) * 100 * 10) / 10;
 
-  // Traffic light (Yoast-style)
   let trafficLight: 'green' | 'orange' | 'red' = 'green';
   const readabilityIssues: string[] = [];
-  
   if (fleschScore < 60) { trafficLight = 'red'; readabilityIssues.push('Flesch < 60'); }
   else if (fleschScore < 70) { trafficLight = 'orange'; readabilityIssues.push('Flesch 60-70'); }
   if (passivePercentage > 25) { trafficLight = 'red'; readabilityIssues.push(`Voz passiva ${passivePercentage}%`); }
-  else if (passivePercentage > 15) { if (trafficLight !== 'red') trafficLight = 'orange'; readabilityIssues.push(`Voz passiva ${passivePercentage}%`); }
-  if (transitionPercentage < 30) { if (trafficLight !== 'red') trafficLight = 'orange'; readabilityIssues.push(`Transições ${transitionPercentage}%`); }
+  else if (passivePercentage > 15) { if (trafficLight !== 'red') trafficLight = 'orange'; }
   if (longSentencePct > 40) { trafficLight = 'red'; readabilityIssues.push(`Frases longas ${longSentencePct}%`); }
-  else if (longSentencePct > 25) { if (trafficLight !== 'red') trafficLight = 'orange'; readabilityIssues.push(`Frases longas ${longSentencePct}%`); }
 
+  const h1Count = (content.match(/<h1[\s>]/gi) || []).length;
   const h2Count = (content.match(/<h2[\s>]/gi) || []).length;
   const h3Count = (content.match(/<h3[\s>]/gi) || []).length;
   const imgCount = (content.match(/<img/gi) || []).length;
@@ -646,8 +714,8 @@ function analyzeContent(content: string, cleanContent: string, article: any) {
   const hasFAQ = /faq|perguntas frequentes|dúvidas comuns/i.test(cleanContent);
   const hasConclusion = /conclus[ãa]o|considerações finais|em suma/i.test(cleanContent);
   const hasCTA = /consulte|entre em contato|saiba mais|fale conosco|whatsapp|agende/i.test(cleanContent);
-  const internalLinks = (content.match(/<a[^>]+href=["'][^"']*(?!https?:\/\/)[^"']*["']/gi) || []).length;
-  const externalLinks = (content.match(/<a[^>]+href=["']https?:\/\//gi) || []).length;
+  const internalLinksCount = (content.match(/<a[^>]+href=["'][^"']*(?!https?:\/\/)[^"']*["']/gi) || []).length;
+  const externalLinksCount = (content.match(/<a[^>]+href=["']https?:\/\//gi) || []).length;
 
   const paragraphs = content.match(/<p[^>]*>[\s\S]*?<\/p>/gi) || [];
   const longParagraphs = paragraphs.filter((p: string) => {
@@ -687,8 +755,8 @@ function analyzeContent(content: string, cleanContent: string, article: any) {
       issues: readabilityIssues,
     },
     structure: {
-      wordCount, h2Count, h3Count, imgCount, imgsWithAlt: altCount,
-      hasFAQ, hasConclusion, hasCTA, internalLinks, externalLinks,
+      wordCount, h1Count, h2Count, h3Count, imgCount, imgsWithAlt: altCount,
+      hasFAQ, hasConclusion, hasCTA, internalLinks: internalLinksCount, externalLinks: externalLinksCount,
       longParagraphs: longParagraphs.length, totalParagraphs: paragraphs.length,
     },
     keyword: {
@@ -707,44 +775,31 @@ function calculateScore(analysis: any): number {
   let score = 0;
   const { flesch, readability_v2, structure, keyword, meta } = analysis;
   
-  // Flesch (20 pts)
   if (flesch.score >= 70) score += 20; else if (flesch.score >= 60) score += 15; else if (flesch.score >= 50) score += 5;
   
-  // Readability v2 bonuses (15 pts)
   if (readability_v2) {
     if (readability_v2.passive_voice_pct <= 10) score += 5; else if (readability_v2.passive_voice_pct <= 15) score += 3;
     if (readability_v2.transition_words_pct >= 30) score += 5; else if (readability_v2.transition_words_pct >= 20) score += 3;
     if (readability_v2.long_sentences_pct <= 15) score += 5; else if (readability_v2.long_sentences_pct <= 25) score += 3;
   }
   
-  // Structure (30 pts)
   if (structure.h2Count >= 5) score += 10; else if (structure.h2Count >= 3) score += 7; else if (structure.h2Count > 0) score += 3;
   if (structure.h3Count >= 3) score += 5; else if (structure.h3Count > 0) score += 2;
   if (structure.hasFAQ) score += 10;
   if (structure.hasConclusion) score += 5;
-  
-  // Engagement (10 pts)
   if (structure.hasCTA) score += 10;
   
-  // Links (20 pts)
   if (structure.internalLinks >= 10) score += 15; else if (structure.internalLinks >= 5) score += 10; else if (structure.internalLinks >= 1) score += 3;
   if (structure.externalLinks >= 1 && structure.externalLinks <= 3) score += 5;
   
-  // Images (5 pts)
   if (structure.imgCount > 0 && structure.imgCount === structure.imgsWithAlt) score += 5; else if (structure.imgCount > 0) score += 2;
-  
-  // Formatting (5 pts)
   if (structure.longParagraphs === 0) score += 5;
   
-  // Keyword (10 pts)
   if (keyword.isOptimal) score += 10; else if (keyword.count > 0) score += 5;
-  
-  // Meta (10 pts)
   if (meta.titleOk) score += 5;
   if (meta.excerptOk) score += 5;
   if (keyword.titleHasKeyword) score += 5;
   
-  // Word count bonus
   if (structure.wordCount >= 1500) score += 5; else if (structure.wordCount >= 800) score += 2;
   
   return score;
