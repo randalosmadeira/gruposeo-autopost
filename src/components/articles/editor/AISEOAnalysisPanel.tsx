@@ -101,23 +101,39 @@ export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt
 
         setResult(r);
         
-        // Auto-apply optimized content to editor
+        // Auto-apply optimized content to editor — always fetch fresh from DB
         if (r.optimized || r.generated) {
-          const { data: updated } = await supabase
+          // Small delay to ensure DB write is committed
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          const { data: updated, error: fetchErr } = await supabase
             .from('articles')
             .select('title, content, excerpt')
             .eq('id', articleId)
             .single();
           
+          if (fetchErr) {
+            console.error('[AISEOPanel] Failed to fetch updated article:', fetchErr);
+          }
+          
           if (updated) {
-            if (updated.content && onApplyContent) onApplyContent(updated.content);
-            if (updated.title && onApplyTitle) onApplyTitle(updated.title);
-            if (updated.excerpt && onApplyMeta) onApplyMeta(updated.excerpt);
+            if (updated.content && onApplyContent) {
+              console.log('[AISEOPanel] Applying optimized content:', updated.content.length, 'chars');
+              onApplyContent(updated.content);
+            }
+            if (updated.title && onApplyTitle) {
+              console.log('[AISEOPanel] Applying optimized title:', updated.title);
+              onApplyTitle(updated.title);
+            }
+            if (updated.excerpt && onApplyMeta) {
+              console.log('[AISEOPanel] Applying optimized meta:', updated.excerpt);
+              onApplyMeta(updated.excerpt);
+            }
           }
           
           toast({
             title: r.generated ? 'Artigo gerado e salvo ✅' : 'Artigo otimizado e salvo ✅',
-            description: `Score: ${r.score}/100. Conteúdo corrigido automaticamente.`,
+            description: `Score: ${r.score}/100. Conteúdo corrigido e aplicado no editor.`,
           });
         } else {
           toast({
