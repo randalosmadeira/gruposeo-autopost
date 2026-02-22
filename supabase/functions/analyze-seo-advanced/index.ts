@@ -580,7 +580,7 @@ Sua MISSÃO é reescrever conteúdo para atingir Flesch Reading Ease >= 70 segui
   }
 }
 
-// === Content Analysis ===
+// === Content Analysis (v2 - with Readability Analysis inspired by Rank Math + Yoast) ===
 function analyzeContent(content: string, cleanContent: string, article: any) {
   const words = cleanContent.split(/\s+/).filter((w: string) => w.length > 0);
   const wordCount = words.length;
@@ -590,6 +590,54 @@ function analyzeContent(content: string, cleanContent: string, article: any) {
   const avgWordsPerSentence = wordCount / sentenceCount;
   const avgSyllablesPerWord = syllableCount / Math.max(wordCount, 1);
   const fleschScore = Math.max(0, Math.min(100, Math.round(206.835 - 1.015 * avgWordsPerSentence - 84.6 * avgSyllablesPerWord)));
+
+  // Coleman-Liau Index
+  const charCount = cleanContent.replace(/\s+/g, '').length;
+  const L = (charCount / Math.max(wordCount, 1)) * 100;
+  const S = (sentenceCount / Math.max(wordCount, 1)) * 100;
+  const colemanLiau = Math.max(0, Math.round((0.0588 * L - 0.296 * S - 15.8) * 10) / 10);
+
+  // Gunning Fog Index
+  const complexWords = words.filter((w: string) => countSyllables(w) >= 3).length;
+  const gunningFog = Math.max(0, Math.round(0.4 * (avgWordsPerSentence + 100 * (complexWords / Math.max(wordCount, 1))) * 10) / 10);
+
+  // Passive voice detection (Portuguese)
+  const passiveRegex = /\b(?:foi|foram|é|são|era|eram|será|serão|sido|sendo)\s+\w+(?:ado|ada|ados|adas|ido|ida|idos|idas|to|ta|tos|tas)\b/gi;
+  const passiveMatches = cleanContent.match(passiveRegex) || [];
+  const passivePercentage = Math.round((passiveMatches.length / sentenceCount) * 100 * 10) / 10;
+
+  // Transition words detection (Portuguese)
+  const transitionWords = [
+    'além disso', 'portanto', 'contudo', 'entretanto', 'porém', 'todavia',
+    'no entanto', 'assim', 'dessa forma', 'por isso', 'consequentemente',
+    'em primeiro lugar', 'em segundo lugar', 'finalmente', 'por exemplo',
+    'ou seja', 'isto é', 'em resumo', 'em conclusão', 'por outro lado',
+    'além do mais', 'sobretudo', 'principalmente', 'especialmente',
+    'de fato', 'na verdade', 'certamente', 'sem dúvida',
+  ];
+  const lowerContent = cleanContent.toLowerCase();
+  let transitionCount = 0;
+  for (const tw of transitionWords) {
+    const regex = new RegExp(tw, 'gi');
+    transitionCount += (lowerContent.match(regex) || []).length;
+  }
+  const transitionPercentage = Math.round((transitionCount / sentenceCount) * 100 * 10) / 10;
+
+  // Long sentences (>25 words)
+  const longSentences = sentences.filter((s: string) => s.trim().split(/\s+/).length > 25).length;
+  const longSentencePct = Math.round((longSentences / sentenceCount) * 100 * 10) / 10;
+
+  // Traffic light (Yoast-style)
+  let trafficLight: 'green' | 'orange' | 'red' = 'green';
+  const readabilityIssues: string[] = [];
+  
+  if (fleschScore < 60) { trafficLight = 'red'; readabilityIssues.push('Flesch < 60'); }
+  else if (fleschScore < 70) { trafficLight = 'orange'; readabilityIssues.push('Flesch 60-70'); }
+  if (passivePercentage > 25) { trafficLight = 'red'; readabilityIssues.push(`Voz passiva ${passivePercentage}%`); }
+  else if (passivePercentage > 15) { if (trafficLight !== 'red') trafficLight = 'orange'; readabilityIssues.push(`Voz passiva ${passivePercentage}%`); }
+  if (transitionPercentage < 30) { if (trafficLight !== 'red') trafficLight = 'orange'; readabilityIssues.push(`Transições ${transitionPercentage}%`); }
+  if (longSentencePct > 40) { trafficLight = 'red'; readabilityIssues.push(`Frases longas ${longSentencePct}%`); }
+  else if (longSentencePct > 25) { if (trafficLight !== 'red') trafficLight = 'orange'; readabilityIssues.push(`Frases longas ${longSentencePct}%`); }
 
   const h2Count = (content.match(/<h2[\s>]/gi) || []).length;
   const h3Count = (content.match(/<h3[\s>]/gi) || []).length;
@@ -622,6 +670,21 @@ function analyzeContent(content: string, cleanContent: string, article: any) {
       score: fleschScore,
       level: fleschScore >= 90 ? "Muito Fácil" : fleschScore >= 80 ? "Fácil" : fleschScore >= 70 ? "Bastante Fácil" : fleschScore >= 60 ? "Padrão" : "REPROVADO",
       passed: fleschScore >= 60,
+      avgWordsPerSentence: Math.round(avgWordsPerSentence * 10) / 10,
+    },
+    readability_v2: {
+      coleman_liau: colemanLiau,
+      gunning_fog: gunningFog,
+      composite_score: Math.round((fleschScore * 0.5 + Math.max(0, 100 - gunningFog * 5) * 0.25 + Math.max(0, 100 - colemanLiau * 5) * 0.25) * 10) / 10,
+      passive_voice_pct: passivePercentage,
+      passive_count: passiveMatches.length,
+      transition_words_pct: transitionPercentage,
+      transition_count: transitionCount,
+      long_sentences_pct: longSentencePct,
+      long_sentences: longSentences,
+      complex_words_pct: Math.round((complexWords / Math.max(wordCount, 1)) * 100 * 10) / 10,
+      traffic_light: trafficLight,
+      issues: readabilityIssues,
     },
     structure: {
       wordCount, h2Count, h3Count, imgCount, imgsWithAlt: altCount,
@@ -633,7 +696,7 @@ function analyzeContent(content: string, cleanContent: string, article: any) {
       isOptimal: keywordDensity >= 0.5 && keywordDensity <= 2.5,
       titleHasKeyword, excerptHasKeyword,
     },
-  meta: {
+    meta: {
       titleLength: titleLen, titleOk: titleLen >= 55 && titleLen <= 80,
       excerptLength: excerptLen, excerptOk: excerptLen >= 145 && excerptLen <= 180,
     },
@@ -642,22 +705,48 @@ function analyzeContent(content: string, cleanContent: string, article: any) {
 
 function calculateScore(analysis: any): number {
   let score = 0;
-  const { flesch, structure, keyword, meta } = analysis;
+  const { flesch, readability_v2, structure, keyword, meta } = analysis;
+  
+  // Flesch (20 pts)
   if (flesch.score >= 70) score += 20; else if (flesch.score >= 60) score += 15; else if (flesch.score >= 50) score += 5;
+  
+  // Readability v2 bonuses (15 pts)
+  if (readability_v2) {
+    if (readability_v2.passive_voice_pct <= 10) score += 5; else if (readability_v2.passive_voice_pct <= 15) score += 3;
+    if (readability_v2.transition_words_pct >= 30) score += 5; else if (readability_v2.transition_words_pct >= 20) score += 3;
+    if (readability_v2.long_sentences_pct <= 15) score += 5; else if (readability_v2.long_sentences_pct <= 25) score += 3;
+  }
+  
+  // Structure (30 pts)
   if (structure.h2Count >= 5) score += 10; else if (structure.h2Count >= 3) score += 7; else if (structure.h2Count > 0) score += 3;
   if (structure.h3Count >= 3) score += 5; else if (structure.h3Count > 0) score += 2;
   if (structure.hasFAQ) score += 10;
   if (structure.hasConclusion) score += 5;
+  
+  // Engagement (10 pts)
   if (structure.hasCTA) score += 10;
+  
+  // Links (20 pts)
   if (structure.internalLinks >= 10) score += 15; else if (structure.internalLinks >= 5) score += 10; else if (structure.internalLinks >= 1) score += 3;
   if (structure.externalLinks >= 1 && structure.externalLinks <= 3) score += 5;
+  
+  // Images (5 pts)
   if (structure.imgCount > 0 && structure.imgCount === structure.imgsWithAlt) score += 5; else if (structure.imgCount > 0) score += 2;
+  
+  // Formatting (5 pts)
   if (structure.longParagraphs === 0) score += 5;
+  
+  // Keyword (10 pts)
   if (keyword.isOptimal) score += 10; else if (keyword.count > 0) score += 5;
+  
+  // Meta (10 pts)
   if (meta.titleOk) score += 5;
   if (meta.excerptOk) score += 5;
   if (keyword.titleHasKeyword) score += 5;
+  
+  // Word count bonus
   if (structure.wordCount >= 1500) score += 5; else if (structure.wordCount >= 800) score += 2;
+  
   return score;
 }
 
