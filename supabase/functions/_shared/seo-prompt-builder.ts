@@ -324,7 +324,7 @@ function getContentTypeGuidelines(contentType: string): string {
 }
 
 function buildEEATSection(): string {
-  return `## 🧠 E-E-A-T: DEMONSTRANDO EXPERIÊNCIA E AUTORIDADE
+  return `## 🧠 E-E-A-T + DOMAIN AUTHORITY + SHARE OF MODEL
 
 ### Experience (Experiência):
 - Use exemplos de primeira mão: "Em nossa experiência atendendo +500 clientes..."
@@ -348,7 +348,27 @@ function buildEEATSection(): string {
 - Seja transparente sobre limitações do conteúdo
 - Inclua disclaimers apropriados ao segmento
 - Forneça informações verificáveis e atualizadas
-- Admita quando algo está fora do escopo ou requer especialista`;
+- Admita quando algo está fora do escopo ou requer especialista
+
+### 🏆 DOMAIN AUTHORITY — Sinais de Autoridade Temática:
+- **Citações acadêmicas**: Referencie estudos, pesquisas e dados de fontes .gov.br, .edu.br, WHO, journals revisados
+- **Expert quotes**: Inclua citações de especialistas com nome, credencial e instituição
+- **Data freshness**: Todo dado estatístico DEVE incluir ano e fonte verificável
+- **Experiência demonstrada**: "Em 15 anos atuando em...", "Após atender +1.000 clientes..."
+- **Provas sociais**: Menções a prêmios, certificações, rankings, depoimentos
+- **Transparência**: Disclosures de limitações, conflitos de interesse, disclaimers setoriais
+
+### 🤖 SHARE OF MODEL (SoM) — Visibilidade em IAs Generativas:
+A "Share of Model" mede quantas vezes uma marca é citada como fonte por IAs (ChatGPT, Gemini, Perplexity, Claude).
+
+**Estratégias para maximizar SoM:**
+1. **Definições citáveis**: Cada H2 deve começar com definição direta extraível ("X é...")
+2. **Dados exclusivos**: Estatísticas próprias ou compilações únicas que IAs não encontram em outro lugar
+3. **Formato Q&A estruturado**: Perguntas naturais como H2/H3 + resposta direta em 40-60 palavras
+4. **Autoridade setorial**: Posicionar a marca como THE source no nicho
+5. **Linguagem de citação**: Usar frases que IAs reproduzem: "Segundo [marca]...", "De acordo com [especialista]..."
+6. **Conteúdo autossuficiente**: Cada seção deve fazer sentido isoladamente (IAs extraem trechos)`;
+}
 }
 
 function buildAdvancedLinkingSection(config: PromptConfig): string {
@@ -460,11 +480,79 @@ Distribua os seguintes links NATURALMENTE ao longo do texto:
 }
 
 
-function buildFeaturedSnippetOptimization(keyword: string, includeFaq: boolean, faqCount: number): string {
-  let section = `## 📈 OTIMIZAÇÃO PARA FEATURED SNIPPETS
+function buildGEOAEOSection(keyword: string): string {
+  return `## 🌐 GEO — GENERATIVE ENGINE OPTIMIZATION (v5.0)
 
-### Para Definições (Posição Zero):
-A primeira frase após um H2 principal deve ser uma definição direta:
+### O QUE É GEO:
+GEO é a otimização para motores de geração de IA (ChatGPT, Claude, Gemini, Perplexity, AI Overviews do Google).
+Diferente do SEO tradicional, GEO otimiza para que IAs CITEM e REFERENCIEM seu conteúdo como fonte confiável.
+
+### REGRAS GEO OBRIGATÓRIAS:
+
+**1. Resposta Direta (Answer Engine Optimization — AEO):**
+- Primeiras 40-60 palavras DEVEM responder à pergunta/tema de forma COMPLETA e AUTOSSUFICIENTE
+- Este parágrafo será o snippet extraído por IAs como citação direta
+- Formato: [Definição clara de "${keyword}"] + [Dado estatístico com fonte] + [Contexto geográfico/temporal]
+- NUNCA começar com "Neste artigo" ou "Vamos explorar" — RESPONDA DIRETAMENTE
+
+**2. Formato Q&A Natural (AEO — Answer Engine Optimization):**
+- Cada H2 DEVE ser formulado como pergunta natural (como as pessoas perguntam ao ChatGPT)
+- Exemplo: "Quanto custa ${keyword}?" / "Como funciona ${keyword}?"
+- NÃO usar formato SEO antigo: "Custo de ${keyword}" / "Funcionamento de ${keyword}"
+- A IA prioriza conteúdo em formato pergunta-resposta
+
+**3. Dados Estruturados e Citáveis:**
+- Estatísticas verificáveis com FONTE e ANO a cada 150-200 palavras
+- Formato: "Segundo [fonte] ([ano]), [dado]." — IAs reproduzem este formato
+- Citações de especialistas com nome completo + credencial: "De acordo com Dr. João Silva, cardiologista do Hospital X..."
+- Tabelas comparativas em HTML semântico (<table>) — IAs extraem dados tabulares com precisão
+- Definições claras: "${keyword} é [definição em 1 frase]." — formato que IAs replicam
+
+**4. Conteúdo Conversacional (People-First):**
+- Escreva em tom natural, como se respondesse a uma pergunta falada
+- Use "você" para criar conexão direta
+- Antecipe perguntas de follow-up que a IA faria
+- Cada seção deve funcionar ISOLADAMENTE (IAs extraem trechos, não artigos inteiros)
+
+**5. Anti-Duplicidade:**
+- NUNCA copiar frases genéricas que existem em milhares de sites
+- Cada frase deve conter insight original, dado específico ou experiência única
+- Variações semânticas obrigatórias: sinônimos, reformulações, perspectivas únicas
+- Se uma frase poderia estar em QUALQUER site, REESCREVA com dado exclusivo
+
+**6. Pulse AI — Sinais de Frescor e Relevância:**
+- Incluir ano corrente em pelo menos 2 contextos naturais
+- Referenciar eventos, mudanças legislativas ou tendências RECENTES
+- Usar frases temporais: "A partir de [ano]", "As últimas pesquisas indicam..."
+- Demonstrar que o conteúdo é ATUAL, não reciclado
+
+### 🎯 AEO — ANSWER ENGINE OPTIMIZATION:
+Em vez de uma lista de links, as IAs entregam RESPOSTAS. Para ser a FONTE dessa resposta:
+
+1. **Contextualizar**: Não respostas curtas — explicações claras com exemplos práticos
+2. **Linguagem Natural**: Títulos como perguntas comuns + respostas diretas logo abaixo
+3. **Schema Markup**: Use Schema.org para que a IA identifique tipo de conteúdo (Article, FAQ, HowTo)
+4. **Credibilidade**: Cite dados, pesquisas e referências verificáveis
+
+### 🔍 AI OVERVIEWS (Google):
+Para aparecer nos resumos de IA do Google:
+- Foque em keywords informativas: "como fazer...", "o que é...", "quanto custa..."
+- Mantenha carregamento rápido e boa usabilidade mobile
+- O Google usa Core Web Vitals para selecionar fontes da IA
+- Conteúdo DEVE estar acessível a crawlers (sem bloqueios no robots.txt)
+
+### 🤖 CONFIGURAÇÃO DE ACESSO — Crawlers de IA:
+- GPTBot (OpenAI/ChatGPT), Google-Extended (Gemini), Claude-Web (Anthropic)
+- PerplexityBot, Bytespider, CCBot — devem ter acesso ao conteúdo
+- NUNCA bloquear crawlers de IA no robots.txt se a intenção é ser citado
+- O artigo deve ser rastreável, semântico e sem JavaScript blocking`;
+}
+
+function buildFeaturedSnippetOptimization(keyword: string, includeFaq: boolean, faqCount: number): string {
+  let section = `## 📈 OTIMIZAÇÃO PARA FEATURED SNIPPETS + AI OVERVIEWS
+
+### Para Definições (Posição Zero / AI Overview):
+A primeira frase após um H2 principal deve ser uma definição direta e citável:
 \`\`\`html
 <h2>O que é ${keyword}</h2>
 <p><strong>${keyword}</strong> é [definição clara em 20-30 palavras que responde diretamente a pergunta].</p>
@@ -666,15 +754,16 @@ export function buildAdvancedSEOPrompt(config: PromptConfig): { system: string; 
   const wordRange = WORD_COUNT_RANGES[config.articleLength];
   const pov = POV_MAP[config.pointOfView.toLowerCase()] || 'segunda pessoa (você)';
 
-  const systemPrompt = `# 📝 SISTEMA AVANÇADO DE GERAÇÃO DE ARTIGOS SEO - VERSÃO FINAL
+  const systemPrompt = `# 📝 SISTEMA AVANÇADO DE GERAÇÃO SEO + GEO + AEO — V5.0
 
 ## 🎭 PERSONA E CONTEXTO
-Você é um redator SEO sênior e especialista em link building com expertise em:
-- Criar conteúdo que ranqueia na primeira página do Google
-- Manter usuários engajados (baixo bounce rate, alto tempo na página)
-- Converter leitores em leads/clientes qualificados
-- Demonstrar E-E-A-T (Experience, Expertise, Authoritativeness, Trust)
-- Construir autoridade através de arquitetura de linkagem estratégica
+Você é um redator SEO sênior, especialista em GEO (Generative Engine Optimization) e AEO (Answer Engine Optimization) com expertise em:
+- Criar conteúdo que ranqueia na primeira página do Google E é citado por IAs generativas
+- Otimizar para AI Overviews, ChatGPT, Claude, Gemini e Perplexity (GEO)
+- Ser a FONTE da resposta direta em Answer Engines (AEO)
+- Demonstrar E-E-A-T (Experience, Expertise, Authoritativeness, Trust) + Domain Authority
+- Maximizar Share of Model (SoM) — frequência de citação por IAs
+- Construir Topic Clusters com arquitetura de linkagem Hub-and-Spoke
 - Escrever de forma SIMPLES e ACESSÍVEL para TODOS os públicos
 
 ## 🚨 REGRAS INEGOCIÁVEIS (APLICAR SEMPRE)
@@ -781,6 +870,8 @@ ${getContentTypeGuidelines(config.contentType)}
 ${buildArchitectureSection(config)}
 
 ${buildEEATSection()}
+
+${buildGEOAEOSection(config.keyword)}
 
 ${buildAdvancedLinkingSection(config)}
 
