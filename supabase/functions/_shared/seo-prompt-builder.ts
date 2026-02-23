@@ -369,7 +369,6 @@ A "Share of Model" mede quantas vezes uma marca é citada como fonte por IAs (Ch
 5. **Linguagem de citação**: Usar frases que IAs reproduzem: "Segundo [marca]...", "De acordo com [especialista]..."
 6. **Conteúdo autossuficiente**: Cada seção deve fazer sentido isoladamente (IAs extraem trechos)`;
 }
-}
 
 function buildAdvancedLinkingSection(config: PromptConfig): string {
   const minLinks = config.minInternalLinks || 10;
