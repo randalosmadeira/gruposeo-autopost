@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
               const newClean = generated.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
               const wordCount = newClean.split(/\s+/).filter((w: string) => w.length > 0).length;
               const updatedArticle = { ...article, title: generated.title || article.title, excerpt: generated.excerpt || article.excerpt };
-              const newAnalysis = analyzeContent(generated.content, newClean, updatedArticle);
+              const newAnalysis = analyzeContent(generated.content, newClean, updatedArticle, project);
               const newScore = Math.min(100, calculateScore(newAnalysis));
 
               const finalTitle = generated.title || article.keyword;
@@ -287,14 +287,14 @@ Deno.serve(async (req) => {
           } else {
             // OPTIMIZE existing content
             console.log(`[AI SEO] Optimizing existing content for article ${article.id}`);
-            const localAnalysis = analyzeContent(content, cleanContent, article);
+            const localAnalysis = analyzeContent(content, cleanContent, article, project);
             const optimized = await optimizeExistingContent(article, localAnalysis, project, internalLinks, orchestrator);
 
             if (optimized.content) {
               const newClean = optimized.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
               const wordCount = newClean.split(/\s+/).filter((w: string) => w.length > 0).length;
               const updatedArticle = { ...article, title: optimized.title || article.title, excerpt: optimized.excerpt || article.excerpt };
-              const newAnalysis = analyzeContent(optimized.content, newClean, updatedArticle);
+              const newAnalysis = analyzeContent(optimized.content, newClean, updatedArticle, project);
               const newScore = Math.min(100, calculateScore(newAnalysis));
 
               // Build changes list
@@ -373,7 +373,7 @@ Deno.serve(async (req) => {
         }
 
         // Fallback: analysis only (no optimization)
-        const localAnalysis = analyzeContent(content, cleanContent, article);
+        const localAnalysis = analyzeContent(content, cleanContent, article, project);
         const score = Math.min(100, calculateScore(localAnalysis));
         await supabase.from("articles").update({ seo_score: score }).eq("id", article.id);
         
@@ -813,8 +813,24 @@ function analyzeContent(content: string, cleanContent: string, article: any, pro
   const hasConclusion = /conclus[ãa]o|considerações finais|em suma/i.test(cleanContent);
   const hasCTA = /consulte|entre em contato|saiba mais|fale conosco|whatsapp|agende/i.test(cleanContent);
   const allLinks = content.match(/<a[^>]+href=["']https?:\/\/[^"']+["']/gi) || [];
-  const externalLinksArr = allLinks.filter((l: string) => !l.includes(project?.domain || '___'));
-  const internalLinksArr = allLinks.filter((l: string) => project?.domain && l.includes(project.domain));
+  
+  // Fix: use project domain for link classification; if no domain, try to infer from links
+  const projectDomain = project?.domain || '';
+  const wpUrl = project?.wordpress_url || '';
+  const domainPatterns: string[] = [];
+  if (projectDomain) domainPatterns.push(projectDomain.replace(/^www\./, ''));
+  if (wpUrl) {
+    try { domainPatterns.push(new URL(wpUrl).hostname.replace(/^www\./, '')); } catch {}
+  }
+  
+  const isInternalLink = (link: string): boolean => {
+    if (domainPatterns.length === 0) return false;
+    const lowerLink = link.toLowerCase();
+    return domainPatterns.some(d => lowerLink.includes(d.toLowerCase()));
+  };
+  
+  const internalLinksArr = allLinks.filter(isInternalLink);
+  const externalLinksArr = allLinks.filter(l => !isInternalLink(l));
   const relativeLinks = content.match(/<a[^>]+href=["']\/[^"']*["']/gi) || [];
   const internalLinksCount = internalLinksArr.length + relativeLinks.length;
   const externalLinksCount = externalLinksArr.length;
@@ -825,15 +841,44 @@ function analyzeContent(content: string, cleanContent: string, article: any, pro
     return text.split(/\s+/).length > 60;
   });
 
+  // Fix: keyword matching — for long keywords, match individual significant words
   const keyword = (article.keyword || "").toLowerCase();
+  const keywordWords = keyword.split(/[\s:,;]+/).filter((w: string) => w.length > 3);
   const keywordRegex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-  const keywordCount = keyword ? (cleanContent.match(keywordRegex) || []).length : 0;
-  const keywordDensity = keyword && wordCount > 0 ? Math.round((keywordCount * keyword.split(/\s+/).length / wordCount) * 100 * 10) / 10 : 0;
+  const exactKeywordCount = keyword ? (cleanContent.match(keywordRegex) || []).length : 0;
+  
+  // For long-tail keywords (4+ words), also count partial matches
+  let keywordCount = exactKeywordCount;
+  if (keywordWords.length >= 3 && exactKeywordCount === 0) {
+    // Count how many significant keyword words appear in content
+    const significantMatches = keywordWords.filter(w => {
+      const wRegex = new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, 'gi');
+      return (cleanContent.match(wRegex) || []).length >= 2;
+    });
+    // If 60%+ of keyword words appear, consider it present
+    if (significantMatches.length >= keywordWords.length * 0.6) {
+      keywordCount = Math.max(1, significantMatches.length);
+    }
+  }
+  const keywordDensity = keyword && wordCount > 0 ? Math.round((keywordCount * Math.min(keywordWords.length, 3) / wordCount) * 100 * 10) / 10 : 0;
 
   const titleLen = (article.title || "").length;
   const excerptLen = (article.excerpt || "").length;
-  const titleHasKeyword = keyword && (article.title || "").toLowerCase().includes(keyword);
-  const excerptHasKeyword = keyword && (article.excerpt || "").toLowerCase().includes(keyword);
+  
+  // Fix: for long keywords, check if main terms appear in title/excerpt
+  const titleLower = (article.title || "").toLowerCase();
+  const excerptLower = (article.excerpt || "").toLowerCase();
+  let titleHasKeyword = keyword ? titleLower.includes(keyword) : false;
+  let excerptHasKeyword = keyword ? excerptLower.includes(keyword) : false;
+  
+  if (!titleHasKeyword && keywordWords.length >= 3) {
+    const titleMatches = keywordWords.filter(w => titleLower.includes(w));
+    titleHasKeyword = titleMatches.length >= keywordWords.length * 0.5;
+  }
+  if (!excerptHasKeyword && keywordWords.length >= 3) {
+    const excerptMatches = keywordWords.filter(w => excerptLower.includes(w));
+    excerptHasKeyword = excerptMatches.length >= keywordWords.length * 0.5;
+  }
 
   return {
     flesch: {
