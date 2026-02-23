@@ -454,11 +454,17 @@ function buildCriticalIssues(analysis: any): string[] {
   if (analysis.flesch.score < 60) issues.push(`Flesch ${analysis.flesch.score} — abaixo do mínimo (60). Conteúdo difícil de ler.`);
   if (analysis.structure.h2Count < 3) issues.push(`Apenas ${analysis.structure.h2Count} H2s — mínimo recomendado: 5.`);
   if (analysis.structure.internalLinks < 2) issues.push(`⚠️ PÁGINA ÓRFÃ: Apenas ${analysis.structure.internalLinks} links internos — sem linkagem interna o Google não rastreia. Execute o OrphanFixer.`);
-  if (!analysis.structure.hasFAQ) issues.push('FAQ ausente — perde featured snippets e visibilidade em IAs generativas.');
+  if (!analysis.structure.hasFAQ) issues.push('FAQ ausente — perde featured snippets e visibilidade em IAs generativas (GEO).');
   if (!analysis.meta.titleOk) issues.push(`Título com ${analysis.meta.titleLength} chars (ideal: 55-80).`);
   if (!analysis.meta.excerptOk) issues.push(`Meta description com ${analysis.meta.excerptLength} chars (ideal: 145-180).`);
   if (!analysis.structure.hasBreadcrumb) issues.push('Breadcrumb ausente — prejudica navegação e schema BreadcrumbList.');
-  if (!analysis.structure.hasArticleSchema && !analysis.structure.hasFAQSchema) issues.push('Schema markup ausente — sem Article/FAQPage schema, perde rich results.');
+  if (!analysis.structure.hasArticleSchema && !analysis.structure.hasFAQSchema) issues.push('Schema markup ausente — sem Article/FAQPage schema, perde rich results e AI Overviews.');
+  // GEO/AEO critical issues
+  if (analysis.geo && analysis.geo.score < 40) issues.push(`⚠️ GEO Score ${analysis.geo.score}/100 (Grade ${analysis.geo.grade}) — conteúdo invisível para IAs generativas.`);
+  if (analysis.aeo && analysis.aeo.score < 40) issues.push(`AEO Score ${analysis.aeo.score}/100 — sem formato Q&A, IAs não extraem respostas deste conteúdo.`);
+  if (analysis.eeat && analysis.eeat.score < 30) issues.push(`E-E-A-T Score ${analysis.eeat.score}/100 — falta autoridade, citações de especialistas e dados verificáveis.`);
+  if (analysis.geo && !analysis.geo.hasDirectAnswer) issues.push('Sem resposta direta no 1º parágrafo — IAs não podem extrair snippet citável.');
+  if (analysis.geo && analysis.geo.genericPhraseCount > 3) issues.push(`${analysis.geo.genericPhraseCount} frases genéricas detectadas — anti-duplicidade falhou.`);
   return issues;
 }
 
@@ -491,6 +497,31 @@ function buildImprovements(analysis: any): Array<{area: string, priority: string
   }
   if (analysis.structure.wordCount >= 2000 && analysis.structure.internalLinks < 5) {
     improvements.push({ area: 'Pilar de Conteúdo', priority: 'alta', suggestion: 'Artigo longo (>2000p) com poucos links = pilar potencial. Conecte spoke articles e adicione ao menu/rodapé.', impact: 'Hub-and-Spoke architecture' });
+  }
+  
+  // GEO/AEO improvements
+  if (analysis.geo) {
+    if (!analysis.geo.hasDirectAnswer) {
+      improvements.push({ area: 'GEO: Resposta Direta', priority: 'alta', suggestion: 'O 1º parágrafo NÃO responde diretamente ao tema. Reescreva com definição clara em 40-60 palavras.', impact: 'Share of Model +40%' });
+    }
+    if (analysis.geo.questionH2Pct < 50) {
+      improvements.push({ area: 'GEO: H2s como Perguntas', priority: 'alta', suggestion: `Apenas ${analysis.geo.questionH2Pct}% dos H2s são perguntas naturais. Reformule como "Como...", "O que é...", "Quanto custa...".`, impact: 'AEO Score +25%' });
+    }
+    if (analysis.geo.statsEvery200Words < 0.5) {
+      improvements.push({ area: 'GEO: Dados Verificáveis', priority: 'alta', suggestion: `Estatísticas insuficientes (${analysis.geo.statsEvery200Words}/200 palavras). Adicione dados com fonte e ano a cada 150-200 palavras.`, impact: 'E-E-A-T + citabilidade +30%' });
+    }
+    if (analysis.geo.expertMentions < 2) {
+      improvements.push({ area: 'E-E-A-T: Especialistas', priority: 'média', suggestion: 'Poucas citações de especialistas. Adicione "Segundo Dr. X, especialista em Y..." com credenciais verificáveis.', impact: 'Domain Authority +20%' });
+    }
+    if (!analysis.geo.isConversational) {
+      improvements.push({ area: 'AEO: Tom Conversacional', priority: 'média', suggestion: 'Conteúdo não conversacional. Use "você", perguntas retóricas e tom natural para melhor extração por IAs.', impact: 'People-First Content signal' });
+    }
+    if (analysis.geo.genericPhraseCount > 0) {
+      improvements.push({ area: 'Anti-Duplicidade', priority: 'média', suggestion: `${analysis.geo.genericPhraseCount} frases genéricas detectadas ("no mundo de hoje", etc.). Substitua por dados específicos e insights originais.`, impact: 'Originalidade + Pulse AI' });
+    }
+    if (!analysis.geo.hasFreshData) {
+      improvements.push({ area: 'Pulse AI: Frescor', priority: 'média', suggestion: `Ano corrente não mencionado. Adicione referências temporais ("Em ${new Date().getFullYear()}...") para sinalizar frescor ao Google e IAs.`, impact: 'Data freshness signal' });
+    }
   }
   
   return improvements;
@@ -778,7 +809,7 @@ Tags permitidas: p, strong, em, ul, ol, li, blockquote, a, table, h2-h6, section
   throw new Error("Otimização falhou após 2 tentativas.");
 }
 
-// === Content Analysis ===
+// === Content Analysis v5.0 — SEO + GEO + AEO ===
 function analyzeContent(content: string, cleanContent: string, article: any, project?: any) {
   const words = cleanContent.split(/\s+/).filter((w: string) => w.length > 0);
   const wordCount = words.length;
@@ -837,7 +868,6 @@ function analyzeContent(content: string, cleanContent: string, article: any, pro
   const hasCTA = /consulte|entre em contato|saiba mais|fale conosco|whatsapp|agende/i.test(cleanContent);
   const allLinks = content.match(/<a[^>]+href=["']https?:\/\/[^"']+["']/gi) || [];
   
-  // Fix: use project domain for link classification; if no domain, try to infer from links
   const projectDomain = project?.domain || '';
   const wpUrl = project?.wordpress_url || '';
   const domainPatterns: string[] = [];
@@ -864,21 +894,18 @@ function analyzeContent(content: string, cleanContent: string, article: any, pro
     return text.split(/\s+/).length > 60;
   });
 
-  // Fix: keyword matching — for long keywords, match individual significant words
+  // Keyword matching with fuzzy long-tail support
   const keyword = (article.keyword || "").toLowerCase();
   const keywordWords = keyword.split(/[\s:,;]+/).filter((w: string) => w.length > 3);
   const keywordRegex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
   const exactKeywordCount = keyword ? (cleanContent.match(keywordRegex) || []).length : 0;
   
-  // For long-tail keywords (4+ words), also count partial matches
   let keywordCount = exactKeywordCount;
   if (keywordWords.length >= 3 && exactKeywordCount === 0) {
-    // Count how many significant keyword words appear in content
     const significantMatches = keywordWords.filter(w => {
       const wRegex = new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, 'gi');
       return (cleanContent.match(wRegex) || []).length >= 2;
     });
-    // If 60%+ of keyword words appear, consider it present
     if (significantMatches.length >= keywordWords.length * 0.6) {
       keywordCount = Math.max(1, significantMatches.length);
     }
@@ -888,7 +915,6 @@ function analyzeContent(content: string, cleanContent: string, article: any, pro
   const titleLen = (article.title || "").length;
   const excerptLen = (article.excerpt || "").length;
   
-  // Fix: for long keywords, check if main terms appear in title/excerpt
   const titleLower = (article.title || "").toLowerCase();
   const excerptLower = (article.excerpt || "").toLowerCase();
   let titleHasKeyword = keyword ? titleLower.includes(keyword) : false;
@@ -903,13 +929,113 @@ function analyzeContent(content: string, cleanContent: string, article: any, pro
     excerptHasKeyword = excerptMatches.length >= keywordWords.length * 0.5;
   }
 
-  // Breadcrumb detection
+  // Schema & breadcrumb detection
   const hasBreadcrumb = /<[^>]*class=["'][^"']*breadcrumb/i.test(content) || /breadcrumbList/i.test(content);
-
-  // Schema detection
   const hasArticleSchema = /ArticleSchema|"@type"\s*:\s*"Article"/i.test(content);
   const hasFAQSchema = /FAQPage|"@type"\s*:\s*"FAQPage"/i.test(content);
   const hasHowToSchema = /HowTo|"@type"\s*:\s*"HowTo"/i.test(content);
+
+  // ====== GEO SCORING (v5.0) ======
+  
+  // 1. Direct Answer Detection — first paragraph answers the query autossuficiently
+  const firstParagraph = paragraphs.length > 0 ? paragraphs[0].replace(/<[^>]+>/g, '').trim() : '';
+  const firstParaWords = firstParagraph.split(/\s+/).length;
+  const hasDirectAnswer = firstParaWords >= 30 && firstParaWords <= 80 && (
+    firstParagraph.includes(' é ') || firstParagraph.includes(' são ') || 
+    firstParagraph.includes(' significa ') || firstParagraph.includes(' consiste ') ||
+    /^\w+.*[.!]$/.test(firstParagraph.trim())
+  );
+  
+  // 2. Q&A Format Detection — H2s as natural questions
+  const h2Texts = (content.match(/<h2[^>]*>([\s\S]*?)<\/h2>/gi) || []).map(h => h.replace(/<[^>]+>/g, '').trim());
+  const questionH2s = h2Texts.filter(h => h.endsWith('?') || /^(como|o que|qual|quando|quanto|por que|onde|quem|para que)/i.test(h));
+  const questionH2Pct = h2Texts.length > 0 ? Math.round((questionH2s.length / h2Texts.length) * 100) : 0;
+  
+  // 3. Verified Statistics Detection — "Segundo [fonte] ([ano])" pattern
+  const statsPatterns = [
+    /segundo\s+[^,.(]+\s*\(\d{4}\)/gi,
+    /de acordo com\s+[^,.(]+/gi,
+    /dados d[aeo]\s+[^,.(]+\s*\(\d{4}\)/gi,
+    /pesquisa\s+d[aeo]\s+[^,.(]+/gi,
+    /estudo\s+d[aeo]\s+[^,.(]+/gi,
+    /\d+[.,]\d*\s*%/g, // percentage stats
+    /R\$\s*[\d.,]+/g, // monetary values
+  ];
+  let statsCount = 0;
+  for (const pattern of statsPatterns) {
+    statsCount += (cleanContent.match(pattern) || []).length;
+  }
+  const statsEvery200Words = wordCount > 0 ? Math.round((statsCount / (wordCount / 200)) * 10) / 10 : 0;
+  
+  // 4. Expert Quotes Detection
+  const expertPatterns = [
+    /(?:Dr\.|Dra\.|Prof\.|Profª\.)\s+[A-ZÀ-Ü][a-zà-ü]+/g,
+    /especialista\s+em\s+/gi,
+    /segundo\s+(?:o|a)\s+(?:advogad|médic|professor|especialista)/gi,
+  ];
+  let expertMentions = 0;
+  for (const p of expertPatterns) {
+    expertMentions += (cleanContent.match(p) || []).length;
+  }
+  
+  // 5. Conversational Tone Detection
+  const conversationalPatterns = [
+    /\bvocê\b/gi,
+    /\bsua\b/gi,
+    /\bseu\b/gi,
+    /\?/g, // questions in content
+  ];
+  let conversationalScore = 0;
+  for (const p of conversationalPatterns) {
+    conversationalScore += Math.min((cleanContent.match(p) || []).length, 20);
+  }
+  const isConversational = conversationalScore >= 10;
+  
+  // 6. Anti-Duplicity Check — generic phrases that exist everywhere
+  const genericPhrases = [
+    'no mundo de hoje', 'em um mundo cada vez mais', 'neste artigo vamos',
+    'é importante ressaltar', 'vale mencionar que', 'vamos mergulhar',
+    'sem dúvida alguma', 'nos dias atuais', 'como já sabemos',
+  ];
+  const genericCount = genericPhrases.filter(p => lowerContent.includes(p)).length;
+  
+  // 7. Data Freshness / Pulse AI
+  const currentYear = new Date().getFullYear();
+  const yearMentions = (cleanContent.match(new RegExp(`\\b${currentYear}\\b`, 'g')) || []).length;
+  const hasFreshData = yearMentions >= 2;
+  
+  // 8. Definition Format Detection ("X é...")
+  const definitionPatterns = (cleanContent.match(/\b\w+\s+(?:é|são|consiste|significa|refere-se)\s+/gi) || []).length;
+  
+  // Compute GEO Score (0-100)
+  let geoScore = 0;
+  if (hasDirectAnswer) geoScore += 15;
+  if (questionH2Pct >= 50) geoScore += 15; else if (questionH2Pct >= 25) geoScore += 8;
+  if (statsEvery200Words >= 0.8) geoScore += 15; else if (statsEvery200Words >= 0.4) geoScore += 8;
+  if (expertMentions >= 2) geoScore += 10; else if (expertMentions >= 1) geoScore += 5;
+  if (isConversational) geoScore += 10;
+  if (genericCount === 0) geoScore += 10; else if (genericCount <= 2) geoScore += 5;
+  if (hasFreshData) geoScore += 10;
+  if (definitionPatterns >= 3) geoScore += 5;
+  if (hasFAQ) geoScore += 10;
+  
+  // AEO Score (subset of GEO focused on answer extraction)
+  let aeoScore = 0;
+  if (hasDirectAnswer) aeoScore += 25;
+  if (questionH2Pct >= 50) aeoScore += 20; else if (questionH2Pct >= 25) aeoScore += 10;
+  if (hasFAQ) aeoScore += 20;
+  if (statsEvery200Words >= 0.8) aeoScore += 15; else if (statsEvery200Words >= 0.4) aeoScore += 8;
+  if (isConversational) aeoScore += 10;
+  if (definitionPatterns >= 3) aeoScore += 10;
+
+  // E-E-A-T Score
+  let eeatScore = 0;
+  if (expertMentions >= 2) eeatScore += 25; else if (expertMentions >= 1) eeatScore += 15;
+  if (externalLinksCount >= 2) eeatScore += 20; else if (externalLinksCount >= 1) eeatScore += 10;
+  if (statsEvery200Words >= 0.8) eeatScore += 20; else if (statsEvery200Words >= 0.4) eeatScore += 10;
+  if (hasFreshData) eeatScore += 15;
+  if (hasArticleSchema || hasFAQSchema) eeatScore += 10;
+  if (wordCount >= 1500) eeatScore += 10;
 
   return {
     flesch: {
@@ -947,39 +1073,73 @@ function analyzeContent(content: string, cleanContent: string, article: any, pro
       titleLength: titleLen, titleOk: titleLen >= 55 && titleLen <= 80,
       excerptLength: excerptLen, excerptOk: excerptLen >= 145 && excerptLen <= 180,
     },
+    // NEW: GEO/AEO/E-E-A-T scores
+    geo: {
+      score: geoScore,
+      grade: geoScore >= 80 ? 'A' : geoScore >= 60 ? 'B' : geoScore >= 40 ? 'C' : 'D',
+      hasDirectAnswer,
+      questionH2Pct,
+      statsEvery200Words,
+      expertMentions,
+      isConversational,
+      genericPhraseCount: genericCount,
+      hasFreshData,
+      definitionPatterns: definitionPatterns,
+    },
+    aeo: {
+      score: aeoScore,
+      grade: aeoScore >= 80 ? 'A' : aeoScore >= 60 ? 'B' : aeoScore >= 40 ? 'C' : 'D',
+    },
+    eeat: {
+      score: eeatScore,
+      grade: eeatScore >= 80 ? 'A' : eeatScore >= 60 ? 'B' : eeatScore >= 40 ? 'C' : 'D',
+    },
   };
 }
 
 function calculateScore(analysis: any): number {
   let score = 0;
-  const { flesch, readability_v2, structure, keyword, meta } = analysis;
+  const { flesch, readability_v2, structure, keyword, meta, geo, aeo, eeat } = analysis;
   
-  if (flesch.score >= 70) score += 20; else if (flesch.score >= 60) score += 15; else if (flesch.score >= 50) score += 5;
-  
+  // Readability (max 30)
+  if (flesch.score >= 70) score += 15; else if (flesch.score >= 60) score += 10; else if (flesch.score >= 50) score += 5;
   if (readability_v2) {
     if (readability_v2.passive_voice_pct <= 10) score += 5; else if (readability_v2.passive_voice_pct <= 15) score += 3;
     if (readability_v2.transition_words_pct >= 30) score += 5; else if (readability_v2.transition_words_pct >= 20) score += 3;
     if (readability_v2.long_sentences_pct <= 15) score += 5; else if (readability_v2.long_sentences_pct <= 25) score += 3;
   }
   
-  if (structure.h2Count >= 5) score += 10; else if (structure.h2Count >= 3) score += 7; else if (structure.h2Count > 0) score += 3;
-  if (structure.h3Count >= 3) score += 5; else if (structure.h3Count > 0) score += 2;
-  if (structure.hasFAQ) score += 10;
-  if (structure.hasConclusion) score += 5;
-  if (structure.hasCTA) score += 10;
+  // Structure (max 30)
+  if (structure.h2Count >= 5) score += 7; else if (structure.h2Count >= 3) score += 5; else if (structure.h2Count > 0) score += 2;
+  if (structure.h3Count >= 3) score += 3; else if (structure.h3Count > 0) score += 1;
+  if (structure.hasFAQ) score += 5;
+  if (structure.hasConclusion) score += 3;
+  if (structure.hasCTA) score += 5;
+  if (structure.internalLinks >= 10) score += 10; else if (structure.internalLinks >= 5) score += 7; else if (structure.internalLinks >= 1) score += 2;
+  if (structure.externalLinks >= 1 && structure.externalLinks <= 3) score += 3;
+  if (structure.longParagraphs === 0) score += 3;
   
-  if (structure.internalLinks >= 10) score += 15; else if (structure.internalLinks >= 5) score += 10; else if (structure.internalLinks >= 1) score += 3;
-  if (structure.externalLinks >= 1 && structure.externalLinks <= 3) score += 5;
+  // Keyword & Meta (max 15)
+  if (keyword.isOptimal) score += 5; else if (keyword.count > 0) score += 3;
+  if (meta.titleOk) score += 3;
+  if (meta.excerptOk) score += 3;
+  if (keyword.titleHasKeyword) score += 4;
   
-  if (structure.imgCount > 0 && structure.imgCount === structure.imgsWithAlt) score += 5; else if (structure.imgCount > 0) score += 2;
-  if (structure.longParagraphs === 0) score += 5;
+  // GEO/AEO/E-E-A-T (max 25 — NEW)
+  if (geo) {
+    const geoContrib = Math.round(geo.score * 0.10); // max 10 pts
+    score += geoContrib;
+  }
+  if (aeo) {
+    const aeoContrib = Math.round(aeo.score * 0.08); // max 8 pts
+    score += aeoContrib;
+  }
+  if (eeat) {
+    const eeatContrib = Math.round(eeat.score * 0.07); // max 7 pts
+    score += eeatContrib;
+  }
   
-  if (keyword.isOptimal) score += 10; else if (keyword.count > 0) score += 5;
-  if (meta.titleOk) score += 5;
-  if (meta.excerptOk) score += 5;
-  if (keyword.titleHasKeyword) score += 5;
-  
-  if (structure.wordCount >= 1500) score += 5; else if (structure.wordCount >= 800) score += 2;
+  if (structure.wordCount >= 1500) score += 3; else if (structure.wordCount >= 800) score += 1;
   
   return score;
 }

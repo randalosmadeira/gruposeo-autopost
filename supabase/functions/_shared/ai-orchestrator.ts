@@ -1,8 +1,9 @@
 /**
- * AI Orchestrator - Multi-Provider System with Dual-Key Fallback
+ * AI Orchestrator v5.0 - GEO/AEO Multi-Provider System
  * 
  * Supports: Gemini (primary), OpenAI, Anthropic (when key available)
- * Includes automatic fallback chain + platform key fallback when BYOK fails.
+ * NEW: geo_optimization, aeo_analysis, eeat_review task types
+ * Upgraded models: gemini-2.5-pro, gpt-4o, claude-sonnet-4-5
  */
 
 export interface AIProvider {
@@ -38,38 +39,60 @@ export type TaskType =
   | 'legal_review'
   | 'conversion_content'
   | 'strategy_planning'
-  | 'image_generation';
+  | 'image_generation'
+  | 'geo_optimization'
+  | 'aeo_analysis'
+  | 'eeat_review'
+  | 'share_of_model';
 
 // Provider configurations per task type - ordered by preference
 const AI_PROVIDERS: Record<string, AIProvider[]> = {
   article_generation: [
+    { name: 'gemini', model: 'gemini-2.5-pro', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['deep-reasoning', 'long-form', 'geo-optimized'] },
     { name: 'gemini', model: 'gemini-2.5-flash', costPer1kTokens: 0.0005, maxTokens: 1000000, strengths: ['fast', 'creative', 'long-form'] },
     { name: 'anthropic', model: 'claude-sonnet-4-5-20250929', costPer1kTokens: 0.003, maxTokens: 200000, strengths: ['creative', 'long-form', 'nuanced'] },
     { name: 'openai', model: 'gpt-4o', costPer1kTokens: 0.005, maxTokens: 128000, strengths: ['versatile', 'instruction-following'] },
   ],
+  geo_optimization: [
+    { name: 'gemini', model: 'gemini-2.5-pro', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['deep-reasoning', 'semantic-analysis', 'geo-signals'] },
+    { name: 'openai', model: 'gpt-4o', costPer1kTokens: 0.005, maxTokens: 128000, strengths: ['structured-output', 'precision'] },
+    { name: 'anthropic', model: 'claude-sonnet-4-5-20250929', costPer1kTokens: 0.003, maxTokens: 200000, strengths: ['nuanced', 'eeat-analysis'] },
+  ],
+  aeo_analysis: [
+    { name: 'gemini', model: 'gemini-2.5-pro', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['answer-engine-optimization', 'snippet-detection'] },
+    { name: 'openai', model: 'gpt-4o', costPer1kTokens: 0.005, maxTokens: 128000, strengths: ['qa-extraction', 'structured'] },
+  ],
+  eeat_review: [
+    { name: 'anthropic', model: 'claude-sonnet-4-5-20250929', costPer1kTokens: 0.003, maxTokens: 200000, strengths: ['nuanced', 'authority-detection', 'trust-analysis'] },
+    { name: 'gemini', model: 'gemini-2.5-pro', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['deep-reasoning'] },
+  ],
+  share_of_model: [
+    { name: 'gemini', model: 'gemini-2.5-flash', costPer1kTokens: 0.0005, maxTokens: 1000000, strengths: ['fast', 'cost-effective', 'brand-detection'] },
+    { name: 'openai', model: 'gpt-4o', costPer1kTokens: 0.005, maxTokens: 128000, strengths: ['precision'] },
+  ],
   seo_analysis: [
-    { name: 'gemini', model: 'gemini-2.0-flash', costPer1kTokens: 0.0001, maxTokens: 1000000, strengths: ['fast', 'analytical', 'cost-effective'] },
+    { name: 'gemini', model: 'gemini-2.5-flash', costPer1kTokens: 0.0005, maxTokens: 1000000, strengths: ['fast', 'analytical', 'cost-effective'] },
     { name: 'openai', model: 'gpt-4o-mini', costPer1kTokens: 0.00015, maxTokens: 128000, strengths: ['fast', 'precise'] },
   ],
   title_generation: [
     { name: 'openai', model: 'gpt-4o', costPer1kTokens: 0.005, maxTokens: 128000, strengths: ['creative', 'catchy'] },
-    { name: 'gemini', model: 'gemini-2.0-flash', costPer1kTokens: 0.0001, maxTokens: 1000000, strengths: ['fast', 'cost-effective'] },
+    { name: 'gemini', model: 'gemini-2.5-flash', costPer1kTokens: 0.0005, maxTokens: 1000000, strengths: ['fast', 'cost-effective'] },
   ],
   meta_description: [
-    { name: 'gemini', model: 'gemini-2.0-flash', costPer1kTokens: 0.0001, maxTokens: 1000000, strengths: ['fast', 'cost-effective'] },
+    { name: 'gemini', model: 'gemini-2.5-flash', costPer1kTokens: 0.0005, maxTokens: 1000000, strengths: ['fast', 'cost-effective'] },
     { name: 'openai', model: 'gpt-4o-mini', costPer1kTokens: 0.00015, maxTokens: 128000, strengths: ['precise'] },
   ],
   content_editing: [
-    { name: 'gemini', model: 'gemini-2.5-flash', costPer1kTokens: 0.0005, maxTokens: 1000000, strengths: ['fast', 'large-context', 'cost-effective'] },
+    { name: 'gemini', model: 'gemini-2.5-pro', costPer1kTokens: 0.00125, maxTokens: 1000000, strengths: ['deep-reasoning', 'large-context', 'geo-optimized'] },
     { name: 'anthropic', model: 'claude-sonnet-4-5-20250929', costPer1kTokens: 0.003, maxTokens: 200000, strengths: ['nuanced', 'careful'] },
     { name: 'openai', model: 'gpt-4o', costPer1kTokens: 0.005, maxTokens: 128000, strengths: ['versatile'] },
   ],
   content_review: [
-    { name: 'gemini', model: 'gemini-2.0-flash', costPer1kTokens: 0.0001, maxTokens: 1000000, strengths: ['fast', 'analytical'] },
+    { name: 'gemini', model: 'gemini-2.5-flash', costPer1kTokens: 0.0005, maxTokens: 1000000, strengths: ['fast', 'analytical'] },
     { name: 'openai', model: 'gpt-4o-mini', costPer1kTokens: 0.00015, maxTokens: 128000, strengths: ['precise'] },
   ],
   news_rewrite: [
-    { name: 'gemini', model: 'gemini-2.0-flash', costPer1kTokens: 0.0001, maxTokens: 1000000, strengths: ['fast', 'cost-effective'] },
+    { name: 'gemini', model: 'gemini-2.5-flash', costPer1kTokens: 0.0005, maxTokens: 1000000, strengths: ['fast', 'cost-effective'] },
     { name: 'openai', model: 'gpt-4o-mini', costPer1kTokens: 0.00015, maxTokens: 128000, strengths: ['fast'] },
   ],
   legal_review: [
@@ -99,7 +122,7 @@ const ANTHROPIC_API_BASE = "https://api.anthropic.com/v1";
 
 export class AIOrchestrator {
   private apiKeys: Record<string, string>;
-  private platformKeys: Record<string, string>; // Platform-level fallback keys
+  private platformKeys: Record<string, string>;
 
   constructor() {
     const openaiKey = Deno.env.get('OPENAI_API_KEY') || '';
@@ -111,7 +134,6 @@ export class AIOrchestrator {
       gemini: Deno.env.get('GEMINI_API_KEY') || '',
     };
     
-    // Save platform keys as immutable fallback
     this.platformKeys = { ...this.apiKeys };
     
     if (openaiKey && !validOpenaiKey) {
@@ -119,7 +141,6 @@ export class AIOrchestrator {
     }
   }
 
-  /** Override API keys with user-provided BYOK keys. Platform keys are preserved as fallback. */
   setKeys(keys: { gemini?: string; openai?: string; anthropic?: string }) {
     if (keys.gemini) this.apiKeys.gemini = keys.gemini;
     if (keys.openai) {
@@ -132,7 +153,6 @@ export class AIOrchestrator {
     if (keys.anthropic) this.apiKeys.anthropic = keys.anthropic;
   }
 
-  /** Check which providers are available (including platform fallbacks) */
   getAvailableProviders(): string[] {
     const available = new Set<string>();
     for (const [name, key] of Object.entries(this.apiKeys)) {
@@ -144,7 +164,6 @@ export class AIOrchestrator {
     return [...available];
   }
 
-  /** Select the best available provider for a task */
   selectProvider(taskType: TaskType, preferences?: Partial<AICallOptions>): AIProvider | null {
     const providers = AI_PROVIDERS[taskType] || AI_PROVIDERS['article_generation'];
     const availableNames = this.getAvailableProviders();
@@ -164,7 +183,6 @@ export class AIOrchestrator {
     return available[0];
   }
 
-  /** Get all possible keys for a provider (BYOK first, then platform fallback) */
   private getKeysForProvider(providerName: string): string[] {
     const keys: string[] = [];
     const byokKey = this.apiKeys[providerName];
@@ -176,7 +194,6 @@ export class AIOrchestrator {
     return keys;
   }
 
-  /** Call AI with automatic provider selection, key fallback, and provider fallback */
   async call(taskType: TaskType, messages: AIMessage[], options?: AICallOptions): Promise<string> {
     const providers = AI_PROVIDERS[taskType] || AI_PROVIDERS['article_generation'];
     const availableNames = this.getAvailableProviders();
@@ -199,7 +216,15 @@ export class AIOrchestrator {
       orderedProviders.sort((a, b) => a.costPer1kTokens - b.costPer1kTokens);
     }
 
-    // Try each provider, and for each provider try all available keys (BYOK → platform)
+    // Deduplicate by model name (avoid retrying same model with same key)
+    const seenModels = new Set<string>();
+    orderedProviders = orderedProviders.filter(p => {
+      const key = `${p.name}:${p.model}`;
+      if (seenModels.has(key)) return false;
+      seenModels.add(key);
+      return true;
+    });
+
     let lastError: Error | null = null;
     for (const provider of orderedProviders) {
       const keys = this.getKeysForProvider(provider.name);
@@ -221,7 +246,6 @@ export class AIOrchestrator {
     throw lastError || new Error('Todos os provedores falharam');
   }
 
-  /** Call a specific provider with an explicit key */
   private async callProviderWithKey(provider: AIProvider, apiKey: string, messages: AIMessage[], options?: AICallOptions): Promise<string> {
     switch (provider.name) {
       case 'gemini':
@@ -235,12 +259,10 @@ export class AIOrchestrator {
     }
   }
 
-  /** Legacy: Call provider using stored key */
   private async callProvider(provider: AIProvider, messages: AIMessage[], options?: AICallOptions): Promise<string> {
     return this.callProviderWithKey(provider, this.apiKeys[provider.name] || this.platformKeys[provider.name], messages, options);
   }
 
-  /** Call Gemini API */
   private async callGemini(model: string, messages: AIMessage[], options?: AICallOptions, apiKey?: string): Promise<string> {
     const key = apiKey || this.apiKeys.gemini || this.platformKeys.gemini;
     if (!key) throw new Error('GEMINI_API_KEY não configurada');
@@ -283,7 +305,6 @@ export class AIOrchestrator {
     
     if (finishReason === 'MAX_TOKENS') {
       console.warn(`[AIOrchestrator] Gemini ${model} response truncated (MAX_TOKENS). Output length: ${text.length} chars`);
-      // Mark truncation so callers can handle it
       (globalThis as any).__lastFinishReason = 'MAX_TOKENS';
     } else {
       (globalThis as any).__lastFinishReason = finishReason || 'STOP';
@@ -297,7 +318,6 @@ export class AIOrchestrator {
     return text;
   }
 
-  /** Call OpenAI API */
   private async callOpenAI(model: string, messages: AIMessage[], options?: AICallOptions, apiKey?: string): Promise<string> {
     const key = apiKey || this.apiKeys.openai || this.platformKeys.openai;
     if (!key) throw new Error('OPENAI_API_KEY não configurada');
@@ -328,7 +348,6 @@ export class AIOrchestrator {
     return data.choices?.[0]?.message?.content || '';
   }
 
-  /** Call Anthropic (Claude) API */
   private async callAnthropic(model: string, messages: AIMessage[], options?: AICallOptions, apiKey?: string): Promise<string> {
     const key = apiKey || this.apiKeys.anthropic || this.platformKeys.anthropic;
     if (!key) throw new Error('ANTHROPIC_API_KEY não configurada');
@@ -363,14 +382,12 @@ export class AIOrchestrator {
     return data.content?.[0]?.text || '';
   }
 
-  /** Stream call - uses Gemini stream with fallback to non-stream */
   async callStream(taskType: TaskType, messages: AIMessage[], options?: AICallOptions): Promise<Response> {
     const provider = this.selectProvider(taskType, options);
     if (!provider) {
       throw new Error('Nenhum provedor de IA disponível para streaming.');
     }
 
-    // Try streaming with key fallback
     const keys = this.getKeysForProvider(provider.name);
     
     for (let i = 0; i < keys.length; i++) {
@@ -385,7 +402,6 @@ export class AIOrchestrator {
       }
     }
 
-    // Final fallback: non-streaming
     const text = await this.call(taskType, messages, options);
     const sseData = `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: [DONE]\n\n`;
     return new Response(new TextEncoder().encode(sseData), {
@@ -393,7 +409,6 @@ export class AIOrchestrator {
     });
   }
 
-  /** Stream via Gemini */
   private async streamGemini(model: string, messages: AIMessage[], options?: AICallOptions, apiKey?: string): Promise<Response> {
     const key = apiKey || this.apiKeys.gemini || this.platformKeys.gemini;
     if (!key) throw new Error('GEMINI_API_KEY não configurada');
@@ -460,7 +475,6 @@ export class AIOrchestrator {
     });
   }
 
-  /** Stream via OpenAI */
   private async streamOpenAI(model: string, messages: AIMessage[], options?: AICallOptions, apiKey?: string): Promise<Response> {
     const key = apiKey || this.apiKeys.openai || this.platformKeys.openai;
     if (!key) throw new Error('OPENAI_API_KEY não configurada');
@@ -493,7 +507,6 @@ export class AIOrchestrator {
     });
   }
 
-  /** Get status of all providers */
   getProvidersStatus(): Record<string, { available: boolean; tasks: string[] }> {
     const status: Record<string, { available: boolean; tasks: string[] }> = {};
     
