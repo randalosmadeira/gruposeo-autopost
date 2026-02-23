@@ -751,7 +751,72 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
         details.sitemap_optimization = { details: sitemapOptDetails };
 
         // ═══════════════════════════════════════════
-        // STEP 12: Summary
+        // STEP 12: Autonomous Noindex Manager v3.6.0
+        // Desativa automaticamente: date archives, categorias/tags vazias,
+        // author archives, attachment pages, paginated archives
+        // ═══════════════════════════════════════════
+        console.log(`[SEO Agent] [${project.name}] Step 12: Autonomous Noindex Manager`);
+
+        let noindexApplied = 0;
+        const noindexDetails: string[] = [];
+
+        if (isPlugin && apiKey && baseUrl) {
+          try {
+            const noindexResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/noindex-manager`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+              body: JSON.stringify({
+                targets: [
+                  "date_archives",
+                  "empty_categories",
+                  "empty_tags",
+                  "author_archives",
+                  "attachment_pages",
+                  "paginated_archives",
+                ],
+              }),
+              signal: AbortSignal.timeout(30000),
+            });
+
+            if (noindexResp.ok) {
+              const noindexData = await noindexResp.json();
+              noindexApplied = noindexData.total_applied || 0;
+
+              if (noindexData.actions && Array.isArray(noindexData.actions)) {
+                for (const action of noindexData.actions) {
+                  if (action.applied > 0) {
+                    noindexDetails.push(`✅ ${action.details}`);
+                  } else {
+                    noindexDetails.push(`ℹ️ ${action.details}`);
+                  }
+                }
+              }
+
+              if (noindexApplied > 0) {
+                console.log(`[SEO Agent] [${project.name}] Noindex Manager: ${noindexApplied} changes applied`);
+                // Refresh sitemap after noindex changes
+                try {
+                  await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-sitemap`, {
+                    method: "POST",
+                    headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+                    body: JSON.stringify({ remove_noindex: true }),
+                  });
+                  noindexDetails.push("✅ Sitemap atualizado após noindex");
+                } catch { /* */ }
+              }
+            } else {
+              noindexDetails.push(`⚠ Noindex Manager endpoint indisponível (${noindexResp.status})`);
+            }
+          } catch (e) {
+            console.log(`[SEO Agent] [${project.name}] Noindex Manager: endpoint unavailable`);
+            noindexDetails.push("⚠ Noindex Manager: endpoint não disponível — atualizar plugin");
+          }
+        }
+
+        details.noindex_manager = { applied: noindexApplied, details: noindexDetails };
+
+        // ═══════════════════════════════════════════
+        // STEP 13: Summary
         // ═══════════════════════════════════════════
         const summaryParts = [];
         if (metaIssuesFixed > 0) summaryParts.push(`${metaIssuesFixed} metas corrigidos`);
@@ -778,6 +843,7 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
         if (bulkMetasFixed > 0) summaryParts.push(`✅ ${bulkMetasFixed} títulos/metas corrigidos via IA`);
         if (redirectAudit.chains > 0) summaryParts.push(`${redirectAudit.chains} redirect chains`);
         if (redirectAudit.loops > 0) summaryParts.push(`🔴 ${redirectAudit.loops} redirect loops`);
+        if (noindexApplied > 0) summaryParts.push(`🚫 ${noindexApplied} páginas noindex (archives/vazias)`);
 
         const summary = summaryParts.length > 0
           ? `✅ ${project.name}: ${summaryParts.join(", ")}`
