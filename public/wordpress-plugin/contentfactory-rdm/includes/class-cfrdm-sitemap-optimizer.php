@@ -100,7 +100,7 @@ class CFRDM_Sitemap_Optimizer {
     }
     
     /**
-     * Optimize sitemap query
+     * Optimize sitemap query — exclude noindex pages
      */
     public function optimize_query_args($args, $post_type) {
         // Ensure we include all published posts
@@ -109,6 +109,11 @@ class CFRDM_Sitemap_Optimizer {
         // Order by last modified (fresher content first)
         $args['orderby'] = 'modified';
         $args['order'] = 'DESC';
+        
+        // Exclude attachment post type (redirected or noindex)
+        if ($post_type === 'attachment') {
+            $args['post__in'] = array(0); // Return nothing
+        }
         
         return $args;
     }
@@ -123,8 +128,39 @@ class CFRDM_Sitemap_Optimizer {
         if (isset($entry['loc'])) {
             $entry_host = parse_url($entry['loc'], PHP_URL_HOST);
             if ($entry_host && $entry_host !== $site_host) {
-                // Return empty entry to skip - WordPress will ignore entries without loc
                 return array();
+            }
+        }
+        
+        // Exclude noindex posts from sitemap
+        if (is_object($post) && isset($post->ID)) {
+            $is_noindex = false;
+            
+            // Check Rank Math
+            $rm_robots = get_post_meta($post->ID, 'rank_math_robots', true);
+            if (is_array($rm_robots) && in_array('noindex', $rm_robots)) {
+                $is_noindex = true;
+            }
+            
+            // Check Yoast
+            $yoast_noindex = get_post_meta($post->ID, '_yoast_wpseo_meta-robots-noindex', true);
+            if ($yoast_noindex === '1') {
+                $is_noindex = true;
+            }
+            
+            // Check AIOSEO
+            $aioseo_noindex = get_post_meta($post->ID, '_aioseo_noindex', true);
+            if ($aioseo_noindex === '1') {
+                $is_noindex = true;
+            }
+            
+            // Check CFRDM custom noindex
+            if (get_post_meta($post->ID, '_cfrdm_noindex', true)) {
+                $is_noindex = true;
+            }
+            
+            if ($is_noindex) {
+                return array(); // Exclude from sitemap
             }
         }
         
@@ -202,6 +238,36 @@ class CFRDM_Sitemap_Optimizer {
                 return array();
             }
         }
+        
+        // Also filter noindex terms from taxonomy sitemaps
+        // WordPress passes the term object as the 3rd arg in some filters
+        // We check the URL to find the term and exclude if noindex
+        if (isset($entry['loc'])) {
+            $term_url = $entry['loc'];
+            // Try to find term by URL — check for _cfrdm_noindex or SEO plugin noindex
+            $term_id = url_to_postid($term_url);
+            if (!$term_id) {
+                // For taxonomy terms, try to resolve via term link
+                $taxonomies = get_taxonomies(array('public' => true));
+                foreach ($taxonomies as $tax) {
+                    $terms = get_terms(array('taxonomy' => $tax, 'hide_empty' => false, 'fields' => 'all'));
+                    if (is_wp_error($terms)) continue;
+                    foreach ($terms as $term) {
+                        if (get_term_link($term) === $term_url) {
+                            $noindex = get_term_meta($term->term_id, '_cfrdm_noindex', true) ||
+                                       get_term_meta($term->term_id, 'wpseo_noindex', true) === 'noindex';
+                            $rm_robots = get_term_meta($term->term_id, 'rank_math_robots', true);
+                            if (is_array($rm_robots) && in_array('noindex', $rm_robots)) {
+                                $noindex = true;
+                            }
+                            if ($noindex) return array();
+                            break 2;
+                        }
+                    }
+                }
+            }
+        }
+        
         return $entry;
     }
     

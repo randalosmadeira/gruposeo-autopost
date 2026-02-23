@@ -112,6 +112,11 @@ function cfrdm_load_dependencies() {
         CFRDM_AI_Auto_SEO_Fix::init();
     }
     
+    // v3.6.0 - Noindex Manager (autonomous low-value page handler)
+    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-noindex-manager.php')) {
+        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-noindex-manager.php';
+    }
+    
     // v3.2.7 - AI Source Rules, Google Indexing Submitter, GMB Auto-Poster
     if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-source-rules.php')) {
         require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-source-rules.php';
@@ -232,6 +237,16 @@ class ContentFactory_RDM {
             }
         } catch (\Throwable $e) {
             error_log('ContentFactory Bulk Meta init error: ' . $e->getMessage());
+        }
+        
+        // Initialize v3.6.0 - Noindex Manager
+        try {
+            if (class_exists('CFRDM_Noindex_Manager')) {
+                CFRDM_Noindex_Manager::get_instance()->init();
+                add_action('wp_head', array('CFRDM_Noindex_Manager', 'inject_noindex_tags'), 1);
+            }
+        } catch (\Throwable $e) {
+            error_log('ContentFactory Noindex Manager init error: ' . $e->getMessage());
         }
         
         // Initialize v3.2.7 modules
