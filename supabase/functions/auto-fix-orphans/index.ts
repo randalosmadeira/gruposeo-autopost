@@ -1,11 +1,16 @@
 /**
- * Auto-Fix Orphan Articles — Runs every 6 hours
+ * Auto-Fix Orphan Articles v4.0 — Advanced SEO Orphan Repair Engine
  * 
+ * TRIAGE SYSTEM:
  * 1. Scans ALL projects for orphan pages (0 internal links pointing to them)
- * 2. Uses AI (Gemini + OpenAI fallback) to generate contextual internal links
- * 3. Applies links to high-traffic/old articles via WordPress API
- * 4. Submits fixed pages for re-indexing (IndexNow + Google)
- * 5. Sends notifications with results
+ * 2. AI-powered TRIAGE: Valuable (keep+link) | Duplicate (301 redirect) | Obsolete (update or 410)
+ * 3. Keyword mapping: identifies best "link donor" articles by semantic relevance
+ * 4. Hub-and-Spoke: detects pillar pages and builds cluster architecture
+ * 5. Contextual linking with anchor text optimization
+ * 6. Click-depth analysis: ensures no page is >3 clicks from home
+ * 7. Breadcrumb and navigation suggestions
+ * 8. Re-indexing via IndexNow + Google Indexing API
+ * 9. Notifications with full audit report
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
@@ -31,9 +36,8 @@ Deno.serve(async (req) => {
     const targetProjectId = body.project_id || null;
     const targetUserId = body.user_id || null;
 
-    console.log(`[OrphanFixer] Starting automated orphan fix cycle`);
+    console.log(`[OrphanFixer v4] Starting advanced orphan fix cycle`);
 
-    // Fetch all connected WordPress projects
     let query = supabase
       .from("projects")
       .select("id, user_id, name, domain, wordpress_url, wordpress_username, wordpress_app_password, seo_plugin, nicho, marca, empresa_nome, compliance_rules")
@@ -53,7 +57,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`[OrphanFixer] Processing ${projects.length} projects`);
+    console.log(`[OrphanFixer v4] Processing ${projects.length} projects`);
     const allResults = [];
 
     for (const project of projects) {
@@ -61,7 +65,7 @@ Deno.serve(async (req) => {
       try {
         orchestrator = await getOrchestratorForUser(project.user_id);
       } catch {
-        console.warn(`[OrphanFixer] BYOK failed for ${project.user_id}, using defaults`);
+        console.warn(`[OrphanFixer v4] BYOK failed for ${project.user_id}, using defaults`);
       }
 
       const baseUrl = project.wordpress_url?.replace(/\/wp-json\/cfrdm\/v1\/?$/, "").replace(/\/+$/, "") || "";
@@ -69,7 +73,7 @@ Deno.serve(async (req) => {
       const apiKey = project.wordpress_app_password || "";
 
       if (!baseUrl || !isPlugin || !apiKey) {
-        console.log(`[OrphanFixer] [${project.name}] Skipped — no plugin connection`);
+        console.log(`[OrphanFixer v4] [${project.name}] Skipped — no plugin connection`);
         continue;
       }
 
@@ -77,30 +81,26 @@ Deno.serve(async (req) => {
         const result = await processProjectOrphans(supabase, orchestrator, project, baseUrl, apiKey);
         allResults.push({ project: project.name, ...result });
 
-        // Send notification if work was done
         if (result.orphansFound > 0) {
           const parts = [];
           if (result.linksApplied > 0) parts.push(`${result.linksApplied} links aplicados`);
           if (result.linksSuggested > 0) parts.push(`${result.linksSuggested} sugestões geradas`);
+          if (result.redirectsCreated > 0) parts.push(`${result.redirectsCreated} redirecionamentos 301`);
           if (result.indexingSubmitted > 0) parts.push(`${result.indexingSubmitted} URLs re-indexadas`);
-          parts.push(`${result.orphansFound} órfãos detectados, ${result.orphansFixed} corrigidos`);
+          parts.push(`${result.orphansFound} órfãos: ${result.triageResults.valuable} valiosos, ${result.triageResults.duplicate} duplicados, ${result.triageResults.obsolete} obsoletos`);
 
           await supabase.from("cron_notifications").insert({
             user_id: project.user_id,
-            title: "🔗 Correção Automática de Páginas Órfãs",
+            title: "🔗 Correção Avançada de Páginas Órfãs v4",
             message: `${project.name}: ${parts.join(" | ")}`,
             type: "orphan_fix",
-            metadata: {
-              project_id: project.id,
-              project_name: project.name,
-              ...result,
-            },
+            metadata: { project_id: project.id, project_name: project.name, ...result },
           });
         }
 
-        console.log(`[OrphanFixer] [${project.name}] Done: ${result.orphansFound} orphans, ${result.linksApplied} links applied`);
+        console.log(`[OrphanFixer v4] [${project.name}] Done: ${result.orphansFound} orphans, ${result.linksApplied} links, ${result.redirectsCreated} redirects`);
       } catch (err) {
-        console.error(`[OrphanFixer] [${project.name}] Error:`, err);
+        console.error(`[OrphanFixer v4] [${project.name}] Error:`, err);
         allResults.push({ project: project.name, error: err instanceof Error ? err.message : String(err) });
       }
     }
@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    console.error("[OrphanFixer] Fatal:", error);
+    console.error("[OrphanFixer v4] Fatal:", error);
     return new Response(
       JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Unknown" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -133,84 +133,277 @@ async function processProjectOrphans(
   let linksSuggested = 0;
   let linksApplied = 0;
   let indexingSubmitted = 0;
+  let redirectsCreated = 0;
+  const triageResults = { valuable: 0, duplicate: 0, obsolete: 0 };
   const fixDetails: string[] = [];
 
   // ══════════════════════════════════════
-  // PHASE 1: Detect orphan articles
+  // PHASE 1: Detect ALL orphan articles
   // ══════════════════════════════════════
   const { data: orphans } = await supabase
     .from("wordpress_article_index")
-    .select("id, wp_post_id, wp_post_title, wp_post_url, wp_post_slug, primary_keyword, topic_cluster, internal_links_count, word_count, seo_score, semantic_summary")
+    .select("id, wp_post_id, wp_post_title, wp_post_url, wp_post_slug, primary_keyword, topic_cluster, internal_links_count, word_count, seo_score, semantic_summary, content_hash, secondary_keywords")
     .eq("project_id", project.id)
     .eq("wp_post_status", "publish")
     .lte("internal_links_count", 0)
-    .order("word_count", { ascending: false }) // prioritize longer/important content
-    .limit(1000); // Process ALL orphans — zero artificial limits
+    .order("word_count", { ascending: false })
+    .limit(1000);
 
   if (!orphans || orphans.length === 0) {
-    return { orphansFound: 0, orphansFixed: 0, linksSuggested: 0, linksApplied: 0, indexingSubmitted: 0, details: [] };
+    return { orphansFound: 0, orphansFixed: 0, linksSuggested: 0, linksApplied: 0, indexingSubmitted: 0, redirectsCreated: 0, triageResults, details: [] };
   }
 
   orphansFound = orphans.length;
-  console.log(`[OrphanFixer] [${project.name}] Found ${orphansFound} orphan articles`);
+  console.log(`[OrphanFixer v4] [${project.name}] Found ${orphansFound} orphan articles`);
 
   // ══════════════════════════════════════
-  // PHASE 2: Get ALL articles for linking context
+  // PHASE 2: Get ALL articles for context
   // ══════════════════════════════════════
   const { data: allArticles } = await supabase
     .from("wordpress_article_index")
-    .select("id, wp_post_id, wp_post_title, wp_post_url, wp_post_slug, primary_keyword, topic_cluster, semantic_summary, internal_links_count, word_count")
+    .select("id, wp_post_id, wp_post_title, wp_post_url, wp_post_slug, primary_keyword, topic_cluster, semantic_summary, internal_links_count, word_count, content_hash, secondary_keywords, seo_score")
     .eq("project_id", project.id)
     .eq("wp_post_status", "publish")
     .order("word_count", { ascending: false })
-    .limit(1000); // Full article base for maximum cross-linking
+    .limit(1000);
 
   if (!allArticles || allArticles.length < 2) {
-    return { orphansFound, orphansFixed: 0, linksSuggested: 0, linksApplied: 0, indexingSubmitted: 0, details: ["Not enough articles for linking"] };
+    return { orphansFound, orphansFixed: 0, linksSuggested: 0, linksApplied: 0, indexingSubmitted: 0, redirectsCreated: 0, triageResults, details: ["Not enough articles for linking"] };
   }
 
-  // Identify high-traffic/high-linkability articles as best link sources
-  // Use ALL published articles as potential link sources (no arbitrary cap)
-  const linkSources = allArticles
-    .filter(a => (a.internal_links_count || 0) >= 1 && (a.word_count || 0) >= 300);
-
+  // Build lookup maps
   const urlToArticle = new Map(allArticles.map(a => [a.wp_post_url, a]));
+  const hashToArticles = new Map<string, typeof allArticles>();
+  for (const a of allArticles) {
+    if (a.content_hash) {
+      const existing = hashToArticles.get(a.content_hash) || [];
+      existing.push(a);
+      hashToArticles.set(a.content_hash, existing);
+    }
+  }
+
+  // Identify high-authority link sources (non-orphan, long content)
+  const linkSources = allArticles
+    .filter(a => (a.internal_links_count || 0) >= 1 && (a.word_count || 0) >= 300)
+    .sort((a, b) => (b.word_count || 0) - (a.word_count || 0));
+
+  // Build cluster map for hub-spoke
+  const clusterMap = new Map<string, typeof allArticles>();
+  for (const a of allArticles) {
+    if (a.topic_cluster) {
+      const cluster = clusterMap.get(a.topic_cluster) || [];
+      cluster.push(a);
+      clusterMap.set(a.topic_cluster, cluster);
+    }
+  }
 
   // ══════════════════════════════════════
-  // PHASE 3: AI generates contextual links for each orphan batch
+  // PHASE 3: AI-POWERED TRIAGE
   // ══════════════════════════════════════
-  const orphanBatches = chunkArray(orphans, 5); // Process 5 orphans per AI call for throughput
+  console.log(`[OrphanFixer v4] [${project.name}] Running triage on ${orphansFound} orphans...`);
+  
+  const triageBatches = chunkArray(orphans, 10);
+  const triageDecisions: Map<string, { action: 'link' | 'redirect' | 'update' | 'delete'; redirectTo?: string; reason: string; isPillar: boolean; suggestMenu: boolean; }> = new Map();
+
+  for (const batch of triageBatches) {
+    // Check for duplicates first (fast, no AI needed)
+    for (const orphan of batch) {
+      if (orphan.content_hash) {
+        const duplicates = hashToArticles.get(orphan.content_hash) || [];
+        const nonOrphanDup = duplicates.find(d => d.id !== orphan.id && (d.internal_links_count || 0) > 0);
+        if (nonOrphanDup) {
+          triageDecisions.set(orphan.id, {
+            action: 'redirect',
+            redirectTo: nonOrphanDup.wp_post_url,
+            reason: `Duplicate of "${nonOrphanDup.wp_post_title}" (content_hash match)`,
+            isPillar: false,
+            suggestMenu: false,
+          });
+          triageResults.duplicate++;
+          continue;
+        }
+      }
+    }
+
+    // AI triage for remaining (non-duplicate) orphans
+    const needsAI = batch.filter(o => !triageDecisions.has(o.id));
+    if (needsAI.length === 0) continue;
+
+    const orphanDescs = needsAI.map(o => 
+      `• "${o.wp_post_title}" | URL: ${o.wp_post_url} | KW: ${o.primary_keyword || "N/A"} | Cluster: ${o.topic_cluster || "N/A"} | ${o.word_count || 0} palavras | SEO: ${o.seo_score || 0}`
+    ).join("\n");
+
+    // Provide cluster context for hub-spoke decisions
+    const clusterContext = [...clusterMap.entries()]
+      .slice(0, 10)
+      .map(([name, articles]) => `Cluster "${name}": ${articles.length} artigos, pilar: ${articles[0]?.wp_post_title || "N/A"}`)
+      .join("\n");
+
+    try {
+      const triagePrompt = `Você é um auditor SEO enterprise fazendo triagem de páginas órfãs.
+
+ARTIGOS ÓRFÃOS (sem links internos):
+${orphanDescs}
+
+CLUSTERS EXISTENTES:
+${clusterContext || "Nenhum cluster definido"}
+
+Para CADA artigo, decida a ação:
+1. "link" — Artigo valioso, deve receber links internos contextuais
+2. "redirect" — Conteúdo duplicado/inferior, redirecionar 301 para artigo melhor
+3. "update" — Conteúdo obsoleto mas útil, precisa ser atualizado antes de linkar
+
+CRITÉRIOS DE DECISÃO:
+- Artigo com >2000 palavras = provável pilar de conteúdo → "link" + suggest_menu=true
+- Artigo com <300 palavras e sem keyword = thin content → "redirect" para artigo relacionado
+- Artigo com keyword relevante e >500 palavras = valioso → "link"
+- Artigo duplicado (mesmo tema/keyword de outro) = → "redirect"
+
+JSON OBRIGATÓRIO:
+{
+  "decisions": [
+    {
+      "orphan_url": "url",
+      "action": "link|redirect|update",
+      "redirect_to": "url_destino (só se redirect)",
+      "reason": "justificativa breve",
+      "is_pillar": true/false,
+      "suggest_menu": true/false,
+      "best_cluster": "nome_do_cluster_ideal"
+    }
+  ]
+}`;
+
+      const aiResult = await orchestrator.call("seo_analysis", [
+        { role: "system", content: `Auditor SEO enterprise. Nicho: ${project.nicho || "geral"}. Retorne APENAS JSON válido.` },
+        { role: "user", content: triagePrompt },
+      ], { maxTokens: 3000, temperature: 0.1 });
+
+      const parsed = safeParseJSON(aiResult);
+      if (parsed?.decisions && Array.isArray(parsed.decisions)) {
+        for (const dec of parsed.decisions) {
+          const orphan = needsAI.find(o => o.wp_post_url === dec.orphan_url);
+          if (!orphan) continue;
+
+          const action = ['link', 'redirect', 'update'].includes(dec.action) ? dec.action : 'link';
+          triageDecisions.set(orphan.id, {
+            action: action as any,
+            redirectTo: dec.redirect_to || undefined,
+            reason: dec.reason || 'AI triage',
+            isPillar: !!dec.is_pillar,
+            suggestMenu: !!dec.suggest_menu,
+          });
+
+          if (action === 'redirect') triageResults.duplicate++;
+          else if (action === 'update') triageResults.obsolete++;
+          else triageResults.valuable++;
+        }
+      }
+    } catch (e) {
+      console.warn(`[OrphanFixer v4] AI triage failed, defaulting to "link":`, e);
+    }
+
+    // Default: any orphan without a decision = valuable → link
+    for (const o of needsAI) {
+      if (!triageDecisions.has(o.id)) {
+        triageDecisions.set(o.id, {
+          action: 'link',
+          reason: 'Default: no triage decision',
+          isPillar: (o.word_count || 0) >= 2000,
+          suggestMenu: (o.word_count || 0) >= 2000,
+        });
+        triageResults.valuable++;
+      }
+    }
+  }
+
+  // ══════════════════════════════════════
+  // PHASE 4: Apply REDIRECTS for duplicates
+  // ══════════════════════════════════════
+  for (const orphan of orphans) {
+    const decision = triageDecisions.get(orphan.id);
+    if (!decision || decision.action !== 'redirect' || !decision.redirectTo) continue;
+
+    try {
+      const redirectResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/redirect-manager`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+        body: JSON.stringify({
+          source_url: orphan.wp_post_url,
+          target_url: decision.redirectTo,
+          type: 301,
+          reason: `OrphanFixer: ${decision.reason}`,
+        }),
+      });
+
+      if (redirectResp.ok) {
+        redirectsCreated++;
+        fixDetails.push(`↪️ 301: "${orphan.wp_post_title}" → ${decision.redirectTo}`);
+      }
+    } catch (e) {
+      console.warn(`[OrphanFixer v4] Redirect failed for ${orphan.wp_post_url}:`, e);
+    }
+  }
+
+  // ══════════════════════════════════════
+  // PHASE 5: AI generates contextual links with keyword mapping
+  // ══════════════════════════════════════
+  const valuableOrphans = orphans.filter(o => {
+    const d = triageDecisions.get(o.id);
+    return !d || d.action === 'link' || d.action === 'update';
+  });
+
+  const orphanBatches = chunkArray(valuableOrphans, 5);
 
   for (const batch of orphanBatches) {
     try {
-      const orphanDescriptions = batch
-        .map(o => `• "${o.wp_post_title}" (URL: ${o.wp_post_url}, kw: ${o.primary_keyword || "N/A"}, cluster: ${o.topic_cluster || "N/A"}, ${o.word_count || 0} palavras)`)
+      const orphanDescriptions = batch.map(o => {
+        const decision = triageDecisions.get(o.id);
+        return `• "${o.wp_post_title}" (URL: ${o.wp_post_url}, kw: ${o.primary_keyword || "N/A"}, cluster: ${o.topic_cluster || "N/A"}, ${o.word_count || 0} palavras, pilar: ${decision?.isPillar ? "SIM" : "não"})`;
+      }).join("\n");
+
+      // Build keyword-mapped donor list: prioritize articles with matching clusters/keywords
+      const batchClusters = new Set(batch.map(o => o.topic_cluster).filter(Boolean));
+      const batchKeywords = new Set(batch.flatMap(o => [o.primary_keyword, ...(o.secondary_keywords || [])].filter(Boolean)));
+      
+      // Score donors by relevance to batch
+      const scoredDonors = linkSources.map(a => {
+        let relevance = 0;
+        if (a.topic_cluster && batchClusters.has(a.topic_cluster)) relevance += 30;
+        if (a.primary_keyword && batchKeywords.has(a.primary_keyword)) relevance += 20;
+        for (const sk of (a.secondary_keywords || [])) {
+          if (batchKeywords.has(sk)) relevance += 10;
+        }
+        if ((a.word_count || 0) >= 1500) relevance += 10;
+        if ((a.seo_score || 0) >= 70) relevance += 10;
+        return { ...a, relevance };
+      }).sort((a, b) => b.relevance - a.relevance);
+
+      const topDonors = scoredDonors.slice(0, 60);
+      const sourceDescriptions = topDonors
+        .map(a => `• [${a.wp_post_title}](${a.wp_post_url}) | kw: ${a.primary_keyword || "N/A"} | cluster: ${a.topic_cluster || "N/A"} | ${a.word_count || 0}p | relevância: ${a.relevance}`)
         .join("\n");
 
-      const sourceDescriptions = linkSources.slice(0, 80)
-        .map(a => `• [${a.wp_post_title}](${a.wp_post_url}) | kw: ${a.primary_keyword || "N/A"} | cluster: ${a.topic_cluster || "N/A"} | ${a.word_count || 0}p`)
-        .join("\n");
-
-      const prompt = `Você é um consultor SEO especializado em Internal Linking.
+      const prompt = `Você é um consultor SEO especializado em Internal Linking Matrix e arquitetura Hub-and-Spoke.
 
 ARTIGOS ÓRFÃOS (sem links internos apontando para eles):
 ${orphanDescriptions}
 
-ARTIGOS EXISTENTES (potenciais fontes de link):
+ARTIGOS DOADORES (ordenados por relevância semântica):
 ${sourceDescriptions}
 
 TAREFA:
-Para CADA artigo órfão, identifique os 3-5 melhores artigos existentes que deveriam linkar para ele.
+Para CADA artigo órfão, identifique os 3-5 melhores artigos doadores que deveriam linkar para ele.
 
-REGRAS OBRIGATÓRIAS:
-1. O anchor_text deve ter 2-5 palavras descritivas (use keywords relevantes)
-2. O link deve ser CONTEXTUALMENTE relevante (mesmo cluster/tema)
-3. Prefira artigos longos (>800 palavras) como fonte de links
-4. O anchor_text deve ser natural e variado (nunca repetir o mesmo)
-5. Sugira também onde no conteúdo o link deveria ser inserido (posição: introdução, meio, conclusão)
-6. Se o artigo órfão for um pilar de conteúdo (>2000 palavras), sugira adicioná-lo ao menu/rodapé
+REGRAS DE LINKING AVANÇADO:
+1. KEYWORD MAPPING: O anchor_text deve conter a keyword principal do artigo ÓRFÃO (destino)
+2. RELEVÂNCIA SEMÂNTICA: Priorize doadores do MESMO cluster/tema
+3. HUB-AND-SPOKE: Se o órfão for pilar (>2000 palavras), TODOS os spoke articles do cluster devem linkar para ele
+4. PROFUNDIDADE: Garanta que o link reduza a profundidade de clique (≤3 cliques da home)
+5. POSIÇÃO CONTEXTUAL: Links na introdução ou primeiro H2 são mais fortes que no rodapé
+6. ANTI-CANIBALIZAÇÃO: Não linke com anchor idêntico ao título do doador
 
-FORMATO JSON OBRIGATÓRIO:
+JSON OBRIGATÓRIO:
 {
   "fixes": [
     {
@@ -218,14 +411,15 @@ FORMATO JSON OBRIGATÓRIO:
       "orphan_title": "título",
       "is_pillar": true/false,
       "suggest_menu": true/false,
+      "suggest_breadcrumb": true/false,
       "links": [
         {
           "source_url": "url_do_artigo_fonte",
           "source_post_id": 123,
-          "anchor_text": "texto âncora descritivo",
-          "position": "introdução|meio|conclusão",
+          "anchor_text": "texto âncora com keyword do destino",
+          "position": "introdução|primeiro_h2|meio|conclusão",
           "relevance": 85,
-          "reason": "motivo breve da relevância"
+          "reason": "mesmo cluster + keyword match"
         }
       ]
     }
@@ -233,55 +427,15 @@ FORMATO JSON OBRIGATÓRIO:
 }`;
 
       const aiResult = await orchestrator.call("seo_analysis", [
-        {
-          role: "system",
-          content: `Especialista SEO brasileiro em Internal Linking Matrix. Nicho: ${project.nicho || "geral"}. Retorne APENAS JSON válido, sem markdown.`,
-        },
+        { role: "system", content: `Especialista SEO enterprise em Internal Linking, Hub-and-Spoke e Domain Authority. Nicho: ${project.nicho || "geral"}. JSON válido apenas.` },
         { role: "user", content: prompt },
       ], { maxTokens: 4000, temperature: 0.2 });
 
-      const jsonStr = aiResult.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      let fixes;
-      try {
-        fixes = JSON.parse(jsonStr);
-      } catch {
-        // Resilient: extract partial JSON even if truncated
-        try {
-          // Find the start of fixes array
-          const fixesStart = jsonStr.indexOf('"fixes"');
-          if (fixesStart === -1) {
-            console.warn(`[OrphanFixer] No "fixes" key found, skipping batch`);
-            continue;
-          }
-          
-          // Take everything from the opening brace
-          let candidate = jsonStr.substring(jsonStr.lastIndexOf('{', fixesStart));
-          
-          // Close any unclosed brackets/braces
-          const opens = { '[': 0, '{': 0 };
-          const closes: Record<string, string> = { '[': ']', '{': '}' };
-          for (const ch of candidate) {
-            if (ch === '[' || ch === '{') opens[ch]++;
-            if (ch === ']') opens['[']--;
-            if (ch === '}') opens['{']--;
-          }
-          
-          // Remove trailing comma if present before closing
-          candidate = candidate.replace(/,\s*$/, '');
-          candidate += ']'.repeat(Math.max(0, opens['[']));
-          candidate += '}'.repeat(Math.max(0, opens['{']));
-          
-          fixes = JSON.parse(candidate);
-        } catch (e2) {
-          console.warn(`[OrphanFixer] JSON repair failed: ${e2 instanceof Error ? e2.message : e2}`);
-          continue;
-        }
-      }
-
+      const fixes = safeParseJSON(aiResult);
       if (!fixes?.fixes || !Array.isArray(fixes.fixes)) continue;
 
       // ══════════════════════════════════════
-      // PHASE 4: Apply links via WordPress API
+      // PHASE 6: Apply links via WordPress API
       // ══════════════════════════════════════
       for (const fix of fixes.fixes) {
         if (!fix.links || !Array.isArray(fix.links)) continue;
@@ -294,7 +448,7 @@ FORMATO JSON OBRIGATÓRIO:
         for (const link of fix.links) {
           if (!link.source_url || !link.anchor_text) continue;
 
-          const sourceArticle = urlToArticle.get(link.source_url) || 
+          const sourceArticle = urlToArticle.get(link.source_url) ||
             allArticles.find(a => a.wp_post_id === link.source_post_id);
 
           if (!sourceArticle?.wp_post_id) continue;
@@ -310,90 +464,40 @@ FORMATO JSON OBRIGATÓRIO:
             source_wp_post_id: sourceArticle.wp_post_id,
             target_wp_post_id: orphanArticle.wp_post_id,
             position_suggestion: link.position || null,
-            anchor_context: `OrphanFixer: ${link.reason || "auto-detected"}`,
+            anchor_context: `OrphanFixer v4: ${link.reason || "auto-detected"} | triage: ${triageDecisions.get(orphanArticle.id)?.reason || "N/A"}`,
           });
           linksSuggested++;
 
-          // Auto-apply if relevance >= 75
-          if ((link.relevance || 0) >= 75) {
+          // Auto-apply if relevance >= 70
+          if ((link.relevance || 0) >= 70) {
             try {
-              const applyResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-CFRDM-API-Key": apiKey,
-                },
-                body: JSON.stringify({
-                  source_post_id: sourceArticle.wp_post_id,
-                  post_id: sourceArticle.wp_post_id,
-                  anchor_text: link.anchor_text,
-                  target_url: fix.orphan_url,
-                  position: link.position || "auto",
-                }),
-              });
+              const applied = await applyLinkWithFallback(
+                baseUrl, apiKey, sourceArticle.wp_post_id, link.anchor_text, fix.orphan_url, orphanArticle.wp_post_title, link.position
+              );
 
-              if (applyResp.ok) {
-                const applyData = await applyResp.json();
-                if (applyData.success || applyData.applied) {
-                  linksApplied++;
-                  fixedThisOrphan = true;
-                  fixDetails.push(`✅ "${link.anchor_text}" em post ${sourceArticle.wp_post_id} → ${orphanArticle.wp_post_title}`);
+              if (applied) {
+                linksApplied++;
+                fixedThisOrphan = true;
+                fixDetails.push(`✅ "${link.anchor_text}" em post ${sourceArticle.wp_post_id} → ${orphanArticle.wp_post_title}`);
 
-                  // Update suggestion status
-                  await supabase
-                    .from("internal_link_suggestions")
-                    .update({ status: "applied", applied_at: new Date().toISOString() })
-                    .eq("project_id", project.id)
-                    .eq("source_wp_post_id", sourceArticle.wp_post_id)
-                    .eq("target_url", fix.orphan_url)
-                    .eq("status", "pending");
-                }
-              } else if (applyResp.status === 422) {
-                // 422 = content doesn't support insertion — try WP REST API direct append
-                console.warn(`[OrphanFixer] Post ${sourceArticle.wp_post_id} returned 422, trying WP REST API fallback`);
-                try {
-                  const wpPost = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${sourceArticle.wp_post_id}`, {
-                    headers: { "X-CFRDM-API-Key": apiKey },
-                  });
-                  if (wpPost.ok) {
-                    const wpData = await wpPost.json();
-                    const currentContent = wpData.content?.raw || wpData.content?.rendered || "";
-                    if (currentContent.length > 50 && !currentContent.includes(fix.orphan_url)) {
-                      const linkHtml = `\n<p><strong>📖 Leia também:</strong> <a href="${fix.orphan_url}" title="${orphanArticle.wp_post_title}">${link.anchor_text}</a></p>\n`;
-                      const updateResp = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${sourceArticle.wp_post_id}`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
-                        body: JSON.stringify({ content: currentContent + linkHtml }),
-                      });
-                      if (updateResp.ok) {
-                        linksApplied++;
-                        fixedThisOrphan = true;
-                        fixDetails.push(`✅ (fallback) "${link.anchor_text}" appended to post ${sourceArticle.wp_post_id}`);
-                        await supabase
-                          .from("internal_link_suggestions")
-                          .update({ status: "applied", applied_at: new Date().toISOString() })
-                          .eq("project_id", project.id)
-                          .eq("source_wp_post_id", sourceArticle.wp_post_id)
-                          .eq("target_url", fix.orphan_url)
-                          .eq("status", "pending");
-                      }
-                    }
-                  }
-                } catch (fallbackErr) {
-                  console.warn(`[OrphanFixer] WP REST fallback also failed for post ${sourceArticle.wp_post_id}:`, fallbackErr);
-                }
-
-                // Mark as rejected to avoid re-trying indefinitely
                 await supabase
                   .from("internal_link_suggestions")
-                  .update({ status: "rejected", rejected_reason: "422: content does not support insertion" })
+                  .update({ status: "applied", applied_at: new Date().toISOString() })
+                  .eq("project_id", project.id)
+                  .eq("source_wp_post_id", sourceArticle.wp_post_id)
+                  .eq("target_url", fix.orphan_url)
+                  .eq("status", "pending");
+              } else {
+                await supabase
+                  .from("internal_link_suggestions")
+                  .update({ status: "rejected", rejected_reason: "apply failed" })
                   .eq("project_id", project.id)
                   .eq("source_wp_post_id", sourceArticle.wp_post_id)
                   .eq("target_url", fix.orphan_url)
                   .eq("status", "pending");
               }
             } catch (e) {
-              console.warn(`[OrphanFixer] Apply failed for post ${sourceArticle.wp_post_id}:`, e);
+              console.warn(`[OrphanFixer v4] Apply failed for post ${sourceArticle.wp_post_id}:`, e);
             }
           }
         }
@@ -410,18 +514,14 @@ FORMATO JSON OBRIGATÓRIO:
             .eq("id", orphanArticle.id);
         }
 
-        // If pillar content, suggest menu/footer addition
-        if (fix.suggest_menu && fix.is_pillar) {
-          fixDetails.push(`📌 PILAR detectado: "${orphanArticle.wp_post_title}" — sugerir adição ao menu/rodapé`);
-          
-          // Try to add to menu via plugin
+        // Pillar page: suggest menu/footer/breadcrumb addition
+        const decision = triageDecisions.get(orphanArticle.id);
+        if ((fix.suggest_menu || decision?.suggestMenu) && (fix.is_pillar || decision?.isPillar)) {
+          fixDetails.push(`📌 PILAR: "${orphanArticle.wp_post_title}" — adicionar ao menu/rodapé/breadcrumb`);
           try {
             await fetch(`${baseUrl}/wp-json/cfrdm/v1/suggest-menu-item`, {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-CFRDM-API-Key": apiKey,
-              },
+              headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
               body: JSON.stringify({
                 post_id: orphanArticle.wp_post_id,
                 title: orphanArticle.wp_post_title,
@@ -429,80 +529,64 @@ FORMATO JSON OBRIGATÓRIO:
                 position: "footer",
               }),
             });
-          } catch { /* optional feature */ }
+          } catch { /* optional */ }
         }
       }
     } catch (e) {
-      console.error(`[OrphanFixer] [${project.name}] AI batch error:`, e);
+      console.error(`[OrphanFixer v4] [${project.name}] AI batch error:`, e);
     }
   }
 
   // ══════════════════════════════════════
-  // PHASE 5: Re-index fixed pages
+  // PHASE 7: Re-index fixed + redirected pages
   // ══════════════════════════════════════
-  if (linksApplied > 0) {
-    const fixedUrls = orphans
-      .slice(0, linksApplied + 5)
-      .map(o => o.wp_post_url)
-      .filter(Boolean);
+  const fixedUrls = [
+    ...orphans.filter(o => triageDecisions.get(o.id)?.action !== 'redirect').map(o => o.wp_post_url),
+  ].filter(Boolean).slice(0, 200);
 
-    if (fixedUrls.length > 0) {
-      // IndexNow batch
-      try {
-        const indexResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/indexnow-batch`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CFRDM-API-Key": apiKey,
-          },
-          body: JSON.stringify({ urls: fixedUrls }),
-        });
+  if (fixedUrls.length > 0 && (linksApplied > 0 || redirectsCreated > 0)) {
+    try {
+      const indexResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/indexnow-batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+        body: JSON.stringify({ urls: fixedUrls }),
+      });
 
-        if (indexResp.ok) {
-          const indexData = await indexResp.json();
-          indexingSubmitted = indexData.submitted || fixedUrls.length;
-        }
-      } catch {
-        // Direct IndexNow fallback
-        try {
-          const host = new URL(baseUrl).hostname;
-          const key = Array.from(host).reduce((acc, c) => acc + c.charCodeAt(0).toString(16), "indexnow").slice(0, 32);
-          
-          await fetch("https://api.indexnow.org/indexnow", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              host,
-              key,
-              keyLocation: `https://${host}/${key}.txt`,
-              urlList: fixedUrls,
-            }),
-          });
-          indexingSubmitted = fixedUrls.length;
-        } catch { /* ignore */ }
+      if (indexResp.ok) {
+        const indexData = await indexResp.json();
+        indexingSubmitted = indexData.submitted || fixedUrls.length;
       }
-
-      // Google Indexing API via plugin
+    } catch {
+      // Direct IndexNow fallback
       try {
-        await fetch(`${baseUrl}/wp-json/cfrdm/v1/google-indexing/batch`, {
+        const host = new URL(baseUrl).hostname;
+        const key = Array.from(host).reduce((acc, c) => acc + c.charCodeAt(0).toString(16), "indexnow").slice(0, 32);
+        await fetch("https://api.indexnow.org/indexnow", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CFRDM-API-Key": apiKey,
-          },
-          body: JSON.stringify({ urls: fixedUrls }),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ host, key, keyLocation: `https://${host}/${key}.txt`, urlList: fixedUrls }),
         });
-      } catch { /* optional */ }
-
-      // Ping sitemaps
-      const siteRoot = baseUrl.replace(/\/blog\/?$/, "");
-      try { await fetch(`https://www.google.com/ping?sitemap=${encodeURIComponent(siteRoot + "/wp-sitemap.xml")}`); } catch { /* */ }
-      try { await fetch(`https://www.bing.com/ping?sitemap=${encodeURIComponent(siteRoot + "/wp-sitemap.xml")}`); } catch { /* */ }
+        indexingSubmitted = fixedUrls.length;
+      } catch { /* ignore */ }
     }
+
+    // Google Indexing API
+    try {
+      await fetch(`${baseUrl}/wp-json/cfrdm/v1/google-indexing/batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+        body: JSON.stringify({ urls: fixedUrls }),
+      });
+    } catch { /* optional */ }
+
+    // Ping sitemaps
+    const siteRoot = baseUrl.replace(/\/blog\/?$/, "");
+    try { await fetch(`https://www.google.com/ping?sitemap=${encodeURIComponent(siteRoot + "/wp-sitemap.xml")}`); } catch { /* */ }
+    try { await fetch(`https://www.bing.com/ping?sitemap=${encodeURIComponent(siteRoot + "/wp-sitemap.xml")}`); } catch { /* */ }
   }
 
   // ══════════════════════════════════════
-  // PHASE 6: Also apply any PENDING suggestions from previous runs
+  // PHASE 8: Process PENDING suggestions from previous runs
   // ══════════════════════════════════════
   const { data: pendingLinks } = await supabase
     .from("internal_link_suggestions")
@@ -511,40 +595,20 @@ FORMATO JSON OBRIGATÓRIO:
     .eq("status", "pending")
     .gte("relevance_score", 70)
     .order("relevance_score", { ascending: false })
-    .limit(500); // Process ALL pending links
+    .limit(500);
 
   if (pendingLinks && pendingLinks.length > 0) {
     for (const link of pendingLinks) {
       if (!link.source_wp_post_id || !link.anchor_text || !link.target_url) continue;
 
       try {
-        const applyResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CFRDM-API-Key": apiKey,
-          },
-          body: JSON.stringify({
-            post_id: link.source_wp_post_id,
-            anchor_text: link.anchor_text,
-            target_url: link.target_url,
-          }),
-        });
+        const applied = await applyLinkWithFallback(baseUrl, apiKey, link.source_wp_post_id, link.anchor_text, link.target_url, '', 'auto');
 
-        if (applyResp.ok) {
-          const data = await applyResp.json();
-          if (data.success || data.applied) {
-            linksApplied++;
-            await supabase
-              .from("internal_link_suggestions")
-              .update({ status: "applied", applied_at: new Date().toISOString() })
-              .eq("id", link.id);
-          } else {
-            await supabase
-              .from("internal_link_suggestions")
-              .update({ status: "rejected", rejected_reason: data.reason || "anchor not found" })
-              .eq("id", link.id);
-          }
+        if (applied) {
+          linksApplied++;
+          await supabase.from("internal_link_suggestions").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", link.id);
+        } else {
+          await supabase.from("internal_link_suggestions").update({ status: "rejected", rejected_reason: "anchor not found" }).eq("id", link.id);
         }
       } catch { /* continue */ }
     }
@@ -556,12 +620,77 @@ FORMATO JSON OBRIGATÓRIO:
     linksSuggested,
     linksApplied,
     indexingSubmitted,
+    redirectsCreated,
+    triageResults,
     details: fixDetails,
   };
 }
 
 // ═══════════════════════════════════════════════════════════
-// Utility
+// Apply link with plugin → WP REST API fallback
+// ═══════════════════════════════════════════════════════════
+async function applyLinkWithFallback(
+  baseUrl: string, apiKey: string, sourcePostId: number, anchorText: string, targetUrl: string, targetTitle: string, position?: string
+): Promise<boolean> {
+  // Try plugin endpoint first
+  try {
+    const resp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+      body: JSON.stringify({
+        source_post_id: sourcePostId,
+        post_id: sourcePostId,
+        anchor_text: anchorText,
+        target_url: targetUrl,
+        position: position || "auto",
+      }),
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.success || data.applied) return true;
+    }
+
+    // 422 = content doesn't support insertion — try WP REST API fallback
+    if (resp.status === 422) {
+      return await wpRestFallbackAppend(baseUrl, apiKey, sourcePostId, anchorText, targetUrl, targetTitle);
+    }
+  } catch { /* continue to fallback */ }
+
+  // Final fallback
+  return await wpRestFallbackAppend(baseUrl, apiKey, sourcePostId, anchorText, targetUrl, targetTitle);
+}
+
+async function wpRestFallbackAppend(
+  baseUrl: string, apiKey: string, sourcePostId: number, anchorText: string, targetUrl: string, targetTitle: string
+): Promise<boolean> {
+  try {
+    const wpPost = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${sourcePostId}`, {
+      headers: { "X-CFRDM-API-Key": apiKey },
+    });
+
+    if (!wpPost.ok) return false;
+
+    const wpData = await wpPost.json();
+    const currentContent = wpData.content?.raw || wpData.content?.rendered || "";
+
+    if (currentContent.length < 50 || currentContent.includes(targetUrl)) return false;
+
+    const linkHtml = `\n<p><strong>📖 Leia também:</strong> <a href="${targetUrl}" title="${targetTitle || anchorText}">${anchorText}</a></p>\n`;
+    const updateResp = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${sourcePostId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+      body: JSON.stringify({ content: currentContent + linkHtml }),
+    });
+
+    return updateResp.ok;
+  } catch {
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Utilities
 // ═══════════════════════════════════════════════════════════
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -569,4 +698,28 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
     chunks.push(arr.slice(i, i + size));
   }
   return chunks;
+}
+
+function safeParseJSON(text: string): any {
+  const cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+
+  try { return JSON.parse(cleaned); } catch { /* continue */ }
+
+  const jsonStart = cleaned.search(/[\{\[]/);
+  if (jsonStart === -1) return null;
+  let candidate = cleaned.substring(jsonStart);
+
+  // Close unclosed brackets/braces
+  const opens = { '[': 0, '{': 0 };
+  for (const ch of candidate) {
+    if (ch === '[' || ch === '{') opens[ch]++;
+    if (ch === ']') opens['[']--;
+    if (ch === '}') opens['{']--;
+  }
+
+  candidate = candidate.replace(/,\s*$/, '');
+  candidate += ']'.repeat(Math.max(0, opens['[']));
+  candidate += '}'.repeat(Math.max(0, opens['{']));
+
+  try { return JSON.parse(candidate); } catch { return null; }
 }

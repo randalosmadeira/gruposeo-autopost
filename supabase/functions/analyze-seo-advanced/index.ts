@@ -173,8 +173,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Fetch existing published articles for internal linking
-    let internalLinksMap: Record<string, Array<{title: string, url: string}>> = {};
+    // Fetch existing published articles for internal linking — EXPANDED to 100+ for better coverage
+    let internalLinksMap: Record<string, Array<{title: string, url: string, keyword?: string, cluster?: string}>> = {};
+    let orphanDataMap: Record<string, { orphanCount: number; totalArticles: number; duplicateHashes: Set<string> }> = {};
+    
     for (const pid of projectIds) {
       const { data: publishedArticles } = await supabase
         .from("articles")
@@ -182,23 +184,36 @@ Deno.serve(async (req) => {
         .eq("project_id", pid)
         .eq("status", "published")
         .not("published_url", "is", null)
-        .limit(30);
+        .limit(100);
       
       const articleLinks = (publishedArticles || [])
         .filter(a => a.published_url)
-        .map(a => ({ title: a.title || a.keyword, url: a.published_url! }));
+        .map(a => ({ title: a.title || a.keyword, url: a.published_url!, keyword: a.keyword }));
 
       const { data: wpIndexArticles } = await supabase
         .from("wordpress_article_index")
-        .select("wp_post_title, wp_post_url, primary_keyword, topic_cluster")
+        .select("wp_post_title, wp_post_url, primary_keyword, topic_cluster, internal_links_count, content_hash")
         .eq("project_id", pid)
         .eq("wp_post_status", "publish")
         .order("linkability_score", { ascending: false })
-        .limit(50);
+        .limit(200);
 
       const wpLinks = (wpIndexArticles || [])
         .filter(a => a.wp_post_url)
-        .map(a => ({ title: a.wp_post_title || a.primary_keyword || '', url: a.wp_post_url }));
+        .map(a => ({ title: a.wp_post_title || a.primary_keyword || '', url: a.wp_post_url, keyword: a.primary_keyword || '', cluster: a.topic_cluster || '' }));
+
+      // Orphan detection data
+      const orphanCount = (wpIndexArticles || []).filter(a => (a.internal_links_count || 0) === 0).length;
+      const totalArticles = (wpIndexArticles || []).length;
+      const hashes = new Set<string>();
+      const duplicateHashes = new Set<string>();
+      for (const a of (wpIndexArticles || [])) {
+        if (a.content_hash) {
+          if (hashes.has(a.content_hash)) duplicateHashes.add(a.content_hash);
+          hashes.add(a.content_hash);
+        }
+      }
+      orphanDataMap[pid] = { orphanCount, totalArticles, duplicateHashes };
 
       const allLinks = [...articleLinks, ...wpLinks];
       const seen = new Set<string>();
@@ -206,9 +221,9 @@ Deno.serve(async (req) => {
         if (seen.has(l.url)) return false;
         seen.add(l.url);
         return true;
-      }).slice(0, 50);
+      }).slice(0, 120);
 
-      console.log(`[AI SEO] Internal links for project ${pid}: ${internalLinksMap[pid].length}`);
+      console.log(`[AI SEO] Internal links for project ${pid}: ${internalLinksMap[pid].length} | Orphans: ${orphanCount}/${totalArticles} | Duplicate hashes: ${duplicateHashes.size}`);
     }
 
     const results = [];
@@ -438,10 +453,12 @@ function buildCriticalIssues(analysis: any): string[] {
   const issues: string[] = [];
   if (analysis.flesch.score < 60) issues.push(`Flesch ${analysis.flesch.score} — abaixo do mínimo (60). Conteúdo difícil de ler.`);
   if (analysis.structure.h2Count < 3) issues.push(`Apenas ${analysis.structure.h2Count} H2s — mínimo recomendado: 5.`);
-  if (analysis.structure.internalLinks < 2) issues.push(`Apenas ${analysis.structure.internalLinks} links internos — sem linkagem interna o Google não rastreia.`);
-  if (!analysis.structure.hasFAQ) issues.push('FAQ ausente — perde featured snippets.');
+  if (analysis.structure.internalLinks < 2) issues.push(`⚠️ PÁGINA ÓRFÃ: Apenas ${analysis.structure.internalLinks} links internos — sem linkagem interna o Google não rastreia. Execute o OrphanFixer.`);
+  if (!analysis.structure.hasFAQ) issues.push('FAQ ausente — perde featured snippets e visibilidade em IAs generativas.');
   if (!analysis.meta.titleOk) issues.push(`Título com ${analysis.meta.titleLength} chars (ideal: 55-80).`);
   if (!analysis.meta.excerptOk) issues.push(`Meta description com ${analysis.meta.excerptLength} chars (ideal: 145-180).`);
+  if (!analysis.structure.hasBreadcrumb) issues.push('Breadcrumb ausente — prejudica navegação e schema BreadcrumbList.');
+  if (!analysis.structure.hasArticleSchema && !analysis.structure.hasFAQSchema) issues.push('Schema markup ausente — sem Article/FAQPage schema, perde rich results.');
   return issues;
 }
 
@@ -452,10 +469,10 @@ function buildImprovements(analysis: any): Array<{area: string, priority: string
     improvements.push({ area: 'Legibilidade', priority: 'alta', suggestion: `Flesch ${analysis.flesch.score}. Reduza frases para máx 25 palavras e use vocabulário simples.`, impact: 'Score SEO +15-20 pontos' });
   }
   if (analysis.structure.internalLinks < 10) {
-    improvements.push({ area: 'Links Internos', priority: 'alta', suggestion: `Apenas ${analysis.structure.internalLinks} links internos. Adicione no mínimo 10 links contextuais.`, impact: 'Crawlability e authority +20%' });
+    improvements.push({ area: 'Links Internos (Órfão)', priority: 'alta', suggestion: `Apenas ${analysis.structure.internalLinks} links internos. Mín 10: 2 na introdução, 4-6 no corpo (H2), 2 na conclusão. Use o OrphanFixer automático.`, impact: 'Crawlability e authority +20%' });
   }
   if (!analysis.structure.hasFAQ) {
-    improvements.push({ area: 'FAQ', priority: 'alta', suggestion: 'Adicione seção FAQ com 5-8 perguntas para capturar featured snippets.', impact: 'CTR +30% via rich snippets' });
+    improvements.push({ area: 'FAQ + Schema', priority: 'alta', suggestion: 'Adicione FAQ com 5-8 perguntas + FAQPage schema para featured snippets e Share of Model em IAs.', impact: 'CTR +30% + visibilidade GEO' });
   }
   if (!analysis.structure.hasCTA) {
     improvements.push({ area: 'CTA', priority: 'média', suggestion: 'Adicione CTAs estratégicos (urgência, autoridade, lead, comunidade, fechamento).', impact: 'Conversão +15%' });
@@ -467,7 +484,13 @@ function buildImprovements(analysis: any): Array<{area: string, priority: string
     improvements.push({ area: 'Parágrafos', priority: 'média', suggestion: `${analysis.structure.longParagraphs} parágrafos muito longos. Quebre em 4-7 linhas.`, impact: 'Legibilidade mobile +25%' });
   }
   if (analysis.structure.externalLinks < 1) {
-    improvements.push({ area: 'Links Externos', priority: 'média', suggestion: 'Adicione 2-3 links para fontes autoritativas (.gov.br, .edu.br).', impact: 'Trust signal +10%' });
+    improvements.push({ area: 'Links Externos', priority: 'média', suggestion: 'Adicione 2-3 links para fontes autoritativas (.gov.br, .edu.br, .org).', impact: 'Trust signal + E-E-A-T +10%' });
+  }
+  if (!analysis.structure.hasBreadcrumb) {
+    improvements.push({ area: 'Breadcrumb', priority: 'média', suggestion: 'Ative breadcrumbs para criar caminhos automáticos e schema BreadcrumbList.', impact: 'Navegação + rich results' });
+  }
+  if (analysis.structure.wordCount >= 2000 && analysis.structure.internalLinks < 5) {
+    improvements.push({ area: 'Pilar de Conteúdo', priority: 'alta', suggestion: 'Artigo longo (>2000p) com poucos links = pilar potencial. Conecte spoke articles e adicione ao menu/rodapé.', impact: 'Hub-and-Spoke architecture' });
   }
   
   return improvements;
@@ -880,6 +903,14 @@ function analyzeContent(content: string, cleanContent: string, article: any, pro
     excerptHasKeyword = excerptMatches.length >= keywordWords.length * 0.5;
   }
 
+  // Breadcrumb detection
+  const hasBreadcrumb = /<[^>]*class=["'][^"']*breadcrumb/i.test(content) || /breadcrumbList/i.test(content);
+
+  // Schema detection
+  const hasArticleSchema = /ArticleSchema|"@type"\s*:\s*"Article"/i.test(content);
+  const hasFAQSchema = /FAQPage|"@type"\s*:\s*"FAQPage"/i.test(content);
+  const hasHowToSchema = /HowTo|"@type"\s*:\s*"HowTo"/i.test(content);
+
   return {
     flesch: {
       score: fleschScore,
@@ -905,6 +936,7 @@ function analyzeContent(content: string, cleanContent: string, article: any, pro
       wordCount, h1Count, h2Count, h3Count, imgCount, imgsWithAlt: altCount,
       hasFAQ, hasConclusion, hasCTA, internalLinks: internalLinksCount, externalLinks: externalLinksCount,
       longParagraphs: longParagraphs.length, totalParagraphs: paragraphs.length,
+      hasBreadcrumb, hasArticleSchema, hasFAQSchema, hasHowToSchema,
     },
     keyword: {
       keyword: article.keyword, density: keywordDensity, count: keywordCount,
