@@ -71,8 +71,7 @@ const selectFields = `
 
 // Helper: article has content if word_count > 0 (content col not fetched in list for performance)
 export function articleHasContent(article: { word_count: number | null; status: string }): boolean {
-  return (article.word_count ?? 0) > 0 && article.status !== 'draft' || 
-         (article.word_count ?? 0) > 100;
+  return (article.word_count ?? 0) > 0;
 }
 
 export function useArticlesList() {
