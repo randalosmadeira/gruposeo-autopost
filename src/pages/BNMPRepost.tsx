@@ -5,11 +5,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Gavel,
   Plus,
@@ -23,11 +22,16 @@ import {
   Search,
   FileText,
   RotateCcw,
+  MessageSquare,
+  ClipboardPaste,
+  Bot,
+  CheckCircle2,
 } from 'lucide-react';
 import { useNewsRewriter } from '@/hooks/useNewsRewriter';
 import { useProjects } from '@/hooks/useProjects';
 import { MadeiraNelesPainel } from '@/components/news-rewriter/MadeiraNelesPainel';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface MandadoEntry {
   id: string;
@@ -62,6 +66,61 @@ const createEmptyMandado = (): MandadoEntry => ({
   selected: true,
 });
 
+// Parse pasted text to extract mandado entries
+function parseBulkText(text: string): MandadoEntry[] {
+  const entries: MandadoEntry[] = [];
+  // Split by double newlines or numbered entries
+  const blocks = text.split(/(?:\n\s*\n|\n(?=\d+[\.\)\-]))/g).filter(b => b.trim());
+
+  for (const block of blocks) {
+    const lines = block.trim();
+    if (!lines || lines.length < 5) continue;
+
+    const entry = createEmptyMandado();
+
+    // Try to extract name
+    const nomeMatch = lines.match(/(?:nome|procurado|réu|ré|investigado)[:\s—\-]+([^\n|]+)/i)
+      || lines.match(/^(?:\d+[\.\)\-]\s*)?([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ][A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑa-záàâãéèêíïóôõöúçñ\s]+)/m);
+    if (nomeMatch) entry.nome = nomeMatch[1].trim();
+
+    // Type
+    if (/busca\s*e?\s*apreens/i.test(lines)) entry.tipoPeca = 'Mandado de Busca e Apreensão';
+    else if (/captura/i.test(lines)) entry.tipoPeca = 'Mandado de Captura';
+    else if (/interna[çc]/i.test(lines)) entry.tipoPeca = 'Mandado de Internação';
+    else entry.tipoPeca = 'Mandado de Prisão';
+
+    // Status
+    if (/cumprido/i.test(lines)) entry.situacao = 'Cumprido';
+    else if (/suspenso/i.test(lines)) entry.situacao = 'Suspenso';
+    else if (/cancelado/i.test(lines)) entry.situacao = 'Cancelado';
+    else if (/ativo/i.test(lines)) entry.situacao = 'Ativo';
+
+    // Process number
+    const numMatch = lines.match(/(?:processo|nº|número|n°)[:\s—\-]*([0-9.\-\/]+)/i)
+      || lines.match(/(\d{7}[\-\.]\d{2}\.\d{4}\.\d\.\d{2}\.\d{4})/);
+    if (numMatch) entry.numero = numMatch[1].trim();
+
+    // Court/Tribunal
+    const orgMatch = lines.match(/(?:comarca|tribunal|vara|foro|tjsp|tjrj|tjmg|tjba|tjpr|tjrs|tjsc|tjgo|tjce|orgão)[:\s—\-]+([^\n|]+)/i);
+    if (orgMatch) entry.orgaoExpedidor = orgMatch[1].trim();
+
+    // Crime
+    const crimeMatch = lines.match(/(?:crime|delito|tipifica[çc][aã]o|infra[çc][aã]o)[:\s—\-]+([^\n|]+)/i);
+    if (crimeMatch) entry.crimeRelacionado = crimeMatch[1].trim();
+
+    // Date
+    const dataMatch = lines.match(/(?:data|expedi[çc][aã]o|emiss[aã]o)[:\s—\-]*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i)
+      || lines.match(/(\d{2}\/\d{2}\/\d{4})/);
+    if (dataMatch) entry.data = dataMatch[1].trim();
+
+    if (entry.nome) {
+      entries.push(entry);
+    }
+  }
+
+  return entries;
+}
+
 export default function BNMPRepost() {
   const { rewriteNews, isRewriting, progress, lastViralPackage } = useNewsRewriter();
   const { projects } = useProjects();
@@ -71,6 +130,9 @@ export default function BNMPRepost() {
   const [projectId, setProjectId] = useState<string>('');
   const [autoPublish, setAutoPublish] = useState(false);
   const [showResult, setShowResult] = useState(false);
+  const [inputMode, setInputMode] = useState<string>('manual');
+  const [bulkText, setBulkText] = useState('');
+  const [bulkParsed, setBulkParsed] = useState(false);
 
   const addMandado = () => {
     setMandados(prev => [...prev, createEmptyMandado()]);
@@ -86,6 +148,82 @@ export default function BNMPRepost() {
   };
 
   const selectedMandados = mandados.filter(m => m.selected && m.nome.trim());
+
+  const handleParseBulk = () => {
+    if (!bulkText.trim()) {
+      toast.error('Cole as informações dos mandados no campo acima');
+      return;
+    }
+
+    const parsed = parseBulkText(bulkText);
+    if (parsed.length === 0) {
+      // If parsing fails, treat the entire text as a single entry for AI processing
+      const fallback = createEmptyMandado();
+      fallback.nome = 'Dados colados (processamento IA)';
+      fallback.observacoes = bulkText.trim().substring(0, 500);
+      setMandados([fallback]);
+      setBulkParsed(true);
+      toast.info('Dados enviados para processamento autônomo pela IA');
+      return;
+    }
+
+    setMandados(parsed);
+    setBulkParsed(true);
+    toast.success(`${parsed.length} mandado(s) identificado(s) automaticamente`);
+  };
+
+  const handleSubmitBulkDirect = async () => {
+    if (!bulkText.trim()) {
+      toast.error('Cole as informações dos mandados');
+      return;
+    }
+
+    const sourceContent = `DADOS PÚBLICOS DO BNMP - BANCO NACIONAL DE MONITORAMENTO DE PRISÕES (CNJ)
+Portal: https://portalbnmp.cnj.jus.br/#/pesquisa-peca
+
+INFORMAÇÕES COLADAS PELO OPERADOR (MODO CHAT-IA AUTÔNOMO):
+
+${bulkText.trim()}
+
+CONTEXTO: Dados de domínio público disponíveis no BNMP 3.0 do Conselho Nacional de Justiça. Qualquer pessoa pode consultar essas informações em portalbnmp.cnj.jus.br. O compartilhamento NÃO gera prejuízo às investigações policiais ou atos judiciais, conforme Art. 5º, XXXIII da CF e Lei 12.527/2011 (Lei de Acesso à Informação).
+
+TIPO DE CONTEÚDO: Repostagem informativa de mandados — MODO MADEIRA NELES BNMP.
+MODO: CHAT-IA AUTÔNOMO — A IA deve interpretar, auditar e estruturar TODOS os mandados encontrados no texto acima.
+
+INSTRUÇÕES ESPECIAIS MODO AUTÔNOMO:
+- INTERPRETAR automaticamente nomes, tipos de mandado, tribunais, datas e status
+- AUDITAR conformidade legal de cada dado
+- EXECUTAR TODOS OS 9 BLOCOS DO PROMPT MESTRE BNMP
+- GERAR artigo completo para CADA mandado identificado ou artigo consolidado se forem do mesmo contexto
+- DISCLAIMER LEGAL obrigatório no início e final
+- Presunção de inocência (Art. 5º, LVII, CF)
+- Links internos criminais (mín 4, máx 10)
+- Links externos: BNMP, CNJ, e-SAJ, PF, Poupatempo, Certidão Antecedentes, TJs, STJ, STF
+- 3 CTAs para advogado criminalista urgente
+- FAQ 5+ perguntas sobre mandados e direitos
+- Prompts de imagem (editorial, thumbnail, Instagram) — sem rostos reais
+- Variações: Stories, Reels, Carrossel, E-mail nurturing
+- Palavras-chave SEO naturalmente no conteúdo
+- Mínimo 2.400 palavras`;
+
+    const result = await rewriteNews({
+      sourceUrl: 'https://portalbnmp.cnj.jus.br/#/pesquisa-peca',
+      sourceContent,
+      sourceName: 'BNMP - Banco Nacional de Monitoramento de Prisões (CNJ)',
+      analysisAngle: 'Análise Criminal — Utilidade Pública, Direitos do Cidadão e CTA Criminalista',
+      keyword: keyword || 'mandado de prisão BNMP CNJ',
+      niche: 'advocacia',
+      articleLength: 'long',
+      projectId: projectId && projectId !== 'none' ? projectId : undefined,
+      language: 'pt-BR',
+      autoPublish: autoPublish && projectId && projectId !== 'none',
+      rewriteMode: 'madeira_neles',
+    });
+
+    if (result) {
+      setShowResult(true);
+    }
+  };
 
   const handleSubmit = async () => {
     if (selectedMandados.length === 0) return;
@@ -142,6 +280,8 @@ INSTRUÇÕES ESPECIAIS:
     setShowResult(false);
     setMandados([createEmptyMandado()]);
     setKeyword('');
+    setBulkText('');
+    setBulkParsed(false);
   };
 
   return (
@@ -183,7 +323,7 @@ INSTRUÇÕES ESPECIAIS:
       </Alert>
 
       {showResult && lastViralPackage ? (
-        <MadeiraNelesPainel viralPackage={lastViralPackage} articleId="" articleTitle={`Mandados BNMP - ${selectedMandados[0]?.nome || ''}`} />
+        <MadeiraNelesPainel viralPackage={lastViralPackage} articleId="" articleTitle={`Mandados BNMP - ${selectedMandados[0]?.nome || 'Chat IA'}`} />
       ) : (
         <>
           {/* Quick Link to BNMP */}
@@ -254,150 +394,269 @@ INSTRUÇÕES ESPECIAIS:
             </CardContent>
           </Card>
 
-          {/* Mandados Input */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Scale className="w-5 h-5 text-orange-500" />
-                    Dados do Mandado — Input Obrigatório
-                  </CardTitle>
-                  <CardDescription>
-                    Insira os dados extraídos do portal BNMP/CNJ
-                  </CardDescription>
-                </div>
-                <Button variant="outline" size="sm" onClick={addMandado}>
-                  <Plus className="w-4 h-4 mr-1" />
-                  Adicionar Mandado
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {mandados.map((mandado, index) => (
-                <Card key={mandado.id} className={cn("border", mandado.selected ? "border-orange-500/30 bg-orange-500/5" : "border-muted")}>
-                  <CardContent className="pt-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          checked={mandado.selected}
-                          onCheckedChange={(v) => updateMandado(mandado.id, 'selected', !!v)}
-                        />
-                        <Badge variant="outline" className="text-orange-500 border-orange-500">
-                          Mandado #{index + 1}
-                        </Badge>
-                      </div>
+          {/* Input Mode Tabs */}
+          <Tabs value={inputMode} onValueChange={setInputMode} className="space-y-4">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="manual" className="gap-2">
+                <Scale className="w-4 h-4" />
+                Manual
+              </TabsTrigger>
+              <TabsTrigger value="chat-ia" className="gap-2">
+                <Bot className="w-4 h-4" />
+                Chat IA — Colagem em Massa
+              </TabsTrigger>
+            </TabsList>
+
+            {/* CHAT IA MODE */}
+            <TabsContent value="chat-ia" className="space-y-4">
+              <Card className="border-orange-500/30">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                      <MessageSquare className="w-5 h-5 text-orange-500" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        Chat IA — Processamento Autônomo
+                        <Badge variant="outline" className="text-orange-500 border-orange-500 text-xs">Modo Autônomo</Badge>
+                      </CardTitle>
+                      <CardDescription>
+                        Cole todas as informações dos mandados. A IA vai interpretar, auditar e gerar os artigos automaticamente.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Textarea
+                    placeholder={`Cole aqui TODAS as informações dos mandados do BNMP...
+
+Exemplo:
+Nome: João Silva dos Santos
+Tipo: Mandado de Prisão
+Processo: 0001234-56.2025.8.26.0001
+Comarca: TJSP — 3ª Vara Criminal de SP
+Status: Ativo
+Crime: Tráfico de Drogas
+Data: 15/01/2025
+
+Nome: Maria Souza Lima
+Tipo: Mandado de Captura
+...
+
+Ou simplesmente cole o texto copiado do portal BNMP. A IA interpretará automaticamente.`}
+                    value={bulkText}
+                    onChange={e => { setBulkText(e.target.value); setBulkParsed(false); }}
+                    className="min-h-[280px] font-mono text-sm"
+                  />
+
+                  {bulkText.trim() && (
+                    <div className="flex items-center gap-3">
                       <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeMandado(mandado.id)}
-                        disabled={mandados.length <= 1}
-                        className="text-destructive hover:text-destructive h-8 w-8"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleParseBulk}
+                        className="gap-2"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <ClipboardPaste className="w-4 h-4" />
+                        Pré-visualizar Mandados Extraídos
                       </Button>
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">Nome do Procurado *</Label>
-                        <Input
-                          placeholder="Nome completo conforme BNMP"
-                          value={mandado.nome}
-                          onChange={e => updateMandado(mandado.id, 'nome', e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">Tipo de Mandado *</Label>
-                        <Select
-                          value={mandado.tipoPeca}
-                          onValueChange={v => updateMandado(mandado.id, 'tipoPeca', v)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {TIPO_PECA_OPTIONS.map(t => (
-                              <SelectItem key={t} value={t}>{t}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">Nº do Processo</Label>
-                        <Input
-                          placeholder="0000000-00.0000.0.00.0000"
-                          value={mandado.numero}
-                          onChange={e => updateMandado(mandado.id, 'numero', e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">Comarca / Tribunal</Label>
-                        <Input
-                          placeholder="Ex: TJSP — 3ª Vara Criminal de SP"
-                          value={mandado.orgaoExpedidor}
-                          onChange={e => updateMandado(mandado.id, 'orgaoExpedidor', e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">Status do Mandado</Label>
-                        <Select
-                          value={mandado.situacao}
-                          onValueChange={v => updateMandado(mandado.id, 'situacao', v)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Pendente de Cumprimento">Pendente de Cumprimento</SelectItem>
-                            <SelectItem value="Cumprido">Cumprido</SelectItem>
-                            <SelectItem value="Suspenso">Suspenso</SelectItem>
-                            <SelectItem value="Ativo">Ativo</SelectItem>
-                            <SelectItem value="Cancelado">Cancelado</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">Crime Relacionado</Label>
-                        <Input
-                          placeholder="Ex: Tráfico, Furto, Estelionato"
-                          value={mandado.crimeRelacionado}
-                          onChange={e => updateMandado(mandado.id, 'crimeRelacionado', e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">Data de Expedição</Label>
-                        <Input
-                          placeholder="DD/MM/AAAA"
-                          value={mandado.data}
-                          onChange={e => updateMandado(mandado.id, 'data', e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1.5 md:col-span-2">
-                        <Label className="text-xs font-medium">Observações Públicas</Label>
-                        <Input
-                          placeholder="Qualquer dado visível na consulta pública"
-                          value={mandado.observacoes}
-                          onChange={e => updateMandado(mandado.id, 'observacoes', e.target.value)}
-                        />
-                      </div>
+                      {bulkParsed && mandados.length > 0 && (
+                        <div className="flex items-center gap-2 text-sm text-green-600">
+                          <CheckCircle2 className="w-4 h-4" />
+                          {mandados.length} mandado(s) identificado(s)
+                        </div>
+                      )}
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
+                  )}
 
-              {selectedMandados.length > 0 && (
-                <div className="flex items-center justify-between pt-2">
-                  <p className="text-sm text-muted-foreground">
-                    {selectedMandados.length} mandado(s) selecionado(s) para repostagem
-                  </p>
-                  <Badge variant="outline" className="text-orange-500 border-orange-500">
-                    Modo Madeira Neles 🔥 — 9 Blocos
-                  </Badge>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  {bulkParsed && mandados.length > 0 && (
+                    <Card className="border-muted">
+                      <CardContent className="pt-4">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Mandados extraídos automaticamente:</p>
+                        <div className="space-y-2">
+                          {mandados.map((m, i) => (
+                            <div key={m.id} className="flex items-center gap-3 text-sm p-2 rounded-md bg-muted/50">
+                              <Checkbox
+                                checked={m.selected}
+                                onCheckedChange={(v) => updateMandado(m.id, 'selected', !!v)}
+                              />
+                              <Badge variant="outline" className="text-orange-500 border-orange-500 text-xs shrink-0">
+                                #{i + 1}
+                              </Badge>
+                              <span className="font-medium">{m.nome}</span>
+                              <span className="text-muted-foreground">•</span>
+                              <span className="text-xs text-muted-foreground">{m.tipoPeca}</span>
+                              {m.orgaoExpedidor && (
+                                <>
+                                  <span className="text-muted-foreground">•</span>
+                                  <span className="text-xs text-muted-foreground">{m.orgaoExpedidor}</span>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  <Alert className="border-muted bg-muted/30">
+                    <Bot className="h-4 w-4 text-orange-500" />
+                    <AlertDescription className="text-xs text-muted-foreground">
+                      <strong>Modo Autônomo:</strong> A IA irá (1) interpretar todos os dados colados, (2) auditar conformidade legal, (3) estruturar mandados, (4) gerar artigo completo com os 9 blocos do Prompt Mestre, (5) criar variações multiplataforma e prompts de imagem — tudo automaticamente.
+                    </AlertDescription>
+                  </Alert>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* MANUAL MODE */}
+            <TabsContent value="manual" className="space-y-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Scale className="w-5 h-5 text-orange-500" />
+                        Dados do Mandado — Input Manual
+                      </CardTitle>
+                      <CardDescription>
+                        Insira os dados extraídos do portal BNMP/CNJ campo a campo
+                      </CardDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={addMandado}>
+                      <Plus className="w-4 h-4 mr-1" />
+                      Adicionar Mandado
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {mandados.map((mandado, index) => (
+                    <Card key={mandado.id} className={cn("border", mandado.selected ? "border-orange-500/30 bg-orange-500/5" : "border-muted")}>
+                      <CardContent className="pt-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={mandado.selected}
+                              onCheckedChange={(v) => updateMandado(mandado.id, 'selected', !!v)}
+                            />
+                            <Badge variant="outline" className="text-orange-500 border-orange-500">
+                              Mandado #{index + 1}
+                            </Badge>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeMandado(mandado.id)}
+                            disabled={mandados.length <= 1}
+                            className="text-destructive hover:text-destructive h-8 w-8"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-medium">Nome do Procurado *</Label>
+                            <Input
+                              placeholder="Nome completo conforme BNMP"
+                              value={mandado.nome}
+                              onChange={e => updateMandado(mandado.id, 'nome', e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-medium">Tipo de Mandado *</Label>
+                            <Select
+                              value={mandado.tipoPeca}
+                              onValueChange={v => updateMandado(mandado.id, 'tipoPeca', v)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {TIPO_PECA_OPTIONS.map(t => (
+                                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-medium">Nº do Processo</Label>
+                            <Input
+                              placeholder="0000000-00.0000.0.00.0000"
+                              value={mandado.numero}
+                              onChange={e => updateMandado(mandado.id, 'numero', e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-medium">Comarca / Tribunal</Label>
+                            <Input
+                              placeholder="Ex: TJSP — 3ª Vara Criminal de SP"
+                              value={mandado.orgaoExpedidor}
+                              onChange={e => updateMandado(mandado.id, 'orgaoExpedidor', e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-medium">Status do Mandado</Label>
+                            <Select
+                              value={mandado.situacao}
+                              onValueChange={v => updateMandado(mandado.id, 'situacao', v)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Pendente de Cumprimento">Pendente de Cumprimento</SelectItem>
+                                <SelectItem value="Cumprido">Cumprido</SelectItem>
+                                <SelectItem value="Suspenso">Suspenso</SelectItem>
+                                <SelectItem value="Ativo">Ativo</SelectItem>
+                                <SelectItem value="Cancelado">Cancelado</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-medium">Crime Relacionado</Label>
+                            <Input
+                              placeholder="Ex: Tráfico, Furto, Estelionato"
+                              value={mandado.crimeRelacionado}
+                              onChange={e => updateMandado(mandado.id, 'crimeRelacionado', e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-medium">Data de Expedição</Label>
+                            <Input
+                              placeholder="DD/MM/AAAA"
+                              value={mandado.data}
+                              onChange={e => updateMandado(mandado.id, 'data', e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1.5 md:col-span-2">
+                            <Label className="text-xs font-medium">Observações Públicas</Label>
+                            <Input
+                              placeholder="Qualquer dado visível na consulta pública"
+                              value={mandado.observacoes}
+                              onChange={e => updateMandado(mandado.id, 'observacoes', e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+
+                  {selectedMandados.length > 0 && (
+                    <div className="flex items-center justify-between pt-2">
+                      <p className="text-sm text-muted-foreground">
+                        {selectedMandados.length} mandado(s) selecionado(s) para repostagem
+                      </p>
+                      <Badge variant="outline" className="text-orange-500 border-orange-500">
+                        Modo Madeira Neles 🔥 — 9 Blocos
+                      </Badge>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
 
           {/* Progress */}
           {isRewriting && (
@@ -426,14 +685,20 @@ INSTRUÇÕES ESPECIAIS:
           <div className="flex justify-end">
             <Button
               size="lg"
-              onClick={handleSubmit}
-              disabled={selectedMandados.length === 0 || isRewriting}
+              onClick={inputMode === 'chat-ia' ? handleSubmitBulkDirect : handleSubmit}
+              disabled={(inputMode === 'chat-ia' ? !bulkText.trim() : selectedMandados.length === 0) || isRewriting}
               className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
             >
               {isRewriting ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
                   Gerando 9 Blocos...
+                </>
+              ) : inputMode === 'chat-ia' ? (
+                <>
+                  <Bot className="w-5 h-5" />
+                  Processar Autônomo — IA
+                  <Sparkles className="w-4 h-4" />
                 </>
               ) : (
                 <>
