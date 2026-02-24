@@ -21,6 +21,7 @@ import {
   ChevronDown,
   FileText,
   MessageSquare,
+  Gavel,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -81,6 +82,14 @@ const navGroups: NavGroup[] = [
             icon: FileEdit, 
             href: '/news-rewriter',
             iconColor: '#10B981',
+          },
+          { 
+            label: 'BNMP', 
+            icon: Gavel, 
+            href: '/bnmp-repost',
+            badge: 'Novo',
+            badgeVariant: 'orange' as const,
+            iconColor: '#FF4500',
           },
           { 
             label: 'Em Massa', 
