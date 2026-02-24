@@ -37,13 +37,15 @@ REGRA ZERO-A2 — TÍTULO SEO PERFEITO (OBRIGATÓRIO):
 - VALIDAR ANTES DE ENTREGAR: contar chars, verificar última palavra completa, parênteses fechados, números completos
 
 REGRA ZERO-A3 — LINKS INTERNOS OBRIGATÓRIOS (ZERO TOLERÂNCIA):
-- TODO conteúdo DEVE conter no MÍNIMO 10 links internos — regra INEGOCIÁVEL
+- TODO conteúdo DEVE conter no MÍNIMO 4 e no MÁXIMO 10 links internos — regra INEGOCIÁVEL
 - NENHUM artigo pode ser entregue ou publicado sem links internos
-- Se links internos foram fornecidos, usar TODOS distribuídos naturalmente
-- Se nenhum link foi fornecido, SUGERIR 5-10 URLs internas no campo "internalSuggestions"
+- Se links internos foram fornecidos, usar o MÁXIMO possível (até 10) distribuídos naturalmente
+- Se nenhum link foi fornecido, SUGERIR 4-10 URLs internas no campo "internalSuggestions"
 - Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora descritivo</a>
 - NUNCA usar "clique aqui" como anchor text
-- Distribuição: 2 na introdução, 4-6 no corpo, 2 na conclusão
+- Distribuição: 1-2 na introdução, 2-6 no corpo, 1-2 na conclusão
+- Links devem conectar conteúdos RELACIONADOS semanticamente, construindo autoridade de domínio
+- Links externos de fontes oficiais, sites de referência e redes sociais do projeto são PERMITIDOS e INCENTIVADOS
 
 REGRA ZERO-B — LEGIBILIDADE FLESCH:
 - Índice Flesch MÍNIMO: 60 (ideal: 70-100)
@@ -241,13 +243,14 @@ REGRA SEO 2 — LISTAS ESTRUTURADAS:
 - Ajudam a conquistar featured snippets (posição zero)
 
 REGRA SEO 3 — LINKS INTERNOS (OBRIGATÓRIO — ZERO TOLERÂNCIA):
-- Mínimo 10 links internos por artigo — NENHUM conteúdo pode ser publicado sem links internos
-- Se links internos foram fornecidos, usar TODOS eles
-- Se nenhum link foi fornecido, SUGERIR 5-10 URLs internas no campo "internalSuggestions"
+- MÍNIMO 4 e MÁXIMO 10 links internos por artigo — NENHUM conteúdo pode ser publicado sem links internos
+- Se links internos foram fornecidos, usar o MÁXIMO possível (até 10) distribuídos naturalmente
+- Se nenhum link foi fornecido, SUGERIR 4-10 URLs internas no campo "internalSuggestions"
 - Anchor text descritivo (NUNCA "clique aqui", "saiba mais", "leia mais")
-- Distribuir naturalmente: 2 na introdução, 4-6 no corpo, 2 na conclusão
+- Distribuir naturalmente: 1-2 na introdução, 2-6 no corpo, 1-2 na conclusão
 - Priorize páginas de serviço, pillar pages e artigos relacionados
 - Links devem ser contextuais — inseridos em frases com sentido semântico
+- Links devem conectar conteúdos de REFERÊNCIA e com relação semântica, construindo autoridade do domínio
 
 REGRA SEO 4 — LINKS EXTERNOS (complementa REGRA ZERO-C):
 - Mínimo 2, ideal 3-5 por artigo
@@ -365,7 +368,7 @@ CHECKLIST DE QUALIDADE SEO (TODOS DEVEM SER ✅)
 - [ ] 5-8 subtítulos H2 distribuídos
 - [ ] Mínimo 2 listas (bullet ou numeradas)
 - [ ] Mínimo 2 links externos autoritativos (INEGOCIÁVEL)
-- [ ] MÍNIMO 10 LINKS INTERNOS inseridos no conteúdo (INEGOCIÁVEL — ZERO TOLERÂNCIA)
+- [ ] MÍNIMO 4 e MÁXIMO 10 LINKS INTERNOS inseridos no conteúdo (INEGOCIÁVEL — ZERO TOLERÂNCIA)
 - [ ] Seção FAQ com 3-8 perguntas
 - [ ] CTAs sutis no meio e final
 - [ ] Conclusão estruturada
@@ -539,7 +542,7 @@ VALIDAÇÕES AUTOMÁTICAS ANTES DA ENTREGA:
 3. ✅ metaTitle length 55-80 chars, COMPLETO, sem parênteses abertos, sem números truncados
 4. ✅ fleschScore >= 60
 5. ✅ external links >= 2
-6. ✅ INTERNAL LINKS >= 10 (OBRIGATÓRIO — ZERO TOLERÂNCIA)
+6. ✅ INTERNAL LINKS >= 4 e <= 10 (OBRIGATÓRIO — ZERO TOLERÂNCIA)
 7. ✅ FAQ count 3-8
 8. ✅ H1 count = 1
 9. ✅ H2 count >= 5
@@ -733,9 +736,16 @@ ${niches.length > 1 ? `
 ` : ''}
 
 ${request.internalLinks && request.internalLinks.length > 0 ? `
-═══ LINKS INTERNOS OBRIGATÓRIOS (use TODOS no artigo) ═══
+═══ LINKS INTERNOS OBRIGATÓRIOS (MÍNIMO 4, MÁXIMO 10 — use o MÁXIMO possível) ═══
 ${request.internalLinks.map(link => `- ${link.url} | Anchor: ${link.anchor}`).join('\n')}
-` : `Nenhum link interno fornecido. Sugira 3-5 URLs internas baseadas no tema no campo "internalSuggestions" do JSON.`}
+
+REGRA: Distribua NATURALMENTE ao longo do artigo. Priorize conteúdos com relação semântica.
+Links EXTERNOS de fontes oficiais e redes sociais do projeto também são PERMITIDOS e INCENTIVADOS.
+` : `
+═══ LINKS INTERNOS — REGRA INEGOCIÁVEL ═══
+Nenhum link interno fornecido. OBRIGATÓRIO: Sugira 4-10 URLs internas baseadas no tema no campo "internalSuggestions" do JSON.
+Links EXTERNOS de fontes oficiais, canais oficiais e redes sociais do projeto são PERMITIDOS e INCENTIVADOS.
+`}
 
 ═══ CONTEÚDO ORIGINAL DA NOTÍCIA ═══
 ${request.sourceContent.substring(0, 4000)}${request.sourceContent.length > 4000 ? '... (truncado)' : ''}
