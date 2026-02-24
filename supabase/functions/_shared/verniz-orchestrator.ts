@@ -465,75 +465,52 @@ Na prática, isso significa que [consequência real para o leitor].
   const siteUrl = config.socialLinktree || '';
 
   if (hasCtas || hasCompany) {
-    section += `\n\n### 🎯 ESTRUTURA DE 5 CTAs OBRIGATÓRIOS (inserir nas posições exatas):`;
+    section += `\n\n### 🎯 CTAs ESTRATÉGICOS (renderizar como HTML natural — SEM rótulos técnicos):`;
+    section += `\n\n⚠️ **REGRA ABSOLUTA**: NUNCA exibir rótulos como "[CTA #1]", "[CTA #2]", "[CTA #3]", "[CTA #4]", "[CTA #5]", "CTA", "CALL TO ACTION" ou qualquer marcador técnico no texto final.`;
+    section += `\nOs CTAs devem ser renderizados como blocos HTML visuais naturais (blockquote, div, parágrafo com link) — o leitor NUNCA deve saber que é um "CTA".`;
+    section += `\nSe aparecer "[CTA" em qualquer parte do artigo final, é um ERRO GRAVE.`;
 
-    // CTA #1 — URGÊNCIA (após introdução/gancho)
-    section += `\n\n**[CTA #1 — URGÊNCIA]** (inserir APÓS os 2 primeiros parágrafos):`;
-    section += `\n\`\`\``;
-    section += `\n---`;
-    section += `\n🚨 **ISSO É URGENTE? NÃO ESPERE.**`;
-    if (config.ctaLeads) section += `\n${config.ctaLeads}`;
-    if (config.empresaNome) section += `\n👉 **[FALE AGORA COM UM ESPECIALISTA](${siteUrl})**`;
-    if (config.empresaEndereco) section += `\n📍 ${config.empresaEndereco}`;
-    section += `\n---`;
-    section += `\n\`\`\``;
+    // CTA de urgência (após introdução/gancho)
+    section += `\n\n**Bloco de urgência** (inserir APÓS os 2 primeiros parágrafos como <blockquote> ou <div>):`;
+    section += `\nConteúdo sugerido:`;
+    if (config.ctaLeads) section += `\n- ${config.ctaLeads}`;
+    if (config.empresaNome) section += `\n- Link: <a href="${siteUrl}">Fale agora com um especialista</a>`;
+    if (config.empresaEndereco) section += `\n- Endereço: ${config.empresaEndereco}`;
 
-    // CTA #2 — AUTORIDADE (após corpo principal)
-    section += `\n\n**[CTA #2 — AUTORIDADE]** (inserir após seção de maior valor técnico):`;
-    section += `\n\`\`\``;
-    section += `\n---`;
+    // CTA de autoridade (após corpo principal)
+    section += `\n\n**Bloco de autoridade** (inserir após seção de maior valor técnico como <blockquote>):`;
     if (config.empresaNome) {
-      section += `\n> *"[Inserir frase de autoridade sobre o tema, na voz da empresa — direto, sem verniz]"*`;
-      section += `\n> **${config.empresaNome}**`;
-      if (config.empresaEndereco) section += `\n> ${config.empresaEndereco}`;
+      section += `\nCriar uma citação de autoridade na voz da empresa ${config.empresaNome}`;
+      if (config.empresaEndereco) section += `\n- ${config.empresaEndereco}`;
     }
-    section += `\n---`;
-    section += `\n\`\`\``;
 
-    // CTA #3 — AVALIAÇÃO/LEAD (após erros comuns)
+    // CTA de lead/avaliação (após erros comuns)
     if (config.ctaLeads) {
-      section += `\n\n**[CTA #3 — LEAD/AVALIAÇÃO]** (inserir após seção de erros comuns ou problemas frequentes):`;
-      section += `\n\`\`\``;
-      section += `\n---`;
-      section += `\n✅ **AVALIE SEU CASO COM UM ESPECIALISTA — SEM CUSTO**`;
-      section += `\n${config.ctaLeads}`;
-      section += `\n✅ Resposta rápida`;
-      section += `\n✅ Sem compromisso`;
-      section += `\n✅ Atendimento humano`;
-      section += `\n👉 **[QUERO AVALIAR MEU CASO GRATUITAMENTE](${siteUrl})**`;
-      section += `\n---`;
-      section += `\n\`\`\``;
+      section += `\n\n**Bloco de avaliação gratuita** (inserir após seção de erros comuns como <div> estilizado):`;
+      section += `\nConteúdo: ${config.ctaLeads}`;
+      section += `\n- Resposta rápida • Sem compromisso • Atendimento humano`;
+      section += `\n- Link: <a href="${siteUrl}">Avaliar meu caso gratuitamente</a>`;
     }
 
-    // CTA #4 — COMUNIDADE E REDES SOCIAIS
+    // CTA de comunidade e redes sociais
     if (config.ctaComunidade) {
-      section += `\n\n**[CTA #4 — COMUNIDADE]** (inserir antes da conclusão):`;
-      section += `\n\`\`\``;
-      section += `\n---`;
-      section += `\n📣 **${config.ctaComunidade}**`;
-      section += `\n`;
-      if (config.socialInstagram) section += `\n📸 Instagram: [${config.socialInstagram}](${config.socialInstagram})`;
-      if (config.socialYoutube) section += `\n▶️ YouTube: [${config.socialYoutube}](${config.socialYoutube})`;
-      if (config.socialTiktok) section += `\n🎵 TikTok: [${config.socialTiktok}](${config.socialTiktok})`;
-      if (config.socialLinkedin) section += `\n💼 LinkedIn: [${config.socialLinkedin}](${config.socialLinkedin})`;
-      if (config.socialTwitter) section += `\n🐦 X: [${config.socialTwitter}](${config.socialTwitter})`;
-      if (config.socialLinktree) section += `\n🔗 Links: [${config.socialLinktree}](${config.socialLinktree})`;
-      section += `\n---`;
-      section += `\n\`\`\``;
+      section += `\n\n**Bloco de redes sociais** (inserir antes da conclusão como seção com links):`;
+      section += `\nTítulo sugerido: "${config.ctaComunidade}"`;
+      if (config.socialInstagram) section += `\n- Instagram: <a href="${config.socialInstagram}">@perfil</a>`;
+      if (config.socialYoutube) section += `\n- YouTube: <a href="${config.socialYoutube}">Canal</a>`;
+      if (config.socialTiktok) section += `\n- TikTok: <a href="${config.socialTiktok}">@perfil</a>`;
+      if (config.socialLinkedin) section += `\n- LinkedIn: <a href="${config.socialLinkedin}">Perfil</a>`;
+      if (config.socialTwitter) section += `\n- X: <a href="${config.socialTwitter}">@perfil</a>`;
+      if (config.socialLinktree) section += `\n- Links: <a href="${config.socialLinktree}">Todos os links</a>`;
     }
 
-    // CTA #5 — FECHAMENTO COM URGÊNCIA
+    // CTA de fechamento
     if (config.ctaConclusao) {
-      section += `\n\n**[CTA #5 — FECHAMENTO]** (inserir obrigatoriamente no final do artigo):`;
-      section += `\n\`\`\``;
-      section += `\n---`;
-      section += `\n⚡ **NÃO DEIXE PARA AMANHÃ O QUE PODE CUSTAR CARO HOJE**`;
-      section += `\n${config.ctaConclusao}`;
-      if (config.empresaEndereco) section += `\n📍 ${config.empresaEndereco}`;
-      if (config.socialGoogleMaps) section += `\n🗺️ Google Maps: ${config.socialGoogleMaps}`;
-      section += `\n👉 **[🚀 QUERO RESOLVER ISSO AGORA](${siteUrl})**`;
-      section += `\n---`;
-      section += `\n\`\`\``;
+      section += `\n\n**Bloco de fechamento** (inserir no final do artigo como <div> ou <blockquote>):`;
+      section += `\nConteúdo: ${config.ctaConclusao}`;
+      if (config.empresaEndereco) section += `\n- Endereço: ${config.empresaEndereco}`;
+      if (config.socialGoogleMaps) section += `\n- Google Maps: <a href="${config.socialGoogleMaps}">Ver no mapa</a>`;
+      section += `\n- Link: <a href="${siteUrl}">Resolver agora</a>`;
     }
   }
 
@@ -552,15 +529,16 @@ Na prática, isso significa que [consequência real para o leitor].
   section += `\n\n### 📋 ESTRUTURA OBRIGATÓRIA DO ARTIGO:`;
   section += `\n1. **GANCHO** (2 parágrafos): Começar com a dor/situação REAL do leitor`;
   section += `\n2. **CONTEXTO**: Validar que o problema é sério com dado ou lei`;
-  section += `\n3. **[CTA #1]** — Urgência`;
+  section += `\n3. Bloco de urgência (HTML natural, sem rótulo)`;
   section += `\n4. **CORPO PRINCIPAL**: H2s como perguntas do leitor + listas + boxes de atenção`;
-  section += `\n5. **[CTA #2]** — Autoridade`;
+  section += `\n5. Bloco de autoridade (HTML natural, sem rótulo)`;
   section += `\n6. **APROFUNDAMENTO**: Prazos, variações, jurisprudência`;
-  section += `\n7. **[CTA #3]** — Lead/Avaliação`;
+  section += `\n7. Bloco de avaliação (HTML natural, sem rótulo)`;
   section += `\n8. **ERROS COMUNS**: 3-5 erros que fazem perder direitos`;
-  section += `\n9. **[CTA #4]** — Comunidade e Redes Sociais`;
+  section += `\n9. Bloco de redes sociais (HTML natural, sem rótulo)`;
   section += `\n10. **FAQ**: Mínimo 5 perguntas`;
-  section += `\n11. **[CTA #5]** — Fechamento com urgência`;
+  section += `\n11. Bloco de fechamento (HTML natural, sem rótulo)`;
+  section += `\n\n⚠️ LEMBRETE FINAL: NUNCA exibir "[CTA #1]", "[CTA #2]", "[CTA #3]", "[CTA #4]", "[CTA #5]" ou qualquer rótulo técnico visível no artigo.`;
 
   return section;
 }
