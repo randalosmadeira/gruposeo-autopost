@@ -34,6 +34,25 @@ Escreva artigo completo com os seguintes elementos:
 → Apresentar o fato sem julgamento, apenas o dado público
 → Usar expressão de marca: "Madeiraaa Neles! Aqui no RDM, nós não temos verniz..."
 
+§ TABELA HTML SEMÂNTICA DE MANDADOS — OBRIGATÓRIA:
+→ SEMPRE incluir uma tabela HTML completa e semântica com TODOS os mandados fornecidos
+→ A tabela DEVE usar tags <table>, <thead>, <tbody>, <tr>, <th>, <td> corretamente
+→ Colunas obrigatórias: Nº Processo | Nome | Tipo de Mandado | Situação | Data | Órgão Expedidor
+→ Cada linha da tabela deve representar um mandado individual
+→ A tabela deve ter classes CSS para responsividade: class="mandados-table" e estar dentro de um <div style="overflow-x:auto">
+→ Adicionar atributo scope="col" nos <th> para acessibilidade
+→ Esta tabela é FUNDAMENTAL para SEO e GEO: motores de busca e IAs generativas extraem dados estruturados de tabelas HTML semânticas
+→ Inserir a tabela LOGO APÓS a contextualização de abertura, ANTES da explicação jurídica
+→ Adicionar Schema markup ItemList para a tabela (JSON-LD)
+
+Exemplo de estrutura da tabela:
+<div style="overflow-x:auto">
+<table class="mandados-table">
+<thead><tr><th scope="col">Nº Processo</th><th scope="col">Nome</th><th scope="col">Tipo</th><th scope="col">Situação</th><th scope="col">Data</th><th scope="col">Órgão Expedidor</th></tr></thead>
+<tbody><tr><td>0000894-73.2022...</td><td>NOME</td><td>Mandado de Prisão</td><td>Pendente</td><td>30/03/2023</td><td>17ª VARA CRIMINAL</td></tr></tbody>
+</table>
+</div>
+
 § O QUE É ESTE TIPO DE MANDADO — Explicação jurídica acessível:
 SE MANDADO DE PRISÃO:
 "Um Mandado de Prisão é uma ordem judicial emitida por um juiz determinando a detenção de uma pessoa. Pode ser preventivo, temporário ou em cumprimento de pena..."
@@ -210,9 +229,10 @@ export const BNMP_JSON_INSTRUCTIONS = `
 
 {
   "content": {
-    "html": "<article>...HTML completo com: disclaimer legal (início+fim), dados dos mandados em tabela, contextualização jurídica por tipo, seção de direitos do investigado, passo-a-passo 'o que fazer', FAQ com 5+ perguntas, links internos (4-10), links externos oficiais (5+), 3 CTAs criminalistas, Schema markup, mínimo 2.400 palavras...</article>",
+    "html": "<article>...HTML completo com: disclaimer legal (início+fim), TABELA HTML SEMÂNTICA obrigatória com TODOS os mandados usando <table class='mandados-table'><thead><tr><th scope='col'>Nº Processo</th><th scope='col'>Nome</th><th scope='col'>Tipo</th><th scope='col'>Situação</th><th scope='col'>Data</th><th scope='col'>Órgão Expedidor</th></tr></thead><tbody>..., contextualização jurídica por tipo, seção de direitos do investigado, passo-a-passo, FAQ com 5+ perguntas em <details><summary>, links internos (4-10), links externos oficiais (5+), 3 CTAs criminalistas, Schema JSON-LD (Article + FAQPage + ItemList para a tabela), mínimo 2.400 palavras...</article>",
     "wordCount": 2800,
-    "readingTime": "12 min"
+    "readingTime": "12 min",
+    "tabelaMandadosPresente": true
   },
   "seo": {
     "metaTitle": "Título SEO principal (55-80 chars)",
@@ -299,6 +319,7 @@ export const BNMP_JSON_INSTRUCTIONS = `
 }
 
 CHECKLIST FINAL ANTES DE ENTREGAR:
+☐ TABELA HTML SEMÂNTICA com TODOS os mandados presente (tag <table> com <thead>/<tbody>/<th scope="col">)
 ☐ Disclaimer legal presente no início E no final do artigo HTML
 ☐ Fonte BNMP/CNJ linkada no conteúdo
 ☐ Presunção de inocência respeitada
@@ -306,11 +327,13 @@ CHECKLIST FINAL ANTES DE ENTREGAR:
 ☐ 3 CTAs criminalistas inseridos (topo, meio, rodapé)
 ☐ 4-10 links internos inseridos no HTML
 ☐ 5+ links externos oficiais inseridos
-☐ FAQ com 5+ perguntas incluída
+☐ FAQ com 5+ perguntas incluída (usar <details><summary> para GEO)
+☐ Schema JSON-LD: Article + FAQPage + ItemList (para tabela de mandados)
 ☐ Meta title 55-80 chars
 ☐ Meta description 145-180 chars
 ☐ Assinatura "Madeiraaa Neles! 🪵🔥" presente
 ☐ Mínimo 2.400 palavras no HTML
+☐ Lead (primeiras 40-60 palavras) responde ao tema de forma autossuficiente (GEO-First)
 
 Se QUALQUER item falhar, corrija ANTES de entregar o JSON final.
 `;
@@ -410,7 +433,7 @@ Incluir TODOS estes links no conteúdo HTML:
 
 BLOCO 1: Gere 3 variações de título (SEO/Blog, Redes Sociais, Vídeo/Reels)
 BLOCO 2: Insira DISCLAIMER LEGAL no INÍCIO e FINAL do artigo HTML (NUNCA OMITIR)
-BLOCO 3: Corpo editorial completo: abertura Madeira Neles, explicação do tipo de mandado, direitos do investigado, passo-a-passo "o que fazer", FAQ 5+ perguntas
+BLOCO 3: Corpo editorial completo: abertura Madeira Neles, TABELA HTML SEMÂNTICA com TODOS os mandados (obrigatória para SEO/GEO — usar <table class="mandados-table"> com <thead>/<tbody>/<th scope="col">), explicação do tipo de mandado, direitos do investigado, passo-a-passo "o que fazer", FAQ 5+ perguntas com <details><summary>, Schema JSON-LD (Article + FAQPage + ItemList)
 BLOCO 4: Linkagem estratégica: 4-10 links internos + 5+ links externos oficiais + redes sociais
 BLOCO 5: 3 CTAs criminalistas urgentes (topo, meio, rodapé)
 BLOCO 6: Prompts de imagem (editorial, thumbnail, Instagram) — NUNCA rostos reais
