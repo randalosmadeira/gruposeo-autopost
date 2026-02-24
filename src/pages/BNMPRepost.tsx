@@ -37,6 +37,7 @@ interface MandadoEntry {
   id: string;
   numero: string;
   nome: string;
+  alcunha: string;
   situacao: string;
   data: string;
   orgaoExpedidor: string;
@@ -57,6 +58,7 @@ const createEmptyMandado = (): MandadoEntry => ({
   id: crypto.randomUUID(),
   numero: '',
   nome: '',
+  alcunha: '',
   situacao: 'Pendente de Cumprimento',
   data: '',
   orgaoExpedidor: '',
@@ -66,56 +68,108 @@ const createEmptyMandado = (): MandadoEntry => ({
   selected: true,
 });
 
-// Parse pasted text to extract mandado entries
+// Parse pasted text from BNMP portal table format
 function parseBulkText(text: string): MandadoEntry[] {
   const entries: MandadoEntry[] = [];
-  // Split by double newlines or numbered entries
-  const blocks = text.split(/(?:\n\s*\n|\n(?=\d+[\.\)\-]))/g).filter(b => b.trim());
 
+  // Regex for BNMP process numbers (e.g. 0000894-73.2022.8.02.0001.01.0007-01)
+  const processNumberRegex = /(\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\.\d{2}\.\d{4}-\d{2})/g;
+  const matches = [...text.matchAll(processNumberRegex)];
+
+  if (matches.length > 0) {
+    // Tabular BNMP format detected — split text by process numbers
+    for (let i = 0; i < matches.length; i++) {
+      const start = matches[i].index!;
+      const end = i + 1 < matches.length ? matches[i + 1].index! : text.length;
+      const block = text.substring(start, end).trim();
+      const numero = matches[i][1];
+
+      const entry = createEmptyMandado();
+      entry.numero = numero;
+
+      // Extract "Mandado de Prisão" / "Mandado de Busca e Apreensão" etc at end of block
+      if (/Mandado de Busca/i.test(block)) entry.tipoPeca = 'Mandado de Busca e Apreensão';
+      else if (/Mandado de Captura/i.test(block)) entry.tipoPeca = 'Mandado de Captura';
+      else if (/Mandado de Interna/i.test(block)) entry.tipoPeca = 'Mandado de Internação';
+      else entry.tipoPeca = 'Mandado de Prisão';
+
+      // Status
+      if (/Pendente de Cumprimento/i.test(block)) entry.situacao = 'Pendente de Cumprimento';
+      else if (/Cumprido/i.test(block)) entry.situacao = 'Cumprido';
+      else if (/Suspenso/i.test(block)) entry.situacao = 'Suspenso';
+
+      // Extract dates (DD/MM/YYYY) — typically 2: birth date and expedition date
+      const dates = [...block.matchAll(/(\d{2}\/\d{2}\/\d{4})/g)].map(m => m[1]);
+      // Last date before "Pendente/Cumprido" is usually the expedition date
+      if (dates.length >= 2) {
+        entry.data = dates[dates.length - 1]; // expedition date is the later one contextually
+      } else if (dates.length === 1) {
+        entry.data = dates[0];
+      }
+
+      // Remove process number from block to parse name
+      let rest = block.replace(processNumberRegex, '').trim();
+
+      // Remove the peça type from end
+      rest = rest.replace(/Mandado de (Prisão|Busca e Apreensão|Captura|Internação)/gi, '').trim();
+
+      // Remove known status text
+      rest = rest.replace(/Pendente de Cumprimento/gi, '').trim();
+      rest = rest.replace(/Cumprido|Suspenso|Cancelado/gi, '').trim();
+
+      // Remove dates
+      rest = rest.replace(/\d{2}\/\d{2}\/\d{4}/g, '').trim();
+
+      // Extract name: first capitalized words before "Não Informado" or known alcunhas
+      const restParts = rest.split(/\s+/);
+      const nameWords: string[] = [];
+      const stopWords = ['Não', 'NÃO', 'VARA', 'FORUM', 'COMARCA', 'Vara', 'Mandado', 'NÚCLEO', 'Pendente', 'Cumprido'];
+      for (const w of restParts) {
+        if (stopWords.some(s => w.startsWith(s))) break;
+        if (/^[A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑa-záàâãéèêíïóôõöúçñ]/.test(w) && w.length > 1) {
+          nameWords.push(w);
+        } else if (nameWords.length >= 2) {
+          break;
+        }
+      }
+      entry.nome = nameWords.join(' ').trim();
+
+      // Extract orgão — look for VARA / TRIBUNAL / FORUM patterns
+      const orgaoMatch = block.match(/((?:\d+[ªº]?\s*)?(?:VARA|Vara|JUIZADO|Juizado|NÚCLEO|FORUM|Fórum|EXECU)[^\n]*?)(?:\s*Mandado|\s*$)/i);
+      if (orgaoMatch) {
+        entry.orgaoExpedidor = orgaoMatch[1].replace(/[-–—]\s*$/, '').trim();
+      }
+
+      if (entry.nome && entry.nome.length > 3) {
+        entries.push(entry);
+      }
+    }
+    return entries;
+  }
+
+  // Fallback: try label-based parsing (Nome:, Tipo:, etc.)
+  const blocks = text.split(/(?:\n\s*\n|\n(?=\d+[\.\)\-]\s))/g).filter(b => b.trim());
   for (const block of blocks) {
     const lines = block.trim();
     if (!lines || lines.length < 5) continue;
-
     const entry = createEmptyMandado();
 
-    // Try to extract name
-    const nomeMatch = lines.match(/(?:nome|procurado|réu|ré|investigado)[:\s—\-]+([^\n|]+)/i)
-      || lines.match(/^(?:\d+[\.\)\-]\s*)?([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ][A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑa-záàâãéèêíïóôõöúçñ\s]+)/m);
+    const nomeMatch = lines.match(/(?:nome|procurado|réu)[:\s—\-]+([^\n|]+)/i);
     if (nomeMatch) entry.nome = nomeMatch[1].trim();
 
-    // Type
     if (/busca\s*e?\s*apreens/i.test(lines)) entry.tipoPeca = 'Mandado de Busca e Apreensão';
     else if (/captura/i.test(lines)) entry.tipoPeca = 'Mandado de Captura';
-    else if (/interna[çc]/i.test(lines)) entry.tipoPeca = 'Mandado de Internação';
-    else entry.tipoPeca = 'Mandado de Prisão';
 
-    // Status
-    if (/cumprido/i.test(lines)) entry.situacao = 'Cumprido';
-    else if (/suspenso/i.test(lines)) entry.situacao = 'Suspenso';
-    else if (/cancelado/i.test(lines)) entry.situacao = 'Cancelado';
-    else if (/ativo/i.test(lines)) entry.situacao = 'Ativo';
-
-    // Process number
-    const numMatch = lines.match(/(?:processo|nº|número|n°)[:\s—\-]*([0-9.\-\/]+)/i)
-      || lines.match(/(\d{7}[\-\.]\d{2}\.\d{4}\.\d\.\d{2}\.\d{4})/);
+    const numMatch = lines.match(/(?:processo|nº|número)[:\s—\-]*([0-9.\-\/]+)/i);
     if (numMatch) entry.numero = numMatch[1].trim();
 
-    // Court/Tribunal
-    const orgMatch = lines.match(/(?:comarca|tribunal|vara|foro|tjsp|tjrj|tjmg|tjba|tjpr|tjrs|tjsc|tjgo|tjce|orgão)[:\s—\-]+([^\n|]+)/i);
+    const orgMatch = lines.match(/(?:comarca|tribunal|vara|orgão)[:\s—\-]+([^\n|]+)/i);
     if (orgMatch) entry.orgaoExpedidor = orgMatch[1].trim();
 
-    // Crime
-    const crimeMatch = lines.match(/(?:crime|delito|tipifica[çc][aã]o|infra[çc][aã]o)[:\s—\-]+([^\n|]+)/i);
-    if (crimeMatch) entry.crimeRelacionado = crimeMatch[1].trim();
-
-    // Date
-    const dataMatch = lines.match(/(?:data|expedi[çc][aã]o|emiss[aã]o)[:\s—\-]*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i)
-      || lines.match(/(\d{2}\/\d{2}\/\d{4})/);
+    const dataMatch = lines.match(/(\d{2}\/\d{2}\/\d{4})/);
     if (dataMatch) entry.data = dataMatch[1].trim();
 
-    if (entry.nome) {
-      entries.push(entry);
-    }
+    if (entry.nome) entries.push(entry);
   }
 
   return entries;
@@ -470,29 +524,42 @@ Ou simplesmente cole o texto copiado do portal BNMP. A IA interpretará automati
                     </div>
                   )}
 
-                  {bulkParsed && mandados.length > 0 && (
+                   {bulkParsed && mandados.length > 0 && (
                     <Card className="border-muted">
                       <CardContent className="pt-4">
-                        <p className="text-xs font-medium text-muted-foreground mb-2">Mandados extraídos automaticamente:</p>
-                        <div className="space-y-2">
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-xs font-medium text-muted-foreground">Mandados extraídos automaticamente:</p>
+                          <Badge className="bg-orange-500 text-white text-xs">{mandados.length} encontrado(s)</Badge>
+                        </div>
+                        <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
                           {mandados.map((m, i) => (
-                            <div key={m.id} className="flex items-center gap-3 text-sm p-2 rounded-md bg-muted/50">
+                            <div key={m.id} className="flex items-start gap-3 text-sm p-3 rounded-md bg-muted/50 border border-border/50">
                               <Checkbox
                                 checked={m.selected}
                                 onCheckedChange={(v) => updateMandado(m.id, 'selected', !!v)}
+                                className="mt-0.5"
                               />
-                              <Badge variant="outline" className="text-orange-500 border-orange-500 text-xs shrink-0">
+                              <Badge variant="outline" className="text-orange-500 border-orange-500 text-xs shrink-0 mt-0.5">
                                 #{i + 1}
                               </Badge>
-                              <span className="font-medium">{m.nome}</span>
-                              <span className="text-muted-foreground">•</span>
-                              <span className="text-xs text-muted-foreground">{m.tipoPeca}</span>
-                              {m.orgaoExpedidor && (
-                                <>
-                                  <span className="text-muted-foreground">•</span>
-                                  <span className="text-xs text-muted-foreground">{m.orgaoExpedidor}</span>
-                                </>
-                              )}
+                              <div className="flex-1 min-w-0 space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-semibold">{m.nome}</span>
+                                  {m.alcunha && <Badge variant="secondary" className="text-xs">"{m.alcunha}"</Badge>}
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                                  <span>{m.tipoPeca}</span>
+                                  <span>•</span>
+                                  <span>{m.situacao}</span>
+                                  {m.data && <><span>•</span><span>{m.data}</span></>}
+                                </div>
+                                {m.orgaoExpedidor && (
+                                  <p className="text-xs text-muted-foreground truncate">{m.orgaoExpedidor}</p>
+                                )}
+                                {m.numero && (
+                                  <p className="text-xs text-muted-foreground font-mono truncate">{m.numero}</p>
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>
