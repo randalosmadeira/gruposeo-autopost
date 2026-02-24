@@ -191,6 +191,8 @@ PROIBIÇÕES:
 - Parágrafos maiores que 4 linhas
 - Seções sem propósito de conversão
 - CTAs genéricos ("Entre em contato")
+- NUNCA exibir rótulos técnicos como "[CTA #1]", "[CTA #2]", "[CTA #3]", "[CTA]", "CALL TO ACTION" ou qualquer marcador interno visível ao leitor
+- Os CTAs devem ser renderizados como HTML natural (blockquote, div, parágrafo com link) — o leitor NUNCA deve saber que é um "CTA"
 
 FORMATO: HTML semântico puro (sem markdown, sem backticks).
 Tags permitidas: <p>, <h2>, <h3>, <h4>, <ul>, <ol>, <li>, <strong>, <em>, <a>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <blockquote>
@@ -247,6 +249,7 @@ TÉCNICAS DE MELHORIA:
 - Parágrafos longos → Quebrados
 
 IMPORTANTE: Retorne o artigo COMPLETO editado em HTML. Mantenha a estrutura, melhore a persuasão.
+REMOVA qualquer marcador técnico visível como "[CTA #1]", "[CTA #2]", "[CTA]", "CALL TO ACTION" — substituir por HTML natural.
 NÃO adicione comentários sobre as mudanças. Retorne APENAS o HTML editado.`;
 }
 
@@ -259,6 +262,12 @@ CHECKLIST TÉCNICO SEO (TODOS DEVEM PASSAR):
 - <!-- META_DESCRIPTION: ... --> PRESENTE no início? Se NÃO, CRIAR AGORA
 - Tem entre 145-160 caracteres?
 - Contém a keyword e um CTA sutil?
+
+## LIMPEZA DE MARCADORES TÉCNICOS (OBRIGATÓRIO - INEGOCIÁVEL)
+- Verificar e REMOVER qualquer ocorrência de "[CTA #1]", "[CTA #2]", "[CTA #3]", "[CTA #4]", "[CTA #5]", "[CTA]" ou variações
+- Verificar e REMOVER textos como "CALL TO ACTION", "CTA DE URGÊNCIA", "CTA DE AUTORIDADE" visíveis ao leitor
+- Os blocos de conversão devem existir como HTML natural (blockquote, div, parágrafo) SEM rótulos técnicos
+- Se encontrar QUALQUER marcador "[CTA", REMOVER o rótulo e manter apenas o conteúdo útil
 
 ## Keyword "${keyword}"
 - Keyword principal no H1? (OBRIGATÓRIO)
@@ -297,9 +306,10 @@ ${sectorConfig.requiredDisclaimer ? `- Disclaimer presente: "${sectorConfig.requ
 
 INSTRUÇÕES:
 1. Revise o artigo fornecido
-2. Corrija problemas encontrados
-3. Retorne o artigo CORRIGIDO em HTML completo
-4. NÃO adicione comentários. Retorne APENAS o HTML corrigido.`;
+2. REMOVA todos os marcadores técnicos "[CTA #X]" encontrados
+3. Corrija problemas de SEO e compliance
+4. Retorne o artigo CORRIGIDO em HTML completo
+5. NÃO adicione comentários. Retorne APENAS o HTML corrigido.`;
 }
 
 // =================== PIPELINE EXECUTION ===================
@@ -417,11 +427,33 @@ export async function runAgentPipeline(config: AgentPipelineConfig): Promise<Age
 
   console.log(`[AgentPipeline] Pipeline completo. Agentes executados: ${providersUsed.join(' → ')}`);
 
+  // Final sanitization: strip any leaked CTA markers
+  content = stripCTAMarkers(content);
+
   return {
     content,
     strategy,
     providersUsed,
   };
+}
+
+/**
+ * Strip technical CTA markers that should never appear in published content.
+ * Runs as final safety net after all agents have processed.
+ */
+function stripCTAMarkers(html: string): string {
+  if (!html) return '';
+  let cleaned = html;
+  // Remove [CTA #X ...] patterns with optional bold/strong wrappers
+  cleaned = cleaned.replace(/\*{0,2}\[CTA\s*#?\d+[^\]]*\]\*{0,2}/gi, '');
+  cleaned = cleaned.replace(/<strong>\s*\[CTA\s*#?\d+[^\]]*\]\s*<\/strong>/gi, '');
+  // Remove standalone "CTA #X" visible text
+  cleaned = cleaned.replace(/(?<![<\w])CTA\s*#\d+\s*(?:—\s*[A-ZÀ-Ü\s/]+)?(?![>\w])/gi, '');
+  // Clean up empty tags left behind
+  cleaned = cleaned.replace(/<p>\s*<\/p>/gi, '');
+  cleaned = cleaned.replace(/<strong>\s*<\/strong>/gi, '');
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  return cleaned;
 }
 
 /**

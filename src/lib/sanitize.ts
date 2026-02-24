@@ -31,6 +31,35 @@ export function removeCodeBlockMarkers(content: string): string {
 }
 
 /**
+ * Removes technical CTA markers that should never be visible to readers.
+ * Strips patterns like [CTA #1], [CTA #2 — AUTORIDADE], **[CTA #3]**, etc.
+ */
+export function removeCTAMarkers(content: string): string {
+  if (!content) return '';
+  
+  let cleaned = content;
+  
+  // Remove [CTA #X] and [CTA #X — LABEL] patterns (with optional bold/strong wrappers)
+  cleaned = cleaned.replace(/\*{0,2}\[CTA\s*#?\d+[^\]]*\]\*{0,2}/gi, '');
+  
+  // Remove <strong>[CTA ...]</strong> variants
+  cleaned = cleaned.replace(/<strong>\s*\[CTA\s*#?\d+[^\]]*\]\s*<\/strong>/gi, '');
+  
+  // Remove standalone "CTA #X" text (not inside links/anchors)
+  cleaned = cleaned.replace(/(?<![<\w])CTA\s*#\d+\s*(?:—\s*[A-ZÀ-Ü\s/]+)?(?![>\w])/gi, '');
+  
+  // Clean up resulting empty paragraphs, headings, bold markers
+  cleaned = cleaned.replace(/<p>\s*<\/p>/gi, '');
+  cleaned = cleaned.replace(/<strong>\s*<\/strong>/gi, '');
+  cleaned = cleaned.replace(/\*\*\s*\*\*/g, '');
+  
+  // Clean up double line breaks left behind
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  
+  return cleaned;
+}
+
+/**
  * Improves content structure by ensuring proper heading hierarchy and paragraph spacing.
  * Converts raw text blocks into properly structured HTML with headings.
  */
@@ -96,6 +125,8 @@ export function sanitizeHTML(html: string): string {
   // First remove any code block markers
   let cleanedHtml = removeCodeBlockMarkers(html);
   
+  // Remove technical CTA markers that leaked into content
+  cleanedHtml = removeCTAMarkers(cleanedHtml);
   return DOMPurify.sanitize(cleanedHtml, {
     ALLOWED_TAGS: [
       'p', 'br', 'strong', 'em', 'u', 'b', 'i',
