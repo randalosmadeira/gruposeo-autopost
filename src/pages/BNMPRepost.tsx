@@ -120,19 +120,29 @@ function parseBulkText(text: string): MandadoEntry[] {
       // Remove dates
       rest = rest.replace(/\d{2}\/\d{2}\/\d{4}/g, '').trim();
 
-      // Extract name: first capitalized words before "Não Informado" or known alcunhas
+      // Extract name: words before "Não Informado" / "NÃO INFORMADO" pattern
+      // The text after removing number/dates/status/peça starts with: NAME ALCUNHA MÃE PAI ORGÃO
+      // Name stops at first "Não" or known court keywords
       const restParts = rest.split(/\s+/);
       const nameWords: string[] = [];
-      const stopWords = ['Não', 'NÃO', 'VARA', 'FORUM', 'COMARCA', 'Vara', 'Mandado', 'NÚCLEO', 'Pendente', 'Cumprido'];
+      const stopPatterns = /^(Não|NÃO|VARA|FORUM|COMARCA|Mandado|NÚCLEO|Pendente|Cumprido|Suspenso|Cancelado|\d+[ªº])/i;
       for (const w of restParts) {
-        if (stopWords.some(s => w.startsWith(s))) break;
-        if (/^[A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑa-záàâãéèêíïóôõöúçñ]/.test(w) && w.length > 1) {
+        if (stopPatterns.test(w)) break;
+        // Accept any word with letters (handles mixed case like "Felipe Souza dos Santos")
+        if (/[a-záàâãéèêíïóôõöúçñ]/i.test(w) && w.length > 1) {
           nameWords.push(w);
         } else if (nameWords.length >= 2) {
           break;
         }
       }
       entry.nome = nameWords.join(' ').trim();
+      
+      // If name has more than 5 words, it likely captured alcunha + parents — trim to reasonable length
+      // Heuristic: name is usually 2-5 words. Look for common alcunha indicators
+      if (nameWords.length > 5) {
+        // Try to detect alcunha boundary (a single short uppercase word after the name)
+        entry.nome = nameWords.slice(0, 5).join(' ').trim();
+      }
 
       // Extract orgão — look for VARA / TRIBUNAL / FORUM patterns
       const orgaoMatch = block.match(/((?:\d+[ªº]?\s*)?(?:VARA|Vara|JUIZADO|Juizado|NÚCLEO|FORUM|Fórum|EXECU)[^\n]*?)(?:\s*Mandado|\s*$)/i);
