@@ -15,6 +15,11 @@ import {
   MADEIRA_NELES_JSON_INSTRUCTIONS,
   buildMadeiraNelessUserPrompt,
 } from "./madeira-neles-prompt.ts";
+import {
+  BNMP_SYSTEM_PROMPT,
+  BNMP_JSON_INSTRUCTIONS,
+  buildBNMPUserPrompt,
+} from "./bnmp-prompt.ts";
 import { createEmotionalImageSystem } from "../_shared/emotional/emotional-image-system.ts";
 import { orchestrate } from "../_shared/verniz-orchestrator.ts";
 import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
@@ -135,8 +140,9 @@ Deno.serve(async (req) => {
       rewriteMode = 'standard',
     } = body;
 
+    const isBNMP = rewriteMode === 'madeira_neles' && sourceContent.includes('BNMP');
     const isMadeiraNeles = rewriteMode === 'madeira_neles';
-    log.info("rewrite_mode", { mode: rewriteMode, isMadeiraNeles });
+    log.info("rewrite_mode", { mode: rewriteMode, isMadeiraNeles, isBNMP });
 
     if (!sourceContent || !sourceName) {
       return new Response(
@@ -156,7 +162,12 @@ Deno.serve(async (req) => {
     let systemPromptToUse: string;
     let agentName: string | null = null;
     
-    if (isMadeiraNeles) {
+    if (isBNMP) {
+      // Use dedicated BNMP Prompt Mestre (9 blocos)
+      systemPromptToUse = BNMP_SYSTEM_PROMPT + "\n\n" + BNMP_JSON_INSTRUCTIONS;
+      agentName = "MADEIRA BOT BNMP v2.0";
+      log.info("using_bnmp_prompt", { promptLength: systemPromptToUse.length });
+    } else if (isMadeiraNeles) {
       // Use dedicated Madeira Neles viral prompt
       systemPromptToUse = MADEIRA_NELES_SYSTEM_PROMPT + "\n\n" + MADEIRA_NELES_JSON_INSTRUCTIONS;
       agentName = "Agente Master Madeira Neles";
@@ -232,16 +243,48 @@ Deno.serve(async (req) => {
     log.info("verniz_applied_to_rewrite", { nicho: orchestration.nichoDetectado.nicho, gatilho: orchestration.gatilho.gatilho, hasProjectConfig: !!projectConfig });
 
     // Build user prompt based on mode
-    const userPrompt = isMadeiraNeles
-      ? buildMadeiraNelessUserPrompt({
+    let userPrompt: string;
+    if (isBNMP) {
+      // Parse mandado data from sourceContent for structured BNMP prompt
+      const mandadoLines = sourceContent.split('\n').filter(l => /^\d+\.\s*(NOME|Nome):/.test(l.trim()));
+      const mandados = mandadoLines.length > 0 
+        ? mandadoLines.map(line => {
+            const nome = line.match(/NOME:\s*([^|]+)/i)?.[1]?.trim() || line.match(/Nome:\s*([^|]+)/i)?.[1]?.trim() || '';
+            const tipo = line.match(/TIPO[^:]*:\s*([^|]+)/i)?.[1]?.trim() || 'Mandado de Prisão';
+            const status = line.match(/STATUS:\s*([^|]+)/i)?.[1]?.trim() || 'Pendente de Cumprimento';
+            const data = line.match(/DATA:\s*([^|]+)/i)?.[1]?.trim() || '';
+            const comarca = line.match(/COMARCA[^:]*:\s*([^|]+)/i)?.[1]?.trim() || '';
+            const numero = line.match(/(?:Nº|PROCESSO)[^:]*:\s*([^|]+)/i)?.[1]?.trim() || '';
+            const crime = line.match(/CRIME:\s*([^|]+)/i)?.[1]?.trim() || '';
+            return { nome, tipoPeca: tipo, situacao: status, data, orgaoExpedidor: comarca, numero, crimeRelacionado: crime };
+          })
+        : [{ nome: keyword || sourceName, tipoPeca: 'Mandado de Prisão', situacao: 'Pendente de Cumprimento' }];
+
+      userPrompt = buildBNMPUserPrompt({
+        mandados,
+        keyword,
+        language,
+        internalLinks,
+        projectSocials: projectConfig ? {
+          whatsapp: projectConfig.empresa_whatsapp,
+          instagram: projectConfig.social_instagram,
+          youtube: projectConfig.social_youtube,
+          tiktok: projectConfig.social_tiktok,
+          linkedin: projectConfig.social_linkedin,
+          googleMaps: projectConfig.social_google_maps,
+        } : undefined,
+      });
+    } else if (isMadeiraNeles) {
+      userPrompt = buildMadeiraNelessUserPrompt({
           sourceUrl,
           sourceContent,
           sourceName,
           keyword,
           language,
           internalLinks,
-        })
-      : buildUserPrompt({
+        });
+    } else {
+      userPrompt = buildUserPrompt({
           sourceUrl,
           sourceContent,
           sourceName,
@@ -252,9 +295,10 @@ Deno.serve(async (req) => {
           language,
           internalLinks,
         });
+    }
 
     // Call AI with the system prompt (custom or default)
-    const maxTokens = isMadeiraNeles ? 16000 : 8000;
+    const maxTokens = (isMadeiraNeles || isBNMP) ? 16000 : 8000;
     const aiResponse = await callAI(
       [
         { role: "system", content: systemPromptToUse },
@@ -453,7 +497,7 @@ Deno.serve(async (req) => {
         image_style: imageStyle,
         image_source: imageSource,
         config: {
-          type: isMadeiraNeles ? "rewrite_madeira_neles" : "rewrite",
+          type: isBNMP ? "rewrite_bnmp_madeira_neles" : isMadeiraNeles ? "rewrite_madeira_neles" : "rewrite",
           rewrite_mode: rewriteMode,
           source_url: sourceUrl,
           source_name: sourceName,
