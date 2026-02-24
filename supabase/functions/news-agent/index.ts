@@ -127,7 +127,17 @@ Formato do artigo: ${promptTemplate === 'news_article' ? 'notícia jornalística
 - Parágrafos curtos: MÁXIMO 3-4 linhas
 - Vocabulário SIMPLES: palavras do dia-a-dia
 - Se usar termo técnico, SEMPRE explique entre parênteses
-- Escreva como se explicasse para um amigo de 14 anos`;
+- Escreva como se explicasse para um amigo de 14 anos
+
+🔗 REGRA INEGOCIÁVEL - LINKS INTERNOS (MÍNIMO 4, MÁXIMO 10):
+- TODO artigo DEVE conter no MÍNIMO 4 e no MÁXIMO 10 links internos
+- NENHUM artigo pode ser entregue sem links internos
+- Links devem conectar a conteúdos RELACIONADOS semanticamente do mesmo domínio
+- Distribuição: 1-2 na introdução, 2-6 no corpo, 1-2 na conclusão
+- Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora descritivo</a>
+- NUNCA usar "clique aqui" ou "saiba mais" como anchor text
+- Se não houver links internos fornecidos, SUGIRA 4-10 URLs internas baseadas no tema
+- Links EXTERNOS de fontes oficiais (.gov, .edu), sites de referência e redes sociais do projeto são PERMITIDOS e INCENTIVADOS (máximo 3 externos)`;
 
   const userPrompt = `Baseado nesta notícia, escreva um artigo completo e original:
 

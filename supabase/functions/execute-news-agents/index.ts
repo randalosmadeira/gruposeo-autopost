@@ -186,6 +186,16 @@ SEO 2026:
 - FAQ obrigatório (3-5 perguntas)
 - SEMPRE gerar prompt de imagem para o artigo
 
+🔗 LINKS INTERNOS OBRIGATÓRIOS (REGRA INEGOCIÁVEL):
+- MÍNIMO 4 e MÁXIMO 10 links internos por artigo
+- NENHUM artigo pode ser publicado sem links internos
+- Links devem conectar conteúdos RELACIONADOS do mesmo domínio, construindo autoridade
+- Distribuição: 1-2 na introdução, 2-6 no corpo, 1-2 na conclusão
+- Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora descritivo</a>
+- NUNCA usar "clique aqui" como anchor text — use anchor text com keyword contextual
+- Se não houver links internos fornecidos, SUGIRA 4-10 URLs internas baseadas no tema no JSON
+- Links EXTERNOS de fontes oficiais e redes sociais do projeto são PERMITIDOS (máximo 3)
+
 FORMATO DE SAÍDA (JSON):
 {
   "title": "Título otimizado (55-65 chars)",
@@ -232,6 +242,8 @@ INSTRUÇÕES CRÍTICAS:
 4. Creditar fonte: "Fonte: ${newsItem.source}${newsItem.link ? ` - ${newsItem.link}` : ''}"
 5. Gerar artigo com mín 600 palavras
 6. Estrutura: H2 para seções principais, parágrafos curtos
+7. OBRIGATÓRIO: Incluir MÍNIMO 4 e MÁXIMO 10 links internos — conectar a conteúdos relacionados do mesmo domínio
+8. Links EXTERNOS de fontes oficiais (.gov, .edu) e redes sociais do projeto são PERMITIDOS (máximo 3)
 
 Se originalidade < 90%, reescreva novamente até atingir 90%+.
 

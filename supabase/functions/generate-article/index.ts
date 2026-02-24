@@ -261,11 +261,12 @@ REGRAS IMPORTANTES:
 
   // Auto-injected internal links (backlinks)
   if (config.internalLinks && config.internalLinks.length > 0) {
-    const minLinks = Math.min(10, config.internalLinks.length);
-    systemPrompt += `\n\n## LINKS INTERNOS OBRIGATÓRIOS (BACKLINKS)
+    const minLinks = Math.max(4, Math.min(10, config.internalLinks.length));
+    systemPrompt += `\n\n## LINKS INTERNOS OBRIGATÓRIOS (BACKLINKS) — REGRA INEGOCIÁVEL
 Distribua os seguintes links NATURALMENTE ao longo do artigo. Use anchor text variado.
 Cada link deve usar: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora</a>
 
+MÍNIMO: 4 links internos | MÁXIMO: 10 links internos | IDEAL: ${minLinks}
 LINKS DISPONÍVEIS (use no MÍNIMO ${minLinks} deles):
 ${config.internalLinks.slice(0, 20).map((l, i) => `${i + 1}. "${l.anchor}" → ${l.url}`).join('\n')}
 
@@ -727,7 +728,7 @@ Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
 5. Frases CURTAS: máximo 15 palavras cada (Flesch 70-100 OBRIGATÓRIO)
 6. Parágrafos CURTOS: máximo 3 linhas
 7. Linguagem SIMPLES: como se falasse com um amigo de 14 anos
-8. MÍNIMO 10 links internos (se disponíveis) e MÁXIMO 3 links externos para fontes oficiais (.gov, .edu)
+8. MÍNIMO 4 e MÁXIMO 10 links internos (OBRIGATÓRIO) e MÁXIMO 3 links externos para fontes oficiais (.gov, .edu)
 9. Citar TODAS as redes sociais configuradas no projeto
 10. Estatísticas verificáveis com fonte a cada 150-200 palavras (GEO)
 11. Definições no formato "X é..." para extração por IAs (GEO)
@@ -763,7 +764,7 @@ Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
 □ META: frase termina com pontuação (. ! ?)? Sem palavras cortadas?
 □ Frases com MÁXIMO 15 palavras cada? (Flesch 70-100)
 □ Parágrafos com MÁXIMO 3 linhas?
-□ MÍNIMO 10 LINKS INTERNOS presentes no conteúdo? (OBRIGATÓRIO — conteúdo sem links internos é REJEITADO)
+□ MÍNIMO 4 e MÁXIMO 10 LINKS INTERNOS presentes no conteúdo? (OBRIGATÓRIO — conteúdo sem links internos é REJEITADO)
 □ MÁXIMO 3 links externos?
 □ TODAS as redes sociais do projeto foram citadas?
 □ Linguagem simples que qualquer pessoa entende?

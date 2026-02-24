@@ -371,8 +371,8 @@ A "Share of Model" mede quantas vezes uma marca é citada como fonte por IAs (Ch
 }
 
 function buildAdvancedLinkingSection(config: PromptConfig): string {
-  const minLinks = config.minInternalLinks || 10;
-  const maxLinks = config.maxInternalLinks || 15;
+  const minLinks = config.minInternalLinks || 4;
+  const maxLinks = config.maxInternalLinks || 10;
 
   let section = `## 🔗 ESTRATÉGIA AVANÇADA DE LINKAGEM E ARQUITETURA SEO
 
@@ -385,23 +385,24 @@ function buildAdvancedLinkingSection(config: PromptConfig): string {
 
 ### Quantidade de Links:
 - **Links Internos OBRIGATÓRIOS**: Mínimo ${minLinks}, máximo ${maxLinks}
-- **Links Externos**: MÁXIMO 3 (apenas fontes oficiais .gov, .edu, instituições)
-- **Ideal**: 1 link interno a cada 100-150 palavras
+- **Links Externos**: MÁXIMO 3 (apenas fontes oficiais .gov, .edu, instituições, redes sociais do projeto)
+- **Links externos de referência**: sites oficiais, canais oficiais e redes sociais configuradas no projeto são PERMITIDOS e INCENTIVADOS
+- **Ideal**: 1 link interno a cada 150-250 palavras
 
 ### Distribuição Estratégica de Links Internos:
 \`\`\`
 INTRODUÇÃO (primeiros 2 parágrafos):
-├─ 1-2 links para Pillar Page do cluster
-└─ 1 link para artigo relacionado principal
+├─ 1-2 links para conteúdos principais/Pillar Page
+└─ 0-1 link para artigo relacionado
 
 DESENVOLVIMENTO (corpo principal):
-├─ 4-6 links para cluster content
-├─ 1-2 links para notícias/atualizações recentes
-└─ 2-3 links para conteúdos de aprofundamento
+├─ 2-6 links para conteúdos do mesmo domínio (cluster content, artigos relacionados)
+├─ Priorizar conteúdos com RELAÇÃO SEMÂNTICA ao tema
+└─ Conectar a conteúdos que abordem temas complementares
 
 CONCLUSÃO/CTA:
-├─ 1 link para landing page/serviço
-└─ 1 link para recurso prático (se aplicável)
+├─ 1-2 links para landing page/serviço ou conteúdo de referência
+└─ Links para redes sociais do projeto (quando configuradas)
 \`\`\`
 
 ### ⚠️ REGRA DE LINKS EXTERNOS (MÁXIMO 3):
