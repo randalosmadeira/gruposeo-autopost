@@ -36,6 +36,7 @@ const QueueMonitor = lazy(() => import("./pages/QueueMonitor"));
 const Academy = lazy(() => import("./pages/Academy"));
 const InternalLinking = lazy(() => import("./pages/InternalLinking"));
 const AIChat = lazy(() => import("./pages/AIChat"));
+const BNMPRepost = lazy(() => import("./pages/BNMPRepost"));
 
 
 const queryClient = new QueryClient({
@@ -101,6 +102,7 @@ const App = () => (
                 <Route path="/news-rewriter" element={<NewsRewriter />} />
                 <Route path="/bulk-generator" element={<BulkKeywordGenerator />} />
                 <Route path="/ai-chat" element={<AIChat />} />
+                <Route path="/bnmp-repost" element={<BNMPRepost />} />
                 <Route path="/system-prompts" element={<SettingsPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
