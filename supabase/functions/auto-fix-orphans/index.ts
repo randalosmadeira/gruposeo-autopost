@@ -537,6 +537,180 @@ JSON OBRIGATÓRIO:
     }
   }
 
+  // ══════════════════════════════════════════════════════════
+  // PHASE 6.5: PONTE SEMÂNTICA — Gera conteúdo contextual
+  // com links internos DIRETAMENTE nos artigos órfãos que
+  // não foram corrigidos pelas fases anteriores.
+  // ══════════════════════════════════════════════════════════
+  const stillOrphans = valuableOrphans.filter(o => {
+    // Orphans that were NOT fixed by donor linking in Phase 5/6
+    const wasFixed = fixDetails.some(d => d.includes(o.wp_post_title) && d.startsWith("✅"));
+    return !wasFixed;
+  });
+
+  if (stillOrphans.length > 0) {
+    console.log(`[OrphanFixer v4] [${project.name}] Phase 6.5: Ponte Semântica for ${stillOrphans.length} remaining orphans`);
+
+    // Find best target articles for each orphan (articles the orphan should link TO)
+    const bridgeBatches = chunkArray(stillOrphans, 5);
+
+    for (const batch of bridgeBatches) {
+      try {
+        const orphanDescs = batch.map(o => {
+          const cluster = o.topic_cluster || "sem-cluster";
+          return `• "${o.wp_post_title}" (URL: ${o.wp_post_url}, post_id: ${o.wp_post_id}, kw: ${o.primary_keyword || "N/A"}, cluster: ${cluster}, ${o.word_count || 0} palavras)`;
+        }).join("\n");
+
+        // Build pool of potential link targets (non-orphan articles with good authority)
+        const batchClusters = new Set(batch.map(o => o.topic_cluster).filter(Boolean));
+        const batchKeywords = new Set(batch.flatMap(o => [o.primary_keyword, ...(o.secondary_keywords || [])].filter(Boolean)));
+
+        const targetPool = allArticles
+          .filter(a => !batch.some(o => o.id === a.id))
+          .map(a => {
+            let score = 0;
+            if (a.topic_cluster && batchClusters.has(a.topic_cluster)) score += 40;
+            if (a.primary_keyword && batchKeywords.has(a.primary_keyword)) score += 25;
+            for (const sk of (a.secondary_keywords || [])) {
+              if (batchKeywords.has(sk)) score += 10;
+            }
+            if ((a.word_count || 0) >= 1500) score += 15;
+            if ((a.seo_score || 0) >= 60) score += 10;
+            return { ...a, score };
+          })
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 40);
+
+        const targetDescs = targetPool.map(a =>
+          `• "${a.wp_post_title}" (URL: ${a.wp_post_url}, kw: ${a.primary_keyword || "N/A"}, cluster: ${a.topic_cluster || "N/A"}, score: ${a.score})`
+        ).join("\n");
+
+        const bridgePrompt = `Você é um redator SEO sênior especializado em arquitetura de conteúdo e linkagem interna.
+
+CONTEXTO: Estes artigos são ÓRFÃOS — nenhum outro artigo do site linka para eles. A abordagem padrão (inserir links em artigos doadores) falhou porque não há contexto natural.
+
+SOLUÇÃO: Gerar um "Snippet de Ponte Semântica" — um parágrafo contextual (2-4 frases, 40-80 palavras) para ser ADICIONADO AO FINAL de cada artigo órfão. Este snippet deve:
+1. Fazer uma TRANSIÇÃO NATURAL do tema do artigo órfão para o tema do artigo destino
+2. Conter 2-3 links internos para artigos relacionados usando anchor text rico em keywords
+3. Ser redigido como continuação natural do conteúdo, NÃO como "Leia também" genérico
+4. Usar HTML semântico (<p> com links <a href="...">)
+
+ARTIGOS ÓRFÃOS (receberão o snippet):
+${orphanDescs}
+
+ARTIGOS DESTINO DISPONÍVEIS (para linkar dentro do snippet):
+${targetDescs}
+
+REGRAS:
+- O snippet deve parecer PARTE NATURAL do artigo, não um apêndice
+- Anchor texts devem ser variados e contextuais (NUNCA "clique aqui" ou "leia mais")
+- Cada snippet deve ter 2-3 links internos
+- Se não houver artigo destino com relevância alta, sugira temas de artigos que DEVERIAM existir
+- Nicho: ${project.nicho || "geral"} | Tom: profissional e acessível
+
+JSON OBRIGATÓRIO:
+{
+  "bridges": [
+    {
+      "orphan_post_id": 123,
+      "orphan_url": "url",
+      "snippet_html": "<p>Parágrafo contextual com <a href='url_destino1' title='titulo'>anchor text 1</a> e <a href='url_destino2' title='titulo'>anchor text 2</a>.</p>",
+      "links_in_snippet": 2,
+      "target_urls": ["url1", "url2"],
+      "missing_content_suggestions": ["tema que deveria existir para melhorar linkagem"]
+    }
+  ]
+}`;
+
+        const aiResult = await orchestrator.call("seo_analysis", [
+          { role: "system", content: `Redator SEO enterprise. Gere snippets de ponte semântica em português brasileiro. Nicho: ${project.nicho || "geral"}. APENAS JSON válido.` },
+          { role: "user", content: bridgePrompt },
+        ], { maxTokens: 4000, temperature: 0.4 });
+
+        const parsed = safeParseJSON(aiResult);
+        if (!parsed?.bridges || !Array.isArray(parsed.bridges)) continue;
+
+        for (const bridge of parsed.bridges) {
+          if (!bridge.snippet_html || !bridge.orphan_post_id) continue;
+
+          const orphan = batch.find(o => o.wp_post_id === bridge.orphan_post_id || o.wp_post_url === bridge.orphan_url);
+          if (!orphan) continue;
+
+          // Inject snippet into the orphan article via WP REST API
+          try {
+            const wpResp = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${orphan.wp_post_id}`, {
+              headers: { "X-CFRDM-API-Key": apiKey },
+              signal: AbortSignal.timeout(10000),
+            });
+
+            if (!wpResp.ok) continue;
+
+            const wpData = await wpResp.json();
+            const currentContent = wpData.content?.raw || wpData.content?.rendered || "";
+
+            if (currentContent.length < 50) continue;
+
+            // Check if snippet links already exist in article
+            const alreadyHasLinks = (bridge.target_urls || []).some((url: string) => currentContent.includes(url));
+            if (alreadyHasLinks) continue;
+
+            // Wrap snippet with semantic section
+            const wrappedSnippet = `\n\n<!-- wp:group {"className":"ponte-semantica"} -->\n<div class="wp-block-group ponte-semantica">\n${bridge.snippet_html}\n</div>\n<!-- /wp:group -->`;
+
+            const updateResp = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${orphan.wp_post_id}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+              body: JSON.stringify({ content: currentContent + wrappedSnippet }),
+              signal: AbortSignal.timeout(10000),
+            });
+
+            if (updateResp.ok) {
+              linksApplied += (bridge.links_in_snippet || 2);
+              orphansFixed++;
+              fixDetails.push(`🌉 Ponte Semântica: "${orphan.wp_post_title}" — ${bridge.links_in_snippet || 2} links injetados`);
+
+              // Save suggestions to DB for tracking
+              for (const targetUrl of (bridge.target_urls || [])) {
+                await supabase.from("internal_link_suggestions").insert({
+                  user_id: project.user_id,
+                  project_id: project.id,
+                  anchor_text: `Ponte Semântica: ${orphan.wp_post_title}`,
+                  target_url: targetUrl,
+                  relevance_score: 80,
+                  status: "applied",
+                  applied_at: new Date().toISOString(),
+                  source_wp_post_id: orphan.wp_post_id,
+                  anchor_context: "Ponte Semântica v1.0 — conteúdo gerado por IA para linkagem contextual",
+                });
+                linksSuggested++;
+              }
+
+              // Update orphan index
+              await supabase
+                .from("wordpress_article_index")
+                .update({
+                  internal_links_count: Math.max(1, (orphan.internal_links_count || 0) + (bridge.links_in_snippet || 2)),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", orphan.id);
+
+              // Log missing content suggestions
+              if (bridge.missing_content_suggestions && bridge.missing_content_suggestions.length > 0) {
+                fixDetails.push(`💡 Sugestão: criar artigos sobre: ${bridge.missing_content_suggestions.join(", ")}`);
+              }
+            }
+          } catch (e) {
+            console.warn(`[OrphanFixer v4] [${project.name}] Bridge inject failed for post ${orphan.wp_post_id}:`, e);
+          }
+        }
+      } catch (e) {
+        console.error(`[OrphanFixer v4] [${project.name}] Semantic Bridge batch error:`, e);
+      }
+    }
+
+    console.log(`[OrphanFixer v4] [${project.name}] Ponte Semântica complete: ${stillOrphans.length} processed`);
+  }
+
   // ══════════════════════════════════════
   // PHASE 7: Re-index fixed + redirected pages
   // ══════════════════════════════════════
