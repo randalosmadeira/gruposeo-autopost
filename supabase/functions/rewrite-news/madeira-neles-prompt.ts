@@ -366,8 +366,15 @@ URL: ${request.sourceUrl || 'Não informada'}
 ${request.keyword ? `Palavra-chave SEO principal: ${request.keyword}` : 'Palavra-chave SEO: EXTRAIR automaticamente do conteúdo'}
 
 ${request.internalLinks && request.internalLinks.length > 0 ? `
-═══ LINKS INTERNOS OBRIGATÓRIOS ═══
-${request.internalLinks.map(link => `- ${link.url} | Anchor: ${link.anchor}`).join('\n')}
+═══ LINKS INTERNOS OBRIGATÓRIOS — ZERO TOLERÂNCIA ═══
+Inserir no MÍNIMO 4 e no MÁXIMO 10 dos links abaixo DENTRO do HTML do artigo.
+Artigo SEM links internos <a href="..."> no HTML será REJEITADO.
+
+${request.internalLinks.slice(0, 20).map((link, i) => `${i + 1}. "${link.anchor}" → ${link.url}`).join('\n')}
+
+DISTRIBUIÇÃO: 1-2 na introdução, 4-6 no corpo, 1-2 na conclusão.
+Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora</a>
+NUNCA usar "clique aqui". VARIE os textos âncora.
 ` : ''}
 
 ═══ CONTEÚDO ORIGINAL ═══
@@ -397,6 +404,8 @@ ${request.sourceContent.substring(0, 6000)}${request.sourceContent.length > 6000
 - Crédito à fonte obrigatório
 - Mínimo 2.400 palavras no artigo HTML
 - Meta-description: 145-160 caracteres
+- LINKS INTERNOS: MÍNIMO 4, MÁXIMO 10 inseridos como <a href="..."> no HTML (OBRIGATÓRIO — artigo sem links internos é REJEITADO)
+- LINKS EXTERNOS: MÍNIMO 2 para fontes oficiais (.gov, .edu, tribunais, portais jurídicos)
 - 5 hooks obrigatórios com gatilhos diferentes
 - Conceito visual com paleta hex e prompts para Midjourney + DALL-E
 - Copy com TODAS as seções (hook, contexto, caso, decisão, impacto, afetados, ação, CTA)
@@ -404,6 +413,11 @@ ${request.sourceContent.substring(0, 6000)}${request.sourceContent.length > 6000
 - Reels: script com marcação de tempo a cada 3-8 segundos
 - Carrossel: 10 slides com título e conteúdo detalhado
 - Crédito: "Com informações de ${request.sourceName}${request.sourceUrl ? ` - ${request.sourceUrl}` : ''}"
+
+⚠️ CHECKLIST FINAL ANTES DE ENTREGAR O JSON:
+□ O campo "html" contém tags <a href="..."> de links internos? Se NÃO → ADICIONAR AGORA
+□ Contagem de links internos ≥ 4? Se NÃO → ADICIONAR MAIS
+□ Links externos para fontes oficiais presentes (mínimo 2)? Se NÃO → ADICIONAR
 
 Retorne o resultado APENAS em formato JSON conforme especificado.`;
 }

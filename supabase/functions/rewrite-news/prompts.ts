@@ -736,14 +736,23 @@ ${niches.length > 1 ? `
 ` : ''}
 
 ${request.internalLinks && request.internalLinks.length > 0 ? `
-═══ LINKS INTERNOS OBRIGATÓRIOS (MÍNIMO 4, MÁXIMO 10 — use o MÁXIMO possível) ═══
-${request.internalLinks.map(link => `- ${link.url} | Anchor: ${link.anchor}`).join('\n')}
+═══ LINKS INTERNOS OBRIGATÓRIOS — ZERO TOLERÂNCIA ═══
+VOCÊ DEVE inserir no MÍNIMO 4 e no MÁXIMO 10 dos links abaixo DENTRO do HTML do artigo.
+Artigo SEM links internos <a href="..."> no HTML será REJEITADO.
 
-REGRA: Distribua NATURALMENTE ao longo do artigo. Priorize conteúdos com relação semântica.
-Links EXTERNOS de fontes oficiais e redes sociais do projeto também são PERMITIDOS e INCENTIVADOS.
+${request.internalLinks.slice(0, 20).map((link, i) => `${i + 1}. "${link.anchor}" → ${link.url}`).join('\n')}
+
+DISTRIBUIÇÃO OBRIGATÓRIA:
+- 1-2 links nos primeiros 2 parágrafos (introdução)
+- 4-6 links distribuídos nas seções H2 do corpo
+- 1-2 links na conclusão
+Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora descritivo</a>
+NUNCA usar "clique aqui" como anchor text. VARIE os textos âncora.
+Links EXTERNOS para fontes oficiais (.gov, .edu) e redes sociais do projeto também são INCENTIVADOS (máx. 3 externos).
 ` : `
 ═══ LINKS INTERNOS — REGRA INEGOCIÁVEL ═══
 Nenhum link interno fornecido. OBRIGATÓRIO: Sugira 4-10 URLs internas baseadas no tema no campo "internalSuggestions" do JSON.
+O artigo HTML DEVE conter links <a href="..."> para fontes oficiais e referências externas (mínimo 2).
 Links EXTERNOS de fontes oficiais, canais oficiais e redes sociais do projeto são PERMITIDOS e INCENTIVADOS.
 `}
 
@@ -765,13 +774,22 @@ ${request.sourceContent.substring(0, 4000)}${request.sourceContent.length > 4000
 - REGRA 40/60: 40% citado com atribuição + 60% autoral/analítico
 - Meta-description: 145-160 caracteres, keyword nos primeiros 60 chars
 - Flesch: mínimo 60, ideal 70-100
-- Links externos: mínimo 2 fontes autoritativas
+- Links INTERNOS: MÍNIMO 4, MÁXIMO 10 inseridos no HTML do artigo (OBRIGATÓRIO — artigo sem links internos é REJEITADO)
+- Links externos: mínimo 2 fontes autoritativas (.gov, .edu, portais oficiais)
 - Citações da fonte: mínimo 4, máximo 6 citações diretas com aspas e crédito
 - Reescrita autoral: 60% análise própria, contexto, FAQ e conteúdo prático
 - Título: reescrito em 90%, mantendo essência SEO
 - Tamanho: ${lengthConfig.min} a ${lengthConfig.max} palavras OBRIGATÓRIO
 - Crédito à fonte: OBRIGATÓRIO no início, distribuído pelo texto e no final
 - Crédito: "Com informações de ${request.sourceName}${request.sourceUrl ? ` - ${request.sourceUrl}` : ''}"
+
+⚠️ CHECKLIST FINAL ANTES DE ENTREGAR O JSON:
+□ O campo "html" contém tags <a href="..."> de links internos? Se NÃO → ADICIONAR AGORA
+□ Contagem de links internos ≥ 4? Se NÃO → ADICIONAR MAIS
+□ Links externos para fontes oficiais presentes (mínimo 2)? Se NÃO → ADICIONAR
+□ Meta-description presente e com 145-160 chars?
+□ Título SEO com 55-80 chars, completo?
+Se QUALQUER item faltar, CORRIJA antes de retornar o JSON.
 
 Retorne o resultado APENAS em formato JSON conforme especificado no sistema.`;
 }
