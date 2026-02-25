@@ -85,7 +85,7 @@ async function detectBrokenLinks(
     .select("wp_post_url, wp_post_title")
     .eq("project_id", project.id)
     .eq("wp_post_status", "publish")
-    .limit(200);
+    .limit(400);
 
   if (!articles || articles.length === 0) {
     return { total_checked: 0, broken_found: 0, redirects_found: 0, broken_urls: [], redirect_chains: [] };
@@ -294,6 +294,11 @@ async function auditRedirects(
 const GLOBAL_START = Date.now();
 const MAX_EXECUTION_MS = 140_000; // 140s safety margin (Deno limit ~150s)
 
+// ═══════════════════════════════════════════════════════════
+// 200% MODE: All limits doubled for maximum throughput
+// ═══════════════════════════════════════════════════════════
+const LIMIT_MULTIPLIER = 2;
+
 function elapsedMs(): number { return Date.now() - GLOBAL_START; }
 function hasTimeLeft(reserveMs = 15_000): boolean { return elapsedMs() + reserveMs < MAX_EXECUTION_MS; }
 
@@ -423,21 +428,18 @@ Deno.serve(async (req) => {
 
       try {
         // ═══════════════════════════════════════════
-        // STEP 1: SEO Meta Audit + AUTO-FIX via AI
+        // STEPS 1-2: Meta Audit + Internal Linking (sequential — Step 2 depends on project state)
         // ═══════════════════════════════════════════
         if (hasTimeLeft()) {
-          console.log(`[SEO Agent] [${project.name}] Step 1: SEO Meta Audit + Auto-Fix (${Math.round(elapsedMs()/1000)}s)`);
+          console.log(`[SEO Agent v200%] [${project.name}] Step 1: SEO Meta Audit (${Math.round(elapsedMs()/1000)}s)`);
           const metaResult = await runMetaAuditWithFix(supabase, orchestrator, project, baseUrl, isPlugin, apiKey);
           metaIssuesFound = metaResult.found;
           metaIssuesFixed = metaResult.fixed;
           details.meta_audit = metaResult;
         }
 
-        // ═══════════════════════════════════════════
-        // STEP 2: Internal Linking - SUGGEST + APPLY (with VERIFICATION)
-        // ═══════════════════════════════════════════
         if (hasTimeLeft()) {
-          console.log(`[SEO Agent] [${project.name}] Step 2: Internal Linking (${Math.round(elapsedMs()/1000)}s)`);
+          console.log(`[SEO Agent v200%] [${project.name}] Step 2: Internal Linking (${Math.round(elapsedMs()/1000)}s)`);
           const linkResult = await analyzeAndApplyLinks(supabase, orchestrator, project, baseUrl, isPlugin, apiKey);
           linksSuggested = linkResult.suggested;
           linksApplied = linkResult.applied;
@@ -445,51 +447,40 @@ Deno.serve(async (req) => {
         } else { const s = await savePartialAndFinish("Step 1"); results.push({ project: project.name, status: "partial", summary: s }); continue; }
 
         // ═══════════════════════════════════════════
-        // STEP 3: Indexing - Submit ALL published URLs
+        // STEPS 3+4: Indexing + AI Discovery (PARALLEL — independent)
         // ═══════════════════════════════════════════
+        let aiDiscoveryResult: any = { actions: [] };
         if (hasTimeLeft()) {
-          console.log(`[SEO Agent] [${project.name}] Step 3: Indexing (${Math.round(elapsedMs()/1000)}s)`);
-          const indexResult = await submitIndexing(supabase, project, baseUrl, isPlugin, apiKey);
-          indexingSubmitted = indexResult.submitted;
-          sitemapUpdated = indexResult.sitemapRefreshed;
-          details.indexing = indexResult;
+          console.log(`[SEO Agent v200%] [${project.name}] Steps 3+4 PARALLEL: Indexing + AI Discovery (${Math.round(elapsedMs()/1000)}s)`);
+          const [indexRes, aiDiscRes] = await Promise.allSettled([
+            submitIndexing(supabase, project, baseUrl, isPlugin, apiKey),
+            optimizeAIDiscovery(supabase, project, baseUrl, isPlugin, apiKey),
+          ]);
+          if (indexRes.status === "fulfilled") {
+            indexingSubmitted = indexRes.value.submitted;
+            sitemapUpdated = indexRes.value.sitemapRefreshed;
+            details.indexing = indexRes.value;
+          }
+          aiDiscoveryResult = aiDiscRes.status === "fulfilled" ? aiDiscRes.value : aiDiscoveryResult;
+          details.ai_discovery = aiDiscoveryResult;
         } else { const s = await savePartialAndFinish("Step 2"); results.push({ project: project.name, status: "partial", summary: s }); continue; }
 
         // ═══════════════════════════════════════════
-        // STEP 4: AI Discovery Optimization
+        // STEPS 5+6: Technical Audit + Autonomous Fix (PARALLEL — independent)
         // ═══════════════════════════════════════════
+        let auditResult: any = { score: 0, issues: [], issues_found: 0, issues_fixed: 0, categories: {} };
+        let autonomousResult: any = { applied: 0, redirects_created: 0, types: [] };
         if (hasTimeLeft()) {
-          console.log(`[SEO Agent] [${project.name}] Step 4: AI Discovery (${Math.round(elapsedMs()/1000)}s)`);
-          const aiDiscoveryResult = await optimizeAIDiscovery(supabase, project, baseUrl, isPlugin, apiKey);
-          details.ai_discovery = aiDiscoveryResult;
-        } else { const s = await savePartialAndFinish("Step 3"); results.push({ project: project.name, status: "partial", summary: s }); continue; }
-
-        // ═══════════════════════════════════════════
-        // STEP 5: Full Technical Audit
-        // ═══════════════════════════════════════════
-        if (hasTimeLeft()) {
-          console.log(`[SEO Agent] [${project.name}] Step 5: Full Technical Audit (${Math.round(elapsedMs()/1000)}s)`);
-          const auditResult = await runFullTechnicalAudit(supabase, orchestrator, project, baseUrl, isPlugin, apiKey);
+          console.log(`[SEO Agent v200%] [${project.name}] Steps 5+6 PARALLEL: Audit + Autonomous Fix (${Math.round(elapsedMs()/1000)}s)`);
+          const [auditRes, autoRes] = await Promise.allSettled([
+            runFullTechnicalAudit(supabase, orchestrator, project, baseUrl, isPlugin, apiKey),
+            runAutonomousSEOFix(supabase, orchestrator, project, baseUrl, isPlugin, apiKey),
+          ]);
+          auditResult = auditRes.status === "fulfilled" ? auditRes.value : auditResult;
+          autonomousResult = autoRes.status === "fulfilled" ? autoRes.value : autonomousResult;
           details.audit = auditResult;
-        } else { const s = await savePartialAndFinish("Step 4"); results.push({ project: project.name, status: "partial", summary: s }); continue; }
-
-        // ═══════════════════════════════════════════
-        // STEP 6: Autonomous SEO Scan + Fix (v3.4.0)
-        // ═══════════════════════════════════════════
-        if (hasTimeLeft()) {
-          console.log(`[SEO Agent] [${project.name}] Step 6: Autonomous SEO Scan & Fix (${Math.round(elapsedMs()/1000)}s)`);
-          const autonomousResult = await runAutonomousSEOFix(supabase, orchestrator, project, baseUrl, isPlugin, apiKey);
           details.autonomous_fix = autonomousResult;
-        } else { const s = await savePartialAndFinish("Step 5"); results.push({ project: project.name, status: "partial", summary: s }); continue; }
-
-        // ═══════════════════════════════════════════
-        // STEP 7: Full-Base Cross-Linking (with VERIFICATION)
-        // ═══════════════════════════════════════════
-        if (hasTimeLeft()) {
-          console.log(`[SEO Agent] [${project.name}] Step 7: Full-Base Cross-Linking (${Math.round(elapsedMs()/1000)}s)`);
-          const crossLinkResult = await runFullBaseCrossLinking(supabase, orchestrator, project, baseUrl, isPlugin, apiKey);
-          details.cross_linking = crossLinkResult;
-        } else { const s = await savePartialAndFinish("Step 6"); results.push({ project: project.name, status: "partial", summary: s }); continue; }
+        } else { const s = await savePartialAndFinish("Step 4"); results.push({ project: project.name, status: "partial", summary: s }); continue; }
 
         // ═══════════════════════════════════════════
         // STEP 8: Full Site Crawl (v3.5.0 — REAL HTTP checks)
@@ -967,7 +958,21 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
         }
 
         results.push({ project: project.name, status: "completed", summary });
-        console.log(`[SEO Agent] [${project.name}] Completed: ${summary}`);
+        console.log(`[SEO Agent v200%] [${project.name}] Completed: ${summary}`);
+
+        // ═══════════════════════════════════════════
+        // INTER-AGENT COORDINATION: Fire-and-forget OrphanFixer
+        // ═══════════════════════════════════════════
+        try {
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "";
+          fetch(`${supabaseUrl}/functions/v1/auto-fix-orphans`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${anonKey}` },
+            body: JSON.stringify({ project_id: project.id, user_id: project.user_id, triggered_by: "seo-agent-v200" }),
+          }).catch(() => {}); // fire-and-forget
+          console.log(`[SEO Agent v200%] [${project.name}] 🔗 Triggered OrphanFixer (fire-and-forget)`);
+        } catch { /* non-critical */ }
 
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
@@ -1248,7 +1253,7 @@ async function analyzeAndApplyLinks(
       .eq("status", "pending")
       .gte("relevance_score", 70)
       .order("relevance_score", { ascending: false })
-      .limit(200);
+      .limit(400);
 
     if (pendingLinks && pendingLinks.length > 0) {
       for (const link of pendingLinks) {
@@ -1343,7 +1348,7 @@ async function analyzeAndApplyLinks(
       .map(a => `- [${a.wp_post_title}](${a.wp_post_url}) | kw: ${a.primary_keyword || "N/A"} | cluster: ${a.topic_cluster || "N/A"}`)
       .join("\n");
 
-    const orphanBatch = orphans.slice(0, 100);
+    const orphanBatch = orphans.slice(0, 200);
 
     for (const orphan of orphanBatch) {
       const prompt = `Artigo órfão: "${orphan.wp_post_title}" (kw: ${orphan.primary_keyword || "N/A"}, cluster: ${orphan.topic_cluster || "N/A"})
@@ -1498,7 +1503,7 @@ async function submitIndexing(
             "Content-Type": "application/json",
             "X-CFRDM-API-Key": apiKey,
           },
-          body: JSON.stringify({ urls: urls.slice(0, 500) }),
+          body: JSON.stringify({ urls: urls.slice(0, 1000) }),
         });
 
         if (indexNowResp.ok) {
@@ -2144,7 +2149,7 @@ async function runAutonomousSEOFix(
     const scanResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/scan-seo-issues`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
-      body: JSON.stringify({ limit: 1000, checks: ["canonical", "https", "missing_h1", "duplicate_title", "missing_meta"] }),
+      body: JSON.stringify({ limit: 2000, checks: ["canonical", "https", "missing_h1", "duplicate_title", "missing_meta"] }),
     });
 
     if (!scanResp.ok) {
@@ -2279,8 +2284,8 @@ async function runFullBaseCrossLinking(
   }
 
   const batches: (typeof allArticles)[] = [];
-  for (let i = 0; i < articlesNeedingLinks.length && i < 100; i += 5) {
-    batches.push(articlesNeedingLinks.slice(i, i + 5));
+  for (let i = 0; i < articlesNeedingLinks.length && i < 200; i += 10) {
+    batches.push(articlesNeedingLinks.slice(i, i + 10));
   }
 
   for (const batch of batches) {

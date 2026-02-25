@@ -370,7 +370,7 @@ ${request.internalLinks && request.internalLinks.length > 0 ? `
 Inserir no MÍNIMO 4 e no MÁXIMO 10 dos links abaixo DENTRO do HTML do artigo.
 Artigo SEM links internos <a href="..."> no HTML será REJEITADO.
 
-${request.internalLinks.slice(0, 20).map((link, i) => `${i + 1}. "${link.anchor}" → ${link.url}`).join('\n')}
+${request.internalLinks.slice(0, 40).map((link, i) => `${i + 1}. "${link.anchor}" → ${link.url}`).join('\n')}
 
 DISTRIBUIÇÃO: 1-2 na introdução, 4-6 no corpo, 1-2 na conclusão.
 Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora</a>

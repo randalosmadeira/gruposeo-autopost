@@ -147,7 +147,7 @@ async function processProjectOrphans(
     .eq("wp_post_status", "publish")
     .lte("internal_links_count", 0)
     .order("word_count", { ascending: false })
-    .limit(1000);
+    .limit(2000);
 
   if (!orphans || orphans.length === 0) {
     return { orphansFound: 0, orphansFixed: 0, linksSuggested: 0, linksApplied: 0, indexingSubmitted: 0, redirectsCreated: 0, triageResults, details: [] };
@@ -165,7 +165,7 @@ async function processProjectOrphans(
     .eq("project_id", project.id)
     .eq("wp_post_status", "publish")
     .order("word_count", { ascending: false })
-    .limit(1000);
+    .limit(2000);
 
   if (!allArticles || allArticles.length < 2) {
     return { orphansFound, orphansFixed: 0, linksSuggested: 0, linksApplied: 0, indexingSubmitted: 0, redirectsCreated: 0, triageResults, details: ["Not enough articles for linking"] };
@@ -202,7 +202,7 @@ async function processProjectOrphans(
   // ══════════════════════════════════════
   console.log(`[OrphanFixer v4] [${project.name}] Running triage on ${orphansFound} orphans...`);
   
-  const triageBatches = chunkArray(orphans, 10);
+  const triageBatches = chunkArray(orphans, 20);
   const triageDecisions: Map<string, { action: 'link' | 'redirect' | 'update' | 'delete'; redirectTo?: string; reason: string; isPillar: boolean; suggestMenu: boolean; }> = new Map();
 
   for (const batch of triageBatches) {
@@ -353,7 +353,7 @@ JSON OBRIGATÓRIO:
     return !d || d.action === 'link' || d.action === 'update';
   });
 
-  const orphanBatches = chunkArray(valuableOrphans, 5);
+  const orphanBatches = chunkArray(valuableOrphans, 10);
 
   for (const batch of orphanBatches) {
     try {
@@ -769,7 +769,7 @@ JSON OBRIGATÓRIO:
     .eq("status", "pending")
     .gte("relevance_score", 70)
     .order("relevance_score", { ascending: false })
-    .limit(500);
+    .limit(1000);
 
   if (pendingLinks && pendingLinks.length > 0) {
     for (const link of pendingLinks) {
