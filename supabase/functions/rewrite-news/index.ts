@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
           .eq('project_id', projectId)
           .eq('wp_post_status', 'publish')
           .order('word_count', { ascending: false })
-          .limit(50);
+          .limit(100);
 
         const autoLinks: Array<{ anchor: string; url: string }> = [];
         
@@ -702,6 +702,21 @@ Deno.serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
+    // ═══ INTER-AGENT COORDINATION v200%: Trigger SEO Agent after article creation ═══
+    try {
+      const projectId = body.project_id || body.projectId;
+      if (projectId) {
+        fetch(`${supabaseUrl}/functions/v1/seo-agent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${supabaseAnonKey}` },
+          body: JSON.stringify({ project_id: projectId, user_id: userId, run_type: "post-generation", triggered_by: "rewrite-news-v200" }),
+        }).catch(() => {}); // fire-and-forget
+        log.info("inter_agent_trigger", { target: "seo-agent", project_id: projectId });
+      }
+    } catch { /* non-critical */ }
+
+    return response;
   } catch (error) {
     log.error("rewrite_error", { error: error instanceof Error ? error.message : "unknown" });
     log.requestEnd(500, Date.now() - startTime);
