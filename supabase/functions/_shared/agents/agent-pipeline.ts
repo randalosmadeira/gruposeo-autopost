@@ -170,10 +170,19 @@ ESTRATÉGIA DE CONTEÚDO (definida pelo Estrategista):
 - Ângulo competitivo: ${strategy.competitiveAngle}
 
 ${config.internalLinks && config.internalLinks.length > 0 ? `
-LINKS INTERNOS OBRIGATÓRIOS:
-${config.internalLinks.map((l, i) => `${i + 1}. Anchor: "${l.anchor}" → URL: ${l.url}`).join('\n')}
-Todos com target="_blank" rel="noopener noreferrer"
-` : ''}
+LINKS INTERNOS OBRIGATÓRIOS — ZERO TOLERÂNCIA:
+Inserir no MÍNIMO 4 e no MÁXIMO 10 dos links abaixo DENTRO do HTML.
+Artigo SEM links internos <a href="..."> será REJEITADO.
+
+${config.internalLinks.slice(0, 20).map((l, i) => `${i + 1}. "${l.anchor}" → ${l.url}`).join('\n')}
+
+DISTRIBUIÇÃO: 1-2 na introdução, 4-6 no corpo, 1-2 na conclusão.
+Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora descritivo</a>
+NUNCA usar "clique aqui". VARIE os anchor texts.
+` : `
+LINKS INTERNOS OBRIGATÓRIOS — ZERO TOLERÂNCIA:
+Mesmo sem links fornecidos, inclua MÍNIMO 2 links externos para fontes oficiais (.gov, .edu).
+`}
 
 ESTRUTURA OBRIGATÓRIA:
 1. <!-- META_DESCRIPTION: [máx 160 chars] -->

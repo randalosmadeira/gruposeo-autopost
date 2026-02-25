@@ -136,9 +136,99 @@ Deno.serve(async (req) => {
       articleLength = 'medium',
       language = "pt-BR", 
       projectId,
-      internalLinks = [],
+      internalLinks: rawInternalLinks = [],
       rewriteMode = 'standard',
     } = body;
+
+    // ====== AUTO-FETCH INTERNAL LINKS if not provided ======
+    let internalLinks = rawInternalLinks;
+    if (projectId && (!internalLinks || internalLinks.length < 3)) {
+      log.info("auto_fetching_internal_links_rewrite", { projectId, existingLinks: internalLinks.length });
+      try {
+        // Fetch from WordPress article index
+        const { data: wpArticles } = await supabaseAdmin
+          .from('wordpress_article_index')
+          .select('wp_post_title, wp_post_url, primary_keyword, word_count, wp_post_status')
+          .eq('project_id', projectId)
+          .eq('wp_post_status', 'publish')
+          .order('word_count', { ascending: false })
+          .limit(50);
+
+        const autoLinks: Array<{ anchor: string; url: string }> = [];
+        
+        if (wpArticles && wpArticles.length > 0) {
+          const searchText = (keyword || sourceName || '').toLowerCase();
+          const scored = wpArticles.map(a => {
+            const titleLower = (a.wp_post_title || '').toLowerCase();
+            const pkLower = (a.primary_keyword || '').toLowerCase();
+            let score = 0;
+            if (titleLower.includes(searchText) || pkLower.includes(searchText)) score += 10;
+            const kwWords = searchText.split(/\s+/);
+            const titleWords = titleLower.split(/\s+/);
+            score += kwWords.filter(w => w.length > 3 && titleWords.some(tw => tw.includes(w))).length * 3;
+            if ((a.word_count || 0) > 2000) score += 5;
+            return { ...a, score };
+          });
+          scored.sort((a, b) => b.score - a.score);
+          for (const article of scored.slice(0, 15)) {
+            autoLinks.push({
+              anchor: article.primary_keyword || article.wp_post_title,
+              url: article.wp_post_url,
+            });
+          }
+        }
+
+        // Also fetch recent platform articles
+        const { data: platformArticles } = await supabaseAdmin
+          .from('articles')
+          .select('title, keyword, published_url, status')
+          .eq('project_id', projectId)
+          .in('status', ['published', 'ready'])
+          .not('published_url', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (platformArticles) {
+          const existingUrls = new Set(autoLinks.map(l => l.url));
+          for (const a of platformArticles) {
+            if (!a.published_url || existingUrls.has(a.published_url)) continue;
+            autoLinks.push({ anchor: a.keyword || a.title || '', url: a.published_url });
+          }
+        }
+
+        // Fetch keyword_link_rules
+        const { data: linkRules } = await supabaseAdmin
+          .from('keyword_link_rules')
+          .select('keyword, target_url')
+          .eq('project_id', projectId)
+          .eq('is_active', true)
+          .order('priority', { ascending: false })
+          .limit(10);
+
+        if (linkRules) {
+          const existingUrls = new Set(autoLinks.map(l => l.url));
+          for (const rule of linkRules) {
+            if (!existingUrls.has(rule.target_url)) {
+              autoLinks.push({ anchor: rule.keyword, url: rule.target_url });
+            }
+          }
+        }
+
+        // Merge with any manually provided links
+        if (autoLinks.length > 0) {
+          const existingUrls = new Set(internalLinks.map(l => l.url));
+          const newLinks = autoLinks.filter(l => !existingUrls.has(l.url));
+          internalLinks = [...internalLinks, ...newLinks];
+          log.info("internal_links_auto_injected_rewrite", {
+            manual: rawInternalLinks.length,
+            auto: newLinks.length,
+            total: internalLinks.length,
+          });
+        }
+      } catch (linkErr) {
+        log.warn("auto_fetch_links_error", { error: linkErr instanceof Error ? linkErr.message : 'unknown' });
+      }
+    }
 
     const isBNMP = rewriteMode === 'madeira_neles' && sourceContent.includes('BNMP');
     const isMadeiraNeles = rewriteMode === 'madeira_neles';
