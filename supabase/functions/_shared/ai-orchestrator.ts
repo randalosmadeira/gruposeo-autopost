@@ -197,7 +197,27 @@ export class AIOrchestrator {
     return keys;
   }
 
+  private injectDirectives(taskType: TaskType, messages: AIMessage[]): AIMessage[] {
+    const directives = getDirectivesForTask(taskType);
+    const hasSystemMsg = messages.some(m => m.role === 'system');
+    
+    if (hasSystemMsg) {
+      // Prepend directives to existing system message
+      return messages.map(m => 
+        m.role === 'system' 
+          ? { ...m, content: `${directives}\n\n---\n\n${m.content}` }
+          : m
+      );
+    }
+    
+    // Add as new system message at the beginning
+    return [{ role: 'system' as const, content: directives }, ...messages];
+  }
+
   async call(taskType: TaskType, messages: AIMessage[], options?: AICallOptions): Promise<string> {
+    // Inject behavioral directives into all AI calls
+    const enrichedMessages = this.injectDirectives(taskType, messages);
+    
     const providers = AI_PROVIDERS[taskType] || AI_PROVIDERS['article_generation'];
     const availableNames = this.getAvailableProviders();
     const available = providers.filter(p => availableNames.includes(p.name));
