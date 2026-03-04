@@ -4,7 +4,10 @@
  * Supports: Gemini (primary), OpenAI, Anthropic (when key available)
  * NEW: geo_optimization, aeo_analysis, eeat_review task types
  * Upgraded models: gemini-2.5-pro, gpt-4o, claude-sonnet-4-5
+ * v5.1: Behavioral Directives injection (PDF Gabarito) em 100% das chamadas
  */
+
+import { getDirectivesForTask } from './behavioral-directives.ts';
 
 export interface AIProvider {
   name: 'openai' | 'anthropic' | 'gemini';
