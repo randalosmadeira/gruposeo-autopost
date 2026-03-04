@@ -256,7 +256,7 @@ export class AIOrchestrator {
         const keyLabel = i === 0 ? 'BYOK' : 'platform';
         try {
           console.log(`[AIOrchestrator] Tentando ${provider.name} (${provider.model}, ${keyLabel}) para ${taskType}...`);
-          const result = await this.callProviderWithKey(provider, keys[i], messages, options);
+          const result = await this.callProviderWithKey(provider, keys[i], enrichedMessages, options);
           console.log(`[AIOrchestrator] Sucesso com ${provider.name} (${keyLabel})`);
           return result;
         } catch (error) {
@@ -406,6 +406,9 @@ export class AIOrchestrator {
   }
 
   async callStream(taskType: TaskType, messages: AIMessage[], options?: AICallOptions): Promise<Response> {
+    // Inject behavioral directives into streaming calls too
+    const enrichedMessages = this.injectDirectives(taskType, messages);
+    
     const provider = this.selectProvider(taskType, options);
     if (!provider) {
       throw new Error('Nenhum provedor de IA disponível para streaming.');
@@ -416,9 +419,9 @@ export class AIOrchestrator {
     for (let i = 0; i < keys.length; i++) {
       try {
         if (provider.name === 'gemini') {
-          return await this.streamGemini(provider.model, messages, options, keys[i]);
+          return await this.streamGemini(provider.model, enrichedMessages, options, keys[i]);
         } else if (provider.name === 'openai') {
-          return await this.streamOpenAI(provider.model, messages, options, keys[i]);
+          return await this.streamOpenAI(provider.model, enrichedMessages, options, keys[i]);
         }
       } catch (e) {
         console.warn(`[AIOrchestrator] Stream fallback ${i + 1}/${keys.length}: ${e instanceof Error ? e.message.slice(0, 80) : e}`);
