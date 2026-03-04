@@ -4,7 +4,10 @@
  * Supports: Gemini (primary), OpenAI, Anthropic (when key available)
  * NEW: geo_optimization, aeo_analysis, eeat_review task types
  * Upgraded models: gemini-2.5-pro, gpt-4o, claude-sonnet-4-5
+ * v5.1: Behavioral Directives injection (PDF Gabarito) em 100% das chamadas
  */
+
+import { getDirectivesForTask } from './behavioral-directives.ts';
 
 export interface AIProvider {
   name: 'openai' | 'anthropic' | 'gemini';
@@ -194,7 +197,27 @@ export class AIOrchestrator {
     return keys;
   }
 
+  private injectDirectives(taskType: TaskType, messages: AIMessage[]): AIMessage[] {
+    const directives = getDirectivesForTask(taskType);
+    const hasSystemMsg = messages.some(m => m.role === 'system');
+    
+    if (hasSystemMsg) {
+      // Prepend directives to existing system message
+      return messages.map(m => 
+        m.role === 'system' 
+          ? { ...m, content: `${directives}\n\n---\n\n${m.content}` }
+          : m
+      );
+    }
+    
+    // Add as new system message at the beginning
+    return [{ role: 'system' as const, content: directives }, ...messages];
+  }
+
   async call(taskType: TaskType, messages: AIMessage[], options?: AICallOptions): Promise<string> {
+    // Inject behavioral directives into all AI calls
+    const enrichedMessages = this.injectDirectives(taskType, messages);
+    
     const providers = AI_PROVIDERS[taskType] || AI_PROVIDERS['article_generation'];
     const availableNames = this.getAvailableProviders();
     const available = providers.filter(p => availableNames.includes(p.name));
@@ -233,7 +256,7 @@ export class AIOrchestrator {
         const keyLabel = i === 0 ? 'BYOK' : 'platform';
         try {
           console.log(`[AIOrchestrator] Tentando ${provider.name} (${provider.model}, ${keyLabel}) para ${taskType}...`);
-          const result = await this.callProviderWithKey(provider, keys[i], messages, options);
+          const result = await this.callProviderWithKey(provider, keys[i], enrichedMessages, options);
           console.log(`[AIOrchestrator] Sucesso com ${provider.name} (${keyLabel})`);
           return result;
         } catch (error) {
@@ -383,6 +406,9 @@ export class AIOrchestrator {
   }
 
   async callStream(taskType: TaskType, messages: AIMessage[], options?: AICallOptions): Promise<Response> {
+    // Inject behavioral directives into streaming calls too
+    const enrichedMessages = this.injectDirectives(taskType, messages);
+    
     const provider = this.selectProvider(taskType, options);
     if (!provider) {
       throw new Error('Nenhum provedor de IA disponível para streaming.');
@@ -393,9 +419,9 @@ export class AIOrchestrator {
     for (let i = 0; i < keys.length; i++) {
       try {
         if (provider.name === 'gemini') {
-          return await this.streamGemini(provider.model, messages, options, keys[i]);
+          return await this.streamGemini(provider.model, enrichedMessages, options, keys[i]);
         } else if (provider.name === 'openai') {
-          return await this.streamOpenAI(provider.model, messages, options, keys[i]);
+          return await this.streamOpenAI(provider.model, enrichedMessages, options, keys[i]);
         }
       } catch (e) {
         console.warn(`[AIOrchestrator] Stream fallback ${i + 1}/${keys.length}: ${e instanceof Error ? e.message.slice(0, 80) : e}`);
