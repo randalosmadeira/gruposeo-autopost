@@ -3,7 +3,7 @@
  * Plugin Name: ContentFactory RDM
  * Plugin URI: https://gruposeo.marketing/contentfactory
  * Description: Integração avançada com ContentFactory para publicação automática de artigos, sincronização, otimização de imagens, links internos, geração de SEO via IA, indexação automática, social posting e queue system.
- * Version: 3.6.0
+ * Version: 3.7.0
  * Author: GRUPO SEO MARKETING
  * Author URI: https://gruposeo.marketing
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '3.6.0');
+define('CFRDM_VERSION', '3.7.0');
 define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -115,6 +115,11 @@ function cfrdm_load_dependencies() {
     // v3.6.0 - Noindex Manager (autonomous low-value page handler)
     if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-noindex-manager.php')) {
         require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-noindex-manager.php';
+    }
+    
+    // v3.7.0 - Instant Indexing Engine (IndexMeNow-style)
+    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-instant-indexing.php')) {
+        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-instant-indexing.php';
     }
     
     // v3.2.7 - AI Source Rules, Google Indexing Submitter, GMB Auto-Poster
@@ -247,6 +252,15 @@ class ContentFactory_RDM {
             }
         } catch (\Throwable $e) {
             error_log('ContentFactory Noindex Manager init error: ' . $e->getMessage());
+        }
+        
+        // Initialize v3.7.0 - Instant Indexing Engine
+        try {
+            if (class_exists('CFRDM_Instant_Indexing')) {
+                CFRDM_Instant_Indexing::get_instance()->init();
+            }
+        } catch (\Throwable $e) {
+            error_log('ContentFactory Instant Indexing init error: ' . $e->getMessage());
         }
         
         // Initialize v3.2.7 modules

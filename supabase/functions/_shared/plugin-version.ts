@@ -5,9 +5,9 @@
  * Ao atualizar o plugin, basta alterar ESTE arquivo.
  */
 
-export const PLUGIN_VERSION = "3.6.0";
+export const PLUGIN_VERSION = "3.7.0";
 export const PLUGIN_MINIMUM_VERSION = "3.0.0";
-export const PLUGIN_RELEASED = "2026-02-22";
+export const PLUGIN_RELEASED = "2026-03-07";
 
 export const PLUGIN_FEATURES = [
   "auto_notifications",
@@ -71,6 +71,16 @@ export const PLUGIN_FEATURES = [
   "sentence_complexity_score",
   "seo_plugin_compatibility",
   "content_ai_suggestions",
+  // v3.7.0 — Instant Indexing Engine (IndexMeNow-style)
+  "instant_indexing_engine",
+  "admin_bar_quick_index",
+  "posts_list_indexing_column",
+  "bulk_index_action",
+  "indexing_quota_monitor",
+  "auto_submit_on_publish",
+  "multi_channel_indexing",
+  "indexing_dashboard_widget",
+  "indexing_coverage_stats",
 ] as const;
 
 /**
@@ -93,38 +103,28 @@ Módulos disponíveis no plugin instalado nos sites:
   • autonomous-content-edit: modifica título WP, H1, H2, hero, insere imagens e força HTTPS no conteúdo
   • manage-redirect: cria/exclui redirects 301/302 via Rank Math ou .htaccess
   • orphan-auto-backlink: detecta artigos órfãos e insere backlinks internos via IA
-- **Bulk Meta Update API (v${PLUGIN_VERSION})**: 
+- **Instant Indexing Engine (v${PLUGIN_VERSION})** — Inspirado no IndexMeNow:
+  • Botão de indexação rápida na barra de administração do WordPress
+  • Coluna de status de indexação na listagem de posts (✅ indexado / ⏳ pendente)
+  • Ação em massa para indexar posts selecionados via IndexNow + Google API + Ping
+  • Widget no dashboard com quota diária (500 URLs/dia) e últimas submissões
+  • Auto-submit ao publicar com delay de 30s para garantir que a página está ativa
+  • Indexação multi-canal: IndexNow + Google Indexing API + Google Ping + Bing Ping
+  • REST API: /instant-indexing/submit, /instant-indexing/batch, /instant-indexing/status
+  • Estatísticas de cobertura: total publicados vs total indexados vs nunca indexados
+- **Bulk Meta Update API (v${PLUGIN_VERSION})**:
   • REST endpoint para atualização em massa de SEO title, meta description, focus keyword e canonical URL
   • Compatível com Rank Math e Yoast SEO (detecção automática do plugin instalado)
-  • Suporte a operações batch de até 100 posts por requisição
 - **Readability Analysis v2 (v${PLUGIN_VERSION})**:
-  • Detector de voz passiva com sugestão de reescrita em voz ativa
-  • Análise de palavras de transição (conectivos) para coesão textual
-  • Score de complexidade frasal (Flesch + Coleman-Liau + Gunning Fog)
-  • Análise Yoast-compatible de legibilidade com semáforo verde/laranja/vermelho
-- **AI Content Suggestions (v${PLUGIN_VERSION})**:
-  • Sugestões em tempo real de otimização baseadas em Rank Math + Yoast scoring
-  • Detecção automática de SEO plugin instalado (Rank Math, Yoast, All-in-One SEO)
-  • Sincronização bidirecional de focus keywords e meta dados
+  • Detector de voz passiva, análise de transições, score Coleman-Liau + Gunning Fog
 - **Redirect Manager (v${PLUGIN_VERSION})**:
-  • Gerenciamento completo de redirects 301/302 com tabela dedicada
-  • Limpeza automática de URLs duplicadas (sufixos -2, -3, etc.)
-  • Batch cleanup de lixo técnico (hello-world, parâmetros, arquivos de sistema)
-  • API REST para criação, listagem e exclusão de redirects
+  • Gerenciamento completo de redirects 301/302 com batch cleanup
 - **AI SEO Generator**: Gera slugs, meta descriptions, focus keywords, tags e títulos virais via IA
-- **GEO Schema Injection**: Injeção automática de LocalBusiness/Attorney/HealthAndBeautyBusiness JSON-LD
-- **llms.txt Force-Enable**: Força ativação e regeneração imediata de llms.txt e llms-full.txt na raiz do site, com escrita de arquivo físico como fallback para CDN/cache
-- **Internal Links Engine**: Insere links internos e backlinks automaticamente baseado em regras de keywords e relevância semântica entre artigos
+- **GEO Schema Injection**: Injeção automática de LocalBusiness/Attorney JSON-LD
+- **Internal Links Engine**: Insere links internos baseado em regras de keywords e relevância semântica
 - **IndexNow Integration**: Notifica Google, Bing e Yandex sobre alterações em tempo real
 - **Google Indexing API**: Submissão direta de URLs (200/dia) via Service Account
-- **Google Meu Negócio Auto-Poster**: Publica automaticamente no GMB com limpeza de page builders
-- **GSC Integration**: Inspeção expandida de posts, pages e products com sitemap dinâmico
-- **Sitemap Optimizer**: Gera e otimiza sitemaps XML com prioridades automáticas e News Sitemap
+- **Site Crawler**: Auditorias reais via HTTP com detecção de redirect chains e conteúdo duplicado
 - **Schema Validator**: Valida JSON-LD para Article, FAQ, HowTo, Product e Review
 - **Image Optimizer**: Converte imagens para WebP com compressão inteligente
-- **HTTPS Enforcer**: Garante que todos os recursos internos usem HTTPS
-- **Post Duplicator**: Clona posts/páginas individualmente ou em lote
-- **AI Source Rules**: Detecção automática de tráfego de IA via User-Agent (16+ bots)
-- **SEO Checklist**: Checklist visual de Fundação SEO com 15 verificações automáticas
-- **Structured Logs**: Sistema de logs para diagnóstico em tempo real
-- **Diagnóstico**: Painel com status de 10 tabelas e 13 cron jobs + reparo automático`;
+- **Structured Logs**: Sistema de logs para diagnóstico em tempo real`;

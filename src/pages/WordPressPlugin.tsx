@@ -95,6 +95,12 @@ const features = [
     title: 'Auto-Fix Crawlers IA',
     description: 'Correção automática de robots.txt e injeção batch de FAQ Schema em artigos sem structured data.',
     badge: 'v3.3',
+  },
+  {
+    icon: Zap,
+    title: 'Instant Indexing Engine',
+    description: 'Botão de indexação na Admin Bar, coluna de status nos posts, ação em massa, widget de quota e auto-submit ao publicar.',
+    badge: 'v3.7',
     isNew: true,
   },
 ];
@@ -109,6 +115,23 @@ const installSteps = [
 ];
 
 const changelog = [
+  {
+    version: '3.7.0',
+    date: '2026-03-07',
+    type: 'major' as const,
+    changes: [
+      { type: 'feature', text: 'Instant Indexing Engine: botão de indexação rápida na Admin Bar do WordPress com badge de quota em tempo real' },
+      { type: 'feature', text: 'Coluna de status de indexação (✅/⏳) na listagem de posts e páginas com push manual em 1 clique' },
+      { type: 'feature', text: 'Ação em massa "Indexar Agora" para posts selecionados via IndexNow + Google API + Ping simultâneo' },
+      { type: 'feature', text: 'Widget no Dashboard WordPress com barra de progresso de quota diária (500 URLs/dia) e últimas submissões' },
+      { type: 'feature', text: 'Auto-submit ao publicar com delay de 30s para garantir que a página está ativa antes da indexação' },
+      { type: 'feature', text: 'Indexação multi-canal simultânea: IndexNow + Google Indexing API + Google Ping + Bing Ping em cada submissão' },
+      { type: 'feature', text: 'REST API completa: /instant-indexing/submit, /instant-indexing/batch, /instant-indexing/status' },
+      { type: 'feature', text: 'Estatísticas de cobertura: total publicados vs total indexados vs nunca indexados com percentual' },
+      { type: 'improvement', text: 'Quota unificada de 500 URLs/dia com reset automático à meia-noite e monitoramento visual' },
+      { type: 'improvement', text: 'Todas as IAs atualizadas com Diretrizes Comportamentais v1.0 (Anti-Sycophancy, Chain of Thought, Obsessão por Objetivo)' },
+    ],
+  },
   {
     version: '3.4.0',
     date: '2026-02-15',

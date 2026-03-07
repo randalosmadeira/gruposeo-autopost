@@ -1,11 +1,11 @@
 {
-  "version": "3.6.0",
+  "version": "3.7.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.6.0 - Bulk Meta Update API (Rank Math/Yoast compatible), Readability Analysis v2 (passive voice, transition words, sentence complexity), AI Content Suggestions em tempo real, detecção automática de SEO plugin instalado, score Coleman-Liau + Gunning Fog, compatibilidade bidirecional Rank Math + Yoast SEO.",
-  "released": "2026-02-22T12:00:00-03:00",
+  "changelog": "v3.7.0 - Instant Indexing Engine (inspirado no IndexMeNow): Admin Bar quick-index, coluna de status na listagem de posts, ação em massa para indexar, widget de quota no dashboard, auto-submit ao publicar, indexação multi-canal (IndexNow + Google API + Ping), REST API completa, estatísticas de cobertura de indexação.",
+  "released": "2026-03-07T12:00:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",
@@ -67,6 +67,15 @@
     "transition_words_check",
     "sentence_complexity_score",
     "seo_plugin_compatibility",
-    "content_ai_suggestions"
+    "content_ai_suggestions",
+    "instant_indexing_engine",
+    "admin_bar_quick_index",
+    "posts_list_indexing_column",
+    "bulk_index_action",
+    "indexing_quota_monitor",
+    "auto_submit_on_publish",
+    "multi_channel_indexing",
+    "indexing_dashboard_widget",
+    "indexing_coverage_stats"
   ]
 }
