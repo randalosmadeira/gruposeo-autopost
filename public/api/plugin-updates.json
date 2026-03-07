@@ -1,27 +1,27 @@
 {
-  "latest_version": "3.5.0",
-  "version": "3.5.0",
+  "latest_version": "3.7.0",
+  "version": "3.7.0",
   "minimum_version": "3.0.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "## v3.5.0 (2026-02-19)\n\n### Site Crawler Engine (REAL HTTP checks)\n- NEW: Verificação real de links quebrados via HTTP HEAD (elimina falsos positivos)\n- NEW: Detector de redirect chains e loops com até 10 hops\n- NEW: Scanner de conteúdo duplicado via MD5 hash\n- NEW: Auditoria completa de títulos e meta descriptions\n- NEW: Análise de estrutura do site (páginas órfãs, anchor text, headings)\n- NEW: Auditoria de robots.txt e meta directives (noindex/nofollow)\n- NEW: Auditoria de imagens (alt text, dimensões)\n- NEW: Endpoint unificado full-site-crawl com score 0-100 e prioridades P0/P1/P2\n- NEW: Detecção de mixed content (HTTP em HTTPS)\n- NEW: Análise de URLs (maiúsculas, underscores, não-ASCII, longas)\n\n## v3.4.9 (2026-02-18)\n\n### Broken Links Verification\n- Fix: Links internos verificados via re-fetch após aplicação\n- Fix: Falsos positivos eliminados com verificação real\n\n## v3.4.8 (2026-02-18)\n\n### Action Block Auto-Execute\n- Fix: Blocos de ação da IA agora são ocultados do chat e auto-executados",
+  "changelog": "## v3.7.0 (2026-03-07)\n\n### Instant Indexing Engine (inspirado no IndexMeNow)\n- NEW: Botão de indexação rápida na Admin Bar do WordPress com badge de quota\n- NEW: Coluna de status de indexação na listagem de posts (✅/⏳)\n- NEW: Ação em massa \"Indexar Agora\" para posts selecionados\n- NEW: Widget no Dashboard com barra de progresso de quota diária\n- NEW: Auto-submit ao publicar com delay de 30s (IndexNow + Google API + Ping)\n- NEW: Indexação multi-canal simultânea (IndexNow, Google Indexing API, Google Ping, Bing Ping)\n- NEW: REST API: /instant-indexing/submit, /instant-indexing/batch, /instant-indexing/status\n- NEW: Estatísticas de cobertura (publicados vs indexados vs nunca indexados)\n- NEW: Quota unificada de 500 URLs/dia (200 Google + 300 IndexNow)\n- NEW: Push manual com 1 clique direto da listagem de posts\n\n## v3.6.0 (2026-02-22)\n\n### Bulk Meta Update API\n- Atualização em massa de SEO meta via REST (Rank Math/Yoast compatible)\n- Readability Analysis v2 com Flesch + Coleman-Liau + Gunning Fog\n\n## v3.5.0 (2026-02-19)\n\n### Site Crawler Engine\n- Verificação real de links quebrados via HTTP HEAD\n- Detector de redirect chains e loops",
   "versions": {
+    "3.7.0": {
+      "released": "2026-03-07",
+      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
+      "features": ["instant_indexing_engine", "admin_bar_quick_index", "posts_list_indexing_column", "bulk_index_action", "indexing_quota_monitor", "auto_submit_on_publish", "multi_channel_indexing", "indexing_dashboard_widget", "indexing_coverage_stats"]
+    },
+    "3.6.0": {
+      "released": "2026-02-22",
+      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
+      "features": ["bulk_meta_update", "readability_analysis_v2", "ai_optimize_realtime"]
+    },
     "3.5.0": {
       "released": "2026-02-19",
       "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-      "features": ["site_crawler", "full_site_crawl", "real_broken_link_check", "redirect_chain_detector", "duplicate_content_scanner", "site_structure_analyzer", "image_audit", "directive_audit"]
-    },
-    "3.4.9": {
-      "released": "2026-02-18",
-      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-      "features": ["real_link_verification"]
-    },
-    "3.4.8": {
-      "released": "2026-02-18",
-      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-      "features": ["action_block_auto_execute"]
+      "features": ["site_crawler", "full_site_crawl", "real_broken_link_check"]
     }
   }
 }
