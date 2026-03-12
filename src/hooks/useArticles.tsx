@@ -18,7 +18,7 @@ export function useArticles(projectId?: string) {
     id, keyword, title, status, type, slug, excerpt,
     featured_image_url, seo_score, word_count, project_id,
     published_at, published_url, scheduled_at, secondary_keywords,
-    config, error_message, emotional_trigger, emotional_confidence,
+    error_message, emotional_trigger, emotional_confidence,
     created_at, updated_at, user_id
   `;
 
@@ -31,7 +31,7 @@ export function useArticles(projectId?: string) {
         .from('articles')
         .select(selectFields)
         .order('created_at', { ascending: false })
-        .limit(1000);
+        .limit(200);
       
       if (projectId) {
         query = query.eq('project_id', projectId);
