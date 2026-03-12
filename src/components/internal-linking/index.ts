@@ -5,4 +5,5 @@ export { InternalLinkingMetrics } from './InternalLinkingMetrics';
 export { InternalLinkingReports } from './InternalLinkingReports';
 export { SyncProgressPanel } from './SyncProgressPanel';
 export { PluginInstallGuide } from './PluginInstallGuide';
+export { AISuggestionsPanel } from './AISuggestionsPanel';
 export type { SyncProgress, SyncLogEntry } from './SyncProgressPanel';

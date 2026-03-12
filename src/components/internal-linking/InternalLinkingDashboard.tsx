@@ -475,6 +475,11 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
           <TabsTrigger value="rules">Regras</TabsTrigger>
         </TabsList>
 
+        {/* AI Suggestions Tab */}
+        <TabsContent value="suggestions">
+          <AISuggestionsPanel projectId={projectId} />
+        </TabsContent>
+
         {/* Metrics Tab */}
         <TabsContent value="metrics">
           <InternalLinkingMetrics
