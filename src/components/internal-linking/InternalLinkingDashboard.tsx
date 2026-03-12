@@ -457,7 +457,11 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="metrics" className="space-y-4">
-        <TabsList className="grid grid-cols-5 w-full max-w-2xl">
+        <TabsList className="grid grid-cols-6 w-full max-w-3xl">
+          <TabsTrigger value="suggestions">
+            <Sparkles className="w-4 h-4 mr-2" />
+            Sugestões IA
+          </TabsTrigger>
           <TabsTrigger value="metrics">
             <BarChart3 className="w-4 h-4 mr-2" />
             Métricas
