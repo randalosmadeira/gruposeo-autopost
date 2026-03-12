@@ -58,6 +58,7 @@ import { InternalLinkingMetrics } from './InternalLinkingMetrics';
 import { InternalLinkingReports } from './InternalLinkingReports';
 import { SyncProgressPanel } from './SyncProgressPanel';
 import { PluginInstallGuide } from './PluginInstallGuide';
+import { AISuggestionsPanel } from './AISuggestionsPanel';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 
