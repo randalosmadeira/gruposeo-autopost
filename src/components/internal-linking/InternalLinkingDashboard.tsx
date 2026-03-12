@@ -456,7 +456,7 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
       </div>
 
       {/* Main Content Tabs */}
-      <Tabs defaultValue="metrics" className="space-y-4">
+      <Tabs defaultValue="suggestions" className="space-y-4">
         <TabsList className="grid grid-cols-6 w-full max-w-3xl">
           <TabsTrigger value="suggestions">
             <Sparkles className="w-4 h-4 mr-2" />
