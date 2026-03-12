@@ -58,6 +58,7 @@ import { InternalLinkingMetrics } from './InternalLinkingMetrics';
 import { InternalLinkingReports } from './InternalLinkingReports';
 import { SyncProgressPanel } from './SyncProgressPanel';
 import { PluginInstallGuide } from './PluginInstallGuide';
+import { AISuggestionsPanel } from './AISuggestionsPanel';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 
@@ -455,8 +456,12 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
       </div>
 
       {/* Main Content Tabs */}
-      <Tabs defaultValue="metrics" className="space-y-4">
-        <TabsList className="grid grid-cols-5 w-full max-w-2xl">
+      <Tabs defaultValue="suggestions" className="space-y-4">
+        <TabsList className="grid grid-cols-6 w-full max-w-3xl">
+          <TabsTrigger value="suggestions">
+            <Sparkles className="w-4 h-4 mr-2" />
+            Sugestões IA
+          </TabsTrigger>
           <TabsTrigger value="metrics">
             <BarChart3 className="w-4 h-4 mr-2" />
             Métricas
@@ -469,6 +474,11 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
           <TabsTrigger value="clusters">Clusters</TabsTrigger>
           <TabsTrigger value="rules">Regras</TabsTrigger>
         </TabsList>
+
+        {/* AI Suggestions Tab */}
+        <TabsContent value="suggestions">
+          <AISuggestionsPanel projectId={projectId} />
+        </TabsContent>
 
         {/* Metrics Tab */}
         <TabsContent value="metrics">
