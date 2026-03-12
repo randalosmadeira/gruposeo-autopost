@@ -50,7 +50,7 @@ export const SchemaValidationPanel = () => {
 
   // Calculate stats
   const stats = publishedArticles.reduce((acc, article) => {
-    const config = article.config as ArticleConfig | null;
+    const config = (article as any).config as ArticleConfig | null;
     const validation = config?.schema_validation;
     
     if (!validation) {
@@ -154,7 +154,7 @@ export const SchemaValidationPanel = () => {
           <ScrollArea className="h-[300px]">
             <div className="space-y-2">
               {publishedArticles.slice(0, 20).map((article) => {
-                const config = article.config as ArticleConfig | null;
+                const config = (article as any).config as ArticleConfig | null;
                 const validation = config?.schema_validation;
                 const googleTestUrl = config?.google_test_url || 
                   (article.published_url ? `https://search.google.com/test/rich-results?url=${encodeURIComponent(article.published_url)}` : null);
