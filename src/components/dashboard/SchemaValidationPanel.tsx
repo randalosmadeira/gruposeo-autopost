@@ -50,7 +50,7 @@ export const SchemaValidationPanel = () => {
 
   // Calculate stats
   const stats = publishedArticles.reduce((acc, article) => {
-    const config = article.config as ArticleConfig | null;
+    const config = (article as any).config as ArticleConfig | null;
     const validation = config?.schema_validation;
     
     if (!validation) {
