@@ -860,7 +860,202 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
         details.noindex_manager = { applied: noindexApplied, details: noindexDetails };
 
         // ═══════════════════════════════════════════
-        // STEP 13: Summary
+        // STEP 13: VPS Server Health & Bot Accessibility Audit v3.8.0
+        // Verifica configurações críticas do servidor VPS para SEO
+        // ═══════════════════════════════════════════
+        if (!hasTimeLeft()) { const s = await savePartialAndFinish("Step 12"); results.push({ project: project.name, status: "partial", summary: s }); continue; }
+        console.log(`[SEO Agent] [${project.name}] Step 13: VPS Server Health Audit (${Math.round(elapsedMs()/1000)}s)`);
+
+        const vpsAuditDetails: string[] = [];
+        let vpsScore = 100;
+        const siteRoot = baseUrl.replace(/\/blog\/?$/, "");
+
+        // 13a: Check robots.txt — AI bots accessibility
+        try {
+          const robotsResp = await fetch(`${siteRoot}/robots.txt`, { signal: AbortSignal.timeout(8000) });
+          if (robotsResp.ok) {
+            const robotsTxt = await robotsResp.text();
+            const requiredBots = [
+              "GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot",
+              "PerplexityBot", "Google-Extended", "Bingbot", "Applebot-Extended",
+              "Googlebot", "Googlebot-Image", "Googlebot-Video"
+            ];
+            const blockedBots: string[] = [];
+            for (const bot of requiredBots) {
+              const botRegex = new RegExp(`User-agent:\\s*${bot}[\\s\\S]*?Disallow:\\s*/\\s*$`, "im");
+              if (botRegex.test(robotsTxt)) {
+                blockedBots.push(bot);
+              }
+            }
+            if (blockedBots.length > 0) {
+              vpsAuditDetails.push(`🔴 P0: ${blockedBots.length} bots bloqueados no robots.txt: ${blockedBots.join(", ")}`);
+              vpsScore -= blockedBots.length * 5;
+              // Auto-fix via plugin
+              if (isPlugin && apiKey) {
+                try {
+                  await fetch(`${baseUrl}/wp-json/cfrdm/v1/fix-robots-ai-crawlers`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+                    body: JSON.stringify({ bots: blockedBots }),
+                  });
+                  vpsAuditDetails.push(`✅ Auto-fix: ${blockedBots.length} bots desbloqueados no robots.txt`);
+                } catch { /* */ }
+              }
+            } else {
+              vpsAuditDetails.push("✅ robots.txt: todos os bots de IA e busca permitidos");
+            }
+            // Check Sitemap reference in robots.txt
+            if (!robotsTxt.toLowerCase().includes("sitemap:")) {
+              vpsAuditDetails.push("⚠ robots.txt não contém referência ao sitemap");
+              vpsScore -= 5;
+            }
+          } else {
+            vpsAuditDetails.push(`⚠ robots.txt inacessível (status ${robotsResp.status})`);
+            vpsScore -= 10;
+          }
+        } catch { vpsAuditDetails.push("🔴 robots.txt: timeout ou erro de conexão"); vpsScore -= 15; }
+
+        // 13b: Check llms.txt accessibility
+        try {
+          const llmsResp = await fetch(`${siteRoot}/llms.txt`, { signal: AbortSignal.timeout(8000) });
+          if (llmsResp.ok) {
+            const llmsContent = await llmsResp.text();
+            if (llmsContent.length > 100) {
+              vpsAuditDetails.push(`✅ llms.txt acessível (${llmsContent.length} chars)`);
+            } else {
+              vpsAuditDetails.push("⚠ llms.txt existe mas conteúdo muito curto");
+              vpsScore -= 5;
+            }
+          } else {
+            vpsAuditDetails.push("⚠ llms.txt não encontrado — IA discovery comprometida");
+            vpsScore -= 10;
+            // Auto-fix: force regenerate via plugin
+            if (isPlugin && apiKey) {
+              try {
+                await fetch(`${baseUrl}/wp-json/cfrdm/v1/llms-txt-regenerate`, {
+                  method: "POST",
+                  headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+                });
+                vpsAuditDetails.push("✅ llms.txt regeneração solicitada");
+              } catch { /* */ }
+            }
+          }
+        } catch { vpsAuditDetails.push("⚠ llms.txt: timeout"); vpsScore -= 5; }
+
+        // 13c: HTTPS enforcement & SSL
+        try {
+          const httpsResp = await fetch(siteRoot, { method: "HEAD", redirect: "manual", signal: AbortSignal.timeout(8000) });
+          const headers = Object.fromEntries(httpsResp.headers.entries());
+
+          // Check HTTPS
+          if (!siteRoot.startsWith("https://")) {
+            vpsAuditDetails.push("🔴 P0: Site não usa HTTPS — penalização severa no Google");
+            vpsScore -= 20;
+          } else {
+            vpsAuditDetails.push("✅ HTTPS ativo");
+          }
+
+          // Check HTTP→HTTPS redirect
+          const httpUrl = siteRoot.replace("https://", "http://");
+          try {
+            const httpResp = await fetch(httpUrl, { method: "HEAD", redirect: "manual", signal: AbortSignal.timeout(5000) });
+            if (httpResp.status === 301 || httpResp.status === 302) {
+              vpsAuditDetails.push("✅ Redirect HTTP→HTTPS configurado");
+            } else {
+              vpsAuditDetails.push("⚠ HTTP não redireciona para HTTPS");
+              vpsScore -= 10;
+            }
+          } catch { /* behind firewall */ }
+
+          // Check caching headers
+          if (headers["cache-control"]) {
+            vpsAuditDetails.push(`✅ Cache-Control: ${headers["cache-control"]}`);
+          } else {
+            vpsAuditDetails.push("⚠ Cache-Control ausente — performance comprometida em VPS");
+            vpsScore -= 5;
+          }
+
+          // Check GZIP/Brotli
+          const encoding = headers["content-encoding"] || "";
+          if (encoding.includes("gzip") || encoding.includes("br")) {
+            vpsAuditDetails.push(`✅ Compressão ativa: ${encoding}`);
+          } else {
+            vpsAuditDetails.push("⚠ Compressão (GZIP/Brotli) não detectada — ativar no VPS");
+            vpsScore -= 5;
+          }
+
+          // Check X-Robots-Tag
+          if (headers["x-robots-tag"]) {
+            if (headers["x-robots-tag"].includes("noindex")) {
+              vpsAuditDetails.push("🔴 P0: X-Robots-Tag: noindex detectado no servidor!");
+              vpsScore -= 25;
+            } else {
+              vpsAuditDetails.push("✅ X-Robots-Tag permitindo indexação");
+            }
+          }
+
+          // Check security headers
+          if (headers["strict-transport-security"]) {
+            vpsAuditDetails.push("✅ HSTS ativo");
+          } else {
+            vpsAuditDetails.push("⚠ HSTS não configurado no VPS");
+            vpsScore -= 3;
+          }
+
+          // Check server response time
+          const t0 = Date.now();
+          await fetch(siteRoot, { method: "HEAD", signal: AbortSignal.timeout(10000) });
+          const ttfb = Date.now() - t0;
+          if (ttfb > 3000) {
+            vpsAuditDetails.push(`🔴 TTFB muito alto: ${ttfb}ms (ideal <800ms)`);
+            vpsScore -= 15;
+          } else if (ttfb > 1500) {
+            vpsAuditDetails.push(`⚠ TTFB alto: ${ttfb}ms (ideal <800ms)`);
+            vpsScore -= 5;
+          } else {
+            vpsAuditDetails.push(`✅ TTFB: ${ttfb}ms`);
+          }
+        } catch { vpsAuditDetails.push("🔴 Servidor inacessível — verificar VPS"); vpsScore -= 30; }
+
+        // 13d: Check IndexNow key accessibility
+        try {
+          const indexNowResp = await fetch(`${siteRoot}/indexnow-key.txt`, { signal: AbortSignal.timeout(5000) });
+          if (indexNowResp.ok) {
+            vpsAuditDetails.push("✅ IndexNow key acessível");
+          } else {
+            vpsAuditDetails.push("⚠ IndexNow key não encontrada — indexação instantânea comprometida");
+            vpsScore -= 5;
+          }
+        } catch { /* */ }
+
+        // 13e: Check plugin REST API accessibility
+        if (isPlugin && apiKey) {
+          try {
+            const pluginResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/diagnostics`, {
+              headers: { "X-CFRDM-API-Key": apiKey },
+              signal: AbortSignal.timeout(10000),
+            });
+            if (pluginResp.ok) {
+              const diag = await pluginResp.json();
+              vpsAuditDetails.push(`✅ Plugin REST API ativo (v${diag.plugin_version || "?"})`);
+              if (diag.plugin_version && diag.plugin_version !== PLUGIN_VERSION) {
+                vpsAuditDetails.push(`⚠ Plugin desatualizado: ${diag.plugin_version} → ${PLUGIN_VERSION}`);
+              }
+            } else {
+              vpsAuditDetails.push(`⚠ Plugin REST API erro (${pluginResp.status})`);
+              vpsScore -= 10;
+            }
+          } catch {
+            vpsAuditDetails.push("🔴 Plugin REST API inacessível — verificar configuração do VPS");
+            vpsScore -= 15;
+          }
+        }
+
+        vpsScore = Math.max(0, Math.min(100, vpsScore));
+        details.vps_server_audit = { score: vpsScore, details: vpsAuditDetails, checks_performed: vpsAuditDetails.length };
+
+        // ═══════════════════════════════════════════
+        // STEP 14: Summary
         // ═══════════════════════════════════════════
         const summaryParts = [];
         if (metaIssuesFixed > 0) summaryParts.push(`${metaIssuesFixed} metas corrigidos`);
