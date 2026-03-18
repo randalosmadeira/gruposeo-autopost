@@ -1,11 +1,11 @@
 {
-  "version": "3.7.0",
+  "version": "3.8.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "v3.7.0 - Instant Indexing Engine (inspirado no IndexMeNow): Admin Bar quick-index, coluna de status na listagem de posts, ação em massa para indexar, widget de quota no dashboard, auto-submit ao publicar, indexação multi-canal (IndexNow + Google API + Ping), REST API completa, estatísticas de cobertura de indexação.",
-  "released": "2026-03-07T12:00:00-03:00",
+  "changelog": "v3.8.0 - VPS Server Health Audit: auditoria automática de configurações VPS para SEO, verificação de 12+ bots de IA no robots.txt, monitoramento TTFB, SSL/HSTS, GZIP/Brotli, Cache-Control, auto-regeneração llms.txt, verificação IndexNow key, score de saúde VPS 0-100.",
+  "released": "2026-03-18T12:00:00-03:00",
   "features": [
     "auto_notifications",
     "portal_monitoring",
@@ -76,6 +76,12 @@
     "auto_submit_on_publish",
     "multi_channel_indexing",
     "indexing_dashboard_widget",
-    "indexing_coverage_stats"
+    "indexing_coverage_stats",
+    "vps_server_health_audit",
+    "ai_bot_accessibility_check",
+    "ttfb_monitoring",
+    "ssl_hsts_verification",
+    "llms_txt_auto_regenerate",
+    "indexnow_key_verification"
   ]
 }

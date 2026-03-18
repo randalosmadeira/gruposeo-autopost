@@ -1,13 +1,18 @@
 {
-  "latest_version": "3.7.0",
-  "version": "3.7.0",
+  "latest_version": "3.8.0",
+  "version": "3.8.0",
   "minimum_version": "3.0.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
-  "changelog": "## v3.7.0 (2026-03-07)\n\n### Instant Indexing Engine (inspirado no IndexMeNow)\n- NEW: Botão de indexação rápida na Admin Bar do WordPress com badge de quota\n- NEW: Coluna de status de indexação na listagem de posts (✅/⏳)\n- NEW: Ação em massa \"Indexar Agora\" para posts selecionados\n- NEW: Widget no Dashboard com barra de progresso de quota diária\n- NEW: Auto-submit ao publicar com delay de 30s (IndexNow + Google API + Ping)\n- NEW: Indexação multi-canal simultânea (IndexNow, Google Indexing API, Google Ping, Bing Ping)\n- NEW: REST API: /instant-indexing/submit, /instant-indexing/batch, /instant-indexing/status\n- NEW: Estatísticas de cobertura (publicados vs indexados vs nunca indexados)\n- NEW: Quota unificada de 500 URLs/dia (200 Google + 300 IndexNow)\n- NEW: Push manual com 1 clique direto da listagem de posts\n\n## v3.6.0 (2026-02-22)\n\n### Bulk Meta Update API\n- Atualização em massa de SEO meta via REST (Rank Math/Yoast compatible)\n- Readability Analysis v2 com Flesch + Coleman-Liau + Gunning Fog\n\n## v3.5.0 (2026-02-19)\n\n### Site Crawler Engine\n- Verificação real de links quebrados via HTTP HEAD\n- Detector de redirect chains e loops",
+  "changelog": "## v3.8.0 (2026-03-18)\n\n### VPS Server Health Audit\n- NEW: Auditoria automática de configurações do servidor VPS para SEO\n- NEW: Verificação de acessibilidade de 12+ bots de IA (GPTBot, ClaudeBot, PerplexityBot, OAI-SearchBot, etc.)\n- NEW: Monitoramento de TTFB com alertas para >800ms\n- NEW: Verificação de SSL/HSTS, GZIP/Brotli, Cache-Control, X-Robots-Tag\n- NEW: Auto-regeneração de llms.txt quando inacessível\n- NEW: Verificação de IndexNow key no servidor\n- NEW: Auto-fix de robots.txt para bots de IA bloqueados\n- NEW: Score de saúde do VPS (0-100) integrado ao relatório do Agente SEO\n- NEW: Redirect HTTP→HTTPS verification\n- NEW: Plugin REST API health check\n\n## v3.7.0 (2026-03-07)\n\n### Instant Indexing Engine (inspirado no IndexMeNow)\n- Botão de indexação rápida na Admin Bar do WordPress\n- Coluna de status de indexação na listagem de posts\n- Ação em massa \"Indexar Agora\" para posts selecionados\n- Widget no Dashboard com barra de progresso de quota diária\n- Auto-submit ao publicar (IndexNow + Google API + Ping)\n- REST API: /instant-indexing/submit, /batch, /status\n\n## v3.6.0 (2026-02-22)\n\n### Bulk Meta Update API\n- Atualização em massa de SEO meta via REST\n- Readability Analysis v2\n\n## v3.5.0 (2026-02-19)\n\n### Site Crawler Engine\n- Verificação real de links quebrados via HTTP HEAD\n- Detector de redirect chains e loops",
   "versions": {
+    "3.8.0": {
+      "released": "2026-03-18",
+      "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
+      "features": ["vps_server_health_audit", "ai_bot_accessibility_check", "ttfb_monitoring", "ssl_hsts_verification", "llms_txt_auto_regenerate", "indexnow_key_verification"]
+    },
     "3.7.0": {
       "released": "2026-03-07",
       "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
