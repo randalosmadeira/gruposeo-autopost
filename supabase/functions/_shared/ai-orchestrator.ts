@@ -387,7 +387,7 @@ export class AIOrchestrator {
       },
       body: JSON.stringify({
         model,
-        max_tokens: options?.maxTokens || 4096,
+        max_tokens: options?.maxTokens || 16384,
         system: systemMsg?.content || '',
         messages: otherMsgs.map(m => ({
           role: m.role === 'model' ? 'assistant' : (m.role === 'assistant' ? 'assistant' : 'user'),
