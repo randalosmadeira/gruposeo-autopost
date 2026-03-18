@@ -1077,7 +1077,7 @@ async function runMetaAuditWithFix(
     return { found: 0, fixed: 0, issues: [], fixes_applied: [] };
   }
 
-  const batchToFix = articlesWithIssues.slice(0, 100);
+  const batchToFix = articlesWithIssues.slice(0, 500);
   
   try {
     const articlesList = batchToFix.map(a => 
