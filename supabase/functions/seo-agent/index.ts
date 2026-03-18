@@ -650,7 +650,7 @@ JSON: {"redirects":[{"broken_url":"...","target_url":"...","reason":"..."}]}`;
 
             if (needsFix.length > 0) {
               const batchSize = 20;
-              for (let i = 0; i < Math.min(needsFix.length, 100); i += batchSize) {
+              for (let i = 0; i < Math.min(needsFix.length, 500); i += batchSize) {
                 const batch = needsFix.slice(i, i + batchSize);
                 const articlesList = batch.map(a => 
                   `- post_id: ${a.wp_post_id} | Título: "${a.wp_post_title}" (${(a.wp_post_title || "").length} chars) | kw: ${a.primary_keyword || "N/A"} | score: ${a.seo_score || 0}`
