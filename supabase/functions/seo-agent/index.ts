@@ -639,7 +639,7 @@ JSON: {"redirects":[{"broken_url":"...","target_url":"...","reason":"..."}]}`;
             .eq("project_id", project.id)
             .eq("wp_post_status", "publish")
             .order("seo_score", { ascending: true })
-            .limit(500);
+            .limit(1000);
 
           if (metaIssueArticles && metaIssueArticles.length > 0) {
             // Filter articles needing title/meta fixes
