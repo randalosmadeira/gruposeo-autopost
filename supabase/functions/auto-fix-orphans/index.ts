@@ -202,7 +202,7 @@ async function processProjectOrphans(
   // ══════════════════════════════════════
   console.log(`[OrphanFixer v4] [${project.name}] Running triage on ${orphansFound} orphans...`);
   
-  const triageBatches = chunkArray(orphans, 20);
+  const triageBatches = chunkArray(orphans, 40);
   const triageDecisions: Map<string, { action: 'link' | 'redirect' | 'update' | 'delete'; redirectTo?: string; reason: string; isPillar: boolean; suggestMenu: boolean; }> = new Map();
 
   for (const batch of triageBatches) {
