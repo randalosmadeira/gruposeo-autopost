@@ -1956,7 +1956,7 @@ JSON: {"links":[{"source_url":"...","anchor_text":"...","relevance":85}]}`;
                 const aiResp = await orchestrator.call('seo_analysis', [
                   { role: "system", content: "Especialista SEO brasileiro. Gere anchor texts CURTOS (2-4 palavras genéricas do tema). APENAS JSON." },
                   { role: "user", content: linkPrompt },
-                ], { maxTokens: 500, temperature: 0.2 });
+                ], { maxTokens: 2000, temperature: 0.2 });
 
                 let jsonStr = aiResp.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
                 const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
