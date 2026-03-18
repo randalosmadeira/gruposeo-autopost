@@ -353,7 +353,7 @@ JSON OBRIGATÓRIO:
     return !d || d.action === 'link' || d.action === 'update';
   });
 
-  const orphanBatches = chunkArray(valuableOrphans, 10);
+  const orphanBatches = chunkArray(valuableOrphans, 20);
 
   for (const batch of orphanBatches) {
     try {
