@@ -85,7 +85,7 @@ async function detectBrokenLinks(
     .select("wp_post_url, wp_post_title")
     .eq("project_id", project.id)
     .eq("wp_post_status", "publish")
-    .limit(400);
+    .limit(1000);
 
   if (!articles || articles.length === 0) {
     return { total_checked: 0, broken_found: 0, redirects_found: 0, broken_urls: [], redirect_chains: [] };
