@@ -357,7 +357,7 @@ export class AIOrchestrator {
           role: m.role === 'model' ? 'assistant' : m.role,
           content: m.content,
         })),
-        max_tokens: options?.maxTokens || 4096,
+        max_tokens: options?.maxTokens || 16384,
         temperature: options?.temperature ?? 0.7,
       }),
     });
