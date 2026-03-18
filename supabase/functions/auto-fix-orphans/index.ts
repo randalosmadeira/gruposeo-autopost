@@ -429,7 +429,7 @@ JSON OBRIGATÓRIO:
       const aiResult = await orchestrator.call("seo_analysis", [
         { role: "system", content: `Especialista SEO enterprise em Internal Linking, Hub-and-Spoke e Domain Authority. Nicho: ${project.nicho || "geral"}. JSON válido apenas.` },
         { role: "user", content: prompt },
-      ], { maxTokens: 4000, temperature: 0.2 });
+      ], { maxTokens: 8000, temperature: 0.2 });
 
       const fixes = safeParseJSON(aiResult);
       if (!fixes?.fixes || !Array.isArray(fixes.fixes)) continue;

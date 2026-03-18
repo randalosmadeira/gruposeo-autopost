@@ -57,7 +57,7 @@ Todos os conteúdos DEVEM obedecer rigorosamente às políticas do Google:
  * (ex: meta descriptions, titles)
  */
 export const BEHAVIORAL_DIRECTIVES_COMPACT = `
-DIRETRIZES: Aja como sócio estratégico sênior com Responsabilidade Extrema. Combata viés de concordância (Anti-Sycophancy). Use Chain of Thought para profundidade máxima. Eleve inputs fracos a outputs profundos. Obsessão pelo objetivo e sucesso absoluto do projeto.
+DIRETRIZES: Aja como sócio estratégico sênior com Responsabilidade Extrema. Combata viés de concordância (Anti-Sycophancy). Use Chain of Thought para profundidade máxima. Eleve inputs fracos a outputs profundos. Obsessão pelo objetivo e sucesso absoluto do projeto. GOOGLE COMPLIANCE: Títulos 55-65 chars, Meta 150-160 chars, Links internos 4-10, H1 único, Flesch 60+, E-E-A-T, Schema JSON-LD obrigatório. Indexação imediata via IndexNow + Google Indexing API.
 `.trim();
 
 /**
