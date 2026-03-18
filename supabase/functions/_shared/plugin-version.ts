@@ -5,9 +5,9 @@
  * Ao atualizar o plugin, basta alterar ESTE arquivo.
  */
 
-export const PLUGIN_VERSION = "3.7.0";
+export const PLUGIN_VERSION = "3.8.0";
 export const PLUGIN_MINIMUM_VERSION = "3.0.0";
-export const PLUGIN_RELEASED = "2026-03-07";
+export const PLUGIN_RELEASED = "2026-03-18";
 
 export const PLUGIN_FEATURES = [
   "auto_notifications",
