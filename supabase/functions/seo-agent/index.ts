@@ -1369,7 +1369,7 @@ JSON:
       const aiContent = await orchestrator.call('seo_analysis', [
         { role: "system", content: "Especialista SEO. Gere anchor texts CURTOS (2-4 palavras). APENAS JSON." },
         { role: "user", content: prompt },
-      ], { maxTokens: 800, temperature: 0.2 });
+      ], { maxTokens: 2000, temperature: 0.2 });
 
       console.log(`[SEO Agent] [${project.name}] Link AI response for "${orphan.wp_post_title}" (${aiContent.length} chars)`);
 
