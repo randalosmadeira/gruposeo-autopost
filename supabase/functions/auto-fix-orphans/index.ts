@@ -147,7 +147,7 @@ async function processProjectOrphans(
     .eq("wp_post_status", "publish")
     .lte("internal_links_count", 0)
     .order("word_count", { ascending: false })
-    .limit(2000);
+    .limit(5000);
 
   if (!orphans || orphans.length === 0) {
     return { orphansFound: 0, orphansFixed: 0, linksSuggested: 0, linksApplied: 0, indexingSubmitted: 0, redirectsCreated: 0, triageResults, details: [] };
