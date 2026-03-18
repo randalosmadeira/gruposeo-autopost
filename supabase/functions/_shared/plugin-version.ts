@@ -81,6 +81,13 @@ export const PLUGIN_FEATURES = [
   "multi_channel_indexing",
   "indexing_dashboard_widget",
   "indexing_coverage_stats",
+  // v3.8.0 — VPS Server Audit & Bot Accessibility
+  "vps_server_health_audit",
+  "ai_bot_accessibility_check",
+  "ttfb_monitoring",
+  "ssl_hsts_verification",
+  "llms_txt_auto_regenerate",
+  "indexnow_key_verification",
 ] as const;
 
 /**
