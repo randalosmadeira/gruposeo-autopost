@@ -165,7 +165,7 @@ async function processProjectOrphans(
     .eq("project_id", project.id)
     .eq("wp_post_status", "publish")
     .order("word_count", { ascending: false })
-    .limit(2000);
+    .limit(5000);
 
   if (!allArticles || allArticles.length < 2) {
     return { orphansFound, orphansFixed: 0, linksSuggested: 0, linksApplied: 0, indexingSubmitted: 0, redirectsCreated: 0, triageResults, details: ["Not enough articles for linking"] };
