@@ -147,7 +147,7 @@ async function processProjectOrphans(
     .eq("wp_post_status", "publish")
     .lte("internal_links_count", 0)
     .order("word_count", { ascending: false })
-    .limit(2000);
+    .limit(5000);
 
   if (!orphans || orphans.length === 0) {
     return { orphansFound: 0, orphansFixed: 0, linksSuggested: 0, linksApplied: 0, indexingSubmitted: 0, redirectsCreated: 0, triageResults, details: [] };
@@ -165,7 +165,7 @@ async function processProjectOrphans(
     .eq("project_id", project.id)
     .eq("wp_post_status", "publish")
     .order("word_count", { ascending: false })
-    .limit(2000);
+    .limit(5000);
 
   if (!allArticles || allArticles.length < 2) {
     return { orphansFound, orphansFixed: 0, linksSuggested: 0, linksApplied: 0, indexingSubmitted: 0, redirectsCreated: 0, triageResults, details: ["Not enough articles for linking"] };
@@ -202,7 +202,7 @@ async function processProjectOrphans(
   // ══════════════════════════════════════
   console.log(`[OrphanFixer v4] [${project.name}] Running triage on ${orphansFound} orphans...`);
   
-  const triageBatches = chunkArray(orphans, 20);
+  const triageBatches = chunkArray(orphans, 40);
   const triageDecisions: Map<string, { action: 'link' | 'redirect' | 'update' | 'delete'; redirectTo?: string; reason: string; isPillar: boolean; suggestMenu: boolean; }> = new Map();
 
   for (const batch of triageBatches) {
@@ -277,7 +277,7 @@ JSON OBRIGATÓRIO:
       const aiResult = await orchestrator.call("seo_analysis", [
         { role: "system", content: `Auditor SEO enterprise. Nicho: ${project.nicho || "geral"}. Retorne APENAS JSON válido.` },
         { role: "user", content: triagePrompt },
-      ], { maxTokens: 3000, temperature: 0.1 });
+      ], { maxTokens: 8000, temperature: 0.1 });
 
       const parsed = safeParseJSON(aiResult);
       if (parsed?.decisions && Array.isArray(parsed.decisions)) {
@@ -353,7 +353,7 @@ JSON OBRIGATÓRIO:
     return !d || d.action === 'link' || d.action === 'update';
   });
 
-  const orphanBatches = chunkArray(valuableOrphans, 10);
+  const orphanBatches = chunkArray(valuableOrphans, 20);
 
   for (const batch of orphanBatches) {
     try {
@@ -379,7 +379,7 @@ JSON OBRIGATÓRIO:
         return { ...a, relevance };
       }).sort((a, b) => b.relevance - a.relevance);
 
-      const topDonors = scoredDonors.slice(0, 60);
+      const topDonors = scoredDonors.slice(0, 100);
       const sourceDescriptions = topDonors
         .map(a => `• [${a.wp_post_title}](${a.wp_post_url}) | kw: ${a.primary_keyword || "N/A"} | cluster: ${a.topic_cluster || "N/A"} | ${a.word_count || 0}p | relevância: ${a.relevance}`)
         .join("\n");
@@ -429,7 +429,7 @@ JSON OBRIGATÓRIO:
       const aiResult = await orchestrator.call("seo_analysis", [
         { role: "system", content: `Especialista SEO enterprise em Internal Linking, Hub-and-Spoke e Domain Authority. Nicho: ${project.nicho || "geral"}. JSON válido apenas.` },
         { role: "user", content: prompt },
-      ], { maxTokens: 4000, temperature: 0.2 });
+      ], { maxTokens: 8000, temperature: 0.2 });
 
       const fixes = safeParseJSON(aiResult);
       if (!fixes?.fixes || !Array.isArray(fixes.fixes)) continue;

@@ -85,7 +85,7 @@ async function detectBrokenLinks(
     .select("wp_post_url, wp_post_title")
     .eq("project_id", project.id)
     .eq("wp_post_status", "publish")
-    .limit(400);
+    .limit(1000);
 
   if (!articles || articles.length === 0) {
     return { total_checked: 0, broken_found: 0, redirects_found: 0, broken_urls: [], redirect_chains: [] };
@@ -573,7 +573,7 @@ JSON: {"redirects":[{"broken_url":"...","target_url":"...","reason":"..."}]}`;
                 const aiResult = await orchestrator.call("seo_analysis", [
                   { role: "system", content: "Especialista SEO. Gere redirects 301 inteligentes para URLs quebradas. APENAS JSON." },
                   { role: "user", content: redirectPrompt },
-                ], { maxTokens: 2000, temperature: 0.1 });
+                ], { maxTokens: 4000, temperature: 0.1 });
 
                 let jsonStr = aiResult.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
                 const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
@@ -639,7 +639,7 @@ JSON: {"redirects":[{"broken_url":"...","target_url":"...","reason":"..."}]}`;
             .eq("project_id", project.id)
             .eq("wp_post_status", "publish")
             .order("seo_score", { ascending: true })
-            .limit(500);
+            .limit(1000);
 
           if (metaIssueArticles && metaIssueArticles.length > 0) {
             // Filter articles needing title/meta fixes
@@ -650,7 +650,7 @@ JSON: {"redirects":[{"broken_url":"...","target_url":"...","reason":"..."}]}`;
 
             if (needsFix.length > 0) {
               const batchSize = 20;
-              for (let i = 0; i < Math.min(needsFix.length, 100); i += batchSize) {
+              for (let i = 0; i < Math.min(needsFix.length, 500); i += batchSize) {
                 const batch = needsFix.slice(i, i + batchSize);
                 const articlesList = batch.map(a => 
                   `- post_id: ${a.wp_post_id} | Título: "${a.wp_post_title}" (${(a.wp_post_title || "").length} chars) | kw: ${a.primary_keyword || "N/A"} | score: ${a.seo_score || 0}`
@@ -674,7 +674,7 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
                   const aiResult = await orchestrator.call("seo_analysis", [
                     { role: "system", content: "Especialista SEO brasileiro. Gere títulos e meta descriptions otimizadas. Máximo CTR. APENAS JSON válido." },
                     { role: "user", content: metaPrompt },
-                  ], { maxTokens: 2000, temperature: 0.3 });
+                  ], { maxTokens: 4000, temperature: 0.3 });
 
                   let jsonStr = aiResult.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
                   const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
@@ -1077,7 +1077,7 @@ async function runMetaAuditWithFix(
     return { found: 0, fixed: 0, issues: [], fixes_applied: [] };
   }
 
-  const batchToFix = articlesWithIssues.slice(0, 100);
+  const batchToFix = articlesWithIssues.slice(0, 500);
   
   try {
     const articlesList = batchToFix.map(a => 
@@ -1142,7 +1142,7 @@ Retorne APENAS JSON:
     const aiContent = await orchestrator.call('seo_analysis', [
       { role: "system", content: `Você é um especialista SEO brasileiro seguindo a filosofia "Madeira Sem Verniz": linguagem simples, acessível, Flesch mínimo 60. Gere metas otimizadas para máximo CTR e ranqueamento. Meta-descriptions SEMPRE 145-160 caracteres. Responda APENAS com JSON válido.` },
       { role: "user", content: prompt },
-    ], { maxTokens: 1500, temperature: 0.3 });
+    ], { maxTokens: 4000, temperature: 0.3 });
 
     const jsonStr = aiContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     const fixData = JSON.parse(jsonStr);
@@ -1369,7 +1369,7 @@ JSON:
       const aiContent = await orchestrator.call('seo_analysis', [
         { role: "system", content: "Especialista SEO. Gere anchor texts CURTOS (2-4 palavras). APENAS JSON." },
         { role: "user", content: prompt },
-      ], { maxTokens: 800, temperature: 0.2 });
+      ], { maxTokens: 2000, temperature: 0.2 });
 
       console.log(`[SEO Agent] [${project.name}] Link AI response for "${orphan.wp_post_title}" (${aiContent.length} chars)`);
 
@@ -1913,7 +1913,7 @@ async function runFullTechnicalAudit(
     .eq("project_id", project.id)
     .eq("wp_post_status", "publish")
     .order("last_wp_modified_at", { ascending: false, nullsFirst: false })
-    .limit(500);
+    .limit(1000);
 
   if (recentArticles && recentArticles.length > 0) {
     const thinContent = recentArticles.filter(a => (a.word_count || 0) < 800);
@@ -1956,7 +1956,7 @@ JSON: {"links":[{"source_url":"...","anchor_text":"...","relevance":85}]}`;
                 const aiResp = await orchestrator.call('seo_analysis', [
                   { role: "system", content: "Especialista SEO brasileiro. Gere anchor texts CURTOS (2-4 palavras genéricas do tema). APENAS JSON." },
                   { role: "user", content: linkPrompt },
-                ], { maxTokens: 500, temperature: 0.2 });
+                ], { maxTokens: 2000, temperature: 0.2 });
 
                 let jsonStr = aiResp.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
                 const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
@@ -2328,7 +2328,7 @@ JSON:
       const aiResult = await orchestrator.call("seo_analysis", [
         { role: "system", content: `Especialista SEO brasileiro em Internal Linking. Nicho: ${project.nicho || "geral"}. APENAS JSON.` },
         { role: "user", content: prompt },
-      ], { maxTokens: 4000, temperature: 0.2 });
+      ], { maxTokens: 8000, temperature: 0.2 });
 
       let jsonStr = aiResult.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);

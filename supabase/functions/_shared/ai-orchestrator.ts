@@ -299,7 +299,7 @@ export class AIOrchestrator {
         parts: [{ text: m.content }],
       })),
       generationConfig: {
-        maxOutputTokens: options?.maxTokens || 8192,
+        maxOutputTokens: options?.maxTokens || 65536,
         temperature: options?.temperature ?? 0.7,
       },
     };
@@ -357,7 +357,7 @@ export class AIOrchestrator {
           role: m.role === 'model' ? 'assistant' : m.role,
           content: m.content,
         })),
-        max_tokens: options?.maxTokens || 4096,
+        max_tokens: options?.maxTokens || 16384,
         temperature: options?.temperature ?? 0.7,
       }),
     });
@@ -387,7 +387,7 @@ export class AIOrchestrator {
       },
       body: JSON.stringify({
         model,
-        max_tokens: options?.maxTokens || 4096,
+        max_tokens: options?.maxTokens || 16384,
         system: systemMsg?.content || '',
         messages: otherMsgs.map(m => ({
           role: m.role === 'model' ? 'assistant' : (m.role === 'assistant' ? 'assistant' : 'user'),
@@ -448,7 +448,7 @@ export class AIOrchestrator {
         parts: [{ text: m.content }],
       })),
       generationConfig: {
-        maxOutputTokens: options?.maxTokens || 8192,
+        maxOutputTokens: options?.maxTokens || 65536,
         temperature: options?.temperature ?? 0.7,
       },
     };
@@ -517,7 +517,7 @@ export class AIOrchestrator {
           role: m.role === 'model' ? 'assistant' : m.role,
           content: m.content,
         })),
-        max_tokens: options?.maxTokens || 4096,
+        max_tokens: options?.maxTokens || 16384,
         temperature: options?.temperature ?? 0.7,
         stream: true,
       }),
