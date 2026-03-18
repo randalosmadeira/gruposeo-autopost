@@ -674,7 +674,7 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
                   const aiResult = await orchestrator.call("seo_analysis", [
                     { role: "system", content: "Especialista SEO brasileiro. Gere títulos e meta descriptions otimizadas. Máximo CTR. APENAS JSON válido." },
                     { role: "user", content: metaPrompt },
-                  ], { maxTokens: 2000, temperature: 0.3 });
+                  ], { maxTokens: 4000, temperature: 0.3 });
 
                   let jsonStr = aiResult.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
                   const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
