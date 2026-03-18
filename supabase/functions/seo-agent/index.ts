@@ -1913,7 +1913,7 @@ async function runFullTechnicalAudit(
     .eq("project_id", project.id)
     .eq("wp_post_status", "publish")
     .order("last_wp_modified_at", { ascending: false, nullsFirst: false })
-    .limit(500);
+    .limit(1000);
 
   if (recentArticles && recentArticles.length > 0) {
     const thinContent = recentArticles.filter(a => (a.word_count || 0) < 800);
