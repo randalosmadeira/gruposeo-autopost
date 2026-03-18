@@ -277,7 +277,7 @@ JSON OBRIGATÓRIO:
       const aiResult = await orchestrator.call("seo_analysis", [
         { role: "system", content: `Auditor SEO enterprise. Nicho: ${project.nicho || "geral"}. Retorne APENAS JSON válido.` },
         { role: "user", content: triagePrompt },
-      ], { maxTokens: 3000, temperature: 0.1 });
+      ], { maxTokens: 8000, temperature: 0.1 });
 
       const parsed = safeParseJSON(aiResult);
       if (parsed?.decisions && Array.isArray(parsed.decisions)) {
