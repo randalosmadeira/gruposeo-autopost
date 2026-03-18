@@ -379,7 +379,7 @@ JSON OBRIGATÓRIO:
         return { ...a, relevance };
       }).sort((a, b) => b.relevance - a.relevance);
 
-      const topDonors = scoredDonors.slice(0, 60);
+      const topDonors = scoredDonors.slice(0, 100);
       const sourceDescriptions = topDonors
         .map(a => `• [${a.wp_post_title}](${a.wp_post_url}) | kw: ${a.primary_keyword || "N/A"} | cluster: ${a.topic_cluster || "N/A"} | ${a.word_count || 0}p | relevância: ${a.relevance}`)
         .join("\n");
