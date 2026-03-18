@@ -573,7 +573,7 @@ JSON: {"redirects":[{"broken_url":"...","target_url":"...","reason":"..."}]}`;
                 const aiResult = await orchestrator.call("seo_analysis", [
                   { role: "system", content: "Especialista SEO. Gere redirects 301 inteligentes para URLs quebradas. APENAS JSON." },
                   { role: "user", content: redirectPrompt },
-                ], { maxTokens: 2000, temperature: 0.1 });
+                ], { maxTokens: 4000, temperature: 0.1 });
 
                 let jsonStr = aiResult.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
                 const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
