@@ -299,7 +299,7 @@ export class AIOrchestrator {
         parts: [{ text: m.content }],
       })),
       generationConfig: {
-        maxOutputTokens: options?.maxTokens || 8192,
+        maxOutputTokens: options?.maxTokens || 65536,
         temperature: options?.temperature ?? 0.7,
       },
     };
