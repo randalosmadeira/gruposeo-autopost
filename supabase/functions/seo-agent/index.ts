@@ -2328,7 +2328,7 @@ JSON:
       const aiResult = await orchestrator.call("seo_analysis", [
         { role: "system", content: `Especialista SEO brasileiro em Internal Linking. Nicho: ${project.nicho || "geral"}. APENAS JSON.` },
         { role: "user", content: prompt },
-      ], { maxTokens: 4000, temperature: 0.2 });
+      ], { maxTokens: 8000, temperature: 0.2 });
 
       let jsonStr = aiResult.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
