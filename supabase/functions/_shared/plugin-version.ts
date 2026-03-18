@@ -119,6 +119,13 @@ Módulos disponíveis no plugin instalado nos sites:
   • Indexação multi-canal: IndexNow + Google Indexing API + Google Ping + Bing Ping
   • REST API: /instant-indexing/submit, /instant-indexing/batch, /instant-indexing/status
   • Estatísticas de cobertura: total publicados vs total indexados vs nunca indexados
+- **VPS Server Health Audit (v${PLUGIN_VERSION})**:
+  • Auditoria automática de configurações do servidor VPS para SEO
+  • Verificação de acessibilidade de 12+ bots de IA (GPTBot, ClaudeBot, PerplexityBot, etc.)
+  • Monitoramento de TTFB (Time To First Byte) com alertas para >800ms
+  • Verificação de SSL/HSTS, GZIP/Brotli, Cache-Control, X-Robots-Tag
+  • Auto-regeneração de llms.txt e verificação de IndexNow key
+  • Score de saúde do VPS (0-100) com relatório detalhado
 - **Bulk Meta Update API (v${PLUGIN_VERSION})**:
   • REST endpoint para atualização em massa de SEO title, meta description, focus keyword e canonical URL
   • Compatível com Rank Math e Yoast SEO (detecção automática do plugin instalado)

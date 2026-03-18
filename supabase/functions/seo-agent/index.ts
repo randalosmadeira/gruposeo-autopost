@@ -1083,6 +1083,8 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
         if (redirectAudit.chains > 0) summaryParts.push(`${redirectAudit.chains} redirect chains`);
         if (redirectAudit.loops > 0) summaryParts.push(`🔴 ${redirectAudit.loops} redirect loops`);
         if (noindexApplied > 0) summaryParts.push(`🚫 ${noindexApplied} páginas noindex (archives/vazias)`);
+        if (vpsScore < 80) summaryParts.push(`🖥️ VPS Score: ${vpsScore}/100`);
+        if (vpsScore >= 80) summaryParts.push(`✅ VPS: ${vpsScore}/100`);
 
         const summary = summaryParts.length > 0
           ? `✅ ${project.name}: ${summaryParts.join(", ")}`
