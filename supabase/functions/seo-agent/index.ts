@@ -1142,7 +1142,7 @@ Retorne APENAS JSON:
     const aiContent = await orchestrator.call('seo_analysis', [
       { role: "system", content: `Você é um especialista SEO brasileiro seguindo a filosofia "Madeira Sem Verniz": linguagem simples, acessível, Flesch mínimo 60. Gere metas otimizadas para máximo CTR e ranqueamento. Meta-descriptions SEMPRE 145-160 caracteres. Responda APENAS com JSON válido.` },
       { role: "user", content: prompt },
-    ], { maxTokens: 1500, temperature: 0.3 });
+    ], { maxTokens: 4000, temperature: 0.3 });
 
     const jsonStr = aiContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     const fixData = JSON.parse(jsonStr);
