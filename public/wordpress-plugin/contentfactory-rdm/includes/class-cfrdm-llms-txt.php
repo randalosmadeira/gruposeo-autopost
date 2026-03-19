@@ -301,15 +301,20 @@ class CFRDM_LLMS_Txt {
      * Add AI-friendly HTTP headers
      */
     public function add_ai_headers() {
-        // Allow all AI crawlers
+        // Allow all AI crawlers explicitly
         header('X-Robots-Tag: all');
         
         // Signal AI-friendliness
         header('X-Content-Type-Options: nosniff');
         
-        // Link to llms.txt
+        // Link to llms.txt (discoverable by GPTBot, ClaudeBot, PerplexityBot, etc.)
         $site_url = get_site_url();
         header("Link: <{$site_url}/llms.txt>; rel=\"ai-content-index\"");
+        header("Link: <{$site_url}/llms-full.txt>; rel=\"ai-content-full\"", false);
+        
+        // Explicit AI bot access signals
+        header('X-AI-Content-Index: ' . $site_url . '/llms.txt');
+        header('X-AI-Discoverable: true');
     }
     
     /**
