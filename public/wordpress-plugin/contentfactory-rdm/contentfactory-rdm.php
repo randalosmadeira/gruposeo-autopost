@@ -865,11 +865,26 @@ private function init_admin_hooks() {
             'cfrdm_auto_correct' => true,
             'cfrdm_log_retention_days' => 30,
             'cfrdm_auto_social_post' => false,
+            'cfrdm_llms_txt_enabled' => true,
+            'cfrdm_indexnow_enabled' => true,
         );
         
         foreach ($defaults as $key => $value) {
             if (get_option($key) === false) {
                 update_option($key, $value);
+            }
+        }
+        
+        // Force-enable llms.txt on VPS activation and generate physical files immediately
+        update_option('cfrdm_llms_txt_enabled', true);
+        if (class_exists('CFRDM_LLMS_Txt')) {
+            try {
+                CFRDM_LLMS_Txt::get_instance()->regenerate();
+                if (cfrdm_tables_exist()) {
+                    CFRDM_Logger::log('system', 'llms.txt gerado com sucesso na ativação (VPS)', array('path' => ABSPATH . 'llms.txt'));
+                }
+            } catch (\Throwable $e) {
+                error_log('ContentFactory llms.txt generation error: ' . $e->getMessage());
             }
         }
         
