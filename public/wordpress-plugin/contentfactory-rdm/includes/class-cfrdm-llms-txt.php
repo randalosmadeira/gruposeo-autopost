@@ -35,7 +35,8 @@ class CFRDM_LLMS_Txt {
      */
     public function init() {
         if (!self::is_enabled()) {
-            return;
+            // Force-enable on VPS — llms.txt is critical for AI discovery
+            update_option(self::OPTION_ENABLED, true);
         }
         
         // Serve llms.txt and llms-full.txt
@@ -48,14 +49,109 @@ class CFRDM_LLMS_Txt {
         add_action('wp_head', array($this, 'add_ai_meta_tags'), 1);
         
         // Regenerate on post publish
-        add_action('publish_post', array($this, 'invalidate_cache'));
-        add_action('publish_page', array($this, 'invalidate_cache'));
+        add_action('publish_post', array($this, 'invalidate_and_regenerate'));
+        add_action('publish_page', array($this, 'invalidate_and_regenerate'));
         
         // Schedule daily regeneration
         if (!wp_next_scheduled(self::CRON_HOOK)) {
             wp_schedule_event(time(), 'daily', self::CRON_HOOK);
         }
         add_action(self::CRON_HOOK, array($this, 'regenerate'));
+        
+        // REST API endpoint for remote regeneration (SEO Agent)
+        add_action('rest_api_init', array($this, 'register_rest_routes'));
+        
+        // Auto-generate physical files if they don't exist
+        $this->ensure_physical_files();
+    }
+    
+    /**
+     * Register REST routes for llms.txt management
+     */
+    public function register_rest_routes() {
+        register_rest_route('cfrdm/v1', '/llms-txt/regenerate', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'rest_regenerate'),
+            'permission_callback' => array('CFRDM_API', 'verify_api_key'),
+        ));
+        
+        register_rest_route('cfrdm/v1', '/llms-txt/status', array(
+            'methods' => 'GET',
+            'callback' => array($this, 'rest_status'),
+            'permission_callback' => array('CFRDM_API', 'verify_api_key'),
+        ));
+    }
+    
+    /**
+     * REST: Force regenerate llms.txt
+     */
+    public function rest_regenerate($request) {
+        $this->regenerate();
+        $llms_exists = file_exists(ABSPATH . 'llms.txt');
+        $llms_full_exists = file_exists(ABSPATH . 'llms-full.txt');
+        
+        return new \WP_REST_Response(array(
+            'success' => true,
+            'llms_txt' => $llms_exists,
+            'llms_full_txt' => $llms_full_exists,
+            'llms_txt_size' => $llms_exists ? filesize(ABSPATH . 'llms.txt') : 0,
+            'llms_full_txt_size' => $llms_full_exists ? filesize(ABSPATH . 'llms-full.txt') : 0,
+            'message' => 'llms.txt regenerado com sucesso',
+        ), 200);
+    }
+    
+    /**
+     * REST: Check llms.txt status
+     */
+    public function rest_status($request) {
+        $llms_path = ABSPATH . 'llms.txt';
+        $llms_full_path = ABSPATH . 'llms-full.txt';
+        $llms_exists = file_exists($llms_path);
+        $llms_full_exists = file_exists($llms_full_path);
+        
+        return new \WP_REST_Response(array(
+            'enabled' => self::is_enabled(),
+            'llms_txt' => array(
+                'exists' => $llms_exists,
+                'size' => $llms_exists ? filesize($llms_path) : 0,
+                'modified' => $llms_exists ? date('c', filemtime($llms_path)) : null,
+                'url' => get_site_url() . '/llms.txt',
+            ),
+            'llms_full_txt' => array(
+                'exists' => $llms_full_exists,
+                'size' => $llms_full_exists ? filesize($llms_full_path) : 0,
+                'modified' => $llms_full_exists ? date('c', filemtime($llms_full_path)) : null,
+                'url' => get_site_url() . '/llms-full.txt',
+            ),
+            'cache' => array(
+                'llms_cached' => (bool) get_transient('cfrdm_llms_txt'),
+                'llms_full_cached' => (bool) get_transient('cfrdm_llms_full_txt'),
+            ),
+        ), 200);
+    }
+    
+    /**
+     * Invalidate cache and regenerate physical files
+     */
+    public function invalidate_and_regenerate() {
+        $this->invalidate_cache();
+        // Schedule immediate regeneration to avoid slowing down publish
+        if (!wp_next_scheduled('cfrdm_llms_txt_immediate_regen')) {
+            wp_schedule_single_event(time() + 10, 'cfrdm_llms_txt_immediate_regen');
+        }
+    }
+    
+    /**
+     * Ensure physical files exist on disk (VPS fallback)
+     */
+    private function ensure_physical_files() {
+        if (!file_exists(ABSPATH . 'llms.txt') || !file_exists(ABSPATH . 'llms-full.txt')) {
+            // Don't block init — schedule for next tick
+            if (!wp_next_scheduled('cfrdm_llms_txt_immediate_regen')) {
+                wp_schedule_single_event(time() + 5, 'cfrdm_llms_txt_immediate_regen');
+            }
+        }
+        add_action('cfrdm_llms_txt_immediate_regen', array($this, 'regenerate'));
     }
     
     public static function is_enabled() {
