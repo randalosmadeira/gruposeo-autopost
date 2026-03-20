@@ -13,8 +13,9 @@ import {
   Bot, Play, CheckCircle2, AlertCircle, Loader2, Link2,
   Search, FileCheck, Clock, TrendingUp, Globe, Shield,
   AlertTriangle, ArrowRight, Trash2, ExternalLink, BarChart3,
-  MapPin, Zap, RefreshCw, Wrench,
+  MapPin, Zap, RefreshCw, Wrench, ClipboardList,
 } from 'lucide-react';
+import { AuditedArticlesPanel } from './AuditedArticlesPanel';
 import { cn } from '@/lib/utils';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
