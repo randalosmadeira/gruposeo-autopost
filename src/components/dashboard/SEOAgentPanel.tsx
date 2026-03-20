@@ -194,8 +194,12 @@ export function SEOAgentPanel() {
       </CardHeader>
       <CardContent className="space-y-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-           <TabsList className="grid w-full grid-cols-5">
+           <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="overview" className="text-xs">Resumo</TabsTrigger>
+            <TabsTrigger value="articles" className="text-xs">
+              <ClipboardList className="w-3 h-3 mr-1" />
+              Artigos
+            </TabsTrigger>
             <TabsTrigger value="audit" className="text-xs">Auditoria</TabsTrigger>
             <TabsTrigger value="fixes" className="text-xs">Correções</TabsTrigger>
             <TabsTrigger value="actions" className="text-xs">Ações</TabsTrigger>
