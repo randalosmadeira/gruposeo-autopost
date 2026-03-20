@@ -13,8 +13,9 @@ import {
   Bot, Play, CheckCircle2, AlertCircle, Loader2, Link2,
   Search, FileCheck, Clock, TrendingUp, Globe, Shield,
   AlertTriangle, ArrowRight, Trash2, ExternalLink, BarChart3,
-  MapPin, Zap, RefreshCw, Wrench,
+  MapPin, Zap, RefreshCw, Wrench, ClipboardList,
 } from 'lucide-react';
+import { AuditedArticlesPanel } from './AuditedArticlesPanel';
 import { cn } from '@/lib/utils';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -193,8 +194,12 @@ export function SEOAgentPanel() {
       </CardHeader>
       <CardContent className="space-y-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-           <TabsList className="grid w-full grid-cols-5">
+           <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="overview" className="text-xs">Resumo</TabsTrigger>
+            <TabsTrigger value="articles" className="text-xs">
+              <ClipboardList className="w-3 h-3 mr-1" />
+              Artigos
+            </TabsTrigger>
             <TabsTrigger value="audit" className="text-xs">Auditoria</TabsTrigger>
             <TabsTrigger value="fixes" className="text-xs">Correções</TabsTrigger>
             <TabsTrigger value="actions" className="text-xs">Ações</TabsTrigger>
@@ -263,6 +268,14 @@ export function SEOAgentPanel() {
                 </div>
               </div>
             )}
+          </TabsContent>
+
+          {/* AUDITED ARTICLES TAB */}
+          <TabsContent value="articles" className="mt-3">
+            <AuditedArticlesPanel
+              auditDetails={completedRuns[0]?.details}
+              projectId={completedRuns[0]?.project_id || undefined}
+            />
           </TabsContent>
 
           {/* AUDIT TAB */}
