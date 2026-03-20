@@ -270,6 +270,14 @@ export function SEOAgentPanel() {
             )}
           </TabsContent>
 
+          {/* AUDITED ARTICLES TAB */}
+          <TabsContent value="articles" className="mt-3">
+            <AuditedArticlesPanel
+              auditDetails={completedRuns[0]?.details}
+              projectId={completedRuns[0]?.project_id || undefined}
+            />
+          </TabsContent>
+
           {/* AUDIT TAB */}
           <TabsContent value="audit" className="space-y-3 mt-3">
             {latestAudit && latestAudit.issues.length > 0 ? (
