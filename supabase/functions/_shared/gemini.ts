@@ -623,34 +623,78 @@ Requirements:
 }
 
 /**
- * Universal AI call - GEMINI ONLY
- * All text generation goes through Gemini
+ * Universal AI call - Gemini primary, OpenAI fallback
+ * Automatically falls back to OpenAI on Gemini failure (429, 500, etc.)
  */
 export async function callAI(
   messages: GeminiMessage[],
   options: GeminiTextOptions = {}
 ): Promise<string> {
-  if (!hasGeminiKey()) {
-    throw new Error("GEMINI_API_KEY não configurada.");
+  // Try Gemini first (primary provider)
+  if (hasGeminiKey()) {
+    try {
+      console.log("Using Gemini (primary provider)...");
+      return await callGemini(messages, options);
+    } catch (geminiError) {
+      const msg = geminiError instanceof Error ? geminiError.message : String(geminiError);
+      console.warn(`Gemini failed: ${msg} — attempting OpenAI fallback...`);
+      
+      // If OpenAI is available, fallback
+      if (hasOpenAIKey()) {
+        try {
+          console.log("Falling back to OpenAI...");
+          return await callOpenAI(messages, { 
+            maxTokens: options.maxTokens, 
+            temperature: options.temperature 
+          });
+        } catch (openaiError) {
+          console.error("OpenAI fallback also failed:", openaiError instanceof Error ? openaiError.message : openaiError);
+          // Throw original Gemini error
+          throw geminiError;
+        }
+      }
+      throw geminiError;
+    }
   }
   
-  console.log("Using Gemini (exclusive provider)...");
-  return await callGemini(messages, options);
+  // No Gemini key — try OpenAI directly
+  if (hasOpenAIKey()) {
+    console.log("No Gemini key — using OpenAI directly...");
+    return await callOpenAI(messages, { 
+      maxTokens: options.maxTokens, 
+      temperature: options.temperature 
+    });
+  }
+  
+  throw new Error("Nenhuma chave de IA configurada. Configure GEMINI_API_KEY ou OPENAI_API_KEY.");
 }
 
 /**
- * Universal AI call with streaming - GEMINI ONLY
+ * Universal AI call with streaming - Gemini primary, OpenAI fallback
  */
 export async function callAIStream(
   messages: GeminiMessage[],
   options: GeminiTextOptions = {}
 ): Promise<Response> {
-  if (!hasGeminiKey()) {
-    throw new Error("GEMINI_API_KEY não configurada.");
+  if (hasGeminiKey()) {
+    try {
+      console.log("Using Gemini stream (primary provider)...");
+      return await callGeminiStream(messages, options);
+    } catch (err) {
+      console.warn("Gemini stream failed, trying OpenAI stream fallback...");
+      if (hasOpenAIKey()) {
+        return await callOpenAIStream(messages, { maxTokens: options.maxTokens, temperature: options.temperature });
+      }
+      throw err;
+    }
   }
   
-  console.log("Using Gemini stream (exclusive provider)...");
-  return await callGeminiStream(messages, options);
+  if (hasOpenAIKey()) {
+    console.log("No Gemini key — using OpenAI stream...");
+    return await callOpenAIStream(messages, { maxTokens: options.maxTokens, temperature: options.temperature });
+  }
+  
+  throw new Error("Nenhuma chave de IA configurada.");
 }
 
 /**
@@ -732,18 +776,21 @@ export function extractJSON<T>(text: string): T | null {
 }
 
 /**
- * Get available AI providers status - GEMINI ONLY
+ * Get available AI providers status - Multi-provider
  */
 export function getAIProvidersStatus(): {
   gemini: boolean;
+  openai: boolean;
   imageGeneration: boolean;
   primaryProvider: string;
 } {
   const hasGemini = hasGeminiKey();
+  const hasOpenAI = hasOpenAIKey();
   
   return {
     gemini: hasGemini,
-    imageGeneration: hasGemini,
-    primaryProvider: hasGemini ? "Google Gemini" : "none",
+    openai: hasOpenAI,
+    imageGeneration: hasGemini || hasOpenAI,
+    primaryProvider: hasGemini ? "Google Gemini" : hasOpenAI ? "OpenAI" : "none",
   };
 }
