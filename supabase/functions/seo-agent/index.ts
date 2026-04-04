@@ -290,8 +290,10 @@ async function auditRedirects(
 // ═══════════════════════════════════════════════════════════
 // GLOBAL EXECUTION TIMER — prevents stuck runs by saving
 // partial results before the edge function timeout (150s).
+// NOTE: requestStart is set per-request inside Deno.serve()
+// to avoid stale timestamps on warm function instances.
 // ═══════════════════════════════════════════════════════════
-const GLOBAL_START = Date.now();
+let requestStart = Date.now();
 const MAX_EXECUTION_MS = 140_000; // 140s safety margin (Deno limit ~150s)
 
 // ═══════════════════════════════════════════════════════════
@@ -299,7 +301,7 @@ const MAX_EXECUTION_MS = 140_000; // 140s safety margin (Deno limit ~150s)
 // ═══════════════════════════════════════════════════════════
 const LIMIT_MULTIPLIER = 2;
 
-function elapsedMs(): number { return Date.now() - GLOBAL_START; }
+function elapsedMs(): number { return Date.now() - requestStart; }
 function hasTimeLeft(reserveMs = 15_000): boolean { return elapsedMs() + reserveMs < MAX_EXECUTION_MS; }
 
 Deno.serve(async (req) => {
