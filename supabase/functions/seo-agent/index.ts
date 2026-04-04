@@ -305,6 +305,9 @@ function elapsedMs(): number { return Date.now() - requestStart; }
 function hasTimeLeft(reserveMs = 15_000): boolean { return elapsedMs() + reserveMs < MAX_EXECUTION_MS; }
 
 Deno.serve(async (req) => {
+  // Reset timer for each request (critical for warm instances)
+  requestStart = Date.now();
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
