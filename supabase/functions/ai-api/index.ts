@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
           aiMessages.push({ role: "user", content: prompt });
         }
 
-        const response = await callGemini(aiMessages, { 
+        const response = await callAI(aiMessages, { 
           model: selectedModel, 
           maxTokens, 
           temperature 
@@ -126,7 +126,7 @@ Retorne APENAS os 8 títulos, um por linha, numerados de 1 a 8. Sem explicaçõe
 
         log.info("title_generation_start", { keyword: prompt, model: selectedModel });
         
-        const titleResponse = await callGemini(
+        const titleResponse = await callAI(
           [{ role: "user", content: titlePrompt }],
           { model: selectedModel, maxTokens: 1024, temperature: 0.9 }
         );
@@ -157,7 +157,7 @@ Requisitos:
 
 Retorne apenas a meta descrição, sem aspas.`;
 
-        const response = await callGemini(
+        const response = await callAI(
           [{ role: "user", content: metaPrompt }],
           { model: selectedModel, maxTokens: 200, temperature: 0.6 }
         );
@@ -191,7 +191,7 @@ Formato JSON:
   ]
 }`;
 
-        const response = await callGemini(
+        const response = await callAI(
           [{ role: "user", content: outlinePrompt }],
           { model: selectedModel, maxTokens: 2000, temperature: 0.7 }
         );
