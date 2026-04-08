@@ -890,16 +890,19 @@ export function extractJSON<T>(text: string): T | null {
 export function getAIProvidersStatus(): {
   gemini: boolean;
   openai: boolean;
+  lovableAI: boolean;
   imageGeneration: boolean;
   primaryProvider: string;
 } {
   const hasGemini = hasGeminiKey();
   const hasOpenAI = hasOpenAIKey();
+  const hasLovable = hasLovableKey();
   
   return {
     gemini: hasGemini,
     openai: hasOpenAI,
+    lovableAI: hasLovable,
     imageGeneration: hasGemini || hasOpenAI,
-    primaryProvider: hasGemini ? "Google Gemini" : hasOpenAI ? "OpenAI" : "none",
+    primaryProvider: hasGemini ? "Google Gemini" : hasOpenAI ? "OpenAI" : hasLovable ? "Lovable AI" : "none",
   };
 }
