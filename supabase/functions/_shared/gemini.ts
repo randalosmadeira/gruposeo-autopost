@@ -106,6 +106,104 @@ export function hasOpenAIKey(): boolean {
 }
 
 /**
+ * Check if Lovable AI Gateway key is available
+ */
+export function hasLovableKey(): boolean {
+  return !!(Deno.env.get("LOVABLE_API_KEY"));
+}
+
+/**
+ * Get the Lovable AI Gateway key
+ */
+function getLovableApiKey(): string | null {
+  return Deno.env.get("LOVABLE_API_KEY") || null;
+}
+
+/**
+ * Call Lovable AI Gateway for text generation (non-streaming)
+ */
+async function callLovableAI(
+  messages: GeminiMessage[],
+  options: { maxTokens?: number; temperature?: number } = {}
+): Promise<string> {
+  const apiKey = getLovableApiKey();
+  if (!apiKey) throw new Error("LOVABLE_API_KEY não disponível.");
+  
+  console.log("[LovableAI] Calling Lovable AI Gateway...");
+  
+  const response = await fetch(LOVABLE_AI_GATEWAY, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: messages.map(m => ({
+        role: m.role === "model" ? "assistant" : m.role,
+        content: m.content,
+      })),
+      max_tokens: options.maxTokens || 8192,
+      temperature: options.temperature ?? 0.7,
+    }),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("[LovableAI] Error:", response.status, errorText);
+    throw new Error(`Lovable AI error: ${response.status}`);
+  }
+  
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || "";
+}
+
+/**
+ * Call Lovable AI Gateway with streaming
+ */
+async function callLovableAIStream(
+  messages: GeminiMessage[],
+  options: { maxTokens?: number; temperature?: number } = {}
+): Promise<Response> {
+  const apiKey = getLovableApiKey();
+  if (!apiKey) throw new Error("LOVABLE_API_KEY não disponível.");
+  
+  console.log("[LovableAI] Streaming via Lovable AI Gateway...");
+  
+  const response = await fetch(LOVABLE_AI_GATEWAY, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: messages.map(m => ({
+        role: m.role === "model" ? "assistant" : m.role,
+        content: m.content,
+      })),
+      max_tokens: options.maxTokens || 8192,
+      temperature: options.temperature ?? 0.7,
+      stream: true,
+    }),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("[LovableAI] Stream error:", response.status, errorText);
+    throw new Error(`Lovable AI stream error: ${response.status}`);
+  }
+  
+  return new Response(response.body, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
+}
+
+/**
  * Resolve model alias to actual Gemini model ID
  */
 export function resolveModel(modelAlias: string): string {
