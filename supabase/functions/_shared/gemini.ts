@@ -623,7 +623,7 @@ Requirements:
 }
 
 /**
- * Universal AI call - Gemini primary, OpenAI fallback, Lovable AI final fallback
+ * Universal AI call - Gemini primary, OpenAI fallback
  */
 export async function callAI(
   messages: GeminiMessage[],
@@ -638,36 +638,26 @@ export async function callAI(
       return await callGemini(messages, options);
     } catch (geminiError) {
       lastError = geminiError instanceof Error ? geminiError : new Error(String(geminiError));
-      console.warn(`Gemini failed: ${lastError.message} — trying next provider...`);
+      console.warn(`Gemini failed: ${lastError.message} — trying OpenAI fallback...`);
     }
   }
 
-  // Try OpenAI (second provider)
+  // Try OpenAI (fallback)
   if (hasOpenAIKey()) {
     try {
       console.log("Falling back to OpenAI...");
       return await callOpenAI(messages, { maxTokens: options.maxTokens, temperature: options.temperature });
     } catch (openaiError) {
       lastError = openaiError instanceof Error ? openaiError : new Error(String(openaiError));
-      console.warn(`OpenAI failed: ${lastError.message} — trying Lovable AI Gateway...`);
+      console.error(`OpenAI fallback also failed: ${lastError.message}`);
     }
   }
 
-  // Try Lovable AI Gateway (final fallback)
-  if (hasLovableKey()) {
-    try {
-      return await callLovableAI(messages, { maxTokens: options.maxTokens, temperature: options.temperature });
-    } catch (lovableError) {
-      lastError = lovableError instanceof Error ? lovableError : new Error(String(lovableError));
-      console.error(`Lovable AI Gateway also failed: ${lastError.message}`);
-    }
-  }
-
-  throw lastError || new Error("Nenhuma chave de IA configurada. Configure GEMINI_API_KEY, OPENAI_API_KEY ou LOVABLE_API_KEY.");
+  throw lastError || new Error("Nenhuma chave de IA configurada. Configure GEMINI_API_KEY ou OPENAI_API_KEY.");
 }
 
 /**
- * Universal AI call with streaming - Gemini primary, OpenAI fallback, Lovable AI final fallback
+ * Universal AI call with streaming - Gemini primary, OpenAI fallback
  */
 export async function callAIStream(
   messages: GeminiMessage[],
@@ -681,7 +671,7 @@ export async function callAIStream(
       return await callGeminiStream(messages, options);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      console.warn("Gemini stream failed, trying next provider...");
+      console.warn("Gemini stream failed, trying OpenAI fallback...");
     }
   }
 
@@ -691,16 +681,7 @@ export async function callAIStream(
       return await callOpenAIStream(messages, { maxTokens: options.maxTokens, temperature: options.temperature });
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      console.warn("OpenAI stream failed, trying Lovable AI Gateway...");
-    }
-  }
-
-  if (hasLovableKey()) {
-    try {
-      return await callLovableAIStream(messages, { maxTokens: options.maxTokens, temperature: options.temperature });
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      console.error("Lovable AI Gateway stream also failed.");
+      console.error("OpenAI stream fallback also failed.");
     }
   }
 
