@@ -13,7 +13,6 @@
 // API endpoints
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const OPENAI_API_BASE = "https://api.openai.com/v1";
-const LOVABLE_AI_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 // Default provider configuration - GEMINI ONLY
 const DEFAULT_PROVIDER: "gemini" = "gemini";
