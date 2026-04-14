@@ -22,6 +22,7 @@ import {
   FileText,
   MessageSquare,
   Gavel,
+  Vote,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -90,6 +91,14 @@ const navGroups: NavGroup[] = [
             badge: 'Novo',
             badgeVariant: 'orange' as const,
             iconColor: '#FF4500',
+          },
+          { 
+            label: 'Eleitoral', 
+            icon: Vote, 
+            href: '/electoral-campaign',
+            badge: 'Novo',
+            badgeVariant: 'orange' as const,
+            iconColor: '#DC2626',
           },
           { 
             label: 'Em Massa', 
