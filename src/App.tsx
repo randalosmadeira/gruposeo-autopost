@@ -37,6 +37,7 @@ const Academy = lazy(() => import("./pages/Academy"));
 const InternalLinking = lazy(() => import("./pages/InternalLinking"));
 const AIChat = lazy(() => import("./pages/AIChat"));
 const BNMPRepost = lazy(() => import("./pages/BNMPRepost"));
+const ElectoralCampaign = lazy(() => import("./pages/ElectoralCampaign"));
 
 
 const queryClient = new QueryClient({
@@ -103,6 +104,7 @@ const App = () => (
                 <Route path="/bulk-generator" element={<BulkKeywordGenerator />} />
                 <Route path="/ai-chat" element={<AIChat />} />
                 <Route path="/bnmp-repost" element={<BNMPRepost />} />
+                <Route path="/electoral-campaign" element={<ElectoralCampaign />} />
                 <Route path="/system-prompts" element={<SettingsPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
