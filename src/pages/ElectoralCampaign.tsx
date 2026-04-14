@@ -234,21 +234,21 @@ export default function ElectoralCampaign() {
 
       // Save article to DB
       if (user) {
-        await supabase.from('articles').insert({
+        await supabase.from('articles').insert([{
           user_id: user.id,
           keyword,
           title: `${config.candidateName} - ${keyword}`,
           content: fullContent,
-          type: 'blog',
-          status: 'draft',
+          type: 'blog' as const,
+          status: 'draft' as const,
           project_id: selectedProjectId || null,
           word_count: fullContent.split(/\s+/).length,
           config: {
             electoral: true,
             template: selectedTemplate,
             candidateConfig: config,
-          },
-        });
+          } as any,
+        }]);
       }
 
       toast({ title: 'Conteúdo gerado! 🔥', description: 'Artigo eleitoral pronto para revisão.' });
