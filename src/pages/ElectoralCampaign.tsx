@@ -7,38 +7,24 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useProjects } from '@/hooks/useProjects';
+import { CitySelector } from '@/components/electoral/CitySelector';
+import { AISuggestionsPanel } from '@/components/electoral/AISuggestionsPanel';
+import { CompetitorAnalysis } from '@/components/electoral/CompetitorAnalysis';
 import {
-  Vote,
-  Megaphone,
-  Flag,
-  Scale,
-  Globe,
-  Instagram,
-  Youtube,
-  Twitter,
-  Facebook,
-  Smartphone,
-  BookOpen,
-  Flame,
-  Send,
-  Loader2,
-  FileText,
-  Share2,
-  Users,
-  MapPin,
-  Shield,
+  Vote, Megaphone, Flag, Scale, Globe, Instagram, Youtube, Twitter, Facebook,
+  Smartphone, BookOpen, Flame, Send, Loader2, FileText, Share2, Users, MapPin,
+  Shield, Sparkles, Target,
 } from 'lucide-react';
 
 interface CandidateConfig {
   candidateName: string;
   politicalParty: string;
-  candidateRole: string; // vereador, deputado, prefeito, etc
+  candidateRole: string;
   campaignPhase: 'pre-campanha' | 'campanha';
   city: string;
   state: string;
@@ -47,6 +33,8 @@ interface CandidateConfig {
   flagsAndCauses: string;
   legislativeProjects: string;
   achievements: string;
+  competitors: string;
+  differentials: string;
   socialMedia: {
     instagram: string;
     youtube: string;
@@ -63,7 +51,7 @@ interface CandidateConfig {
 const defaultConfig: CandidateConfig = {
   candidateName: '',
   politicalParty: '',
-  candidateRole: 'vereador',
+  candidateRole: 'deputado-federal',
   campaignPhase: 'pre-campanha',
   city: '',
   state: 'SP',
@@ -72,62 +60,22 @@ const defaultConfig: CandidateConfig = {
   flagsAndCauses: '',
   legislativeProjects: '',
   achievements: '',
-  socialMedia: {
-    instagram: '',
-    youtube: '',
-    twitter: '',
-    facebook: '',
-    tiktok: '',
-    website: '',
-    whatsapp: '',
-  },
+  competitors: '',
+  differentials: '',
+  socialMedia: { instagram: '', youtube: '', twitter: '', facebook: '', tiktok: '', website: '', whatsapp: '' },
   brandStyle: 'both',
   contentTone: 'coloquial',
 };
 
 const contentTemplates = [
-  {
-    id: 'authority-article',
-    title: 'Artigo de Autoridade',
-    description: 'Artigo completo 2800+ palavras com projetos de lei, bandeiras e histórico',
-    icon: BookOpen,
-    color: '#4169E1',
-  },
-  {
-    id: 'social-viral',
-    title: 'Conteúdo Viral Social',
-    description: 'Pacote para redes sociais com hooks, copy e roteiros',
-    icon: Share2,
-    color: '#FF4500',
-  },
-  {
-    id: 'legislative-project',
-    title: 'Projeto de Lei',
-    description: 'Destaque de projeto legislativo com análise de impacto',
-    icon: Scale,
-    color: '#10B981',
-  },
-  {
-    id: 'community-agenda',
-    title: 'Pauta Comunitária',
-    description: 'Artigo sobre demandas locais e propostas concretas',
-    icon: Users,
-    color: '#8B5CF6',
-  },
-  {
-    id: 'debate-position',
-    title: 'Posicionamento & Debate',
-    description: 'Artigo opinativo com posicionamento firme sobre temas relevantes',
-    icon: Megaphone,
-    color: '#F97316',
-  },
-  {
-    id: 'track-record',
-    title: 'Histórico & Realizações',
-    description: 'Retrospectiva de atuação com dados e provas sociais',
-    icon: Shield,
-    color: '#06B6D4',
-  },
+  { id: 'authority-article', title: 'Artigo de Autoridade', description: 'Artigo 2800+ palavras com projetos de lei, bandeiras e histórico', icon: BookOpen, color: 'hsl(var(--primary))' },
+  { id: 'social-viral', title: 'Conteúdo Viral Social', description: 'Pacote para redes sociais com hooks, copy e roteiros', icon: Share2, color: 'hsl(var(--accent))' },
+  { id: 'legislative-project', title: 'Projeto de Lei', description: 'Destaque de projeto legislativo com análise de impacto', icon: Scale, color: 'hsl(var(--primary))' },
+  { id: 'community-agenda', title: 'Pauta Comunitária', description: 'Artigo sobre demandas locais e propostas concretas', icon: Users, color: 'hsl(var(--accent))' },
+  { id: 'debate-position', title: 'Posicionamento & Debate', description: 'Artigo opinativo com posicionamento firme', icon: Megaphone, color: 'hsl(var(--primary))' },
+  { id: 'track-record', title: 'Histórico & Realizações', description: 'Retrospectiva de atuação com dados e provas sociais', icon: Shield, color: 'hsl(var(--accent))' },
+  { id: 'city-targeted', title: 'Artigo por Cidade', description: 'Conteúdo segmentado para cidades específicas de SP', icon: MapPin, color: 'hsl(var(--primary))' },
+  { id: 'competitor-comparison', title: 'Comparativo Eleitoral', description: 'Quem são os candidatos, em quem votar em 2026', icon: Target, color: 'hsl(var(--accent))' },
 ];
 
 export default function ElectoralCampaign() {
@@ -137,31 +85,19 @@ export default function ElectoralCampaign() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [generatedContent, setGeneratedContent] = useState('');
+  const [selectedCities, setSelectedCities] = useState<string[]>([]);
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const { toast } = useToast();
   const { user } = useAuth();
   const { projects } = useProjects();
   const [selectedProjectId, setSelectedProjectId] = useState('');
 
-  const updateConfig = (field: string, value: any) => {
-    setConfig(prev => ({ ...prev, [field]: value }));
-  };
-
-  const updateSocial = (field: string, value: string) => {
-    setConfig(prev => ({
-      ...prev,
-      socialMedia: { ...prev.socialMedia, [field]: value },
-    }));
-  };
+  const updateConfig = (field: string, value: any) => setConfig(prev => ({ ...prev, [field]: value }));
+  const updateSocial = (field: string, value: string) => setConfig(prev => ({ ...prev, socialMedia: { ...prev.socialMedia, [field]: value } }));
 
   const handleGenerate = async () => {
-    if (!keyword.trim()) {
-      toast({ title: 'Informe a palavra-chave', variant: 'destructive' });
-      return;
-    }
-    if (!config.candidateName.trim()) {
-      toast({ title: 'Informe o nome do candidato', variant: 'destructive' });
-      return;
-    }
+    if (!keyword.trim()) { toast({ title: 'Informe a palavra-chave', variant: 'destructive' }); return; }
+    if (!config.candidateName.trim()) { toast({ title: 'Informe o nome do candidato', variant: 'destructive' }); return; }
 
     setIsGenerating(true);
     setProgress(0);
@@ -169,34 +105,26 @@ export default function ElectoralCampaign() {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        toast({ title: 'Sessão expirada', description: 'Faça login novamente.', variant: 'destructive' });
-        setIsGenerating(false);
-        return;
-      }
+      if (!session?.access_token) { toast({ title: 'Sessão expirada', variant: 'destructive' }); setIsGenerating(false); return; }
+
+      // Build enhanced config with cities, topics, competitors
+      const enhancedConfig = {
+        ...config,
+        targetCities: selectedCities,
+        campaignTopics: selectedTopics,
+        city: selectedCities.length === 1 ? selectedCities[0] : config.city,
+      };
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-electoral-content`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            keyword,
-            template: selectedTemplate,
-            config,
-            projectId: selectedProjectId || undefined,
-          }),
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ keyword, template: selectedTemplate, config: enhancedConfig, projectId: selectedProjectId || undefined }),
         }
       );
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
-        throw new Error(err.error || 'Falha na geração');
-      }
-
+      if (!response.ok) { const err = await response.json().catch(() => ({ error: 'Erro' })); throw new Error(err.error); }
       if (!response.body) throw new Error('Stream indisponível');
 
       const reader = response.body.getReader();
@@ -208,7 +136,6 @@ export default function ElectoralCampaign() {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-
         let idx: number;
         while ((idx = buffer.indexOf('\n')) !== -1) {
           let line = buffer.slice(0, idx);
@@ -220,11 +147,7 @@ export default function ElectoralCampaign() {
           try {
             const parsed = JSON.parse(json);
             const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) {
-              fullContent += delta;
-              setGeneratedContent(fullContent);
-              setProgress(Math.min((fullContent.split(/\s+/).length / 2800) * 100, 95));
-            }
+            if (delta) { fullContent += delta; setGeneratedContent(fullContent); setProgress(Math.min((fullContent.split(/\s+/).length / 2800) * 100, 95)); }
           } catch { /* partial */ }
         }
       }
@@ -232,33 +155,20 @@ export default function ElectoralCampaign() {
       setGeneratedContent(fullContent);
       setProgress(100);
 
-      // Save article to DB
       if (user) {
         await supabase.from('articles').insert([{
-          user_id: user.id,
-          keyword,
+          user_id: user.id, keyword,
           title: `${config.candidateName} - ${keyword}`,
-          content: fullContent,
-          type: 'blog' as const,
-          status: 'draft' as const,
+          content: fullContent, type: 'blog' as const, status: 'draft' as const,
           project_id: selectedProjectId || null,
           word_count: fullContent.split(/\s+/).length,
-          config: {
-            electoral: true,
-            template: selectedTemplate,
-            candidateConfig: config,
-          } as any,
+          config: { electoral: true, template: selectedTemplate, candidateConfig: enhancedConfig, targetCities: selectedCities, campaignTopics: selectedTopics } as any,
         }]);
       }
-
       toast({ title: 'Conteúdo gerado! 🔥', description: 'Artigo eleitoral pronto para revisão.' });
     } catch (error) {
       console.error('Electoral generation error:', error);
-      toast({
-        title: 'Erro na geração',
-        description: error instanceof Error ? error.message : 'Erro desconhecido',
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro na geração', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
     } finally {
       setIsGenerating(false);
     }
@@ -266,36 +176,27 @@ export default function ElectoralCampaign() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <div className="p-3 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 shadow-lg">
           <Vote className="w-8 h-8 text-white" />
         </div>
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            Campanha Eleitoral
+            Campanha Eleitoral 2026
             <Badge className="bg-orange-500 text-white text-xs">MADEIRA NELES 🪵🔥</Badge>
           </h1>
-          <p className="text-muted-foreground">
-            Gerador de artigos estratégicos para pré-campanha e campanha eleitoral
-          </p>
+          <p className="text-muted-foreground">Gerador de artigos estratégicos segmentados por cidade — Estado de São Paulo</p>
         </div>
       </div>
 
       <Tabs defaultValue="config" className="space-y-4">
-        <TabsList className="grid grid-cols-4 w-full max-w-2xl">
-          <TabsTrigger value="config">
-            <Users className="w-4 h-4 mr-1" /> Candidato
-          </TabsTrigger>
-          <TabsTrigger value="social">
-            <Share2 className="w-4 h-4 mr-1" /> Redes
-          </TabsTrigger>
-          <TabsTrigger value="content">
-            <FileText className="w-4 h-4 mr-1" /> Conteúdo
-          </TabsTrigger>
-          <TabsTrigger value="preview">
-            <Flame className="w-4 h-4 mr-1" /> Preview
-          </TabsTrigger>
+        <TabsList className="grid grid-cols-6 w-full max-w-4xl">
+          <TabsTrigger value="config"><Users className="w-4 h-4 mr-1" /> Candidato</TabsTrigger>
+          <TabsTrigger value="cities"><MapPin className="w-4 h-4 mr-1" /> Cidades</TabsTrigger>
+          <TabsTrigger value="social"><Share2 className="w-4 h-4 mr-1" /> Redes</TabsTrigger>
+          <TabsTrigger value="suggestions"><Sparkles className="w-4 h-4 mr-1" /> Sugestões IA</TabsTrigger>
+          <TabsTrigger value="content"><FileText className="w-4 h-4 mr-1" /> Conteúdo</TabsTrigger>
+          <TabsTrigger value="preview"><Flame className="w-4 h-4 mr-1" /> Preview</TabsTrigger>
         </TabsList>
 
         {/* TAB: Candidato */}
@@ -303,28 +204,11 @@ export default function ElectoralCampaign() {
           <div className="grid md:grid-cols-2 gap-4">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Users className="w-5 h-5 text-primary" />
-                  Dados do Candidato
-                </CardTitle>
+                <CardTitle className="text-base flex items-center gap-2"><Users className="w-5 h-5 text-primary" /> Dados do Candidato</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div>
-                  <Label>Nome Completo *</Label>
-                  <Input
-                    placeholder="Ex: Dr. Rândalos Madeira"
-                    value={config.candidateName}
-                    onChange={e => updateConfig('candidateName', e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label>Partido Político</Label>
-                  <Input
-                    placeholder="Ex: PSD"
-                    value={config.politicalParty}
-                    onChange={e => updateConfig('politicalParty', e.target.value)}
-                  />
-                </div>
+                <div><Label>Nome Completo *</Label><Input placeholder="Ex: Dr. Rândalos Madeira" value={config.candidateName} onChange={e => updateConfig('candidateName', e.target.value)} /></div>
+                <div><Label>Partido Político</Label><Input placeholder="Ex: PSD" value={config.politicalParty} onChange={e => updateConfig('politicalParty', e.target.value)} /></div>
                 <div>
                   <Label>Cargo Pretendido</Label>
                   <Select value={config.candidateRole} onValueChange={v => updateConfig('candidateRole', v)}>
@@ -340,182 +224,88 @@ export default function ElectoralCampaign() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Fase</Label>
+                  <Label>Fase da Campanha</Label>
                   <Select value={config.campaignPhase} onValueChange={v => updateConfig('campaignPhase', v as any)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pre-campanha">Pré-Campanha</SelectItem>
-                      <SelectItem value="campanha">Campanha Oficial</SelectItem>
+                      <SelectItem value="pre-campanha">Pré-Campanha (NÃO pedir votos)</SelectItem>
+                      <SelectItem value="campanha">Campanha Oficial (pode pedir votos)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label>Cidade</Label>
-                    <Input
-                      placeholder="São Paulo"
-                      value={config.city}
-                      onChange={e => updateConfig('city', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label>Estado</Label>
-                    <Input
-                      placeholder="SP"
-                      value={config.state}
-                      onChange={e => updateConfig('state', e.target.value)}
-                    />
-                  </div>
+                  <div><Label>Cidade Base</Label><Input placeholder="São Paulo" value={config.city} onChange={e => updateConfig('city', e.target.value)} /></div>
+                  <div><Label>Estado</Label><Input value={config.state} onChange={e => updateConfig('state', e.target.value)} /></div>
                 </div>
-                <div>
-                  <Label>Slogan de Campanha</Label>
-                  <Input
-                    placeholder="Ex: Madeira Neles! Sem verniz, com atitude!"
-                    value={config.slogan}
-                    onChange={e => updateConfig('slogan', e.target.value)}
-                  />
-                </div>
+                <div><Label>Slogan</Label><Input placeholder="Madeira Neles! Sem verniz, com atitude!" value={config.slogan} onChange={e => updateConfig('slogan', e.target.value)} /></div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Flag className="w-5 h-5 text-orange-500" />
-                  Bandeiras & Projetos
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <Label>Biografia / Histórico</Label>
-                  <Textarea
-                    placeholder="Trajetória política, formação, atuação comunitária..."
-                    value={config.biography}
-                    onChange={e => updateConfig('biography', e.target.value)}
-                    rows={3}
-                  />
-                </div>
-                <div>
-                  <Label>Bandeiras & Pautas Principais</Label>
-                  <Textarea
-                    placeholder="Segurança pública, saúde, educação, combate à corrupção..."
-                    value={config.flagsAndCauses}
-                    onChange={e => updateConfig('flagsAndCauses', e.target.value)}
-                    rows={3}
-                  />
-                </div>
-                <div>
-                  <Label>Projetos de Lei / Propostas</Label>
-                  <Textarea
-                    placeholder="Descreva projetos legislativos apresentados ou propostas..."
-                    value={config.legislativeProjects}
-                    onChange={e => updateConfig('legislativeProjects', e.target.value)}
-                    rows={3}
-                  />
-                </div>
-                <div>
-                  <Label>Realizações / Conquistas</Label>
-                  <Textarea
-                    placeholder="Obras entregues, leis aprovadas, benefícios à comunidade..."
-                    value={config.achievements}
-                    onChange={e => updateConfig('achievements', e.target.value)}
-                    rows={3}
-                  />
-                </div>
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><Flag className="w-5 h-5 text-orange-500" /> Bandeiras & Projetos</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  <div><Label>Biografia</Label><Textarea placeholder="Trajetória política, formação..." value={config.biography} onChange={e => updateConfig('biography', e.target.value)} rows={3} /></div>
+                  <div><Label>Bandeiras & Pautas</Label><Textarea placeholder="Segurança, saúde, educação..." value={config.flagsAndCauses} onChange={e => updateConfig('flagsAndCauses', e.target.value)} rows={3} /></div>
+                  <div><Label>Projetos de Lei</Label><Textarea placeholder="Projetos legislativos..." value={config.legislativeProjects} onChange={e => updateConfig('legislativeProjects', e.target.value)} rows={2} /></div>
+                  <div><Label>Realizações</Label><Textarea placeholder="Obras, leis aprovadas..." value={config.achievements} onChange={e => updateConfig('achievements', e.target.value)} rows={2} /></div>
+                </CardContent>
+              </Card>
+
+              <CompetitorAnalysis
+                competitors={config.competitors}
+                differentials={config.differentials}
+                onCompetitorsChange={v => updateConfig('competitors', v)}
+                onDifferentialsChange={v => updateConfig('differentials', v)}
+              />
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* TAB: Cidades SP */}
+        <TabsContent value="cities">
+          <CitySelector selectedCities={selectedCities} onCitiesChange={setSelectedCities} />
+          {selectedCities.length > 0 && (
+            <Card className="mt-4">
+              <CardContent className="pt-4">
+                <p className="text-sm text-muted-foreground">
+                  <strong>{selectedCities.length}</strong> cidade(s) selecionada(s). Os artigos serão gerados com segmentação geográfica para cada cidade, usando termos como
+                  <Badge variant="outline" className="ml-1 text-xs">"candidato deputado federal {selectedCities[0]} 2026"</Badge>
+                </p>
               </CardContent>
             </Card>
-          </div>
+          )}
         </TabsContent>
 
         {/* TAB: Redes Sociais */}
         <TabsContent value="social" className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Globe className="w-5 h-5 text-primary" />
-                Redes Sociais do Candidato
-              </CardTitle>
-              <CardDescription>
-                Links serão inseridos estrategicamente nos artigos para máxima indexação
-              </CardDescription>
+              <CardTitle className="text-base flex items-center gap-2"><Globe className="w-5 h-5 text-primary" /> Redes Sociais</CardTitle>
+              <CardDescription>Links inseridos como CTAs nos artigos</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-2 gap-4">
-                <div className="flex items-center gap-2">
-                  <Instagram className="w-5 h-5 text-pink-500" />
-                  <Input
-                    placeholder="@candidato"
-                    value={config.socialMedia.instagram}
-                    onChange={e => updateSocial('instagram', e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Youtube className="w-5 h-5 text-red-500" />
-                  <Input
-                    placeholder="youtube.com/c/candidato"
-                    value={config.socialMedia.youtube}
-                    onChange={e => updateSocial('youtube', e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Twitter className="w-5 h-5 text-sky-500" />
-                  <Input
-                    placeholder="@candidato"
-                    value={config.socialMedia.twitter}
-                    onChange={e => updateSocial('twitter', e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Facebook className="w-5 h-5 text-blue-600" />
-                  <Input
-                    placeholder="facebook.com/candidato"
-                    value={config.socialMedia.facebook}
-                    onChange={e => updateSocial('facebook', e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Smartphone className="w-5 h-5 text-foreground" />
-                  <Input
-                    placeholder="tiktok.com/@candidato"
-                    value={config.socialMedia.tiktok}
-                    onChange={e => updateSocial('tiktok', e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Globe className="w-5 h-5 text-primary" />
-                  <Input
-                    placeholder="www.candidato.com.br"
-                    value={config.socialMedia.website}
-                    onChange={e => updateSocial('website', e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Smartphone className="w-5 h-5 text-green-500" />
-                  <Input
-                    placeholder="(11) 99999-9999"
-                    value={config.socialMedia.whatsapp}
-                    onChange={e => updateSocial('whatsapp', e.target.value)}
-                  />
-                </div>
+                <div className="flex items-center gap-2"><Instagram className="w-5 h-5 text-pink-500" /><Input placeholder="@candidato" value={config.socialMedia.instagram} onChange={e => updateSocial('instagram', e.target.value)} /></div>
+                <div className="flex items-center gap-2"><Youtube className="w-5 h-5 text-red-500" /><Input placeholder="youtube.com/c/candidato" value={config.socialMedia.youtube} onChange={e => updateSocial('youtube', e.target.value)} /></div>
+                <div className="flex items-center gap-2"><Twitter className="w-5 h-5 text-sky-500" /><Input placeholder="@candidato" value={config.socialMedia.twitter} onChange={e => updateSocial('twitter', e.target.value)} /></div>
+                <div className="flex items-center gap-2"><Facebook className="w-5 h-5 text-blue-600" /><Input placeholder="facebook.com/candidato" value={config.socialMedia.facebook} onChange={e => updateSocial('facebook', e.target.value)} /></div>
+                <div className="flex items-center gap-2"><Smartphone className="w-5 h-5 text-foreground" /><Input placeholder="tiktok.com/@candidato" value={config.socialMedia.tiktok} onChange={e => updateSocial('tiktok', e.target.value)} /></div>
+                <div className="flex items-center gap-2"><Globe className="w-5 h-5 text-primary" /><Input placeholder="www.candidato.com.br" value={config.socialMedia.website} onChange={e => updateSocial('website', e.target.value)} /></div>
+                <div className="flex items-center gap-2"><Smartphone className="w-5 h-5 text-green-500" /><Input placeholder="(11) 99999-9999" value={config.socialMedia.whatsapp} onChange={e => updateSocial('whatsapp', e.target.value)} /></div>
               </div>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Flame className="w-5 h-5 text-orange-500" />
-                Estilo de Marca
-              </CardTitle>
-            </CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><Flame className="w-5 h-5 text-orange-500" /> Estilo de Marca</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div>
                 <Label>Versão da Marca</Label>
                 <Select value={config.brandStyle} onValueChange={v => updateConfig('brandStyle', v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="madeira-neles">🪵🔥 MADEIRA NELES (Atitude, Combativo)</SelectItem>
-                    <SelectItem value="madeira-sem-verniz">🎯 MADEIRA SEM VERNIZ (Direto, Transparente)</SelectItem>
+                    <SelectItem value="madeira-neles">🪵🔥 MADEIRA NELES</SelectItem>
+                    <SelectItem value="madeira-sem-verniz">🎯 MADEIRA SEM VERNIZ</SelectItem>
                     <SelectItem value="both">🔥🎯 Ambos (Híbrido)</SelectItem>
                   </SelectContent>
                 </Select>
@@ -525,9 +315,9 @@ export default function ElectoralCampaign() {
                 <Select value={config.contentTone} onValueChange={v => updateConfig('contentTone', v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="coloquial">Coloquial (Acessível, Popular)</SelectItem>
-                    <SelectItem value="popular-direto">Popular e Direto (Sem Papas na Língua)</SelectItem>
-                    <SelectItem value="combativo">Combativo (Madeira Neles Total)</SelectItem>
+                    <SelectItem value="coloquial">Coloquial</SelectItem>
+                    <SelectItem value="popular-direto">Popular e Direto</SelectItem>
+                    <SelectItem value="combativo">Combativo</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -535,37 +325,40 @@ export default function ElectoralCampaign() {
                 <Label>Projeto WordPress</Label>
                 <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
                   <SelectTrigger><SelectValue placeholder="Selecionar projeto..." /></SelectTrigger>
-                  <SelectContent>
-                    {projects?.map(p => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
+                  <SelectContent>{projects?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* TAB: Sugestões IA */}
+        <TabsContent value="suggestions">
+          <AISuggestionsPanel
+            candidateRole={config.candidateRole}
+            candidateName={config.candidateName}
+            city={config.city || (selectedCities.length > 0 ? selectedCities[0] : '')}
+            onSelectKeyword={setKeyword}
+            onSelectTopics={setSelectedTopics}
+            selectedTopics={selectedTopics}
+          />
+        </TabsContent>
+
         {/* TAB: Conteúdo */}
         <TabsContent value="content" className="space-y-4">
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-4 gap-3">
             {contentTemplates.map(tpl => (
               <Card
                 key={tpl.id}
-                className={`cursor-pointer transition-all hover:shadow-md ${
-                  selectedTemplate === tpl.id ? 'ring-2 ring-primary shadow-md' : ''
-                }`}
+                className={`cursor-pointer transition-all hover:shadow-md ${selectedTemplate === tpl.id ? 'ring-2 ring-primary shadow-md' : ''}`}
                 onClick={() => setSelectedTemplate(tpl.id)}
               >
-                <CardContent className="pt-6 text-center space-y-2">
-                  <div
-                    className="mx-auto w-12 h-12 rounded-xl flex items-center justify-center"
-                    style={{ backgroundColor: `${tpl.color}20` }}
-                  >
-                    <tpl.icon className="w-6 h-6" style={{ color: tpl.color }} />
+                <CardContent className="pt-5 text-center space-y-2">
+                  <div className="mx-auto w-10 h-10 rounded-lg flex items-center justify-center bg-primary/10">
+                    <tpl.icon className="w-5 h-5 text-primary" />
                   </div>
-                  <h3 className="font-semibold text-sm">{tpl.title}</h3>
-                  <p className="text-xs text-muted-foreground">{tpl.description}</p>
+                  <h3 className="font-semibold text-xs">{tpl.title}</h3>
+                  <p className="text-[10px] text-muted-foreground">{tpl.description}</p>
                 </CardContent>
               </Card>
             ))}
@@ -574,13 +367,22 @@ export default function ElectoralCampaign() {
           <Card>
             <CardContent className="pt-6 space-y-4">
               <div>
-                <Label className="text-base font-semibold">Palavra-chave / Tema Principal *</Label>
+                <Label className="text-base font-semibold">Palavra-chave / Tema *</Label>
                 <Input
-                  placeholder="Ex: segurança pública zona leste SP, projetos de lei combate corrupção..."
+                  placeholder="Ex: candidato deputado federal São Paulo 2026, em quem votar eleições 2026..."
                   value={keyword}
                   onChange={e => setKeyword(e.target.value)}
                   className="mt-2"
                 />
+                {selectedTopics.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    <span className="text-xs text-muted-foreground">Pautas:</span>
+                    {selectedTopics.map(t => <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>)}
+                  </div>
+                )}
+                {selectedCities.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">📍 Segmentação: {selectedCities.length} cidade(s) de SP</p>
+                )}
               </div>
 
               {isGenerating && (
@@ -600,15 +402,9 @@ export default function ElectoralCampaign() {
                 size="lg"
               >
                 {isGenerating ? (
-                  <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Gerando Conteúdo Eleitoral...
-                  </>
+                  <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Gerando Conteúdo Eleitoral...</>
                 ) : (
-                  <>
-                    <Send className="w-5 h-5 mr-2" />
-                    Gerar Artigo Eleitoral (2800+ palavras)
-                  </>
+                  <><Send className="w-5 h-5 mr-2" /> Gerar Artigo Eleitoral (2800+ palavras)</>
                 )}
               </Button>
             </CardContent>
@@ -620,28 +416,18 @@ export default function ElectoralCampaign() {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-primary" />
-                  Conteúdo Gerado
-                </CardTitle>
-                {generatedContent && (
-                  <Badge variant="outline">
-                    {generatedContent.split(/\s+/).length} palavras
-                  </Badge>
-                )}
+                <CardTitle className="text-base flex items-center gap-2"><FileText className="w-5 h-5 text-primary" /> Conteúdo Gerado</CardTitle>
+                {generatedContent && <Badge variant="outline">{generatedContent.split(/\s+/).length} palavras</Badge>}
               </div>
             </CardHeader>
             <CardContent>
               {generatedContent ? (
-                <div
-                  className="prose prose-sm max-w-none dark:prose-invert"
-                  dangerouslySetInnerHTML={{ __html: generatedContent }}
-                />
+                <div className="prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: generatedContent }} />
               ) : (
                 <div className="text-center py-16 text-muted-foreground">
                   <Vote className="w-12 h-12 mx-auto mb-4 opacity-30" />
                   <p>Nenhum conteúdo gerado ainda.</p>
-                  <p className="text-sm">Configure o candidato e gere o artigo na aba "Conteúdo".</p>
+                  <p className="text-sm">Configure o candidato e gere na aba "Conteúdo".</p>
                 </div>
               )}
             </CardContent>

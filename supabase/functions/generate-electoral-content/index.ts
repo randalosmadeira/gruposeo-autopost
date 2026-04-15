@@ -28,10 +28,7 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Sessão inválida" }), {
         status: 401,
@@ -48,7 +45,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Build social media block
+    // Social media block
     const socialLinks: string[] = [];
     const sm = config.socialMedia || {};
     if (sm.instagram) socialLinks.push(`Instagram: ${sm.instagram}`);
@@ -77,25 +74,69 @@ Deno.serve(async (req) => {
         ? `FASE: PRÉ-CAMPANHA — NÃO peça votos diretamente. Foque em apresentar o histórico, bandeiras, propostas e construir autoridade. Use linguagem de "possível candidato" ou "liderança".`
         : `FASE: CAMPANHA OFICIAL — Pode incluir pedido de voto explícito, número do candidato e partido. Intensifique a urgência e o call-to-action eleitoral.`;
 
+    // Target cities block
+    const targetCities = config.targetCities || [];
+    const citiesBlock = targetCities.length > 0
+      ? `\nCIDADES-ALVO (segmentação geográfica obrigatória):\n${targetCities.join(', ')}\n- Mencione a cidade principal no título, H1 e nos primeiros 100 palavras\n- Use termos de busca locais: "candidato deputado federal [cidade] 2026"\n- Referencie problemas, demandas e características específicas da região\n- Inclua LocalBusiness Schema com a cidade`
+      : '';
+
+    // Campaign topics
+    const topics = config.campaignTopics || [];
+    const topicsBlock = topics.length > 0
+      ? `\nPAUTAS PRIORITÁRIAS DO CANDIDATO:\n${topics.map((t: string) => `- ${t}`).join('\n')}\n- Conecte CADA pauta com propostas concretas do candidato\n- Use dados e estatísticas da região sobre cada tema`
+      : '';
+
+    // Competitor analysis
+    const competitorBlock = config.competitors
+      ? `\nANÁLISE DE CONCORRENTES:\n${config.competitors}\n\nDIFERENCIAIS DO CANDIDATO:\n${config.differentials || 'Não informados'}\n- Compare sutilmente com concorrentes sem ataques pessoais\n- Destaque os diferenciais concretos do candidato\n- Use a pergunta "em quem votar" como gancho SEO`
+      : '';
+
     const templatePrompts: Record<string, string> = {
       "authority-article": `Crie um ARTIGO DE AUTORIDADE ELEITORAL completo sobre "${keyword}" para ${config.candidateName}.
-O artigo deve posicionar o candidato como referência absoluta no tema, citando projetos de lei, bandeiras, realizações e propostas concretas.`,
+O artigo deve posicionar o candidato como referência absoluta no tema, citando projetos de lei, bandeiras, realizações e propostas concretas.
+${targetCities.length > 0 ? `Foco geográfico: ${targetCities[0]}` : ''}`,
+
       "social-viral": `Crie um PACOTE DE CONTEÚDO VIRAL para redes sociais sobre "${keyword}" para ${config.candidateName}.
 Inclua: 1) Hook viral (primeira frase impactante), 2) Copy para Instagram/Facebook, 3) Thread para Twitter/X, 4) Roteiro para Reels/TikTok, 5) Descrição para YouTube.`,
+
       "legislative-project": `Crie um artigo detalhado sobre PROJETO DE LEI / PROPOSTA LEGISLATIVA relacionado a "${keyword}" de ${config.candidateName}.
 Analise o impacto social, beneficiários, comparação com legislação existente e argumentos técnicos.`,
+
       "community-agenda": `Crie um artigo sobre PAUTA COMUNITÁRIA "${keyword}" conectando às propostas de ${config.candidateName}.
-Aborde demandas locais de ${config.city}/${config.state}, dados do bairro/região e soluções concretas.`,
+Aborde demandas locais de ${targetCities.length > 0 ? targetCities[0] : config.city || 'São Paulo'}/${config.state}, dados do bairro/região e soluções concretas.`,
+
       "debate-position": `Crie um ARTIGO DE POSICIONAMENTO E DEBATE sobre "${keyword}" refletindo a visão de ${config.candidateName}.
 Tom opinativo forte, argumentos sólidos, dados que sustentem a posição e resposta a críticas.`,
+
       "track-record": `Crie um artigo de HISTÓRICO E REALIZAÇÕES de ${config.candidateName} relacionado a "${keyword}".
 Retrospectiva com dados concretos, depoimentos, comparações antes/depois e provas sociais.`,
+
+      "city-targeted": `Crie um ARTIGO SEGMENTADO POR CIDADE sobre "${keyword}" para ${config.candidateName} focado em ${targetCities.length > 0 ? targetCities[0] : config.city || 'São Paulo'}.
+OBRIGATÓRIO:
+- Título com nome da cidade + cargo + 2026
+- H1 otimizado para busca local
+- Dados demográficos e problemas específicos da cidade
+- Propostas concretas para a cidade
+- Termos: "candidato a ${config.candidateRole.replace('-', ' ')} ${targetCities.length > 0 ? targetCities[0] : config.city} 2026"
+- "em quem votar para ${config.candidateRole.replace('-', ' ')} ${targetCities.length > 0 ? targetCities[0] : config.city}"
+- "melhores candidatos ${config.candidateRole.replace('-', ' ')} ${targetCities.length > 0 ? targetCities[0] : config.city} 2026"`,
+
+      "competitor-comparison": `Crie um ARTIGO COMPARATIVO ELEITORAL sobre "${keyword}" posicionando ${config.candidateName} como a melhor opção.
+OBRIGATÓRIO:
+- Responda à pergunta: "Em quem votar para ${config.candidateRole.replace('-', ' ')} em ${targetCities.length > 0 ? targetCities[0] : 'São Paulo'} nas eleições 2026?"
+- "Quem são os candidatos a ${config.candidateRole.replace('-', ' ')} SP 2026?"
+- "Qual o melhor candidato a ${config.candidateRole.replace('-', ' ')} 2026?"
+- Tabela comparativa de propostas
+- Análise ponto a ponto das bandeiras
+- Posicione ${config.candidateName} com destaque nos diferenciais
+${config.competitors ? `\nConcorrentes mencionados: ${config.competitors}` : ''}
+${config.differentials ? `\nDiferenciais: ${config.differentials}` : ''}`,
     };
 
     const systemPrompt = `${BEHAVIORAL_DIRECTIVES}
 
-MÓDULO: GERADOR DE CONTEÚDO ELEITORAL — CAMPANHA POLÍTICA
-==========================================================
+MÓDULO: GERADOR DE CONTEÚDO ELEITORAL — CAMPANHA POLÍTICA 2026
+================================================================
 
 ${brandDirective}
 
@@ -106,8 +147,8 @@ TOM: ${toneMap[config.contentTone] || toneMap.coloquial}
 DADOS DO CANDIDATO:
 - Nome: ${config.candidateName}
 - Partido: ${config.politicalParty || "Não informado"}
-- Cargo: ${config.candidateRole}
-- Cidade/Estado: ${config.city || "Não informado"}/${config.state || "Não informado"}
+- Cargo: ${config.candidateRole.replace('-', ' ')}
+- Cidade/Estado: ${config.city || "Não informado"}/${config.state || "SP"}
 - Slogan: ${config.slogan || "Não informado"}
 
 BIOGRAFIA:
@@ -115,15 +156,26 @@ ${config.biography || "Não fornecida"}
 
 BANDEIRAS E PAUTAS:
 ${config.flagsAndCauses || "Não informadas"}
+${topicsBlock}
 
 PROJETOS DE LEI / PROPOSTAS:
 ${config.legislativeProjects || "Não informados"}
 
 REALIZAÇÕES:
 ${config.achievements || "Não informadas"}
+${competitorBlock}
+${citiesBlock}
 
 REDES SOCIAIS (inserir estrategicamente no conteúdo):
 ${socialLinks.length > 0 ? socialLinks.join("\n") : "Nenhuma configurada"}
+
+PALAVRAS-CHAVE SEO OBRIGATÓRIAS A INCLUIR NO ARTIGO:
+- "candidato a ${config.candidateRole.replace('-', ' ')} 2026 SP"
+- "em quem votar para ${config.candidateRole.replace('-', ' ')} 2026"
+- "melhores candidatos ${config.candidateRole.replace('-', ' ')} São Paulo"
+- "eleições 2026 ${config.candidateRole.replace('-', ' ')} estado de São Paulo"
+- "${config.candidateName} ${config.candidateRole.replace('-', ' ')}"
+${targetCities.length > 0 ? `- "candidato ${config.candidateRole.replace('-', ' ')} ${targetCities[0]} 2026"\n- "${config.candidateName} ${targetCities[0]}"` : ''}
 
 REGRAS OBRIGATÓRIAS:
 1. MÍNIMO 2.800 PALAVRAS — artigo completo e profundo
@@ -132,7 +184,7 @@ REGRAS OBRIGATÓRIAS:
 4. SEO máximo — meta title 55-65 chars, meta description 150-160 chars
 5. Schema JSON-LD Article obrigatório no final
 6. Inserir redes sociais do candidato como CTAs estratégicos ao longo do texto
-7. Incluir FAQPage Schema com 5+ perguntas relevantes
+7. Incluir FAQPage Schema com 5+ perguntas relevantes (ex: "Em quem votar para deputado federal SP 2026?")
 8. Subtítulos (H2/H3) como perguntas naturais para AEO/Featured Snippets
 9. Dados e estatísticas verificáveis a cada 200 palavras
 10. E-E-A-T: Experience, Expertise, Authoritativeness, Trustworthiness
@@ -141,7 +193,9 @@ REGRAS OBRIGATÓRIAS:
 13. Incluir seção de destaque com as BANDEIRAS do candidato em formato de tabela
 14. CTA final direcionando para as redes sociais e site do candidato
 15. Incluir BreadcrumbList Schema
-16. Slug SEO-friendly, sem acentos, máx 60 caracteres`;
+16. Slug SEO-friendly, sem acentos, máx 60 caracteres
+17. Incluir perguntas "em quem votar", "quem são os candidatos", "melhor candidato" como H2/H3
+18. Se houver cidades-alvo, incluir o nome da cidade no título e no H1`;
 
     const userPrompt = templatePrompts[template] || templatePrompts["authority-article"];
 
