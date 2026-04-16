@@ -804,7 +804,7 @@ Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
       const promptConfig = buildPromptConfig(config);
       const prompts = buildAdvancedSEOPrompt(promptConfig);
       // Inject Brand SEO+GEO + Verniz DNA into advanced prompt
-      systemPrompt = prompts.system + '\n\n' + brandSEOGeoSection + '\n\n' + orchestration.vernizSection;
+      systemPrompt = prompts.system + '\n\n' + brandSEOGeoSection + '\n\n' + orchestration.vernizSection + criminalGeoSection;
       userPrompt = prompts.user;
       log.info("using_advanced_prompt_with_brand_geo", { 
         brand: brandDetection.brand, 
@@ -812,7 +812,7 @@ Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
         contentType: config.contentType 
       });
     } else {
-      systemPrompt = buildLegacySystemPrompt(config) + '\n\n' + brandSEOGeoSection + '\n\n' + orchestration.vernizSection;
+      systemPrompt = buildLegacySystemPrompt(config) + '\n\n' + brandSEOGeoSection + '\n\n' + orchestration.vernizSection + criminalGeoSection;
       userPrompt = `Escreva um artigo completo e otimizado para SEO e GEO (IA Generativa) sobre: "${config.keyword}"
 
 ⚠️ OBRIGATÓRIO - NÃO ESQUECER:
