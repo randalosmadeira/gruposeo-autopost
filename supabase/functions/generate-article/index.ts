@@ -771,7 +771,16 @@ Deno.serve(async (req) => {
       resolvedTargetFunction,
     );
 
-    // ====== STANDARD FLOW with Verniz DNA + Brand SEO+GEO injection ======
+    // ====== CRIMINAL LAW GEO AUTO-INJECTION ======
+    const criminalGeoSection = isCriminalLawKeyword(config.keyword, config.title)
+      ? buildCriminalLawGeoPrompt(config.keyword)
+      : '';
+    
+    if (criminalGeoSection) {
+      log.info("criminal_law_geo_detected", { keyword: config.keyword });
+    }
+
+    // ====== STANDARD FLOW with Verniz DNA + Brand SEO+GEO + Criminal GEO injection ======
     let systemPrompt: string;
     let userPrompt: string;
 
@@ -779,7 +788,8 @@ Deno.serve(async (req) => {
       // USE USER'S CUSTOM TEMPLATE with variable substitution
       systemPrompt = substituteTemplateVariables(userTemplate, config) 
         + '\n\n' + brandSEOGeoSection 
-        + '\n\n' + orchestration.vernizSection;
+        + '\n\n' + orchestration.vernizSection
+        + criminalGeoSection;
       userPrompt = `Escreva um artigo completo e otimizado para SEO e GEO (IA Generativa) sobre: "${config.keyword}"
 ${config.title ? `\nTítulo sugerido: "${config.title}"` : ''}
 ${config.sourcesContext ? `\nContexto adicional:\n${config.sourcesContext}` : ''}
