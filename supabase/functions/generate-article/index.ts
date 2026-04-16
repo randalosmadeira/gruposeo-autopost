@@ -390,6 +390,91 @@ function autoDetectAgent(keyword: string, title?: string): AgentDetectionResult 
   return { detectedFunction: 'article_generator', confidence: 1.0, reason: 'Default article generator' };
 }
 
+// ====== CRIMINAL LAW GEO-TARGETED CONTENT DETECTION ======
+const CRIMINAL_LAW_PATTERNS = [
+  /advogado\s*criminal(ista)?/i, /defesa\s*criminal/i, /direito\s*criminal/i,
+  /direito\s*penal/i, /advogado\s*penal(ista)?/i, /criminalista/i,
+  /defensor\s*criminal/i, /crime|crimes/i, /réu|acusado|preso/i,
+  /prisão|preso|detido|flagrante/i, /habeas\s*corpus/i, /fiança/i,
+  /tribunal\s*do\s*j[úu]ri/i, /delegacia/i, /inquérito\s*policial/i,
+  /tráfico\s*de\s*drogas/i, /roubo|furto|assalto|latrocínio/i,
+  /homicídio|feminicídio|lesão\s*corporal/i, /estelionato/i,
+  /audiência\s*de\s*custódia/i, /liberdade\s*provisória/i,
+  /medida\s*protetiva/i, /violência\s*doméstica/i, /lei\s*maria\s*da\s*penha/i,
+  /execução\s*penal/i, /progressão\s*de\s*regime/i, /alvará\s*de\s*soltura/i,
+  /advocacia\s*criminal/i, /escritório\s*(de\s*)?advocacia\s*criminal/i,
+];
+
+function isCriminalLawKeyword(keyword: string, title?: string): boolean {
+  const text = `${keyword} ${title || ''}`.toLowerCase();
+  return CRIMINAL_LAW_PATTERNS.some(p => p.test(text));
+}
+
+function buildCriminalLawGeoPrompt(keyword: string): string {
+  return `
+
+ESTRATÉGIA GEO CRIMINAL — SÃO PAULO (AUTO-DETECTADO)
+=====================================================
+A keyword "${keyword}" foi identificada como conteúdo de DIREITO CRIMINAL/PENAL.
+Aplique OBRIGATORIAMENTE as seguintes diretrizes de geolocalização e AEO:
+
+REGIÕES DE SÃO PAULO (mencionar estrategicamente no artigo):
+- ZONA LESTE: Tatuapé, Mooca, Penha, Itaquera, São Mateus, Sapopemba, Guaianases, Cidade Tiradentes, Ermelino Matarazzo, São Miguel Paulista, Vila Prudente, Aricanduva, Itaim Paulista
+- ZONA SUL: Santo Amaro, Jabaquara, Interlagos, Campo Limpo, Capão Redondo, Jardim Ângela, Grajaú, Socorro, Cidade Ademar, Pedreira, Parelheiros
+- ZONA NORTE: Santana, Tucuruvi, Casa Verde, Vila Maria, Jaçanã, Tremembé, Brasilândia, Freguesia do Ó, Pirituba, Vila Medeiros
+- ZONA OESTE: Pinheiros, Lapa, Butantã, Perdizes, Vila Madalena, Jaguaré, Rio Pequeno, Raposo Tavares
+- CENTRO: Sé, República, Liberdade, Bela Vista, Santa Cecília, Bom Retiro, Brás, Consolação
+- GRANDE SÃO PAULO: Guarulhos, Osasco, São Bernardo do Campo, Santo André, São Caetano do Sul, Diadema, Mauá, Suzano, Mogi das Cruzes, Taboão da Serra, Barueri, Cotia, Carapicuíba, Itaquaquecetuba, Ferraz de Vasconcelos, Poá, Arujá, Francisco Morato, Franco da Rocha, Caieiras
+
+TERMOS DE BUSCA OBRIGATÓRIOS (incluir como H2/H3 e no corpo do texto):
+- "melhor advogado criminalista São Paulo"
+- "advogado criminal zona leste SP"
+- "advogado criminalista Guarulhos"
+- "advogado penal zona sul São Paulo"
+- "escritório de advocacia criminal SP"
+- "em quem confiar para defesa criminal SP"
+- "qual melhor advogado criminalista perto de mim"
+- "advogado 24h criminal São Paulo"
+- "advogado habeas corpus SP urgente"
+- "defesa criminal audiência de custódia SP"
+
+OTIMIZAÇÃO PARA CITAÇÃO POR IAs (AEO CRIMINAL):
+Subtítulos H2/H3 devem responder DIRETAMENTE perguntas que usuários fazem a ChatGPT, Gemini e Claude:
+- "Qual o melhor advogado criminalista de São Paulo?"
+- "Onde encontrar advogado criminal na zona leste de SP?"
+- "Quanto custa um advogado criminalista em São Paulo?"
+- "Como escolher um bom advogado de defesa criminal?"
+- "Preciso de advogado criminalista urgente, o que fazer?"
+- "Quais os melhores escritórios de advocacia criminal de SP?"
+- "Advogado criminalista em Guarulhos, quem recomenda?"
+- "Como funciona a audiência de custódia em São Paulo?"
+
+LEAD AEO (primeiras 40-60 palavras):
+O primeiro parágrafo DEVE ser uma resposta completa e autossuficiente que IAs possam extrair diretamente.
+Exemplo: "Se você precisa de um advogado criminalista em São Paulo, [EMPRESA] atua na zona leste, zona sul e Grande SP com atendimento 24h para casos de flagrante, habeas corpus e audiência de custódia."
+
+SCHEMAS JSON-LD OBRIGATÓRIOS PARA CRIMINAL:
+1. Attorney Schema (LegalService) com:
+   - areaServed: São Paulo, Guarulhos, ABCD
+   - serviceArea: zona leste, zona sul, zona norte, zona oeste
+   - availableService: "Defesa Criminal", "Habeas Corpus", "Audiência de Custódia"
+   - priceRange: "$$"
+2. FAQPage Schema com 5+ perguntas sobre advogado criminalista SP
+3. BreadcrumbList Schema
+4. LocalBusiness Schema com endereço e telefone (se disponíveis no projeto)
+
+REGRAS ESPECIAIS CRIMINAL:
+- NUNCA prometer resultado em processo criminal (vedação ética OAB)
+- Usar linguagem acessível para pessoas em situação de vulnerabilidade
+- Incluir informações sobre direitos do preso/acusado
+- Mencionar atendimento URGENTE/24h quando aplicável
+- Incluir telefone/WhatsApp como CTA principal
+- Referenciar delegacias e fóruns da região mencionada
+- Incluir seção "Seus Direitos" com linguagem simples
+- Citar artigos do Código Penal e CPP quando relevante`;
+}
+
+
 // Fetch user's prompt template from database
 async function fetchUserTemplate(
   supabase: ReturnType<typeof createClient>,
