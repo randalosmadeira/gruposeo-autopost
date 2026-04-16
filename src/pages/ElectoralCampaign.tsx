@@ -44,6 +44,10 @@ interface CandidateConfig {
     website: string;
     whatsapp: string;
   };
+  videoUrls: {
+    youtube: string[];
+    instagram: string[];
+  };
   brandStyle: 'madeira-neles' | 'madeira-sem-verniz' | 'both';
   contentTone: 'coloquial' | 'popular-direto' | 'combativo';
 }
@@ -63,6 +67,7 @@ const defaultConfig: CandidateConfig = {
   competitors: '',
   differentials: '',
   socialMedia: { instagram: '', youtube: '', twitter: '', facebook: '', tiktok: '', website: '', whatsapp: '' },
+  videoUrls: { youtube: [], instagram: [] },
   brandStyle: 'both',
   contentTone: 'coloquial',
 };
@@ -293,6 +298,69 @@ export default function ElectoralCampaign() {
                 <div className="flex items-center gap-2"><Smartphone className="w-5 h-5 text-foreground" /><Input placeholder="tiktok.com/@candidato" value={config.socialMedia.tiktok} onChange={e => updateSocial('tiktok', e.target.value)} /></div>
                 <div className="flex items-center gap-2"><Globe className="w-5 h-5 text-primary" /><Input placeholder="www.candidato.com.br" value={config.socialMedia.website} onChange={e => updateSocial('website', e.target.value)} /></div>
                 <div className="flex items-center gap-2"><Smartphone className="w-5 h-5 text-green-500" /><Input placeholder="(11) 99999-9999" value={config.socialMedia.whatsapp} onChange={e => updateSocial('whatsapp', e.target.value)} /></div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Vídeos para Embed */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2"><Youtube className="w-5 h-5 text-red-500" /> Vídeos para Indexação</CardTitle>
+              <CardDescription>URLs de vídeos do YouTube e Instagram para embed nos artigos (melhora indexação e autoridade)</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><Youtube className="w-4 h-4 text-red-500" /> Vídeos do YouTube</Label>
+                {config.videoUrls.youtube.map((url, i) => (
+                  <div key={i} className="flex gap-2">
+                    <Input
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      value={url}
+                      onChange={e => {
+                        const newUrls = [...config.videoUrls.youtube];
+                        newUrls[i] = e.target.value;
+                        updateConfig('videoUrls', { ...config.videoUrls, youtube: newUrls });
+                      }}
+                    />
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      const newUrls = config.videoUrls.youtube.filter((_, idx) => idx !== i);
+                      updateConfig('videoUrls', { ...config.videoUrls, youtube: newUrls });
+                    }}>✕</Button>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" onClick={() => updateConfig('videoUrls', { ...config.videoUrls, youtube: [...config.videoUrls.youtube, ''] })}>
+                  + Adicionar vídeo YouTube
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><Instagram className="w-4 h-4 text-pink-500" /> Posts/Reels do Instagram</Label>
+                {config.videoUrls.instagram.map((url, i) => (
+                  <div key={i} className="flex gap-2">
+                    <Input
+                      placeholder="https://www.instagram.com/reel/... ou /p/..."
+                      value={url}
+                      onChange={e => {
+                        const newUrls = [...config.videoUrls.instagram];
+                        newUrls[i] = e.target.value;
+                        updateConfig('videoUrls', { ...config.videoUrls, instagram: newUrls });
+                      }}
+                    />
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      const newUrls = config.videoUrls.instagram.filter((_, idx) => idx !== i);
+                      updateConfig('videoUrls', { ...config.videoUrls, instagram: newUrls });
+                    }}>✕</Button>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" onClick={() => updateConfig('videoUrls', { ...config.videoUrls, instagram: [...config.videoUrls.instagram, ''] })}>
+                  + Adicionar post/reel Instagram
+                </Button>
+              </div>
+              <div className="p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground space-y-1">
+                <p className="font-semibold">🚀 Como os vídeos melhoram a indexação:</p>
+                <p>• <strong>Google:</strong> Artigos com vídeo embed têm 53x mais chances de aparecer na 1ª página</p>
+                <p>• <strong>ChatGPT/Claude/Gemini:</strong> Citam fontes com rich media como referência de autoridade</p>
+                <p>• <strong>IndexNow/Bing:</strong> VideoObject Schema acelera indexação e gera rich snippets</p>
+                <p>• <strong>YouTube:</strong> Backlink do artigo melhora SEO do vídeo e vice-versa</p>
               </div>
             </CardContent>
           </Card>
