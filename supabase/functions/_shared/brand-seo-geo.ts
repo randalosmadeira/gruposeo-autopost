@@ -259,12 +259,18 @@ export function buildBrandSEOGeoPrompt(
   }
 }
 
-function buildRDMPrompt(config: ProjectConfig | undefined, year: number, contentHint?: string): string {
+function buildRDMPrompt(
+  config: ProjectConfig | undefined,
+  year: number,
+  contentHint?: string,
+  hyperlocalPoi?: HyperlocalPoi | null,
+): string {
   const siteUrl = config?.social_linktree || config?.wordpress_url || '';
 
   // ============ INJEÇÃO GEO/AEO 2026 (RDM ONLY) ============
   const subArea = detectLegalSubArea(contentHint || config?.empresa_nome || '');
-  const isLocalUrgency = subArea === 'audiencia_custodia';
+  const hyperlocalDet = detectHyperlocalIntent(contentHint || '');
+  const isLocalUrgency = subArea === 'audiencia_custodia' || hyperlocalDet.isUrgency;
   const geo2026 = buildGeo2026Block({
     subArea,
     isLocalUrgency,
@@ -274,6 +280,19 @@ function buildRDMPrompt(config: ProjectConfig | undefined, year: number, content
     officeWhatsapp: config?.empresa_whatsapp,
     siteUrl,
   });
+
+  // ============ INJEÇÃO HIPERLOCAL 2026 (só se houver POI resolvido) ============
+  const hyperlocalBlock = hyperlocalPoi
+    ? buildHyperlocalBlock({
+        poi: hyperlocalPoi,
+        subArea,
+        isUrgency: isLocalUrgency,
+        attorneyName: 'Dr. Rândalos Madeira',
+        officeAddress: config?.empresa_endereco || 'Av. Paulista, São Paulo/SP',
+        officePhone: config?.empresa_telefone,
+        siteUrl,
+      })
+    : '';
 
   return `
 ## 🏛️ IDENTIDADE DA MARCA: RDM Advogados Associados
