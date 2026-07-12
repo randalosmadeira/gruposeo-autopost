@@ -39,6 +39,7 @@ const AIChat = lazy(() => import("./pages/AIChat"));
 const BNMPRepost = lazy(() => import("./pages/BNMPRepost"));
 const ElectoralCampaign = lazy(() => import("./pages/ElectoralCampaign"));
 const PainelMigracao = lazy(() => import("./pages/PainelMigracao"));
+const AuditoriaGBP = lazy(() => import("./pages/AuditoriaGBP"));
 
 
 const queryClient = new QueryClient({
