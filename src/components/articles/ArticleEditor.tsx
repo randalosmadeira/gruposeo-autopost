@@ -17,6 +17,7 @@ import { ArticleEditorSidebar } from './editor/ArticleEditorSidebar';
 import { ReportProblemDialog } from './editor/ReportProblemDialog';
 import { RecreateArticleButton } from './editor/RecreateArticleButton';
 import { VersionHistoryPanel } from './editor/VersionHistoryPanel';
+import { FirstSentencePreview } from './editor/FirstSentencePreview';
 
 interface ArticleConfig {
   type?: string;
