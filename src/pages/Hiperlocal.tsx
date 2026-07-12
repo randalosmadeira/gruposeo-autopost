@@ -237,9 +237,27 @@ export default function Hiperlocal() {
     setDrafts(nextDrafts);
   };
 
+  // ============ Titles / Pautas ============
+  const loadTitles = async () => {
+    setLoadingTitles(true);
+    const { data, error } = await supabase
+      .from("hyperlocal_title_templates")
+      .select("id, user_id, category, title, poi_type, ymyl_subarea, neighborhood_hint, city_hint, is_urgency, status, source")
+      .eq("status", "approved")
+      .order("category")
+      .order("title");
+    if (error) {
+      toast({ title: "Erro ao carregar títulos", description: error.message, variant: "destructive" });
+    } else {
+      setTitles((data ?? []) as TitleRow[]);
+    }
+    setLoadingTitles(false);
+  };
+
   useEffect(() => {
     loadPois();
     loadTemplates();
+    loadTitles();
   }, []);
 
   // ============ Discover ============
