@@ -265,6 +265,7 @@ function buildRDMPrompt(
   year: number,
   contentHint?: string,
   hyperlocalPoi?: HyperlocalPoi | null,
+  hyperlocalTemplateOverride?: string | null,
 ): string {
   const siteUrl = config?.social_linktree || config?.wordpress_url || '';
 
@@ -284,15 +285,18 @@ function buildRDMPrompt(
 
   // ============ INJEÇÃO HIPERLOCAL 2026 (só se houver POI resolvido) ============
   const hyperlocalBlock = hyperlocalPoi
-    ? buildHyperlocalBlock({
-        poi: hyperlocalPoi,
-        subArea,
-        isUrgency: isLocalUrgency,
-        attorneyName: 'Dr. Rândalos Madeira',
-        officeAddress: config?.empresa_endereco || 'Av. Paulista, São Paulo/SP',
-        officePhone: config?.empresa_telefone,
-        siteUrl,
-      })
+    ? buildHyperlocalBlock(
+        {
+          poi: hyperlocalPoi,
+          subArea,
+          isUrgency: isLocalUrgency,
+          attorneyName: 'Dr. Rândalos Madeira',
+          officeAddress: config?.empresa_endereco || 'Av. Paulista, São Paulo/SP',
+          officePhone: config?.empresa_telefone,
+          siteUrl,
+        },
+        hyperlocalTemplateOverride,
+      )
     : '';
 
   return `
