@@ -967,16 +967,19 @@ Se QUALQUER item está faltando, CORRIJA antes de entregar. Conteúdo sem links 
 
 ⚠️ REGENERAÇÃO OBRIGATÓRIA — TENTATIVA ${attempts}/${MAX_REGEN}
 O parágrafo §1 anterior falhou na validação GEO 2026:
-- Palavras detectadas: ${validation.wordCount} (obrigatório: 40-60)
+- §1 total: ${validation.wordCount} palavras (obrigatório: 40-60)
+- 1ª frase (resposta direta): ${validation.firstSentenceWordCount} palavras (obrigatório: ≤30 — regra ouro AEO 2026)
 - Base legal presente: ${validation.hasLegalBase ? 'sim' : 'NÃO'}
 - Jurisdição presente: ${validation.hasJurisdiction ? 'sim' : 'NÃO'}
+- Motivo: ${validation.reason || '-'}
 
 REESCREVA o artigo COMPLETO. O PRIMEIRO <p> DEVE:
 1. Ter class="lead-answer" data-geo="frontload"
-2. Conter 40-60 palavras
-3. Citar base legal explícita (art. X, Lei Y/AAAA, ou tribunal + ano)
-4. Mencionar jurisdição (São Paulo/Brasil/federal)
-5. Responder diretamente ao tema em 1 frase técnica.`;
+2. Total 40-60 palavras
+3. **1ª frase (resposta direta) em ATÉ 30 palavras** — ela é o snippet que ChatGPT/Gemini vão citar.
+4. Citar base legal explícita (art. X, Lei Y/AAAA, ou tribunal + ano) já na 1ª ou 2ª frase.
+5. Mencionar jurisdição (São Paulo/Brasil/federal).
+6. Responder diretamente à pergunta do TÍTULO — não uma introdução genérica.`;
         const regen = await callAIStream(
           [
             { role: "system", content: systemPrompt },
