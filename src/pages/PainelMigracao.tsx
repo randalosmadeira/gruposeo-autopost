@@ -7,7 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import {
   Eye, EyeOff, Copy, Check, ShieldAlert, Key, Download, Loader2,
-  Code2, Database, AlertTriangle, Info,
+  Code2, Database, AlertTriangle, Info, FileCode,
 } from 'lucide-react';
 
 interface MigrationData {
