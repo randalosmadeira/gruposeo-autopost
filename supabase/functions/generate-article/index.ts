@@ -9,6 +9,7 @@ import { orchestrate } from "../_shared/verniz-orchestrator.ts";
 import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
 import { detectBrand, buildBrandSEOGeoPrompt } from "../_shared/brand-seo-geo.ts";
 import { validateFrontloading } from "../_shared/geo-aeo-2026.ts";
+import { resolvePoiForContent, type HyperlocalPoi } from "../_shared/hyperlocal-2026.ts";
 
 const FUNCTION_NAME = "generate-article";
 
