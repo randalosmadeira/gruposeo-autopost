@@ -21,7 +21,7 @@ import {
   ChevronDown,
   FileText,
   MessageSquare,
-  Gavel,
+  
   Vote,
 } from 'lucide-react';
 import {
@@ -83,14 +83,6 @@ const navGroups: NavGroup[] = [
             icon: FileEdit, 
             href: '/news-rewriter',
             iconColor: '#10B981',
-          },
-          { 
-            label: 'BNMP', 
-            icon: Gavel, 
-            href: '/bnmp-repost',
-            badge: 'Novo',
-            badgeVariant: 'orange' as const,
-            iconColor: '#FF4500',
           },
           { 
             label: 'Eleitoral', 

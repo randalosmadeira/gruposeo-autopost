@@ -34,7 +34,7 @@ Em 2026 o eixo do SEO deslocou-se para **GEO (Generative Engine Optimization)** 
 | Arquivo | Status | Ação sugerida |
 | --- | --- | --- |
 | `supabase/functions/painel-migracao/*` + `migrate-sql` + `execute-migration-remote` | Uso pontual (migração VPS concluída) | Manter congelado, mover para pasta `/legacy/` em fase 2 |
-| `supabase/functions/bnmp-*` (via news-rewriter) | Ativo | Manter |
+
 | `emotional-triggers-config.ts` | Ativo | Adicionar gatilho "Segurança Institucional" (YMYL) |
 | Rotas duplicadas: `ArticleGenerator` + `ArticleGeneratorV2` | Duplicada | Deprecar V1 quando V2 estabilizar |
 
