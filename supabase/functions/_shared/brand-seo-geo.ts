@@ -331,7 +331,9 @@ ${buildSocialMediaSection(config)}
 
 ${buildCTASection(config, 'RDM')}
 
-${geo2026}`;
+${geo2026}
+
+${hyperlocalBlock}`;
 }
 
 function buildElasTracyPrompt(config: ProjectConfig | undefined, year: number): string {
