@@ -708,6 +708,24 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ====== HYPERLOCAL TEMPLATE OVERRIDE (RDM only) ======
+    let hyperlocalTemplateOverride: string | null = null;
+    if (brandDetection.brand === 'rdm' && hyperlocalPoi) {
+      const { poiTypeToTemplateKind } = await import("../_shared/hyperlocal-2026.ts");
+      const kind = poiTypeToTemplateKind(hyperlocalPoi.poi_type);
+      const { data: tpl } = await supabase
+        .from('hyperlocal_template_overrides')
+        .select('content, is_active')
+        .eq('user_id', user.id)
+        .eq('template_kind', kind)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (tpl?.content) {
+        hyperlocalTemplateOverride = tpl.content as string;
+        log.info("hyperlocal_template_override_applied", { kind });
+      }
+    }
+
     const brandSEOGeoSection = buildBrandSEOGeoPrompt(
       brandDetection,
       config.projectConfig
@@ -729,7 +747,7 @@ Deno.serve(async (req) => {
             cta_leads: config.projectConfig.cta_leads,
           }
         : undefined,
-      { contentHint, hyperlocalPoi },
+      { contentHint, hyperlocalPoi, hyperlocalTemplateOverride },
     );
 
     log.info("brand_detected", {
