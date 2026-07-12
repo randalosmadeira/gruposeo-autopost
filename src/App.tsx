@@ -88,6 +88,7 @@ const App = () => (
                 <Route path="/articles/new" element={<ArticleGeneratorV2 />} />
                 <Route path="/articles/new/:type" element={<ArticleGenerator />} />
                 <Route path="/articles/bulk" element={<BulkArticleGenerator />} />
+                <Route path="/bulk-articles" element={<BulkArticleGenerator />} />
                 <Route path="/articles/:id/edit" element={<ArticleEditPage />} />
                 <Route path="/articles/:id" element={<ArticleViewPage />} />
                 <Route path="/landing-page/new" element={<LandingPageGenerator />} />
