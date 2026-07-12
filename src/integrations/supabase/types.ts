@@ -658,6 +658,39 @@ export type Database = {
         }
         Relationships: []
       }
+      hyperlocal_template_overrides: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          is_active: boolean
+          template_kind: string
+          updated_at: string
+          updated_by_ai: boolean
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          template_kind: string
+          updated_at?: string
+          updated_by_ai?: boolean
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          template_kind?: string
+          updated_at?: string
+          updated_by_ai?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
       internal_link_suggestions: {
         Row: {
           anchor_context: string | null

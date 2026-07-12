@@ -40,6 +40,7 @@ const BNMPRepost = lazy(() => import("./pages/BNMPRepost"));
 const ElectoralCampaign = lazy(() => import("./pages/ElectoralCampaign"));
 const PainelMigracao = lazy(() => import("./pages/PainelMigracao"));
 const AuditoriaGBP = lazy(() => import("./pages/AuditoriaGBP"));
+const Hiperlocal = lazy(() => import("./pages/Hiperlocal"));
 
 
 const queryClient = new QueryClient({
@@ -109,6 +110,7 @@ const App = () => (
                 <Route path="/bnmp-repost" element={<BNMPRepost />} />
                 <Route path="/electoral-campaign" element={<ElectoralCampaign />} />
                 <Route path="/auditoria-gbp" element={<AuditoriaGBP />} />
+                <Route path="/hiperlocal" element={<Hiperlocal />} />
                 <Route path="/system-prompts" element={<SettingsPage />} />
 
               </Route>

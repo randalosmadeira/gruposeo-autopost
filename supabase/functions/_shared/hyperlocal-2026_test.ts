@@ -149,21 +149,49 @@ Deno.test('buildHyperlocalSchema — SEM Place quando POI não tem geo', () => {
   assert(!out.includes('GeoCoordinates'));
 });
 
-Deno.test('buildHyperlocalSchema — LocalBusiness 24/7 SOMENTE em urgência', () => {
-  const withUrgency = buildHyperlocalSchema({
-    poi: POI_DELEGACIA_24,
+Deno.test('buildHyperlocalSchema — LocalBusiness emitido quando isUrgency=true (opens/closes 00-23:59)', () => {
+  const out = buildHyperlocalSchema({
+    poi: POI_FORUM, // not 24/7
     isUrgency: true,
     officeAddress: 'Av. Paulista, 100',
     officeGeo: { lat: -23.56, lng: -46.65 },
     officePhone: '(11) 9xxxx-xxxx',
   });
-  assert(withUrgency.includes('LocalBusiness'));
-  assert(withUrgency.includes('Plantão 24h'));
-  assert(withUrgency.includes('"opens": "00:00"'));
-  assert(withUrgency.includes('"closes": "23:59"'));
+  assert(out.includes('LocalBusiness'));
+  assert(out.includes('Plantão 24h'));
+  assert(out.includes('"opens": "00:00"'));
+  assert(out.includes('"closes": "23:59"'));
+});
 
-  const withoutUrgency = buildHyperlocalSchema({ poi: POI_FORUM, isUrgency: false });
-  assert(!withoutUrgency.includes('LocalBusiness'));
+Deno.test('buildHyperlocalSchema — LocalBusiness emitido quando POI.is_24_7=true mesmo sem isUrgency', () => {
+  const out = buildHyperlocalSchema({ poi: POI_DELEGACIA_24, isUrgency: false });
+  assert(out.includes('LocalBusiness'));
+  assert(out.includes('"opens": "00:00"'));
+  assert(out.includes('"closes": "23:59"'));
+});
+
+Deno.test('buildHyperlocalSchema — NO LocalBusiness quando POI não é 24/7 e sem urgência', () => {
+  const out = buildHyperlocalSchema({ poi: POI_FORUM, isUrgency: false });
+  assert(!out.includes('LocalBusiness'));
+});
+
+Deno.test('buildHyperlocalSchema — LocalBusiness inclui areaServed e GeoCoordinates', () => {
+  const out = buildHyperlocalSchema({
+    poi: POI_DELEGACIA_24,
+    isUrgency: true,
+    officeGeo: { lat: -23.56, lng: -46.65 },
+  });
+  // areaServed no LocalBusiness (aparece 2x: LegalService + LocalBusiness)
+  const areaServedCount = (out.match(/"areaServed"/g) || []).length;
+  assert(areaServedCount >= 2, `esperava >=2 areaServed, veio ${areaServedCount}`);
+  // GeoCoordinates presente com office geo
+  assert(out.includes('"latitude": -23.56'));
+});
+
+Deno.test('buildHyperlocalSchema — LegalService.geo cai no POI quando officeGeo ausente', () => {
+  const out = buildHyperlocalSchema({ poi: POI_FORUM }); // POI tem lat/lng, sem officeGeo
+  assert(out.includes('GeoCoordinates'));
+  assert(out.includes('-23.5245'));
 });
 
 Deno.test('buildHyperlocalSchema — FAQPage sempre presente com 3 perguntas', () => {
@@ -172,6 +200,22 @@ Deno.test('buildHyperlocalSchema — FAQPage sempre presente com 3 perguntas', (
   assert(out.includes('endereço'));
   assert(out.includes('bairros'));
   assert(out.includes('horário'));
+});
+
+// ==================== template override ====================
+
+Deno.test('pickHyperlocalTemplate — usa override e interpola {{name}} e {{city}}', () => {
+  const tpl = 'Custom: {{name}} em {{city}}/{{state_uf}} — bairro {{neighborhood}}.';
+  const out = pickHyperlocalTemplate(POI_FORUM, tpl);
+  assertEquals(
+    out,
+    'Custom: Fórum Regional da Barra Funda em São Paulo/SP — bairro Barra Funda.',
+  );
+});
+
+Deno.test('pickHyperlocalTemplate — override vazio cai no default por tipo', () => {
+  const out = pickHyperlocalTemplate(POI_DELEGACIA_24, '');
+  assert(out.includes('DELEGACIA'));
 });
 
 // ==================== buildHyperlocalBlock ====================

@@ -230,16 +230,46 @@ export function buildPoloTemplate(poi: HyperlocalPoi): string {
 Em 2 frases, resumir 1 obrigação regulatória crítica + 1 risco tributário típico do polo.`.trim();
 }
 
-export function pickHyperlocalTemplate(poi: HyperlocalPoi): string {
-  switch (poi.poi_type) {
+export type TemplateKind = 'forum' | 'delegacia' | 'polo';
+
+export function poiTypeToTemplateKind(t: HyperlocalPoi['poi_type']): TemplateKind {
+  if (t === 'delegacia') return 'delegacia';
+  if (t === 'forum' || t === 'tribunal') return 'forum';
+  return 'polo';
+}
+
+/**
+ * Interpola placeholders {{name}} de um template livre com dados do POI.
+ * Usado quando o usuário definiu um override no painel /hiperlocal.
+ */
+function interpolateTemplate(tpl: string, poi: HyperlocalPoi): string {
+  const map: Record<string, string> = {
+    name: poi.name,
+    poi_name: poi.name,
+    full_address: poi.full_address || '',
+    neighborhood: poi.neighborhood || '',
+    city: poi.city,
+    state_uf: poi.state_uf,
+    comarca: poi.comarca || '',
+    opening_hours: poi.opening_hours || (poi.is_24_7 ? '24 horas por dia, 7 dias por semana' : ''),
+    neighborhoods_served: (poi.neighborhoods_served || []).join(', '),
+    urgency_phone: poi.urgency_phone || '',
+    virtual_channel_url: poi.virtual_channel_url || '',
+    official_url: poi.official_url || '',
+  };
+  return tpl.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_m, k) => map[k.toLowerCase()] ?? '');
+}
+
+export function pickHyperlocalTemplate(poi: HyperlocalPoi, override?: string | null): string {
+  if (override && override.trim().length > 0) {
+    return interpolateTemplate(override, poi);
+  }
+  switch (poiTypeToTemplateKind(poi.poi_type)) {
     case 'delegacia':
       return buildDelegaciaTemplate(poi);
     case 'forum':
-    case 'tribunal':
       return buildForumTemplate(poi);
     case 'polo':
-    case 'cartorio':
-    case 'outro':
     default:
       return buildPoloTemplate(poi);
   }
@@ -258,29 +288,79 @@ export interface HyperlocalSchemaConfig {
   siteUrl?: string;
 }
 
-export function buildHyperlocalSchema(cfg: HyperlocalSchemaConfig): string {
-  const { poi } = cfg;
-  const attorney = cfg.attorneyName || 'Dr. Rândalos Madeira';
-  const isUrgency = !!cfg.isUrgency;
+const ALL_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-  // 1) LegalService + Attorney com areaServed do POI
-  const areaServed: any[] = [];
+/**
+ * Regra unificada de emissão do LocalBusiness:
+ *   emite se POI é 24/7 OU se o artigo é de urgência (plantão/custódia).
+ * openingHoursSpecification reflete o estado real:
+ *   - is_24_7 → 24/7
+ *   - isUrgency (não 24/7) → 24/7 (o plantão RDM opera 24h)
+ *   - caso contrário → tenta parsear opening_hours livre; se não parsear, cai em 24/7
+ */
+function buildOpeningHours(poi: HyperlocalPoi, isUrgency: boolean) {
+  if (poi.is_24_7 || isUrgency) {
+    return {
+      '@type': 'OpeningHoursSpecification',
+      dayOfWeek: ALL_WEEK,
+      opens: '00:00',
+      closes: '23:59',
+    };
+  }
+  // Fallback: mantém string livre em `description` para não mentir
+  return {
+    '@type': 'OpeningHoursSpecification',
+    dayOfWeek: ALL_WEEK,
+    description: poi.opening_hours || 'Consulte horário no site oficial',
+  };
+}
+
+/**
+ * areaServed consistente: sempre bairro (se houver) + cidade + comarca + bairros_atendidos.
+ * Sem duplicatas por nome.
+ */
+function buildAreaServed(poi: HyperlocalPoi): any[] {
+  const seen = new Set<string>();
+  const out: any[] = [];
+  const push = (entry: { '@type': string; name: string; containedInPlace?: any }) => {
+    const key = `${entry['@type']}::${entry.name.toLowerCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(entry);
+  };
+
   if (poi.neighborhood) {
-    areaServed.push({
+    push({
       '@type': 'AdministrativeArea',
       name: poi.neighborhood,
       containedInPlace: { '@type': 'City', name: poi.city },
     });
   }
-  areaServed.push({ '@type': 'City', name: poi.city });
+  push({ '@type': 'City', name: poi.city });
   if (poi.comarca) {
-    areaServed.push({ '@type': 'AdministrativeArea', name: `Comarca de ${poi.comarca}` });
+    push({ '@type': 'AdministrativeArea', name: `Comarca de ${poi.comarca}` });
   }
-  if (poi.neighborhoods_served?.length) {
-    for (const b of poi.neighborhoods_served) {
-      areaServed.push({ '@type': 'AdministrativeArea', name: b });
-    }
+  for (const b of poi.neighborhoods_served || []) {
+    push({ '@type': 'AdministrativeArea', name: b });
   }
+  return out;
+}
+
+export function buildHyperlocalSchema(cfg: HyperlocalSchemaConfig): string {
+  const { poi } = cfg;
+  const attorney = cfg.attorneyName || 'Dr. Rândalos Madeira';
+  const isUrgency = !!cfg.isUrgency;
+  const emitLocalBusiness = !!poi.is_24_7 || isUrgency;
+
+  // GeoCoordinates: prefere office (do escritório RDM), cai no POI
+  const officeGeoResolved =
+    cfg.officeGeo ??
+    (poi.latitude != null && poi.longitude != null
+      ? { lat: Number(poi.latitude), lng: Number(poi.longitude) }
+      : undefined);
+
+  // 1) LegalService + Attorney com areaServed do POI
+  const areaServed = buildAreaServed(poi);
 
   const legalService: Record<string, unknown> = {
     '@context': 'https://schema.org',
@@ -303,11 +383,20 @@ export function buildHyperlocalSchema(cfg: HyperlocalSchemaConfig): string {
           },
         }
       : {}),
+    ...(officeGeoResolved
+      ? {
+          geo: {
+            '@type': 'GeoCoordinates',
+            latitude: officeGeoResolved.lat,
+            longitude: officeGeoResolved.lng,
+          },
+        }
+      : {}),
     ...(cfg.officePhone ? { telephone: cfg.officePhone } : {}),
     ...(cfg.siteUrl ? { url: cfg.siteUrl } : {}),
   };
 
-  // 2) Place com GeoCoordinates do POI
+  // 2) Place com GeoCoordinates do POI (referenciado pela LegalService via areaServed)
   const place: Record<string, unknown> | null =
     poi.latitude != null && poi.longitude != null
       ? {
@@ -327,19 +416,19 @@ export function buildHyperlocalSchema(cfg: HyperlocalSchemaConfig): string {
             : {}),
           geo: {
             '@type': 'GeoCoordinates',
-            latitude: poi.latitude,
-            longitude: poi.longitude,
+            latitude: Number(poi.latitude),
+            longitude: Number(poi.longitude),
           },
           ...(poi.official_url ? { url: poi.official_url } : {}),
         }
       : null;
 
-  // 3) LocalBusiness 24/7 — SOMENTE se urgência
-  const localBusiness: Record<string, unknown> | null = isUrgency
+  // 3) LocalBusiness — reflete is_24_7 do POI OU urgência
+  const localBusiness: Record<string, unknown> | null = emitLocalBusiness
     ? {
         '@context': 'https://schema.org',
         '@type': 'LocalBusiness',
-        name: 'RDM Advogados — Plantão 24h',
+        name: isUrgency || poi.is_24_7 ? 'RDM Advogados — Plantão 24h' : 'RDM Advogados Associados',
         ...(cfg.officeAddress
           ? {
               address: {
@@ -351,22 +440,19 @@ export function buildHyperlocalSchema(cfg: HyperlocalSchemaConfig): string {
               },
             }
           : {}),
-        ...(cfg.officeGeo
+        ...(officeGeoResolved
           ? {
               geo: {
                 '@type': 'GeoCoordinates',
-                latitude: cfg.officeGeo.lat,
-                longitude: cfg.officeGeo.lng,
+                latitude: officeGeoResolved.lat,
+                longitude: officeGeoResolved.lng,
               },
             }
           : {}),
-        openingHoursSpecification: {
-          '@type': 'OpeningHoursSpecification',
-          dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
-          opens: '00:00',
-          closes: '23:59',
-        },
+        openingHoursSpecification: buildOpeningHours(poi, isUrgency),
+        areaServed,
         ...(cfg.officePhone ? { telephone: cfg.officePhone } : {}),
+        ...(cfg.siteUrl ? { url: cfg.siteUrl } : {}),
       }
     : null;
 
@@ -412,8 +498,13 @@ export function buildHyperlocalSchema(cfg: HyperlocalSchemaConfig): string {
     );
   }
   if (localBusiness) {
+    const label = poi.is_24_7 && !isUrgency
+      ? 'LocalBusiness (POI 24/7)'
+      : isUrgency
+      ? 'LocalBusiness 24/7 (urgência — plantão)'
+      : 'LocalBusiness';
     blocks.push(
-      `### 3) LocalBusiness 24/7 (urgência — plantão)\n\`\`\`json\n${JSON.stringify(localBusiness, null, 2)}\n\`\`\``,
+      `### 3) ${label}\n\`\`\`json\n${JSON.stringify(localBusiness, null, 2)}\n\`\`\``,
     );
   }
   blocks.push(
@@ -431,8 +522,8 @@ ${blocks.join('\n\n')}
 
 // ==================== BLOCO PRINCIPAL ====================
 
-export function buildHyperlocalBlock(cfg: HyperlocalSchemaConfig): string {
-  const template = pickHyperlocalTemplate(cfg.poi);
+export function buildHyperlocalBlock(cfg: HyperlocalSchemaConfig, templateOverride?: string | null): string {
+  const template = pickHyperlocalTemplate(cfg.poi, templateOverride);
   const schema = buildHyperlocalSchema(cfg);
 
   return `
