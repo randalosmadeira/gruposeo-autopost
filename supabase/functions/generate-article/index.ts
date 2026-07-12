@@ -977,8 +977,78 @@ ${examples.map((t, i) => `${i + 1}. ${t}`).join('\n')}
       }
     }
 
+    // ====== Corporate Legal directive (Tributário, Ordem Econômica, Execução Fiscal, Crédito Fomento) ======
+    let corporateLegalBlock = '';
+    const CORPORATE_LEGAL_CATS = new Set(['tributario', 'ordem_economica', 'execucao_fiscal', 'credito_fomento']);
+    if (brandDetection.brand === 'rdm' && pickedTitleCategory && CORPORATE_LEGAL_CATS.has(pickedTitleCategory)) {
+      corporateLegalBlock = `
+
+## ⚖️ DIRETRIZ CORPORATE LEGAL 2026 (categoria: ${pickedTitleCategory}) — OBRIGATÓRIA
+
+Este artigo pertence ao pilar de **Direito Penal Econômico / Tributário / Corporativo**. Aplique as regras abaixo SEM EXCEÇÃO:
+
+### 1) Seção final OBRIGATÓRIA: "Análise Jurídica do Impacto Empresarial"
+Antes do bloco de FAQ/CTA, inclua um H2 EXATO com esse título. Nela:
+- Escreva **Legal Opinion técnica** (opinião legal), não paráfrase da lei.
+- Parágrafos curtos (≤3 linhas). KWs-alvo em <strong>…</strong>.
+- Feche posicionando o escritório como ator **preventivo** — estruturação de **comitês de compliance** para tirar o sócio da linha de tiro do **MPF / Procuradorias Fazendárias**.
+- Nunca prometa resultado; a linguagem é analítica e institucional.
+
+### 2) Hedge editorial para menções nominais (obrigatório)
+Ao citar marcas ou pessoas públicas reais (Ultrafarma, Sidney Oliveira, Ambev, cases de grande repercussão), use SEMPRE fórmulas de blindagem:
+- "segundo repercussão pública noticiada pela imprensa"
+- "conforme cases de mercado de conhecimento notório"
+- "sem prejuízo do princípio constitucional da presunção de inocência (art. 5º, LVII, CF)"
+JAMAIS afirme fatos não julgados, JAMAIS impute crime a pessoa nomeada, JAMAIS use adjetivação depreciativa.
+
+### 3) KWs-alvo com <strong> (mínimo 6 aparições distribuídas ao longo do texto)
+crimes contra a ordem tributária · responsabilidade penal dos sócios · blindagem patrimonial de marcas · redirecionamento de execução fiscal · art 135 CTN · Lei 8.137/90 · STF Tema 999 · Súmula 435 STJ · Lei 9.279/96 · propriedade industrial · Lei 7.492/86 (para crédito de fomento) · art. 66 CDC (para ordem econômica).
+
+### 4) Schema.org JSON-LD OBRIGATÓRIO (colocar em bloco <script type="application/ld+json"> no fim do artigo)
+Emita DOIS objetos JSON-LD interligados:
+
+\`\`\`json
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "{{TÍTULO H1 EXATO}}",
+  "author": { "@type": "Organization", "name": "RDM Advogados Associados" },
+  "publisher": { "@type": "Organization", "name": "RDM Advogados Associados" },
+  "datePublished": "{{YYYY-MM-DD}}",
+  "keywords": "crimes tributários, responsabilidade penal dos sócios, blindagem patrimonial, art 135 CTN, Lei 8.137/90",
+  "about": { "@id": "#rdm-legal-service" },
+  "articleSection": "Direito Penal Econômico"
+}
+\`\`\`
+
+\`\`\`json
+{
+  "@context": "https://schema.org",
+  "@type": "LegalService",
+  "@id": "#rdm-legal-service",
+  "name": "RDM Advogados Associados — Direito Penal Econômico e Tributário",
+  "areaServed": [
+    { "@type": "City", "name": "São Paulo" },
+    { "@type": "City", "name": "Guarulhos" },
+    { "@type": "Place", "name": "Fórum da Barra Funda" },
+    { "@type": "Place", "name": "Justiça Federal de São Paulo (JFSP)" }
+  ],
+  "serviceType": [
+    "Defesa em crimes contra a ordem tributária (Lei 8.137/90)",
+    "Defesa em execuções fiscais e redirecionamento (art. 135 CTN)",
+    "Blindagem patrimonial de marcas (Lei 9.279/96)",
+    "Compliance corporativo e comitês de auditoria jurídica"
+  ]
+}
+\`\`\`
+
+### 5) Densidade & formato
+Parágrafos curtos, negrito nas KWs, use <cite> quando referenciar acórdão/tese com fonte+ano.
+`;
+    }
+
     // Add critical enforcement reminder at the end of user prompt
-    const enforcedUserPrompt = userPrompt + titleFewShotBlock + `
+    const enforcedUserPrompt = userPrompt + titleFewShotBlock + corporateLegalBlock + `
 
 ⚠️ CHECKLIST FINAL ANTES DE RESPONDER (OBRIGATÓRIO):
 □ <!-- META_DESCRIPTION: ... --> presente na PRIMEIRA linha? (145-180 chars, frase COMPLETA)
