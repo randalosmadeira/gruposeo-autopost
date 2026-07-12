@@ -39,6 +39,7 @@ const AIChat = lazy(() => import("./pages/AIChat"));
 const BNMPRepost = lazy(() => import("./pages/BNMPRepost"));
 const ElectoralCampaign = lazy(() => import("./pages/ElectoralCampaign"));
 const PainelMigracao = lazy(() => import("./pages/PainelMigracao"));
+const AuditoriaGBP = lazy(() => import("./pages/AuditoriaGBP"));
 
 
 const queryClient = new QueryClient({
@@ -107,7 +108,9 @@ const App = () => (
                 <Route path="/ai-chat" element={<AIChat />} />
                 <Route path="/bnmp-repost" element={<BNMPRepost />} />
                 <Route path="/electoral-campaign" element={<ElectoralCampaign />} />
+                <Route path="/auditoria-gbp" element={<AuditoriaGBP />} />
                 <Route path="/system-prompts" element={<SettingsPage />} />
+
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

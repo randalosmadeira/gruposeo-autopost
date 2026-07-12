@@ -421,6 +421,198 @@ export type Database = {
         }
         Relationships: []
       }
+      gbp_audits: {
+        Row: {
+          ai_insights: Json | null
+          ai_provider: string | null
+          business_name: string
+          category: string | null
+          city: string
+          country: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          language: string | null
+          local_pack: Json | null
+          own_place: Json | null
+          project_id: string | null
+          search_query: string | null
+          serp_data: Json | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ai_insights?: Json | null
+          ai_provider?: string | null
+          business_name: string
+          category?: string | null
+          city: string
+          country?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          language?: string | null
+          local_pack?: Json | null
+          own_place?: Json | null
+          project_id?: string | null
+          search_query?: string | null
+          serp_data?: Json | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ai_insights?: Json | null
+          ai_provider?: string | null
+          business_name?: string
+          category?: string | null
+          city?: string
+          country?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          language?: string | null
+          local_pack?: Json | null
+          own_place?: Json | null
+          project_id?: string | null
+          search_query?: string | null
+          serp_data?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gbp_audits_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gbp_competitor_snapshots: {
+        Row: {
+          competitor_id: string
+          created_at: string
+          id: string
+          photos_count: number | null
+          posts_count: number | null
+          rating: number | null
+          raw: Json | null
+          reviews_count: number | null
+          snapshot_date: string
+          user_id: string
+        }
+        Insert: {
+          competitor_id: string
+          created_at?: string
+          id?: string
+          photos_count?: number | null
+          posts_count?: number | null
+          rating?: number | null
+          raw?: Json | null
+          reviews_count?: number | null
+          snapshot_date?: string
+          user_id: string
+        }
+        Update: {
+          competitor_id?: string
+          created_at?: string
+          id?: string
+          photos_count?: number | null
+          posts_count?: number | null
+          rating?: number | null
+          raw?: Json | null
+          reviews_count?: number | null
+          snapshot_date?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gbp_competitor_snapshots_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "gbp_competitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gbp_competitors: {
+        Row: {
+          address: string | null
+          audit_id: string
+          category: string | null
+          created_at: string
+          hours: Json | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          name: string
+          phone: string | null
+          place_id: string | null
+          price_level: string | null
+          rating: number | null
+          raw: Json | null
+          reviews_count: number | null
+          tracked: boolean
+          updated_at: string
+          user_id: string
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          audit_id: string
+          category?: string | null
+          created_at?: string
+          hours?: Json | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          phone?: string | null
+          place_id?: string | null
+          price_level?: string | null
+          rating?: number | null
+          raw?: Json | null
+          reviews_count?: number | null
+          tracked?: boolean
+          updated_at?: string
+          user_id: string
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          audit_id?: string
+          category?: string | null
+          created_at?: string
+          hours?: Json | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          phone?: string | null
+          place_id?: string | null
+          price_level?: string | null
+          rating?: number | null
+          raw?: Json | null
+          reviews_count?: number | null
+          tracked?: boolean
+          updated_at?: string
+          user_id?: string
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gbp_competitors_audit_id_fkey"
+            columns: ["audit_id"]
+            isOneToOne: false
+            referencedRelation: "gbp_audits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       generation_logs: {
         Row: {
           completed_at: string | null
