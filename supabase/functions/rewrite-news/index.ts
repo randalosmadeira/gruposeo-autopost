@@ -15,11 +15,6 @@ import {
   MADEIRA_NELES_JSON_INSTRUCTIONS,
   buildMadeiraNelessUserPrompt,
 } from "./madeira-neles-prompt.ts";
-import {
-  BNMP_SYSTEM_PROMPT,
-  BNMP_JSON_INSTRUCTIONS,
-  buildBNMPUserPrompt,
-} from "./bnmp-prompt.ts";
 import { createEmotionalImageSystem } from "../_shared/emotional/emotional-image-system.ts";
 import { orchestrate } from "../_shared/verniz-orchestrator.ts";
 import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
@@ -230,9 +225,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    const isBNMP = rewriteMode === 'madeira_neles' && sourceContent.includes('BNMP');
     const isMadeiraNeles = rewriteMode === 'madeira_neles';
-    log.info("rewrite_mode", { mode: rewriteMode, isMadeiraNeles, isBNMP });
+    log.info("rewrite_mode", { mode: rewriteMode, isMadeiraNeles });
 
     if (!sourceContent || !sourceName) {
       return new Response(
@@ -252,12 +246,7 @@ Deno.serve(async (req) => {
     let systemPromptToUse: string;
     let agentName: string | null = null;
     
-    if (isBNMP) {
-      // Use dedicated BNMP Prompt Mestre (9 blocos)
-      systemPromptToUse = BNMP_SYSTEM_PROMPT + "\n\n" + BNMP_JSON_INSTRUCTIONS;
-      agentName = "MADEIRA BOT BNMP v2.0";
-      log.info("using_bnmp_prompt", { promptLength: systemPromptToUse.length });
-    } else if (isMadeiraNeles) {
+    if (isMadeiraNeles) {
       // Use dedicated Madeira Neles viral prompt
       systemPromptToUse = MADEIRA_NELES_SYSTEM_PROMPT + "\n\n" + MADEIRA_NELES_JSON_INSTRUCTIONS;
       agentName = "Agente Master Madeira Neles";
