@@ -373,6 +373,8 @@ export const SECTOR_CONFIGS: Record<SectorType, SectorConfig> = {
 export function mapSegmentToSector(segment: string): SectorType | null {
   const mapping: Record<string, SectorType> = {
     'legal': 'legal',
+    'legal-high-complexity': 'legal-high-complexity',
+    'legal_high_complexity': 'legal-high-complexity',
     'health': 'health_general',
     'fintech': 'accounting',
     'ecommerce': 'marketing_digital',
