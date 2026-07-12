@@ -230,16 +230,46 @@ export function buildPoloTemplate(poi: HyperlocalPoi): string {
 Em 2 frases, resumir 1 obrigação regulatória crítica + 1 risco tributário típico do polo.`.trim();
 }
 
-export function pickHyperlocalTemplate(poi: HyperlocalPoi): string {
-  switch (poi.poi_type) {
+export type TemplateKind = 'forum' | 'delegacia' | 'polo';
+
+export function poiTypeToTemplateKind(t: HyperlocalPoi['poi_type']): TemplateKind {
+  if (t === 'delegacia') return 'delegacia';
+  if (t === 'forum' || t === 'tribunal') return 'forum';
+  return 'polo';
+}
+
+/**
+ * Interpola placeholders {{name}} de um template livre com dados do POI.
+ * Usado quando o usuário definiu um override no painel /hiperlocal.
+ */
+function interpolateTemplate(tpl: string, poi: HyperlocalPoi): string {
+  const map: Record<string, string> = {
+    name: poi.name,
+    poi_name: poi.name,
+    full_address: poi.full_address || '',
+    neighborhood: poi.neighborhood || '',
+    city: poi.city,
+    state_uf: poi.state_uf,
+    comarca: poi.comarca || '',
+    opening_hours: poi.opening_hours || (poi.is_24_7 ? '24 horas por dia, 7 dias por semana' : ''),
+    neighborhoods_served: (poi.neighborhoods_served || []).join(', '),
+    urgency_phone: poi.urgency_phone || '',
+    virtual_channel_url: poi.virtual_channel_url || '',
+    official_url: poi.official_url || '',
+  };
+  return tpl.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_m, k) => map[k.toLowerCase()] ?? '');
+}
+
+export function pickHyperlocalTemplate(poi: HyperlocalPoi, override?: string | null): string {
+  if (override && override.trim().length > 0) {
+    return interpolateTemplate(override, poi);
+  }
+  switch (poiTypeToTemplateKind(poi.poi_type)) {
     case 'delegacia':
       return buildDelegaciaTemplate(poi);
     case 'forum':
-    case 'tribunal':
       return buildForumTemplate(poi);
     case 'polo':
-    case 'cartorio':
-    case 'outro':
     default:
       return buildPoloTemplate(poi);
   }
