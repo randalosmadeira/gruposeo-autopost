@@ -60,7 +60,7 @@ Deno.test("validateFrontloading — falls back to first <p> when no lead-answer 
 
 // Regra ouro AEO 2026: 1ª frase (resposta direta) ≤30 palavras
 Deno.test("validateFrontloading — 1ª frase >30 palavras falha (regra ouro AEO 2026)", () => {
-  const longFirst = `<p class="lead-answer">A audiência de custódia consiste em um procedimento presencial obrigatório realizado em até vinte e quatro horas depois da prisão em flagrante ou preventiva em qualquer estado brasileiro conforme entendimento consolidado. Base legal: art. 310 CPP.</p>`;
+  const longFirst = `<p class="lead-answer">A audiência de custódia consiste em um procedimento presencial obrigatório realizado em até vinte e quatro horas depois da prisão em flagrante ou preventiva em qualquer estado brasileiro conforme entendimento consolidado. A base legal aplicável é o art. 310 do CPP e a Resolução CNJ 213 de 2015 em São Paulo capital.</p>`;
   const r = validateFrontloading(longFirst);
   assertEquals(r.hasDirectAnswer, false);
   assertEquals(r.passes, false);
