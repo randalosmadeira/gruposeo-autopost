@@ -990,6 +990,14 @@ export default function Hiperlocal() {
                               <Button size="sm" variant="default" onClick={() => usarTitulo(t.title)}>
                                 <Sparkles className="h-3 w-3 mr-1" /> Usar
                               </Button>
+                              <Button size="sm" variant="ghost" title="Editar (clona seed se necessário)" onClick={() => openEditDialog(t)}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              {t.user_id && (
+                                <Button size="sm" variant="ghost" title="Ver versões" onClick={() => openVersions(t)}>
+                                  <History className="h-4 w-4" />
+                                </Button>
+                              )}
                               <Button size="sm" variant="ghost" onClick={() => copiarTitulo(t.title)}>
                                 <Copy className="h-4 w-4" />
                               </Button>
