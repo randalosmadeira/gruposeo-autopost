@@ -938,11 +938,17 @@ Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
       try {
         const hint = (contentHint || config.keyword || '').toLowerCase();
         const categoryMatchers: Array<{ cat: string; test: () => boolean }> = [
+          // Corporate legal (higher priority than generic colarinho_branco)
+          { cat: 'tributario', test: () => /icms|lei 8\.?137|apropria[çc][ãa]o ind[ée]bita tribut[áa]ria|sonega[çc][ãa]o fiscal|tema 999|substitui[çc][ãa]o tribut[áa]ria|cr[ée]dito frio|sefaz|auto de infra[çc][ãa]o/.test(hint) },
+          { cat: 'execucao_fiscal', test: () => /execu[çc][ãa]o fiscal|art\.?\s*135\s*ctn|s[úu]mula 435|cda|certid[ãa]o de d[íi]vida ativa|redirecionamento|penhora de faturamento|dissolu[çc][ãa]o irregular|exce[çc][ãa]o de pr[ée][- ]?executividade|leil[ãa]o judicial/.test(hint) },
+          { cat: 'credito_fomento', test: () => /bndes|pronamp|fgi|fgo|ccb|c[ée]dula de cr[ée]dito banc[áa]rio|lei 7\.?492|financiamento mediante fraude|fomento empresarial|fiador de empr[ée]stimo|desvio de finalidade/.test(hint) },
+          { cat: 'ordem_economica', test: () => /cartel|dumping|fixa[çc][ãa]o artificial de pre[çc]o|publicidade enganosa|art\.?\s*66\s*cdc|lei 9\.?279|propriedade industrial|concorr[êe]ncia desleal|inpi|desvio de clientela/.test(hint) },
+          // Existing hyperlocal categories
           { cat: 'aeroporto', test: () => /aeroporto|gru|congonhas|deain|receita federal|cumbica|contrabando|descaminho|evas[ãa]o de divisas|tr[áa]fico internacional/.test(hint) },
           { cat: 'criminal_24h', test: () => /custódia|custodia|flagrante|plantão|plantao|preso|habeas corpus|intima[çc][ãa]o|delegacia|inqu[ée]rito|criminalista/.test(hint) },
           { cat: 'isp', test: () => /provedor|isp|anatel|marco civil|lgpd|banda larga|telecomunica|tr[âa]nsito ip/.test(hint) },
           { cat: 'fraude_bancaria', test: () => /pix|fraude bancária|fraude bancaria|golpe|clonagem|deepfake|boleto falso|banco/.test(hint) },
-          { cat: 'colarinho_branco', test: () => /icms|sonega|holding|colarinho|lavagem|compliance|ordem econ[ôo]mica|societário|societario/.test(hint) },
+          { cat: 'colarinho_branco', test: () => /holding|colarinho|lavagem|compliance|societário|societario/.test(hint) },
           { cat: 'foruns', test: () => /f[óo]rum|comarca|tribunal|juizado|vara/.test(hint) },
         ];
         const picked = categoryMatchers.find((m) => m.test())?.cat ?? 'foruns';
@@ -971,8 +977,78 @@ ${examples.map((t, i) => `${i + 1}. ${t}`).join('\n')}
       }
     }
 
+    // ====== Corporate Legal directive (Tributário, Ordem Econômica, Execução Fiscal, Crédito Fomento) ======
+    let corporateLegalBlock = '';
+    const CORPORATE_LEGAL_CATS = new Set(['tributario', 'ordem_economica', 'execucao_fiscal', 'credito_fomento']);
+    if (brandDetection.brand === 'rdm' && pickedTitleCategory && CORPORATE_LEGAL_CATS.has(pickedTitleCategory)) {
+      corporateLegalBlock = `
+
+## ⚖️ DIRETRIZ CORPORATE LEGAL 2026 (categoria: ${pickedTitleCategory}) — OBRIGATÓRIA
+
+Este artigo pertence ao pilar de **Direito Penal Econômico / Tributário / Corporativo**. Aplique as regras abaixo SEM EXCEÇÃO:
+
+### 1) Seção final OBRIGATÓRIA: "Análise Jurídica do Impacto Empresarial"
+Antes do bloco de FAQ/CTA, inclua um H2 EXATO com esse título. Nela:
+- Escreva **Legal Opinion técnica** (opinião legal), não paráfrase da lei.
+- Parágrafos curtos (≤3 linhas). KWs-alvo em <strong>…</strong>.
+- Feche posicionando o escritório como ator **preventivo** — estruturação de **comitês de compliance** para tirar o sócio da linha de tiro do **MPF / Procuradorias Fazendárias**.
+- Nunca prometa resultado; a linguagem é analítica e institucional.
+
+### 2) Hedge editorial para menções nominais (obrigatório)
+Ao citar marcas ou pessoas públicas reais (Ultrafarma, Sidney Oliveira, Ambev, cases de grande repercussão), use SEMPRE fórmulas de blindagem:
+- "segundo repercussão pública noticiada pela imprensa"
+- "conforme cases de mercado de conhecimento notório"
+- "sem prejuízo do princípio constitucional da presunção de inocência (art. 5º, LVII, CF)"
+JAMAIS afirme fatos não julgados, JAMAIS impute crime a pessoa nomeada, JAMAIS use adjetivação depreciativa.
+
+### 3) KWs-alvo com <strong> (mínimo 6 aparições distribuídas ao longo do texto)
+crimes contra a ordem tributária · responsabilidade penal dos sócios · blindagem patrimonial de marcas · redirecionamento de execução fiscal · art 135 CTN · Lei 8.137/90 · STF Tema 999 · Súmula 435 STJ · Lei 9.279/96 · propriedade industrial · Lei 7.492/86 (para crédito de fomento) · art. 66 CDC (para ordem econômica).
+
+### 4) Schema.org JSON-LD OBRIGATÓRIO (colocar em bloco <script type="application/ld+json"> no fim do artigo)
+Emita DOIS objetos JSON-LD interligados:
+
+\`\`\`json
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "{{TÍTULO H1 EXATO}}",
+  "author": { "@type": "Organization", "name": "RDM Advogados Associados" },
+  "publisher": { "@type": "Organization", "name": "RDM Advogados Associados" },
+  "datePublished": "{{YYYY-MM-DD}}",
+  "keywords": "crimes tributários, responsabilidade penal dos sócios, blindagem patrimonial, art 135 CTN, Lei 8.137/90",
+  "about": { "@id": "#rdm-legal-service" },
+  "articleSection": "Direito Penal Econômico"
+}
+\`\`\`
+
+\`\`\`json
+{
+  "@context": "https://schema.org",
+  "@type": "LegalService",
+  "@id": "#rdm-legal-service",
+  "name": "RDM Advogados Associados — Direito Penal Econômico e Tributário",
+  "areaServed": [
+    { "@type": "City", "name": "São Paulo" },
+    { "@type": "City", "name": "Guarulhos" },
+    { "@type": "Place", "name": "Fórum da Barra Funda" },
+    { "@type": "Place", "name": "Justiça Federal de São Paulo (JFSP)" }
+  ],
+  "serviceType": [
+    "Defesa em crimes contra a ordem tributária (Lei 8.137/90)",
+    "Defesa em execuções fiscais e redirecionamento (art. 135 CTN)",
+    "Blindagem patrimonial de marcas (Lei 9.279/96)",
+    "Compliance corporativo e comitês de auditoria jurídica"
+  ]
+}
+\`\`\`
+
+### 5) Densidade & formato
+Parágrafos curtos, negrito nas KWs, use <cite> quando referenciar acórdão/tese com fonte+ano.
+`;
+    }
+
     // Add critical enforcement reminder at the end of user prompt
-    const enforcedUserPrompt = userPrompt + titleFewShotBlock + `
+    const enforcedUserPrompt = userPrompt + titleFewShotBlock + corporateLegalBlock + `
 
 ⚠️ CHECKLIST FINAL ANTES DE RESPONDER (OBRIGATÓRIO):
 □ <!-- META_DESCRIPTION: ... --> presente na PRIMEIRA linha? (145-180 chars, frase COMPLETA)
@@ -986,6 +1062,9 @@ ${examples.map((t, i) => `${i + 1}. ${t}`).join('\n')}
 □ TODAS as redes sociais do projeto foram citadas?
 □ Linguagem simples que qualquer pessoa entende?
 □ [RDM] §1 tem 40-60 palavras E a 1ª frase (resposta direta) tem ≤30 palavras (regra ouro AEO 2026)?
+□ [Corporate Legal] Se aplicável, H2 "Análise Jurídica do Impacto Empresarial" está presente ANTES do FAQ/CTA?
+□ [Corporate Legal] Menções a marcas/pessoas públicas usam hedge textual e nunca imputam crime?
+□ [Corporate Legal] Blocos JSON-LD TechArticle + LegalService (com areaServed) emitidos em <script type="application/ld+json">?
 Se QUALQUER item está faltando, CORRIJA antes de entregar. Conteúdo sem links internos será REJEITADO.`;
 
     const streamResponse = await callAIStream(
@@ -1040,6 +1119,25 @@ REESCREVA o artigo COMPLETO. O PRIMEIRO <p> DEVE:
 
       log.info("frontload_final", { passes: validation.passes, attempts, wordCount: validation.wordCount });
 
+      // ====== Corporate Legal post-checks (informational; no regen) ======
+      const isCorporateLegal = !!pickedTitleCategory && CORPORATE_LEGAL_CATS.has(pickedTitleCategory);
+      const hasImpactAnalysis = /an[áa]lise\s+jur[íi]dica\s+do\s+impacto\s+empresarial/i.test(content);
+      const hasTechArticleSchema = /"@type"\s*:\s*"TechArticle"/i.test(content);
+      const hasLegalServiceSchema = /"@type"\s*:\s*"LegalService"/i.test(content);
+      const hasHedgeLanguage = /presun[çc][ãa]o de inoc[êe]ncia|repercuss[ãa]o p[úu]blica noticiada|cases de mercado/i.test(content);
+      const mentionsRealBrand = /ultrafarma|sidney oliveira|ambev/i.test(content);
+      const corporateLegalMeta = isCorporateLegal ? {
+        has_impact_analysis: hasImpactAnalysis,
+        has_tech_article_schema: hasTechArticleSchema,
+        has_legal_service_schema: hasLegalServiceSchema,
+        mentions_real_brand: mentionsRealBrand,
+        has_hedge_language: hasHedgeLanguage,
+        hedge_ok: !mentionsRealBrand || hasHedgeLanguage,
+      } : null;
+      if (isCorporateLegal) {
+        log.info("corporate_legal_checks", corporateLegalMeta as Record<string, unknown>);
+      }
+
       // ====== Registrar histórico de geração hiperlocal ======
       try {
         await supabase.from("hyperlocal_generation_history").insert({
@@ -1071,7 +1169,14 @@ REESCREVA o artigo COMPLETO. O PRIMEIRO <p> DEVE:
 
       const sseData = `data: ${JSON.stringify({
         choices: [{ delta: { content } }],
-        _meta: { frontload_validation: validation, regen_attempts: attempts, history: validations, category: pickedTitleCategory, fewshot_count: injectedFewShotExamples.length },
+        _meta: {
+          frontload_validation: validation,
+          regen_attempts: attempts,
+          history: validations,
+          category: pickedTitleCategory,
+          fewshot_count: injectedFewShotExamples.length,
+          corporate_legal: corporateLegalMeta,
+        },
       })}\n\ndata: [DONE]\n\n`;
       return new Response(sseData, {
         headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
