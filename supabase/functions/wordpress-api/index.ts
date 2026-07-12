@@ -60,20 +60,33 @@ async function wpFetch(
     });
 
     const contentType = response.headers.get("content-type") || "";
-    
+    const rawText = await response.text();
+
     if (!contentType.includes("application/json")) {
-      return { 
-        error: "WordPress REST API retornou resposta inválida", 
-        status: response.status 
+      console.error(`WP non-JSON response [${response.status}] ${apiUrl}:`, rawText.slice(0, 500));
+      return {
+        error: `WordPress REST API retornou resposta não-JSON (HTTP ${response.status}). Verifique permalinks e se o endpoint ${endpoint} está habilitado. Body: ${rawText.slice(0, 200)}`,
+        status: response.status,
       };
     }
 
-    const data = await response.json();
-    
+    let data: any = null;
+    try {
+      data = rawText ? JSON.parse(rawText) : null;
+    } catch (parseErr) {
+      console.error(`WP JSON parse error [${response.status}] ${apiUrl}:`, rawText.slice(0, 500));
+      return {
+        error: `Falha ao decodificar JSON do WordPress (HTTP ${response.status}). Body: ${rawText.slice(0, 200)}`,
+        status: response.status,
+      };
+    }
+
     if (!response.ok) {
-      return { 
-        error: data.message || `Erro ${response.status}`, 
-        status: response.status 
+      const wpMessage = data?.message || data?.data?.message || data?.code || rawText.slice(0, 200);
+      console.error(`WP error [${response.status}] ${apiUrl}:`, wpMessage);
+      return {
+        error: wpMessage ? `WordPress ${response.status}: ${wpMessage}` : `Erro ${response.status}`,
+        status: response.status,
       };
     }
 
