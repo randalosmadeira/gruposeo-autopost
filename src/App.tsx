@@ -108,7 +108,9 @@ const App = () => (
                 <Route path="/ai-chat" element={<AIChat />} />
                 <Route path="/bnmp-repost" element={<BNMPRepost />} />
                 <Route path="/electoral-campaign" element={<ElectoralCampaign />} />
+                <Route path="/auditoria-gbp" element={<AuditoriaGBP />} />
                 <Route path="/system-prompts" element={<SettingsPage />} />
+
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
