@@ -304,6 +304,7 @@ export default function Hiperlocal() {
     loadPois();
     loadTemplates();
     loadTitles();
+    loadHistory();
   }, []);
 
   // ============ Discover ============
