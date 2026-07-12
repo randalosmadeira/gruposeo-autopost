@@ -689,23 +689,48 @@ Deno.serve(async (req) => {
       cta_leads: config.projectConfig.cta_leads,
     } : undefined);
     
-    const brandSEOGeoSection = buildBrandSEOGeoPrompt(brandDetection, config.projectConfig ? {
-      empresa_nome: config.projectConfig.empresa_nome,
-      wordpress_url: undefined,
-      social_instagram: config.projectConfig.social_instagram,
-      social_youtube: config.projectConfig.social_youtube,
-      social_linkedin: config.projectConfig.social_linkedin,
-      social_twitter: config.projectConfig.social_twitter,
-      social_tiktok: config.projectConfig.social_tiktok,
-      social_google_maps: config.projectConfig.social_google_maps,
-      social_linktree: config.projectConfig.social_linktree,
-      empresa_telefone: config.projectConfig.empresa_telefone,
-      empresa_endereco: config.projectConfig.empresa_endereco,
-      empresa_whatsapp: config.projectConfig.empresa_whatsapp,
-      cta_comunidade: config.projectConfig.cta_comunidade,
-      cta_conclusao: config.projectConfig.cta_conclusao,
-      cta_leads: config.projectConfig.cta_leads,
-    } : undefined);
+    // ====== HYPERLOCAL POI RESOLUTION (RDM only) ======
+    let hyperlocalPoi: HyperlocalPoi | null = null;
+    const contentHint = [config.title, config.keyword, config.secondaryKeywords].filter(Boolean).join(' | ');
+    if (brandDetection.brand === 'rdm') {
+      try {
+        hyperlocalPoi = await resolvePoiForContent(supabase, user.id, contentHint);
+        if (hyperlocalPoi) {
+          log.info("hyperlocal_poi_matched", {
+            poi_id: hyperlocalPoi.id,
+            poi_type: hyperlocalPoi.poi_type,
+            poi_name: hyperlocalPoi.name,
+            city: hyperlocalPoi.city,
+          });
+        }
+      } catch (e) {
+        log.warn("hyperlocal_poi_resolve_failed", { error: (e as Error).message });
+      }
+    }
+
+    const brandSEOGeoSection = buildBrandSEOGeoPrompt(
+      brandDetection,
+      config.projectConfig
+        ? {
+            empresa_nome: config.projectConfig.empresa_nome,
+            wordpress_url: undefined,
+            social_instagram: config.projectConfig.social_instagram,
+            social_youtube: config.projectConfig.social_youtube,
+            social_linkedin: config.projectConfig.social_linkedin,
+            social_twitter: config.projectConfig.social_twitter,
+            social_tiktok: config.projectConfig.social_tiktok,
+            social_google_maps: config.projectConfig.social_google_maps,
+            social_linktree: config.projectConfig.social_linktree,
+            empresa_telefone: config.projectConfig.empresa_telefone,
+            empresa_endereco: config.projectConfig.empresa_endereco,
+            empresa_whatsapp: config.projectConfig.empresa_whatsapp,
+            cta_comunidade: config.projectConfig.cta_comunidade,
+            cta_conclusao: config.projectConfig.cta_conclusao,
+            cta_leads: config.projectConfig.cta_leads,
+          }
+        : undefined,
+      { contentHint, hyperlocalPoi },
+    );
 
     log.info("brand_detected", {
       brand: brandDetection.brand,
