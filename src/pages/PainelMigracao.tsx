@@ -7,7 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import {
   Eye, EyeOff, Copy, Check, ShieldAlert, Key, Download, Loader2,
-  Code2, Database, AlertTriangle, Info,
+  Code2, Database, AlertTriangle, Info, FileCode,
 } from 'lucide-react';
 
 interface MigrationData {
@@ -130,6 +130,34 @@ export default function PainelMigracao() {
     a.click();
     URL.revokeObjectURL(url);
     toast.success(`${count} edge functions exportadas`);
+  };
+
+  const downloadMigrations = () => {
+    const modules = import.meta.glob('/supabase/migrations/*.sql', {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }) as Record<string, string>;
+    const entries = Object.entries(modules).sort(([a], [b]) => a.localeCompare(b));
+    const parts: string[] = [
+      '-- ═══════════════════════════════════════════════════════════',
+      '-- MIGRATIONS CONSOLIDADAS — execute em ordem no destino',
+      `-- Total: ${entries.length} arquivos`,
+      '-- ═══════════════════════════════════════════════════════════',
+      '',
+    ];
+    for (const [path, source] of entries) {
+      const name = path.split('/').pop();
+      parts.push(`-- ═════════ ${name} ═════════\n${source}`);
+    }
+    const blob = new Blob([parts.join('\n\n')], { type: 'text/sql' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'migrations.sql';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${entries.length} migrations exportadas`);
   };
 
   const downloadSecrets = () => {
@@ -323,6 +351,32 @@ export default function PainelMigracao() {
                 <AlertDescription>
                   As senhas permanecem como hash bcrypt. Se o JWT Secret mudar no projeto de destino,
                   os usuários apenas precisarão fazer login novamente; as senhas continuarão válidas.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+
+          <SectionDivider label="PASSO 5" />
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileCode className="w-5 h-5 text-purple-500" />
+                Passo 5 — Migrations SQL
+              </CardTitle>
+              <CardDescription>
+                Todos os arquivos de <code>supabase/migrations/</code> consolidados em um único SQL,
+                em ordem cronológica. Execute no banco de destino para recriar schema, policies, funções e triggers.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button onClick={downloadMigrations}>
+                <Download className="w-4 h-4 mr-2" /> Baixar migrations.sql
+              </Button>
+              <Alert>
+                <Info className="w-4 h-4" />
+                <AlertTitle>Ordem de execução no destino</AlertTitle>
+                <AlertDescription>
+                  1) Rodar <code>migrations.sql</code> → 2) Deploy das edge functions → 3) Configurar secrets → 4) Importar dados das tabelas essenciais.
                 </AlertDescription>
               </Alert>
             </CardContent>
