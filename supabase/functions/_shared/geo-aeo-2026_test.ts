@@ -58,6 +58,24 @@ Deno.test("validateFrontloading — falls back to first <p> when no lead-answer 
   assert(r.hasJurisdiction);
 });
 
+// Regra ouro AEO 2026: 1ª frase (resposta direta) ≤30 palavras
+Deno.test("validateFrontloading — 1ª frase >30 palavras falha (regra ouro AEO 2026)", () => {
+  const longFirst = `<p class="lead-answer">A audiência de custódia consiste em um procedimento presencial obrigatório realizado em até vinte e quatro horas depois da prisão em flagrante ou preventiva em qualquer estado brasileiro conforme entendimento consolidado. A base legal aplicável é o art. 310 do CPP e a Resolução CNJ 213 de 2015 em São Paulo capital.</p>`;
+  const r = validateFrontloading(longFirst);
+  assertEquals(r.hasDirectAnswer, false);
+  assertEquals(r.passes, false);
+  assertStringIncludes(r.reason || "", "1ª frase");
+});
+
+Deno.test("validateFrontloading — 1ª frase ≤30 palavras + base legal + tamanho OK passa", () => {
+  const html = `<p class="lead-answer">A audiência de custódia ocorre em até 24 horas após a prisão em flagrante (art. 310 do CPP). Em São Paulo, é realizada no DIPO com defensor obrigatório, garantindo o controle judicial imediato da legalidade da prisão perante o juízo competente.</p>`;
+  const r = validateFrontloading(html);
+  assert(r.hasDirectAnswer, `first sentence=${r.firstSentenceWordCount} words`);
+  assert(r.passes, `expected pass, got: ${r.reason}`);
+});
+
+
+
 // ============================================================
 // buildDynamicSchema — consistency per sub-area
 // ============================================================

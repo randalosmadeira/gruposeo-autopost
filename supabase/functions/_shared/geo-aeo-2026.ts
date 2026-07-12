@@ -75,15 +75,15 @@ const FRONTLOADING_BLOCK = `
 
 **Regra crítica:** 65-69% das buscas terminam em AI Overview (zero-clique). O §1 é o único conteúdo que a IA vai citar. Ele DEVE valer sozinho.
 
-### Estrutura obrigatória do §1 (40-60 palavras):
-1. **Resposta direta** à pergunta/tema (frase 1, tempo verbal presente).
+### Estrutura obrigatória do §1 (40-60 palavras no total):
+1. **Resposta direta** à pergunta/tema em **1 frase de até 30 palavras** (esta é a frase que ChatGPT/Gemini extraem como snippet — **regra ouro AEO 2026**).
 2. **Dado técnico verificável** (artigo de lei + número, tribunal + ano, ou estatística oficial com fonte).
 3. **Contexto jurisdicional** (São Paulo, tribunal competente, ou base legal).
 
 ### Formato canônico:
 \`\`\`html
 <p class="lead-answer" data-geo="frontload">
-  [Resposta técnica em 1 frase]. [Base legal: art. X da Lei Y/AAAA ou tribunal + ano]. [Contexto SP/federal].
+  [Frase 1: resposta técnica direta em ≤30 palavras — inclui a base legal mínima]. [Frase 2: contexto SP/federal e detalhe complementar].
 </p>
 \`\`\`
 
@@ -352,12 +352,20 @@ export interface FrontloadValidation {
   wordCount: number;
   hasLegalBase: boolean;
   hasJurisdiction: boolean;
+  /** Contagem de palavras da 1ª frase (regra ouro AEO 2026: resposta direta ≤30 palavras). */
+  firstSentenceWordCount: number;
+  hasDirectAnswer: boolean;
   reason?: string;
 }
 
 /**
  * Valida se o primeiro parágrafo do HTML atende ao padrão GEO 2026.
- * Chame após geração; se `passes=false`, force regeneração.
+ * Regras cumulativas:
+ *   1) §1 completo entre 40-80 palavras
+ *   2) base legal explícita (art./lei/tribunal/ano)
+ *   3) **Regra Ouro AEO 2026**: 1ª frase responde à pergunta do título em ≤30 palavras
+ *      (é o "snippet" que ChatGPT/Gemini extraem como resposta direta).
+ * Se `passes=false`, force regeneração.
  */
 export function validateFrontloading(html: string): FrontloadValidation {
   const match = html.match(/<p[^>]*(?:lead-answer|class="lead[^"]*")[^>]*>([\s\S]*?)<\/p>/i)
@@ -370,16 +378,26 @@ export function validateFrontloading(html: string): FrontloadValidation {
     || /\b(stf|stj|tst|tjsp|tj-sp|carf)\b/i.test(text);
   const hasJurisdiction = /\b(s[ãa]o paulo|sp|brasil|federal|estadual|municipal)\b/i.test(text);
 
-  const passes = words >= 40 && words <= 80 && hasLegalBase;
+  // Regra Ouro AEO: 1ª frase = resposta direta ≤30 palavras
+  const firstSentence = (text.split(/(?<=[.!?])\s+/)[0] || '').trim();
+  const firstSentenceWordCount = firstSentence ? firstSentence.split(/\s+/).length : 0;
+  const hasDirectAnswer = firstSentenceWordCount > 0 && firstSentenceWordCount <= 30;
+
+  const passes = words >= 40 && words <= 80 && hasLegalBase && hasDirectAnswer;
+
+  const reasons: string[] = [];
+  if (words < 40 || words > 80) reasons.push(`§1=${words}p (40-80)`);
+  if (!hasLegalBase) reasons.push('sem base_legal');
+  if (!hasDirectAnswer) reasons.push(`1ª frase=${firstSentenceWordCount}p (≤30 obrigatório — regra ouro AEO 2026)`);
 
   return {
     passes,
     wordCount: words,
     hasLegalBase,
     hasJurisdiction,
-    reason: !passes
-      ? `Frontload inválido: ${words} palavras (esperado 40-60), base_legal=${hasLegalBase}, jurisdição=${hasJurisdiction}`
-      : undefined,
+    firstSentenceWordCount,
+    hasDirectAnswer,
+    reason: passes ? undefined : `Frontload inválido: ${reasons.join(' | ')}`,
   };
 }
 

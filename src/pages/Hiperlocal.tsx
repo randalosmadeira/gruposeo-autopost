@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,7 +18,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, MapPin, Radar, RefreshCcw, Save, Sparkles, Trash2 } from "lucide-react";
+import { Copy, FileText, Loader2, MapPin, Plus, Radar, RefreshCcw, Save, Sparkles, Trash2, Wand2 } from "lucide-react";
 
 type TemplateKind = "forum" | "delegacia" | "polo";
 type PoiType = "forum" | "delegacia" | "polo" | "tribunal" | "cartorio" | "outro";
@@ -115,8 +116,35 @@ const POI_STATUS_LABEL: Record<PoiStatus, { label: string; variant: "default" | 
   archived: { label: "Arquivado", variant: "outline" },
 };
 
+// ============ Pautas (títulos GEO 2026) ============
+type TitleCategory = "criminal_24h" | "colarinho_branco" | "isp" | "fraude_bancaria" | "aeroporto" | "foruns";
+
+interface TitleRow {
+  id: string;
+  user_id: string | null;
+  category: TitleCategory;
+  title: string;
+  poi_type: string | null;
+  ymyl_subarea: string | null;
+  neighborhood_hint: string | null;
+  city_hint: string | null;
+  is_urgency: boolean;
+  status: "approved" | "draft" | "archived";
+  source: string;
+}
+
+const TITLE_CATEGORIES: { key: TitleCategory; label: string; emoji: string }[] = [
+  { key: "criminal_24h", label: "Criminal 24h / Custódia", emoji: "🚨" },
+  { key: "colarinho_branco", label: "Colarinho Branco", emoji: "💼" },
+  { key: "isp", label: "Provedores (ISP)", emoji: "🌐" },
+  { key: "fraude_bancaria", label: "Fraude Bancária / Consumo", emoji: "🏦" },
+  { key: "aeroporto", label: "Aeroporto / DEAIN", emoji: "✈️" },
+  { key: "foruns", label: "Fóruns / Tribunais", emoji: "🏢" },
+];
+
 export default function Hiperlocal() {
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   // ============ POIs ============
   const [pois, setPois] = useState<Poi[]>([]);
@@ -147,6 +175,32 @@ export default function Hiperlocal() {
     polo: "",
   });
   const [savingKind, setSavingKind] = useState<TemplateKind | null>(null);
+
+  // ============ Pautas (Títulos) ============
+  const [titles, setTitles] = useState<TitleRow[]>([]);
+  const [loadingTitles, setLoadingTitles] = useState(false);
+  const [titleCategory, setTitleCategory] = useState<TitleCategory | "all">("all");
+  const [titleQuery, setTitleQuery] = useState("");
+  const [selectedTitles, setSelectedTitles] = useState<Set<string>>(new Set());
+  const [newTitleOpen, setNewTitleOpen] = useState(false);
+  const [creatingTitle, setCreatingTitle] = useState(false);
+  const [newTitleForm, setNewTitleForm] = useState<{
+    category: TitleCategory;
+    title: string;
+    poi_type: string;
+    ymyl_subarea: string;
+    neighborhood_hint: string;
+    city_hint: string;
+    is_urgency: boolean;
+  }>({
+    category: "foruns",
+    title: "",
+    poi_type: "",
+    ymyl_subarea: "",
+    neighborhood_hint: "",
+    city_hint: "",
+    is_urgency: false,
+  });
 
   const loadPois = async () => {
     setLoadingPois(true);
@@ -183,9 +237,27 @@ export default function Hiperlocal() {
     setDrafts(nextDrafts);
   };
 
+  // ============ Titles / Pautas ============
+  const loadTitles = async () => {
+    setLoadingTitles(true);
+    const { data, error } = await supabase
+      .from("hyperlocal_title_templates")
+      .select("id, user_id, category, title, poi_type, ymyl_subarea, neighborhood_hint, city_hint, is_urgency, status, source")
+      .eq("status", "approved")
+      .order("category")
+      .order("title");
+    if (error) {
+      toast({ title: "Erro ao carregar títulos", description: error.message, variant: "destructive" });
+    } else {
+      setTitles((data ?? []) as TitleRow[]);
+    }
+    setLoadingTitles(false);
+  };
+
   useEffect(() => {
     loadPois();
     loadTemplates();
+    loadTitles();
   }, []);
 
   // ============ Discover ============
@@ -284,6 +356,104 @@ export default function Hiperlocal() {
     }
   };
 
+  // ============ Pautas actions ============
+  const filteredTitles = useMemo(() => {
+    const q = titleQuery.trim().toLowerCase();
+    return titles.filter((t) => {
+      if (titleCategory !== "all" && t.category !== titleCategory) return false;
+      if (q && !t.title.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [titles, titleCategory, titleQuery]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedTitles((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const usarTitulo = (title: string) => {
+    navigate(`/article-generator?title=${encodeURIComponent(title)}`);
+  };
+
+  const copiarTitulo = async (title: string) => {
+    try {
+      await navigator.clipboard.writeText(title);
+      toast({ title: "Título copiado", description: title.slice(0, 80) + (title.length > 80 ? "…" : "") });
+    } catch {
+      toast({ title: "Falha ao copiar", variant: "destructive" });
+    }
+  };
+
+  const enviarParaBulk = () => {
+    const selected = titles.filter((t) => selectedTitles.has(t.id)).map((t) => t.title);
+    if (selected.length === 0) {
+      toast({ title: "Selecione ao menos 1 título", variant: "destructive" });
+      return;
+    }
+    const payload = encodeURIComponent(JSON.stringify(selected));
+    navigate(`/bulk-articles?titles=${payload}`);
+  };
+
+  const criarTitulo = async () => {
+    if (!newTitleForm.title.trim()) {
+      toast({ title: "Título obrigatório", variant: "destructive" });
+      return;
+    }
+    setCreatingTitle(true);
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) {
+      toast({ title: "Não autenticado", variant: "destructive" });
+      setCreatingTitle(false);
+      return;
+    }
+    const { error } = await supabase.from("hyperlocal_title_templates").insert({
+      user_id: userData.user.id,
+      category: newTitleForm.category,
+      title: newTitleForm.title.trim(),
+      poi_type: newTitleForm.poi_type || null,
+      ymyl_subarea: newTitleForm.ymyl_subarea || null,
+      neighborhood_hint: newTitleForm.neighborhood_hint || null,
+      city_hint: newTitleForm.city_hint || null,
+      is_urgency: newTitleForm.is_urgency,
+      status: "approved",
+      source: "user_custom",
+    });
+    setCreatingTitle(false);
+    if (error) {
+      toast({ title: "Erro ao criar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Título criado" });
+    setNewTitleOpen(false);
+    setNewTitleForm({
+      category: newTitleForm.category,
+      title: "",
+      poi_type: "",
+      ymyl_subarea: "",
+      neighborhood_hint: "",
+      city_hint: "",
+      is_urgency: false,
+    });
+    loadTitles();
+  };
+
+  const excluirTitulo = async (id: string) => {
+    const { error } = await supabase.from("hyperlocal_title_templates").delete().eq("id", id);
+    if (error) {
+      toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
+      return;
+    }
+    setTitles((prev) => prev.filter((t) => t.id !== id));
+    setSelectedTitles((prev) => {
+      const n = new Set(prev);
+      n.delete(id);
+      return n;
+    });
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -292,7 +462,7 @@ export default function Hiperlocal() {
             <MapPin className="h-8 w-8" /> Hiperlocal (RDM)
           </h1>
           <p className="text-muted-foreground mt-1">
-            POIs (fóruns, delegacias, polos) e templates que a IA usa para artigos hiperlocais.
+            POIs, templates e biblioteca de pautas GEO 2026 usados nos artigos hiperlocais.
           </p>
         </div>
       </div>
@@ -301,7 +471,9 @@ export default function Hiperlocal() {
         <TabsList>
           <TabsTrigger value="pois">POIs</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
+          <TabsTrigger value="pautas">Pautas ({titles.length})</TabsTrigger>
         </TabsList>
+
 
         {/* ============ POIs ============ */}
         <TabsContent value="pois" className="space-y-4">
@@ -550,6 +722,180 @@ export default function Hiperlocal() {
               </CardContent>
             </Card>
           ))}
+        </TabsContent>
+
+        {/* ============ Pautas (Títulos GEO 2026) ============ */}
+        <TabsContent value="pautas" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" /> Biblioteca de Pautas GEO 2026
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  60 títulos-modelo hiperlocais (Criminal 24h, Colarinho Branco, ISPs, Fraude Bancária, Aeroporto, Fóruns) —
+                  a IA usa esta biblioteca como few-shot ao gerar artigos RDM.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={loadTitles} disabled={loadingTitles}>
+                  <RefreshCcw className="h-4 w-4 mr-2" /> Recarregar
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={selectedTitles.size === 0}
+                  onClick={enviarParaBulk}
+                >
+                  <Wand2 className="h-4 w-4 mr-2" /> Gerar em lote ({selectedTitles.size})
+                </Button>
+                <Dialog open={newTitleOpen} onOpenChange={setNewTitleOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm">
+                      <Plus className="h-4 w-4 mr-2" /> Novo título
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>Novo título hiperlocal</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                      <div>
+                        <Label>Categoria</Label>
+                        <Select
+                          value={newTitleForm.category}
+                          onValueChange={(v) => setNewTitleForm({ ...newTitleForm, category: v as TitleCategory })}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {TITLE_CATEGORIES.map((c) => (
+                              <SelectItem key={c.key} value={c.key}>{c.emoji} {c.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Título</Label>
+                        <Textarea
+                          rows={3}
+                          value={newTitleForm.title}
+                          onChange={(e) => setNewTitleForm({ ...newTitleForm, title: e.target.value })}
+                          placeholder="Ex.: Preso em flagrante no Fórum de Itaquera: Como funciona a audiência de custódia?"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label>Bairro (hint)</Label>
+                          <Input
+                            value={newTitleForm.neighborhood_hint}
+                            onChange={(e) => setNewTitleForm({ ...newTitleForm, neighborhood_hint: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label>Cidade (hint)</Label>
+                          <Input
+                            value={newTitleForm.city_hint}
+                            onChange={(e) => setNewTitleForm({ ...newTitleForm, city_hint: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="ghost" onClick={() => setNewTitleOpen(false)}>Cancelar</Button>
+                      <Button onClick={criarTitulo} disabled={creatingTitle}>
+                        {creatingTitle ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                        Salvar
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex gap-2">
+                <Select value={titleCategory} onValueChange={(v) => setTitleCategory(v as TitleCategory | "all")}>
+                  <SelectTrigger className="w-64"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as categorias</SelectItem>
+                    {TITLE_CATEGORIES.map((c) => (
+                      <SelectItem key={c.key} value={c.key}>{c.emoji} {c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Buscar por termo (bairro, fórum, delegacia…)"
+                  value={titleQuery}
+                  onChange={(e) => setTitleQuery(e.target.value)}
+                />
+              </div>
+
+              {loadingTitles ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>
+              ) : filteredTitles.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">Nenhum título encontrado.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10"></TableHead>
+                        <TableHead>Título</TableHead>
+                        <TableHead>Categoria</TableHead>
+                        <TableHead>Bairro / Cidade</TableHead>
+                        <TableHead>Origem</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredTitles.map((t) => {
+                        const cat = TITLE_CATEGORIES.find((c) => c.key === t.category);
+                        return (
+                          <TableRow key={t.id}>
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                checked={selectedTitles.has(t.id)}
+                                onChange={() => toggleSelect(t.id)}
+                              />
+                            </TableCell>
+                            <TableCell className="max-w-xl">
+                              <div className="text-sm font-medium">{t.title}</div>
+                              {t.is_urgency && <Badge variant="destructive" className="mt-1 text-xs">urgência</Badge>}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{cat?.emoji} {cat?.label ?? t.category}</Badge>
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {t.neighborhood_hint ? <div>{t.neighborhood_hint}</div> : null}
+                              <div className="text-muted-foreground">{t.city_hint || "—"}</div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={t.user_id ? "default" : "secondary"} className="text-xs">
+                                {t.user_id ? "custom" : "seed"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right space-x-1">
+                              <Button size="sm" variant="default" onClick={() => usarTitulo(t.title)}>
+                                <Sparkles className="h-3 w-3 mr-1" /> Usar
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => copiarTitulo(t.title)}>
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                              {t.user_id && (
+                                <Button size="sm" variant="ghost" onClick={() => excluirTitulo(t.id)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
