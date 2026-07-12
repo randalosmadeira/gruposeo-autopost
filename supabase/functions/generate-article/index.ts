@@ -1040,9 +1040,38 @@ REESCREVA o artigo COMPLETO. O PRIMEIRO <p> DEVE:
 
       log.info("frontload_final", { passes: validation.passes, attempts, wordCount: validation.wordCount });
 
+      // ====== Registrar histórico de geração hiperlocal ======
+      try {
+        await supabase.from("hyperlocal_generation_history").insert({
+          user_id: user.id,
+          article_id: historyArticleId,
+          title: config.title || config.keyword || '(sem título)',
+          keyword: config.keyword,
+          brand: brandDetection.brand,
+          category: pickedTitleCategory,
+          fewshot_examples: injectedFewShotExamples,
+          fewshot_count: injectedFewShotExamples.length,
+          template_kind: hyperlocalPoi ? (await import("../_shared/hyperlocal-2026.ts")).poiTypeToTemplateKind(hyperlocalPoi.poi_type) : null,
+          poi_id: hyperlocalPoi?.id ?? null,
+          regen_attempts: attempts,
+          frontload_passes: validation.passes,
+          frontload_word_count: validation.wordCount,
+          first_sentence_words: (validation as any).firstSentenceWordCount ?? null,
+          first_sentence_ok: typeof (validation as any).firstSentenceWordCount === 'number'
+            ? ((validation as any).firstSentenceWordCount <= 30)
+            : null,
+          has_legal_base: (validation as any).hasLegalBase ?? null,
+          has_jurisdiction: (validation as any).hasJurisdiction ?? null,
+          validation_history: validations,
+          source: historySource,
+        });
+      } catch (histErr) {
+        log.warn("hyperlocal_history_insert_failed", { error: (histErr as Error).message });
+      }
+
       const sseData = `data: ${JSON.stringify({
         choices: [{ delta: { content } }],
-        _meta: { frontload_validation: validation, regen_attempts: attempts, history: validations },
+        _meta: { frontload_validation: validation, regen_attempts: attempts, history: validations, category: pickedTitleCategory, fewshot_count: injectedFewShotExamples.length },
       })}\n\ndata: [DONE]\n\n`;
       return new Response(sseData, {
         headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
