@@ -1,9 +1,11 @@
 /**
  * Brand Detection & SEO+GEO Prompt Builder
- * 
+ *
  * Auto-detects brand (RDM, Grupo SEO, Elas Tracy) from project config
  * and injects brand-specific SEO+GEO optimization directives.
+ * RDM builder also injects the 2026 GEO/AEO directives module.
  */
+import { buildGeo2026Block, detectLegalSubArea } from './geo-aeo-2026.ts';
 
 export type BrandType = 'rdm' | 'grupo_seo' | 'elas_tracy' | 'generic';
 
@@ -247,9 +249,22 @@ export function buildBrandSEOGeoPrompt(brand: BrandDetectionResult, config?: Pro
   }
 }
 
-function buildRDMPrompt(config: ProjectConfig | undefined, year: number): string {
+function buildRDMPrompt(config: ProjectConfig | undefined, year: number, contentHint?: string): string {
   const siteUrl = config?.social_linktree || config?.wordpress_url || '';
-  
+
+  // ============ INJEÇÃO GEO/AEO 2026 (RDM ONLY) ============
+  const subArea = detectLegalSubArea(contentHint || config?.empresa_nome || '');
+  const isLocalUrgency = subArea === 'audiencia_custodia';
+  const geo2026 = buildGeo2026Block({
+    subArea,
+    isLocalUrgency,
+    attorneyName: 'Dr. Rândalos Madeira',
+    officeAddress: config?.empresa_endereco || 'Av. Paulista, São Paulo/SP',
+    officePhone: config?.empresa_telefone,
+    officeWhatsapp: config?.empresa_whatsapp,
+    siteUrl,
+  });
+
   return `
 ## 🏛️ IDENTIDADE DA MARCA: RDM Advogados Associados
 
@@ -257,7 +272,7 @@ function buildRDMPrompt(config: ProjectConfig | undefined, year: number): string
 **Persona**: "Madeira Sem Verniz" — anti-guru, transparência radical.
 **Bordão**: "Madeiraaa Nelesss!"
 **Público**: Trabalhadores CLT, consumidores lesados, empresários de PME, pessoas comuns que precisam de justiça.
-**Áreas**: Direito Trabalhista, Penal, Consumidor, Empresarial, Telecomunicações, Família.
+**Áreas**: Direito Penal Empresarial, Tributário, Consumidor, Empresarial, Digital (ISPs), Trabalhista, Família.
 **Localização**: São Paulo (Av. Paulista + Tatuapé). Atuação: 9 estados brasileiros.
 
 ### Compliance OAB (Provimento 205/2021):
@@ -267,10 +282,10 @@ function buildRDMPrompt(config: ProjectConfig | undefined, year: number): string
 - JAMAIS divulgar casos concretos com identificação
 - SEMPRE: "consulte um advogado", informativo/educacional
 
-### Formato de Título RDM:
-- "[Situação urgente]? [Solução] — RDM Advogados São Paulo"
-- "[Tema]: O Que a Lei Garante Para Você [${year}]"
-- "[Número] Direitos Que Você Tem em [Situação] — Advogado Explica"
+### Formato de Título RDM (2026 — pergunta natural + jurisdição):
+- "[Pergunta natural sobre risco/direito] em São Paulo (${year}) — RDM Advogados"
+- "[Tema]: O Que a Lei Garante Para Você em ${year}"
+- "[Número] Direitos Que Você Tem em [Situação] — Advogado Penal Empresarial Explica"
 
 ### Âncoras de Autoridade E-E-A-T (mínimo 3 por artigo):
 - Mencionar "Dr. Rândalos Madeira" pelo menos 2x
@@ -285,7 +300,9 @@ ${buildSocialMediaSection(config)}
 - WhatsApp direto + formulário de consulta (sem promessa de resultado)
 - Site: ${siteUrl}
 
-${buildCTASection(config, 'RDM')}`;
+${buildCTASection(config, 'RDM')}
+
+${geo2026}`;
 }
 
 function buildElasTracyPrompt(config: ProjectConfig | undefined, year: number): string {
