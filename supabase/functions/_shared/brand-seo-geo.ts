@@ -200,6 +200,7 @@ function buildOutputFormatRules(): string {
 export interface BrandPromptContext {
   contentHint?: string;
   hyperlocalPoi?: HyperlocalPoi | null;
+  hyperlocalTemplateOverride?: string | null;
 }
 
 export function buildBrandSEOGeoPrompt(
@@ -249,7 +250,7 @@ export function buildBrandSEOGeoPrompt(
 
   switch (brand.brand) {
     case 'rdm':
-      return buildRDMPrompt(config, currentYear, ctx?.contentHint, ctx?.hyperlocalPoi) + '\n\n' + geoRules + '\n\n' + seoTechRules + '\n\n' + outputRules;
+      return buildRDMPrompt(config, currentYear, ctx?.contentHint, ctx?.hyperlocalPoi, ctx?.hyperlocalTemplateOverride) + '\n\n' + geoRules + '\n\n' + seoTechRules + '\n\n' + outputRules;
     case 'elas_tracy':
       return buildElasTracyPrompt(config, currentYear) + '\n\n' + geoRules + '\n\n' + seoTechRules + '\n\n' + outputRules;
     case 'grupo_seo':
