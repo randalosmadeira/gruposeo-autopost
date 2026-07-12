@@ -34,7 +34,7 @@ Deno.test("validateFrontloading — too short §1 fails", () => {
 });
 
 Deno.test("validateFrontloading — missing legal base fails", () => {
-  const html = `<p>Este artigo fala sobre um tema muito interessante que impacta diariamente milhares de brasileiros em todo território nacional. Vamos explorar juntos as principais nuances deste assunto complexo e relevante para a sociedade em São Paulo.</p>`;
+  const html = `<p>Este texto fala sobre um tema muito interessante que impacta diariamente milhares de brasileiros em todo território nacional. Vamos explorar juntos as principais nuances deste assunto complexo e relevante para a sociedade em São Paulo hoje mesmo agora.</p>`;
   const r = validateFrontloading(html);
   assertEquals(r.hasLegalBase, false);
   assertEquals(r.passes, false);
