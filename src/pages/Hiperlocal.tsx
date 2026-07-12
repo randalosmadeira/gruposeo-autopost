@@ -202,6 +202,18 @@ export default function Hiperlocal() {
     is_urgency: false,
   });
 
+  // Edit / versions dialogs
+  const [editTitleOpen, setEditTitleOpen] = useState(false);
+  const [editingTitle, setEditingTitle] = useState<TitleRow | null>(null);
+  const [editTitleForm, setEditTitleForm] = useState<{ title: string; category: TitleCategory; neighborhood_hint: string; city_hint: string; is_urgency: boolean }>({
+    title: "", category: "foruns", neighborhood_hint: "", city_hint: "", is_urgency: false,
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [versionsFor, setVersionsFor] = useState<TitleRow | null>(null);
+  const [versionsList, setVersionsList] = useState<Array<{ id: string; version_number: number; title: string; category: string; created_at: string; change_reason: string | null; }>>([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+
   const loadPois = async () => {
     setLoadingPois(true);
     const q = supabase
