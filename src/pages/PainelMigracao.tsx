@@ -88,11 +88,71 @@ function SectionDivider({ label }: { label?: string }) {
   );
 }
 
+interface RemoteResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+  code?: string;
+  detail?: string;
+  position?: string;
+  elapsed_ms?: number;
+  sql_bytes?: number;
+  destination?: { db?: string; version?: string; role?: string };
+}
+
 export default function PainelMigracao() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<MigrationData | null>(null);
+  const [destDbUrl, setDestDbUrl] = useState('');
+  const [showDbUrl, setShowDbUrl] = useState(false);
+  const [executing, setExecuting] = useState(false);
+  const [remoteResult, setRemoteResult] = useState<RemoteResult | null>(null);
+  const [confirmText, setConfirmText] = useState('');
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+
+  // Pré-requisitos de execução remota
+  const dbUrlValid = /^postgres(ql)?:\/\/[^@]+@[^:/]+(:\d+)?\/[^?]+/i.test(destDbUrl.trim());
+  const confirmOk = confirmText.trim().toUpperCase() === 'EXECUTAR';
+  const preReqs = {
+    dbUrlValid,
+    hasPassword: /:\/\/[^:]+:[^@]+@/.test(destDbUrl),
+    hasSslHint: destDbUrl.includes('sslmode=') || destDbUrl.includes('supabase.co') || destDbUrl.includes('pooler.supabase.com'),
+    confirmOk,
+  };
+  const canExecute = preReqs.dbUrlValid && preReqs.hasPassword && preReqs.confirmOk && !executing;
+
+  const buildMigrationsSql = (): string => {
+    const modules = import.meta.glob('/supabase/migrations/*.sql', {
+      query: '?raw', import: 'default', eager: true,
+    }) as Record<string, string>;
+    const entries = Object.entries(modules).sort(([a], [b]) => a.localeCompare(b));
+    return entries.map(([p, src]) => `-- ═════════ ${p.split('/').pop()} ═════════\n${src}`).join('\n\n');
+  };
+
+  const executeRemoteMigration = async () => {
+    setExecuting(true);
+    setRemoteResult(null);
+    try {
+      const sql = buildMigrationsSql();
+      const res = await fetch(`${supabaseUrl}/functions/v1/execute-migration-remote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ db_url: destDbUrl.trim(), sql }),
+      });
+      const json = (await res.json()) as RemoteResult;
+      setRemoteResult(json);
+      if (json.success) toast.success('Migração executada com sucesso!');
+      else toast.error(`Falha: ${json.error ?? 'erro desconhecido'}`);
+    } catch (e) {
+      const msg = (e as Error).message;
+      setRemoteResult({ success: false, error: msg });
+      toast.error(`Erro de rede: ${msg}`);
+    } finally {
+      setExecuting(false);
+    }
+  };
+
 
   const revealAll = async () => {
     setLoading(true);
