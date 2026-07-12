@@ -18,7 +18,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Copy, FileText, Loader2, MapPin, Plus, Radar, RefreshCcw, Save, Sparkles, Trash2, Wand2 } from "lucide-react";
+import { Copy, FileText, History, Loader2, MapPin, Pencil, Plus, Radar, RefreshCcw, Save, Sparkles, Trash2, Wand2 } from "lucide-react";
 
 type TemplateKind = "forum" | "delegacia" | "polo";
 type PoiType = "forum" | "delegacia" | "polo" | "tribunal" | "cartorio" | "outro";
