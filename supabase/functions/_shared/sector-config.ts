@@ -7,6 +7,7 @@
 
 export type SectorType =
   | 'legal'
+  | 'legal-high-complexity'
   | 'marketing_digital'
   | 'beauty_aesthetics'
   | 'health_general'
@@ -15,6 +16,58 @@ export type SectorType =
   | 'health_medical'
   | 'real_estate'
   | 'accounting';
+
+/**
+ * YMYL sub-area mapping for 'legal-high-complexity' sector.
+ * Maps SectorType 'legal-high-complexity' + free-text hint → geo-aeo-2026 sub-area.
+ * Used by prompt builders to route to the correct YMYL block.
+ */
+export const LEGAL_HIGH_COMPLEXITY_SUBAREAS = {
+  criminal_empresarial: {
+    label: 'Penal Empresarial / Colarinho Branco',
+    schema: 'LegalService+Attorney+TechArticle+FAQPage+Legislation',
+    keywords: ['penal empresarial', 'colarinho branco', 'busca e apreensão', 'condução coercitiva'],
+  },
+  ordem_economica_tributaria: {
+    label: 'Tributário / Ordem Econômica',
+    schema: 'LegalService+Attorney+TechArticle+FAQPage+Legislation',
+    keywords: ['tributário', 'sonegação', 'crime tributário', 'lei 8137', 'ordem econômica'],
+  },
+  fraudes_icms: {
+    label: 'ICMS / Autuações Fiscais',
+    schema: 'LegalService+Attorney+TechArticle+FAQPage+Legislation',
+    keywords: ['icms', 'sefaz', 'autuação fiscal', 'kandir'],
+  },
+  assessoria_isp: {
+    label: 'Digital / ISPs / LGPD',
+    schema: 'LegalService+Attorney+TechArticle+FAQPage+Legislation',
+    keywords: ['isp', 'provedor', 'marco civil', 'lgpd', 'anatel'],
+  },
+  lavagem_dinheiro: {
+    label: 'Lavagem de Dinheiro',
+    schema: 'LegalService+Attorney+TechArticle+FAQPage+Legislation',
+    keywords: ['lavagem', 'coaf', 'ocultação de bens'],
+  },
+  audiencia_custodia: {
+    label: 'Audiência de Custódia (Urgência 24/7)',
+    schema: 'LegalService+Attorney+TechArticle+FAQPage+Legislation+LocalBusiness',
+    keywords: ['audiência de custódia', 'flagrante', 'plantão criminal'],
+  },
+} as const;
+
+export type LegalHighComplexitySubArea = keyof typeof LEGAL_HIGH_COMPLEXITY_SUBAREAS;
+
+/**
+ * Resolve sub-area from free-text (keyword+title) for 'legal-high-complexity' sector.
+ * Returns null when no sub-area matches so callers can fall back to 'generico'.
+ */
+export function resolveLegalHighComplexitySubArea(text: string): LegalHighComplexitySubArea | null {
+  const t = (text || '').toLowerCase();
+  for (const [area, cfg] of Object.entries(LEGAL_HIGH_COMPLEXITY_SUBAREAS)) {
+    if (cfg.keywords.some((k) => t.includes(k))) return area as LegalHighComplexitySubArea;
+  }
+  return null;
+}
 
 export interface SectorConfig {
   sector: SectorType;
