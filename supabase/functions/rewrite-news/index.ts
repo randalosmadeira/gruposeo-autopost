@@ -323,37 +323,7 @@ Deno.serve(async (req) => {
 
     // Build user prompt based on mode
     let userPrompt: string;
-    if (isBNMP) {
-      // Parse mandado data from sourceContent for structured BNMP prompt
-      const mandadoLines = sourceContent.split('\n').filter(l => /^\d+\.\s*(NOME|Nome):/.test(l.trim()));
-      const mandados = mandadoLines.length > 0 
-        ? mandadoLines.map(line => {
-            const nome = line.match(/NOME:\s*([^|]+)/i)?.[1]?.trim() || line.match(/Nome:\s*([^|]+)/i)?.[1]?.trim() || '';
-            const tipo = line.match(/TIPO[^:]*:\s*([^|]+)/i)?.[1]?.trim() || 'Mandado de Prisão';
-            const status = line.match(/STATUS:\s*([^|]+)/i)?.[1]?.trim() || 'Pendente de Cumprimento';
-            const data = line.match(/DATA:\s*([^|]+)/i)?.[1]?.trim() || '';
-            const comarca = line.match(/COMARCA[^:]*:\s*([^|]+)/i)?.[1]?.trim() || '';
-            const numero = line.match(/(?:Nº|PROCESSO)[^:]*:\s*([^|]+)/i)?.[1]?.trim() || '';
-            const crime = line.match(/CRIME:\s*([^|]+)/i)?.[1]?.trim() || '';
-            return { nome, tipoPeca: tipo, situacao: status, data, orgaoExpedidor: comarca, numero, crimeRelacionado: crime };
-          })
-        : [{ nome: keyword || sourceName, tipoPeca: 'Mandado de Prisão', situacao: 'Pendente de Cumprimento' }];
-
-      userPrompt = buildBNMPUserPrompt({
-        mandados,
-        keyword,
-        language,
-        internalLinks,
-        projectSocials: projectConfig ? {
-          whatsapp: projectConfig.empresa_whatsapp,
-          instagram: projectConfig.social_instagram,
-          youtube: projectConfig.social_youtube,
-          tiktok: projectConfig.social_tiktok,
-          linkedin: projectConfig.social_linkedin,
-          googleMaps: projectConfig.social_google_maps,
-        } : undefined,
-      });
-    } else if (isMadeiraNeles) {
+    if (isMadeiraNeles) {
       userPrompt = buildMadeiraNelessUserPrompt({
           sourceUrl,
           sourceContent,
@@ -377,7 +347,7 @@ Deno.serve(async (req) => {
     }
 
     // Call AI with the system prompt (custom or default)
-    const maxTokens = (isMadeiraNeles || isBNMP) ? 16000 : 8000;
+    const maxTokens = isMadeiraNeles ? 16000 : 8000;
     const aiResponse = await callAI(
       [
         { role: "system", content: systemPromptToUse },
