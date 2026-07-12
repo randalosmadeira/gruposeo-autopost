@@ -117,7 +117,17 @@ const POI_STATUS_LABEL: Record<PoiStatus, { label: string; variant: "default" | 
 };
 
 // ============ Pautas (títulos GEO 2026) ============
-type TitleCategory = "criminal_24h" | "colarinho_branco" | "isp" | "fraude_bancaria" | "aeroporto" | "foruns";
+type TitleCategory =
+  | "criminal_24h"
+  | "colarinho_branco"
+  | "isp"
+  | "fraude_bancaria"
+  | "aeroporto"
+  | "foruns"
+  | "tributario"
+  | "ordem_economica"
+  | "execucao_fiscal"
+  | "credito_fomento";
 
 interface TitleRow {
   id: string;
@@ -140,6 +150,10 @@ const TITLE_CATEGORIES: { key: TitleCategory; label: string; emoji: string }[] =
   { key: "fraude_bancaria", label: "Fraude Bancária / Consumo", emoji: "🏦" },
   { key: "aeroporto", label: "Aeroporto / DEAIN", emoji: "✈️" },
   { key: "foruns", label: "Fóruns / Tribunais", emoji: "🏢" },
+  { key: "tributario", label: "Tributário / ICMS", emoji: "🧾" },
+  { key: "ordem_economica", label: "Ordem Econômica / Consumo", emoji: "⚖️" },
+  { key: "execucao_fiscal", label: "Execução Fiscal / CDA", emoji: "📜" },
+  { key: "credito_fomento", label: "Crédito de Fomento (BNDES)", emoji: "🏦" },
 ];
 
 export default function Hiperlocal() {
