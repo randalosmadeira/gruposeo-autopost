@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,7 +18,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, MapPin, Radar, RefreshCcw, Save, Sparkles, Trash2 } from "lucide-react";
+import { Copy, FileText, Loader2, MapPin, Plus, Radar, RefreshCcw, Save, Sparkles, Trash2, Wand2 } from "lucide-react";
 
 type TemplateKind = "forum" | "delegacia" | "polo";
 type PoiType = "forum" | "delegacia" | "polo" | "tribunal" | "cartorio" | "outro";
