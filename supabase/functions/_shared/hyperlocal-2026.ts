@@ -522,8 +522,8 @@ ${blocks.join('\n\n')}
 
 // ==================== BLOCO PRINCIPAL ====================
 
-export function buildHyperlocalBlock(cfg: HyperlocalSchemaConfig): string {
-  const template = pickHyperlocalTemplate(cfg.poi);
+export function buildHyperlocalBlock(cfg: HyperlocalSchemaConfig, templateOverride?: string | null): string {
+  const template = pickHyperlocalTemplate(cfg.poi, templateOverride);
   const schema = buildHyperlocalSchema(cfg);
 
   return `
