@@ -658,6 +658,81 @@ export type Database = {
         }
         Relationships: []
       }
+      hyperlocal_generation_history: {
+        Row: {
+          article_id: string | null
+          brand: string | null
+          category: string | null
+          created_at: string
+          fewshot_count: number
+          fewshot_examples: Json
+          first_sentence_ok: boolean | null
+          first_sentence_words: number | null
+          frontload_passes: boolean | null
+          frontload_word_count: number | null
+          has_jurisdiction: boolean | null
+          has_legal_base: boolean | null
+          id: string
+          keyword: string | null
+          poi_id: string | null
+          regen_attempts: number
+          source: string
+          template_kind: string | null
+          title: string
+          updated_at: string
+          user_id: string
+          validation_history: Json
+        }
+        Insert: {
+          article_id?: string | null
+          brand?: string | null
+          category?: string | null
+          created_at?: string
+          fewshot_count?: number
+          fewshot_examples?: Json
+          first_sentence_ok?: boolean | null
+          first_sentence_words?: number | null
+          frontload_passes?: boolean | null
+          frontload_word_count?: number | null
+          has_jurisdiction?: boolean | null
+          has_legal_base?: boolean | null
+          id?: string
+          keyword?: string | null
+          poi_id?: string | null
+          regen_attempts?: number
+          source?: string
+          template_kind?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+          validation_history?: Json
+        }
+        Update: {
+          article_id?: string | null
+          brand?: string | null
+          category?: string | null
+          created_at?: string
+          fewshot_count?: number
+          fewshot_examples?: Json
+          first_sentence_ok?: boolean | null
+          first_sentence_words?: number | null
+          frontload_passes?: boolean | null
+          frontload_word_count?: number | null
+          has_jurisdiction?: boolean | null
+          has_legal_base?: boolean | null
+          id?: string
+          keyword?: string | null
+          poi_id?: string | null
+          regen_attempts?: number
+          source?: string
+          template_kind?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+          validation_history?: Json
+        }
+        Relationships: []
+      }
       hyperlocal_template_overrides: {
         Row: {
           content: string
@@ -688,6 +763,63 @@ export type Database = {
           updated_at?: string
           updated_by_ai?: boolean
           user_id?: string
+        }
+        Relationships: []
+      }
+      hyperlocal_title_template_versions: {
+        Row: {
+          category: string
+          change_reason: string | null
+          changed_by: string | null
+          city_hint: string | null
+          created_at: string
+          id: string
+          is_urgency: boolean
+          neighborhood_hint: string | null
+          poi_type: string | null
+          source: string | null
+          status: string
+          template_id: string
+          title: string
+          user_id: string
+          version_number: number
+          ymyl_subarea: string | null
+        }
+        Insert: {
+          category: string
+          change_reason?: string | null
+          changed_by?: string | null
+          city_hint?: string | null
+          created_at?: string
+          id?: string
+          is_urgency?: boolean
+          neighborhood_hint?: string | null
+          poi_type?: string | null
+          source?: string | null
+          status: string
+          template_id: string
+          title: string
+          user_id: string
+          version_number: number
+          ymyl_subarea?: string | null
+        }
+        Update: {
+          category?: string
+          change_reason?: string | null
+          changed_by?: string | null
+          city_hint?: string | null
+          created_at?: string
+          id?: string
+          is_urgency?: boolean
+          neighborhood_hint?: string | null
+          poi_type?: string | null
+          source?: string | null
+          status?: string
+          template_id?: string
+          title?: string
+          user_id?: string
+          version_number?: number
+          ymyl_subarea?: string | null
         }
         Relationships: []
       }
