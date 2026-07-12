@@ -1,9 +1,11 @@
 /**
  * Brand Detection & SEO+GEO Prompt Builder
- * 
+ *
  * Auto-detects brand (RDM, Grupo SEO, Elas Tracy) from project config
  * and injects brand-specific SEO+GEO optimization directives.
+ * RDM builder also injects the 2026 GEO/AEO directives module.
  */
+import { buildGeo2026Block, detectLegalSubArea } from './geo-aeo-2026.ts';
 
 export type BrandType = 'rdm' | 'grupo_seo' | 'elas_tracy' | 'generic';
 
@@ -251,9 +253,6 @@ function buildRDMPrompt(config: ProjectConfig | undefined, year: number, content
   const siteUrl = config?.social_linktree || config?.wordpress_url || '';
 
   // ============ INJEÇÃO GEO/AEO 2026 (RDM ONLY) ============
-  // Lazy import via require-style — módulo puro sem dependências.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { buildGeo2026Block, detectLegalSubArea } = require('./geo-aeo-2026.ts');
   const subArea = detectLegalSubArea(contentHint || config?.empresa_nome || '');
   const isLocalUrgency = subArea === 'audiencia_custodia';
   const geo2026 = buildGeo2026Block({
