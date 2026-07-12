@@ -654,8 +654,14 @@ Deno.serve(async (req) => {
     // Load user's BYOK API keys into environment for this request
     await setEnvKeysForUser(user.id);
 
-    const { config, projectId: bodyProjectId } = await req.json() as { config: ArticleConfig; projectId?: string };
+    const { config, projectId: bodyProjectId, articleId: bodyArticleId, source: bodySource } = await req.json() as { config: ArticleConfig; projectId?: string; articleId?: string; source?: string };
     const effectiveProjectId = config.projectId || bodyProjectId;
+    const historyArticleId = bodyArticleId ?? null;
+    const historySource = bodySource || 'single';
+
+    // Trackers for hyperlocal generation history (populated below)
+    let pickedTitleCategory: string | null = null;
+    let injectedFewShotExamples: string[] = [];
 
     // ====== AUTO-FETCH INTERNAL LINKS from project if not manually provided ======
     if (effectiveProjectId && (!config.internalLinks || config.internalLinks.length < 3)) {
