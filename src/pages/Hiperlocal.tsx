@@ -1053,6 +1053,96 @@ export default function Hiperlocal() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* ============ Histórico de gerações ============ */}
+        <TabsContent value="historico" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="h-5 w-5" /> Histórico de artigos hiperlocais gerados
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Registro por artigo: categoria detectada, few-shot injetado, tentativas de regeneração e regra ≤30 palavras.
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={loadHistory} disabled={loadingHistory}>
+                <RefreshCcw className="h-4 w-4 mr-2" /> Recarregar
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {loadingHistory ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>
+              ) : history.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">
+                  Nenhuma geração hiperlocal registrada ainda.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data</TableHead>
+                        <TableHead>Título</TableHead>
+                        <TableHead>Categoria</TableHead>
+                        <TableHead>Few-shot</TableHead>
+                        <TableHead>Regen</TableHead>
+                        <TableHead>§1 · 1ª frase</TableHead>
+                        <TableHead>Origem</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {history.map((h) => {
+                        const cat = TITLE_CATEGORIES.find((c) => c.key === h.category);
+                        return (
+                          <TableRow key={h.id}>
+                            <TableCell className="text-xs whitespace-nowrap">
+                              {new Date(h.created_at).toLocaleString("pt-BR")}
+                            </TableCell>
+                            <TableCell className="max-w-md">
+                              <div className="text-sm font-medium line-clamp-2">{h.title}</div>
+                              {h.template_kind && (
+                                <div className="text-xs text-muted-foreground">template: {h.template_kind}</div>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {h.category ? (
+                                <Badge variant="outline">{cat?.emoji} {cat?.label ?? h.category}</Badge>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <Badge variant="secondary">{h.fewshot_count} ex.</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={h.regen_attempts === 0 ? "default" : h.regen_attempts >= 2 ? "destructive" : "secondary"}>
+                                {h.regen_attempts}×
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <div className="flex items-center gap-1">
+                                <Badge variant={h.first_sentence_ok ? "default" : "destructive"} className="text-[10px]">
+                                  {h.first_sentence_words ?? "—"}w / 30
+                                </Badge>
+                                <Badge variant={h.frontload_passes ? "default" : "destructive"} className="text-[10px]">
+                                  §1 {h.frontload_passes ? "OK" : "FAIL"}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">{h.source}</Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* ============ Edit title dialog ============ */}
