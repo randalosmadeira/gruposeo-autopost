@@ -214,6 +214,40 @@ export default function Hiperlocal() {
   const [versionsList, setVersionsList] = useState<Array<{ id: string; version_number: number; title: string; category: string; created_at: string; change_reason: string | null; }>>([]);
   const [loadingVersions, setLoadingVersions] = useState(false);
 
+  // ============ Histórico de gerações ============
+  interface HistoryRow {
+    id: string;
+    article_id: string | null;
+    title: string;
+    category: string | null;
+    fewshot_count: number;
+    fewshot_examples: string[];
+    template_kind: string | null;
+    regen_attempts: number;
+    frontload_passes: boolean | null;
+    frontload_word_count: number | null;
+    first_sentence_words: number | null;
+    first_sentence_ok: boolean | null;
+    source: string;
+    created_at: string;
+  }
+  const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const loadHistory = async () => {
+    setLoadingHistory(true);
+    const { data, error } = await supabase
+      .from("hyperlocal_generation_history")
+      .select("id, article_id, title, category, fewshot_count, fewshot_examples, template_kind, regen_attempts, frontload_passes, frontload_word_count, first_sentence_words, first_sentence_ok, source, created_at")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    setLoadingHistory(false);
+    if (error) {
+      toast({ title: "Erro ao carregar histórico", description: error.message, variant: "destructive" });
+      return;
+    }
+    setHistory((data ?? []) as any);
+  };
+
   const loadPois = async () => {
     setLoadingPois(true);
     const q = supabase
