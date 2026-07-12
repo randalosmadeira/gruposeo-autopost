@@ -79,9 +79,33 @@ Deno.serve(async (req) => {
     const pre = await sqlClient`SELECT current_database() AS db, version() AS version, current_user AS role`;
     const preInfo = pre[0];
 
-    // Executa o migrations.sql inteiro como um único bloco.
-    // Usa unsafe() porque o conteúdo é uma sequência de statements (DDL).
+    // Bootstrap idempotente do exec_sql ANTES do payload (evita PGRST202 no destino).
+    const bootstrapExecSql = `
+CREATE OR REPLACE FUNCTION public.exec_sql(sql_query text)
+RETURNS json LANGUAGE plpgsql SECURITY DEFINER
+SET search_path TO 'public', 'pg_catalog', 'information_schema', 'auth', 'storage'
+AS $fn$
+DECLARE result json; caller_role text; clean_query text;
+BEGIN
+  caller_role := current_setting('request.jwt.claims', true)::json->>'role';
+  IF caller_role IS DISTINCT FROM 'service_role' THEN
+    RAISE EXCEPTION 'Acesso negado: apenas service_role pode executar esta função.';
+  END IF;
+  clean_query := rtrim(sql_query, '; ');
+  EXECUTE 'SELECT json_agg(row_to_json(t)) FROM (' || clean_query || ') t' INTO result;
+  RETURN COALESCE(result, '[]'::json);
+END;
+$fn$;
+REVOKE ALL ON FUNCTION public.exec_sql(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.exec_sql(text) TO service_role;
+`;
+    await sqlClient.unsafe(bootstrapExecSql);
+
+    // Executa o migrations.sql inteiro
     await sqlClient.unsafe(sql);
+
+    // Força PostgREST a recarregar o schema cache no destino
+    await sqlClient.unsafe(`NOTIFY pgrst, 'reload schema';`);
 
     const elapsed = Date.now() - started;
 

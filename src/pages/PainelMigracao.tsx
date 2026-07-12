@@ -138,7 +138,42 @@ export default function PainelMigracao() {
       query: '?raw', import: 'default', eager: true,
     }) as Record<string, string>;
     const entries = Object.entries(modules).sort(([a], [b]) => a.localeCompare(b));
-    return entries.map(([p, src]) => `-- ═════════ ${p.split('/').pop()} ═════════\n${src}`).join('\n\n');
+
+    // Bootstrap: garante exec_sql disponível ANTES de qualquer migration
+    // (evita erro PGRST202 "public.exec_sql not found in schema cache" no destino).
+    const bootstrap = `-- ═════════ BOOTSTRAP exec_sql (pré-requisito) ═════════
+CREATE OR REPLACE FUNCTION public.exec_sql(sql_query text)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_catalog', 'information_schema', 'auth', 'storage'
+AS $fn$
+DECLARE
+  result json;
+  caller_role text;
+  clean_query text;
+BEGIN
+  caller_role := current_setting('request.jwt.claims', true)::json->>'role';
+  IF caller_role IS DISTINCT FROM 'service_role' THEN
+    RAISE EXCEPTION 'Acesso negado: apenas service_role pode executar esta função.';
+  END IF;
+  clean_query := rtrim(sql_query, '; ');
+  EXECUTE 'SELECT json_agg(row_to_json(t)) FROM (' || clean_query || ') t' INTO result;
+  RETURN COALESCE(result, '[]'::json);
+END;
+$fn$;
+REVOKE ALL ON FUNCTION public.exec_sql(text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.exec_sql(text) TO service_role;
+`;
+
+    const body = entries
+      .map(([p, src]) => `-- ═════════ ${p.split('/').pop()} ═════════\n${src}`)
+      .join('\n\n');
+
+    // Reload PostgREST schema cache no final para exec_sql ficar imediatamente visível.
+    const reload = `\n\n-- ═════════ RELOAD PostgREST schema cache ═════════\nNOTIFY pgrst, 'reload schema';\n`;
+
+    return `${bootstrap}\n\n${body}${reload}`;
   };
 
   const executeRemoteMigration = async () => {
