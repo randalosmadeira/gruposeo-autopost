@@ -143,15 +143,46 @@ Deno.serve(async (req) => {
       );
     }
 
-    const q = [
-      payload.query || DEFAULT_QUERIES[payload.poi_type],
-      payload.city,
-      payload.state_uf,
-    ]
-      .filter(Boolean)
-      .join(' ');
+    // Monta lista de queries: manual > AI-expandida (se keyword+gemini) > default
+    let queries: string[] = [];
+    if (payload.query) {
+      queries = [`${payload.query} ${payload.city} ${payload.state_uf}`];
+    } else if (payload.keyword && keys.gemini) {
+      const aiQueries = await expandQueriesWithAI(
+        keys.gemini,
+        payload.keyword,
+        payload.poi_type,
+        payload.city,
+        payload.state_uf,
+      );
+      queries = aiQueries.length > 0
+        ? aiQueries.map((q) => `${q} ${payload.city} ${payload.state_uf}`)
+        : [`${payload.keyword} ${DEFAULT_QUERIES[payload.poi_type]} ${payload.city} ${payload.state_uf}`];
+    } else {
+      queries = [
+        [payload.keyword, DEFAULT_QUERIES[payload.poi_type], payload.city, payload.state_uf]
+          .filter(Boolean)
+          .join(' '),
+      ];
+    }
 
-    const places = await serperPlaces(keys.serper, q);
+    // Executa Places por query, deduplica por endereço/nome
+    const seen = new Set<string>();
+    const places: any[] = [];
+    for (const q of queries) {
+      try {
+        const found = await serperPlaces(keys.serper, q);
+        for (const p of found) {
+          const key = `${(p.title || '').toLowerCase()}|${(p.address || '').toLowerCase()}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          places.push(p);
+        }
+      } catch (err) {
+        console.warn(`serper query failed: ${q}`, err);
+      }
+    }
+
     const limit = Math.min(payload.limit ?? 15, 30);
 
     // Normaliza + insere como draft com service role
