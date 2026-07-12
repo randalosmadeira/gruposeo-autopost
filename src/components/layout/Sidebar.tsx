@@ -21,7 +21,7 @@ import {
   ChevronDown,
   FileText,
   MessageSquare,
-  Gavel,
+  
   Vote,
 } from 'lucide-react';
 import {
