@@ -78,6 +78,17 @@ function SecretRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function PreCheck({ ok, label, warn }: { ok: boolean; label: string; warn?: boolean }) {
+  const Icon = ok ? CheckCircle2 : warn ? AlertTriangle : XCircle;
+  const color = ok ? 'text-green-500' : warn ? 'text-amber-500' : 'text-destructive';
+  return (
+    <div className="flex items-center gap-2">
+      <Icon className={`w-4 h-4 ${color}`} />
+      <span className="text-xs">{label}</span>
+    </div>
+  );
+}
+
 function SectionDivider({ label }: { label?: string }) {
   return (
     <div className="flex items-center gap-2 my-2">
