@@ -18,6 +18,7 @@ interface DiscoverPayload {
   state_uf: string;
   poi_type: 'forum' | 'delegacia' | 'polo' | 'tribunal' | 'cartorio' | 'outro';
   query?: string;
+  keyword?: string; // ex: "audiência de custódia", "provedor de internet"
   limit?: number;
 }
 
@@ -42,6 +43,46 @@ async function serperPlaces(apiKey: string, q: string, gl = 'br', hl = 'pt-br'):
   }
   const data = await res.json();
   return Array.isArray(data.places) ? data.places : [];
+}
+
+/**
+ * Usa Gemini (BYOK do usuário) para expandir uma keyword + poi_type + cidade
+ * em 3-5 queries Places específicas. Retorna array de strings.
+ */
+async function expandQueriesWithAI(
+  geminiKey: string,
+  keyword: string,
+  poiType: string,
+  city: string,
+  state: string,
+): Promise<string[]> {
+  const prompt = `Você é um especialista em SEO local no Brasil. A partir da keyword do usuário e do tipo de POI, gere 3 a 5 consultas curtas (uma por linha, sem numeração, sem aspas) para o Google Places que ajudem a encontrar os POIs mais relevantes na cidade indicada. Foque em termos que um cliente jurídico usaria. Retorne SOMENTE as consultas, uma por linha.
+
+Keyword: ${keyword}
+Tipo de POI: ${poiType}
+Cidade: ${city}/${state}`;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    console.warn(`Gemini expand failed [${res.status}]: ${body}`);
+    return [];
+  }
+  const data = await res.json();
+  const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  return text
+    .split('\n')
+    .map((s: string) => s.replace(/^[\s\-\*\d\.\)]+/, '').trim())
+    .filter((s: string) => s.length > 2)
+    .slice(0, 5);
 }
 
 function extractNeighborhood(address?: string): string | null {
