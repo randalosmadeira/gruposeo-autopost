@@ -116,8 +116,35 @@ const POI_STATUS_LABEL: Record<PoiStatus, { label: string; variant: "default" | 
   archived: { label: "Arquivado", variant: "outline" },
 };
 
+// ============ Pautas (títulos GEO 2026) ============
+type TitleCategory = "criminal_24h" | "colarinho_branco" | "isp" | "fraude_bancaria" | "aeroporto" | "foruns";
+
+interface TitleRow {
+  id: string;
+  user_id: string | null;
+  category: TitleCategory;
+  title: string;
+  poi_type: string | null;
+  ymyl_subarea: string | null;
+  neighborhood_hint: string | null;
+  city_hint: string | null;
+  is_urgency: boolean;
+  status: "approved" | "draft" | "archived";
+  source: string;
+}
+
+const TITLE_CATEGORIES: { key: TitleCategory; label: string; emoji: string }[] = [
+  { key: "criminal_24h", label: "Criminal 24h / Custódia", emoji: "🚨" },
+  { key: "colarinho_branco", label: "Colarinho Branco", emoji: "💼" },
+  { key: "isp", label: "Provedores (ISP)", emoji: "🌐" },
+  { key: "fraude_bancaria", label: "Fraude Bancária / Consumo", emoji: "🏦" },
+  { key: "aeroporto", label: "Aeroporto / DEAIN", emoji: "✈️" },
+  { key: "foruns", label: "Fóruns / Tribunais", emoji: "🏢" },
+];
+
 export default function Hiperlocal() {
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   // ============ POIs ============
   const [pois, setPois] = useState<Poi[]>([]);
