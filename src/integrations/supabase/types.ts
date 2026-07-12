@@ -1610,7 +1610,7 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      exec_sql: { Args: { sql_query: string }; Returns: Json }
     }
     Enums: {
       article_status: "draft" | "generating" | "ready" | "published" | "error"
