@@ -125,6 +125,38 @@ export const SECTOR_CONFIGS: Record<SectorType, SectorConfig> = {
     exampleOpening: 'A cada hora, mais de 100 trabalhadores brasileiros são demitidos sem receber todos os seus direitos. Você pode ser um deles.\n\nSe você foi demitido recentemente – ou está prestes a ser – provavelmente está se perguntando: recebi tudo que me era devido?',
   },
 
+  'legal-high-complexity': {
+    sector: 'legal-high-complexity',
+    displayName: 'Advocacia — Alta Complexidade (Penal Empresarial / Tributário / Digital)',
+    complianceLevel: 'strict',
+    complianceBody: 'OAB',
+    primaryCTA: 'Agende análise sigilosa com o Dr. Rândalos Madeira',
+    secondaryCTAs: [
+      'Solicite parecer técnico especializado',
+      'Fale com defesa criminal empresarial',
+      'Atendimento 24h para audiência de custódia',
+    ],
+    forbiddenWords: [
+      'garantimos', 'certeza de ganho', 'arquivamento garantido', 'absolvição garantida',
+      'preço', 'valor', 'honorário', 'promoção', 'desconto', 'melhor advogado', 'somos os melhores',
+    ],
+    requiredDisclaimer: 'Este conteúdo é informativo e não substitui consulta jurídica individualizada. Casos de alta complexidade (penal empresarial, tributário, ISPs, LGPD) exigem análise sigilosa caso a caso.',
+    tone: 'formal',
+    pronounUsage: 'nos',
+    openingStyle: 'statistic',
+    closingStyle: 'urgency',
+    preferredAI: 'anthropic',
+    conversionTechniques: [
+      'Autoridade técnica: cite base legal + tribunal + ano em cada tese apresentada.',
+      'Sigilo institucional: reforce a proteção da imagem e do patrimônio do cliente empresarial.',
+      'Urgência ética: prazos decadenciais/prescricionais de operações fiscais e criminais empresariais.',
+      'Prova social anonimizada: casos sem valor de causa, sem identificação de cliente, seguindo OAB 205/2021.',
+    ],
+    exampleOpening: 'Empresários alvos de operação de busca e apreensão têm entre 24 e 72 horas para estruturar defesa técnica antes de decisões cautelares (CPP arts. 240-250). Neste guia, os passos jurídicos imediatos para preservar patrimônio e reputação em São Paulo.',
+  },
+
+
+
   marketing_digital: {
     sector: 'marketing_digital',
     displayName: 'Marketing Digital',
