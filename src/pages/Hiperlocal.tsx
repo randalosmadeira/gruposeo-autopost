@@ -356,6 +356,104 @@ export default function Hiperlocal() {
     }
   };
 
+  // ============ Pautas actions ============
+  const filteredTitles = useMemo(() => {
+    const q = titleQuery.trim().toLowerCase();
+    return titles.filter((t) => {
+      if (titleCategory !== "all" && t.category !== titleCategory) return false;
+      if (q && !t.title.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [titles, titleCategory, titleQuery]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedTitles((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const usarTitulo = (title: string) => {
+    navigate(`/article-generator?title=${encodeURIComponent(title)}`);
+  };
+
+  const copiarTitulo = async (title: string) => {
+    try {
+      await navigator.clipboard.writeText(title);
+      toast({ title: "Título copiado", description: title.slice(0, 80) + (title.length > 80 ? "…" : "") });
+    } catch {
+      toast({ title: "Falha ao copiar", variant: "destructive" });
+    }
+  };
+
+  const enviarParaBulk = () => {
+    const selected = titles.filter((t) => selectedTitles.has(t.id)).map((t) => t.title);
+    if (selected.length === 0) {
+      toast({ title: "Selecione ao menos 1 título", variant: "destructive" });
+      return;
+    }
+    const payload = encodeURIComponent(JSON.stringify(selected));
+    navigate(`/bulk-articles?titles=${payload}`);
+  };
+
+  const criarTitulo = async () => {
+    if (!newTitleForm.title.trim()) {
+      toast({ title: "Título obrigatório", variant: "destructive" });
+      return;
+    }
+    setCreatingTitle(true);
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) {
+      toast({ title: "Não autenticado", variant: "destructive" });
+      setCreatingTitle(false);
+      return;
+    }
+    const { error } = await supabase.from("hyperlocal_title_templates").insert({
+      user_id: userData.user.id,
+      category: newTitleForm.category,
+      title: newTitleForm.title.trim(),
+      poi_type: newTitleForm.poi_type || null,
+      ymyl_subarea: newTitleForm.ymyl_subarea || null,
+      neighborhood_hint: newTitleForm.neighborhood_hint || null,
+      city_hint: newTitleForm.city_hint || null,
+      is_urgency: newTitleForm.is_urgency,
+      status: "approved",
+      source: "user_custom",
+    });
+    setCreatingTitle(false);
+    if (error) {
+      toast({ title: "Erro ao criar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Título criado" });
+    setNewTitleOpen(false);
+    setNewTitleForm({
+      category: newTitleForm.category,
+      title: "",
+      poi_type: "",
+      ymyl_subarea: "",
+      neighborhood_hint: "",
+      city_hint: "",
+      is_urgency: false,
+    });
+    loadTitles();
+  };
+
+  const excluirTitulo = async (id: string) => {
+    const { error } = await supabase.from("hyperlocal_title_templates").delete().eq("id", id);
+    if (error) {
+      toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
+      return;
+    }
+    setTitles((prev) => prev.filter((t) => t.id !== id));
+    setSelectedTitles((prev) => {
+      const n = new Set(prev);
+      n.delete(id);
+      return n;
+    });
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -364,7 +462,7 @@ export default function Hiperlocal() {
             <MapPin className="h-8 w-8" /> Hiperlocal (RDM)
           </h1>
           <p className="text-muted-foreground mt-1">
-            POIs (fóruns, delegacias, polos) e templates que a IA usa para artigos hiperlocais.
+            POIs, templates e biblioteca de pautas GEO 2026 usados nos artigos hiperlocais.
           </p>
         </div>
       </div>
@@ -373,7 +471,9 @@ export default function Hiperlocal() {
         <TabsList>
           <TabsTrigger value="pois">POIs</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
+          <TabsTrigger value="pautas">Pautas ({titles.length})</TabsTrigger>
         </TabsList>
+
 
         {/* ============ POIs ============ */}
         <TabsContent value="pois" className="space-y-4">
