@@ -6,6 +6,7 @@
  * RDM builder also injects the 2026 GEO/AEO directives module.
  */
 import { buildGeo2026Block, detectLegalSubArea } from './geo-aeo-2026.ts';
+import { buildHyperlocalBlock, detectHyperlocalIntent, type HyperlocalPoi } from './hyperlocal-2026.ts';
 
 export type BrandType = 'rdm' | 'grupo_seo' | 'elas_tracy' | 'generic';
 
