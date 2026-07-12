@@ -6,6 +6,7 @@
  * RDM builder also injects the 2026 GEO/AEO directives module.
  */
 import { buildGeo2026Block, detectLegalSubArea } from './geo-aeo-2026.ts';
+import { buildHyperlocalBlock, detectHyperlocalIntent, type HyperlocalPoi } from './hyperlocal-2026.ts';
 
 export type BrandType = 'rdm' | 'grupo_seo' | 'elas_tracy' | 'generic';
 
@@ -196,7 +197,16 @@ function buildOutputFormatRules(): string {
 /**
  * Build brand-specific SEO+GEO system prompt section.
  */
-export function buildBrandSEOGeoPrompt(brand: BrandDetectionResult, config?: ProjectConfig): string {
+export interface BrandPromptContext {
+  contentHint?: string;
+  hyperlocalPoi?: HyperlocalPoi | null;
+}
+
+export function buildBrandSEOGeoPrompt(
+  brand: BrandDetectionResult,
+  config?: ProjectConfig,
+  ctx?: BrandPromptContext,
+): string {
   const currentYear = new Date().getFullYear();
 
   const geoRules = `
@@ -239,7 +249,7 @@ export function buildBrandSEOGeoPrompt(brand: BrandDetectionResult, config?: Pro
 
   switch (brand.brand) {
     case 'rdm':
-      return buildRDMPrompt(config, currentYear) + '\n\n' + geoRules + '\n\n' + seoTechRules + '\n\n' + outputRules;
+      return buildRDMPrompt(config, currentYear, ctx?.contentHint, ctx?.hyperlocalPoi) + '\n\n' + geoRules + '\n\n' + seoTechRules + '\n\n' + outputRules;
     case 'elas_tracy':
       return buildElasTracyPrompt(config, currentYear) + '\n\n' + geoRules + '\n\n' + seoTechRules + '\n\n' + outputRules;
     case 'grupo_seo':
@@ -249,12 +259,18 @@ export function buildBrandSEOGeoPrompt(brand: BrandDetectionResult, config?: Pro
   }
 }
 
-function buildRDMPrompt(config: ProjectConfig | undefined, year: number, contentHint?: string): string {
+function buildRDMPrompt(
+  config: ProjectConfig | undefined,
+  year: number,
+  contentHint?: string,
+  hyperlocalPoi?: HyperlocalPoi | null,
+): string {
   const siteUrl = config?.social_linktree || config?.wordpress_url || '';
 
   // ============ INJEÇÃO GEO/AEO 2026 (RDM ONLY) ============
   const subArea = detectLegalSubArea(contentHint || config?.empresa_nome || '');
-  const isLocalUrgency = subArea === 'audiencia_custodia';
+  const hyperlocalDet = detectHyperlocalIntent(contentHint || '');
+  const isLocalUrgency = subArea === 'audiencia_custodia' || hyperlocalDet.isUrgency;
   const geo2026 = buildGeo2026Block({
     subArea,
     isLocalUrgency,
@@ -264,6 +280,19 @@ function buildRDMPrompt(config: ProjectConfig | undefined, year: number, content
     officeWhatsapp: config?.empresa_whatsapp,
     siteUrl,
   });
+
+  // ============ INJEÇÃO HIPERLOCAL 2026 (só se houver POI resolvido) ============
+  const hyperlocalBlock = hyperlocalPoi
+    ? buildHyperlocalBlock({
+        poi: hyperlocalPoi,
+        subArea,
+        isUrgency: isLocalUrgency,
+        attorneyName: 'Dr. Rândalos Madeira',
+        officeAddress: config?.empresa_endereco || 'Av. Paulista, São Paulo/SP',
+        officePhone: config?.empresa_telefone,
+        siteUrl,
+      })
+    : '';
 
   return `
 ## 🏛️ IDENTIDADE DA MARCA: RDM Advogados Associados
@@ -302,7 +331,9 @@ ${buildSocialMediaSection(config)}
 
 ${buildCTASection(config, 'RDM')}
 
-${geo2026}`;
+${geo2026}
+
+${hyperlocalBlock}`;
 }
 
 function buildElasTracyPrompt(config: ProjectConfig | undefined, year: number): string {
