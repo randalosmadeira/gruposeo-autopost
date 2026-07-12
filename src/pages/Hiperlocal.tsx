@@ -466,6 +466,106 @@ export default function Hiperlocal() {
     });
   };
 
+  // ============ Edit + Versions ============
+  const openEditDialog = async (t: TitleRow) => {
+    // If seed (no user_id), clone into user_id before editing
+    let target = t;
+    if (!t.user_id) {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        toast({ title: "Não autenticado", variant: "destructive" });
+        return;
+      }
+      const { data: cloned, error } = await supabase.from("hyperlocal_title_templates").insert({
+        user_id: userData.user.id,
+        category: t.category,
+        title: t.title,
+        poi_type: t.poi_type,
+        ymyl_subarea: t.ymyl_subarea,
+        neighborhood_hint: t.neighborhood_hint,
+        city_hint: t.city_hint,
+        is_urgency: t.is_urgency,
+        status: "approved",
+        source: "user_clone_of_seed",
+      }).select("id, user_id, category, title, poi_type, ymyl_subarea, neighborhood_hint, city_hint, is_urgency, status, source").single();
+      if (error || !cloned) {
+        toast({ title: "Erro ao clonar seed", description: error?.message, variant: "destructive" });
+        return;
+      }
+      target = cloned as TitleRow;
+      setTitles((prev) => [target, ...prev]);
+      toast({ title: "Cópia criada", description: "Você editará sua própria versão. O seed original é preservado." });
+    }
+    setEditingTitle(target);
+    setEditTitleForm({
+      title: target.title,
+      category: target.category,
+      neighborhood_hint: target.neighborhood_hint ?? "",
+      city_hint: target.city_hint ?? "",
+      is_urgency: target.is_urgency,
+    });
+    setEditTitleOpen(true);
+  };
+
+  const saveEdit = async () => {
+    if (!editingTitle) return;
+    if (!editTitleForm.title.trim()) {
+      toast({ title: "Título obrigatório", variant: "destructive" });
+      return;
+    }
+    setSavingEdit(true);
+    const { error } = await supabase.from("hyperlocal_title_templates").update({
+      title: editTitleForm.title.trim(),
+      category: editTitleForm.category,
+      neighborhood_hint: editTitleForm.neighborhood_hint || null,
+      city_hint: editTitleForm.city_hint || null,
+      is_urgency: editTitleForm.is_urgency,
+    }).eq("id", editingTitle.id);
+    setSavingEdit(false);
+    if (error) {
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Título atualizado", description: "Versão anterior salva no histórico." });
+    setEditTitleOpen(false);
+    setEditingTitle(null);
+    loadTitles();
+  };
+
+  const openVersions = async (t: TitleRow) => {
+    setVersionsFor(t);
+    setVersionsOpen(true);
+    setLoadingVersions(true);
+    const { data, error } = await supabase
+      .from("hyperlocal_title_template_versions")
+      .select("id, version_number, title, category, created_at, change_reason")
+      .eq("template_id", t.id)
+      .order("version_number", { ascending: false });
+    setLoadingVersions(false);
+    if (error) {
+      toast({ title: "Erro ao carregar versões", description: error.message, variant: "destructive" });
+      return;
+    }
+    setVersionsList((data ?? []) as any);
+  };
+
+  const restoreVersion = async (versionId: string) => {
+    if (!versionsFor) return;
+    const v = versionsList.find((x) => x.id === versionId);
+    if (!v) return;
+    const { error } = await supabase.from("hyperlocal_title_templates").update({
+      title: v.title,
+      category: v.category as TitleCategory,
+    }).eq("id", versionsFor.id);
+    if (error) {
+      toast({ title: "Erro ao restaurar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: `Versão v${v.version_number} restaurada` });
+    setVersionsOpen(false);
+    loadTitles();
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
