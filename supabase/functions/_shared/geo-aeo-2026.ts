@@ -75,15 +75,15 @@ const FRONTLOADING_BLOCK = `
 
 **Regra crítica:** 65-69% das buscas terminam em AI Overview (zero-clique). O §1 é o único conteúdo que a IA vai citar. Ele DEVE valer sozinho.
 
-### Estrutura obrigatória do §1 (40-60 palavras):
-1. **Resposta direta** à pergunta/tema (frase 1, tempo verbal presente).
+### Estrutura obrigatória do §1 (40-60 palavras no total):
+1. **Resposta direta** à pergunta/tema em **1 frase de até 30 palavras** (esta é a frase que ChatGPT/Gemini extraem como snippet — **regra ouro AEO 2026**).
 2. **Dado técnico verificável** (artigo de lei + número, tribunal + ano, ou estatística oficial com fonte).
 3. **Contexto jurisdicional** (São Paulo, tribunal competente, ou base legal).
 
 ### Formato canônico:
 \`\`\`html
 <p class="lead-answer" data-geo="frontload">
-  [Resposta técnica em 1 frase]. [Base legal: art. X da Lei Y/AAAA ou tribunal + ano]. [Contexto SP/federal].
+  [Frase 1: resposta técnica direta em ≤30 palavras — inclui a base legal mínima]. [Frase 2: contexto SP/federal e detalhe complementar].
 </p>
 \`\`\`
 
