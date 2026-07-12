@@ -4,10 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import {
   Eye, EyeOff, Copy, Check, ShieldAlert, Key, Download, Loader2,
-  Code2, Database, AlertTriangle, Info, FileCode,
+  Code2, Database, AlertTriangle, Info, FileCode, Rocket, XCircle, CheckCircle2,
 } from 'lucide-react';
 
 interface MigrationData {
