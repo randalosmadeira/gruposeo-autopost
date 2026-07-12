@@ -11,6 +11,15 @@
  */
 
 import type { LegalSubArea } from './geo-aeo-2026.ts';
+import {
+  detectSpLocation,
+  detectAirportCrime,
+  type SpLocationDetection,
+  type AirportCrimeDetection,
+} from './hyperlocal-sp-reference.ts';
+
+export { detectSpLocation, detectAirportCrime } from './hyperlocal-sp-reference.ts';
+export type { SpZone, FederalAirportCrime } from './hyperlocal-sp-reference.ts';
 
 // ==================== TIPOS ====================
 
@@ -44,6 +53,8 @@ export interface HyperlocalDetection {
   cityHint?: string;
   isUrgency: boolean;
   reason: string;
+  spLocation?: SpLocationDetection;
+  airportCrime?: AirportCrimeDetection;
 }
 
 // ==================== DETECÇÃO DE INTENÇÃO ====================
@@ -66,23 +77,39 @@ export function detectHyperlocalIntent(text: string): HyperlocalDetection {
   const delegacia = DELEGACIA_RX.test(t);
   const polo = POLO_RX.test(t);
   const isUrgency = URGENCY_RX.test(t);
-  const isHyperlocal = forum || delegacia || polo || isUrgency;
+  const spLocation = detectSpLocation(t);
+  const airportCrime = detectAirportCrime(t);
+  const isHyperlocal =
+    forum || delegacia || polo || isUrgency ||
+    Boolean(spLocation.city) || airportCrime.isAirportCrime;
 
   let poiTypeHint: PoiType | undefined;
-  if (delegacia) poiTypeHint = 'delegacia';
+  if (delegacia || airportCrime.isAirportCrime) poiTypeHint = 'delegacia';
   else if (forum) poiTypeHint = 'forum';
-  else if (polo) poiTypeHint = 'polo';
+  else if (polo || spLocation.isGuarulhosAirportPole) poiTypeHint = 'polo';
 
   const neighMatch = t.match(NEIGHBORHOOD_HINT_RX);
-  const neighborhoodHint = neighMatch?.[1]?.trim();
+  const neighborhoodHint =
+    neighMatch?.[1]?.trim() ||
+    spLocation.matchedDistrict ||
+    spLocation.matchedGuarulhosNeighborhood;
+
+  const cityHint = spLocation.city === 'guarulhos'
+    ? 'Guarulhos'
+    : spLocation.city === 'sao_paulo'
+      ? 'São Paulo'
+      : undefined;
 
   return {
     isHyperlocal,
     poiTypeHint,
     neighborhoodHint,
-    isUrgency,
+    cityHint,
+    isUrgency: isUrgency || airportCrime.isAirportCrime,
+    spLocation,
+    airportCrime,
     reason: isHyperlocal
-      ? `Match: forum=${forum} delegacia=${delegacia} polo=${polo} urg=${isUrgency}`
+      ? `Match: forum=${forum} delegacia=${delegacia} polo=${polo} urg=${isUrgency} city=${spLocation.city || '-'} zone=${spLocation.spZone || '-'} airport=${airportCrime.isAirportCrime} crime=${airportCrime.crime?.slug || '-'}`
       : 'sem_match_hiperlocal',
   };
 }
