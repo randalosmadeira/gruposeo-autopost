@@ -85,14 +85,6 @@ const navGroups: NavGroup[] = [
             iconColor: '#10B981',
           },
           { 
-            label: 'BNMP', 
-            icon: Gavel, 
-            href: '/bnmp-repost',
-            badge: 'Novo',
-            badgeVariant: 'orange' as const,
-            iconColor: '#FF4500',
-          },
-          { 
             label: 'Eleitoral', 
             icon: Vote, 
             href: '/electoral-campaign',

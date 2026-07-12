@@ -36,7 +36,7 @@ const QueueMonitor = lazy(() => import("./pages/QueueMonitor"));
 const Academy = lazy(() => import("./pages/Academy"));
 const InternalLinking = lazy(() => import("./pages/InternalLinking"));
 const AIChat = lazy(() => import("./pages/AIChat"));
-const BNMPRepost = lazy(() => import("./pages/BNMPRepost"));
+
 const ElectoralCampaign = lazy(() => import("./pages/ElectoralCampaign"));
 const PainelMigracao = lazy(() => import("./pages/PainelMigracao"));
 const AuditoriaGBP = lazy(() => import("./pages/AuditoriaGBP"));
@@ -108,7 +108,7 @@ const App = () => (
                 <Route path="/news-rewriter" element={<NewsRewriter />} />
                 <Route path="/bulk-generator" element={<BulkKeywordGenerator />} />
                 <Route path="/ai-chat" element={<AIChat />} />
-                <Route path="/bnmp-repost" element={<BNMPRepost />} />
+                
                 <Route path="/electoral-campaign" element={<ElectoralCampaign />} />
                 <Route path="/auditoria-gbp" element={<AuditoriaGBP />} />
                 <Route path="/hiperlocal" element={<Hiperlocal />} />
