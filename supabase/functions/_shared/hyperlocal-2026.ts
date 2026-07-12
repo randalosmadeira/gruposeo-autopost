@@ -11,6 +11,15 @@
  */
 
 import type { LegalSubArea } from './geo-aeo-2026.ts';
+import {
+  detectSpLocation,
+  detectAirportCrime,
+  type SpLocationDetection,
+  type AirportCrimeDetection,
+} from './hyperlocal-sp-reference.ts';
+
+export { detectSpLocation, detectAirportCrime } from './hyperlocal-sp-reference.ts';
+export type { SpZone, FederalAirportCrime } from './hyperlocal-sp-reference.ts';
 
 // ==================== TIPOS ====================
 
