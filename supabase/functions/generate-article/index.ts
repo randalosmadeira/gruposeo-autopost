@@ -926,8 +926,45 @@ Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
       useAdvanced: hasAdvancedConfig(config)
     });
 
+    // Few-shot de TÍTULOS-MODELO (biblioteca GEO 2026) — só para marca RDM
+    let titleFewShotBlock = '';
+    if (brandDetection.brand === 'rdm') {
+      try {
+        const hint = (contentHint || config.keyword || '').toLowerCase();
+        const categoryMatchers: Array<{ cat: string; test: () => boolean }> = [
+          { cat: 'aeroporto', test: () => /aeroporto|gru|congonhas|deain|receita federal|cumbica|contrabando|descaminho|evas[ãa]o de divisas|tr[áa]fico internacional/.test(hint) },
+          { cat: 'criminal_24h', test: () => /custódia|custodia|flagrante|plantão|plantao|preso|habeas corpus|intima[çc][ãa]o|delegacia|inqu[ée]rito|criminalista/.test(hint) },
+          { cat: 'isp', test: () => /provedor|isp|anatel|marco civil|lgpd|banda larga|telecomunica|tr[âa]nsito ip/.test(hint) },
+          { cat: 'fraude_bancaria', test: () => /pix|fraude bancária|fraude bancaria|golpe|clonagem|deepfake|boleto falso|banco/.test(hint) },
+          { cat: 'colarinho_branco', test: () => /icms|sonega|holding|colarinho|lavagem|compliance|ordem econ[ôo]mica|societário|societario/.test(hint) },
+          { cat: 'foruns', test: () => /f[óo]rum|comarca|tribunal|juizado|vara/.test(hint) },
+        ];
+        const picked = categoryMatchers.find((m) => m.test())?.cat ?? 'foruns';
+        const { data: titleRows } = await supabase
+          .from('hyperlocal_title_templates')
+          .select('title')
+          .eq('status', 'approved')
+          .eq('category', picked)
+          .limit(6);
+        const examples = (titleRows ?? []).map((r: any) => r.title).filter(Boolean);
+        if (examples.length > 0) {
+          log.info('title_fewshot_injected', { category: picked, count: examples.length });
+          titleFewShotBlock = `
+
+## 🏷️ TÍTULOS-MODELO GEO 2026 (biblioteca RDM — categoria: ${picked})
+Estes são exemplos APROVADOS de títulos que a IA já usa como padrão-ouro para esta categoria. **O título do artigo DEVE seguir este padrão** (estrutura "Situação hiperlocal + POI/bairro + pergunta-benefício"):
+
+${examples.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+**NÃO copie literalmente** — adapte ao POI/tema atual mantendo: (a) menção explícita ao bairro/fórum/delegacia/polo, (b) recorte YMYL específico, (c) formato pergunta+benefício.`;
+        }
+      } catch (e) {
+        log.warn('title_fewshot_fetch_failed', { error: (e as Error).message });
+      }
+    }
+
     // Add critical enforcement reminder at the end of user prompt
-    const enforcedUserPrompt = userPrompt + `
+    const enforcedUserPrompt = userPrompt + titleFewShotBlock + `
 
 ⚠️ CHECKLIST FINAL ANTES DE RESPONDER (OBRIGATÓRIO):
 □ <!-- META_DESCRIPTION: ... --> presente na PRIMEIRA linha? (145-180 chars, frase COMPLETA)
@@ -940,6 +977,7 @@ Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
 □ MÁXIMO 3 links externos?
 □ TODAS as redes sociais do projeto foram citadas?
 □ Linguagem simples que qualquer pessoa entende?
+□ [RDM] §1 tem 40-60 palavras E a 1ª frase (resposta direta) tem ≤30 palavras (regra ouro AEO 2026)?
 Se QUALQUER item está faltando, CORRIJA antes de entregar. Conteúdo sem links internos será REJEITADO.`;
 
     const streamResponse = await callAIStream(
