@@ -1019,6 +1019,90 @@ export type Database = {
           },
         ]
       }
+      poi_hyperlocal: {
+        Row: {
+          city: string
+          comarca: string | null
+          created_at: string
+          discovery_source: string
+          full_address: string | null
+          id: string
+          internal_notes: string | null
+          is_24_7: boolean
+          latitude: number | null
+          longitude: number | null
+          name: string
+          neighborhood: string | null
+          neighborhoods_served: string[] | null
+          official_url: string | null
+          opening_hours: string | null
+          poi_type: string
+          raw_payload: Json | null
+          slug: string | null
+          state_uf: string
+          status: string
+          updated_at: string
+          urgency_phone: string | null
+          user_id: string
+          virtual_channel_url: string | null
+          ymyl_subareas: string[] | null
+        }
+        Insert: {
+          city: string
+          comarca?: string | null
+          created_at?: string
+          discovery_source?: string
+          full_address?: string | null
+          id?: string
+          internal_notes?: string | null
+          is_24_7?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          neighborhood?: string | null
+          neighborhoods_served?: string[] | null
+          official_url?: string | null
+          opening_hours?: string | null
+          poi_type: string
+          raw_payload?: Json | null
+          slug?: string | null
+          state_uf: string
+          status?: string
+          updated_at?: string
+          urgency_phone?: string | null
+          user_id: string
+          virtual_channel_url?: string | null
+          ymyl_subareas?: string[] | null
+        }
+        Update: {
+          city?: string
+          comarca?: string | null
+          created_at?: string
+          discovery_source?: string
+          full_address?: string | null
+          id?: string
+          internal_notes?: string | null
+          is_24_7?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          neighborhood?: string | null
+          neighborhoods_served?: string[] | null
+          official_url?: string | null
+          opening_hours?: string | null
+          poi_type?: string
+          raw_payload?: Json | null
+          slug?: string | null
+          state_uf?: string
+          status?: string
+          updated_at?: string
+          urgency_phone?: string | null
+          user_id?: string
+          virtual_channel_url?: string | null
+          ymyl_subareas?: string[] | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
