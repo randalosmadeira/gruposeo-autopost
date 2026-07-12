@@ -1119,6 +1119,25 @@ REESCREVA o artigo COMPLETO. O PRIMEIRO <p> DEVE:
 
       log.info("frontload_final", { passes: validation.passes, attempts, wordCount: validation.wordCount });
 
+      // ====== Corporate Legal post-checks (informational; no regen) ======
+      const isCorporateLegal = !!pickedTitleCategory && CORPORATE_LEGAL_CATS.has(pickedTitleCategory);
+      const hasImpactAnalysis = /an[áa]lise\s+jur[íi]dica\s+do\s+impacto\s+empresarial/i.test(content);
+      const hasTechArticleSchema = /"@type"\s*:\s*"TechArticle"/i.test(content);
+      const hasLegalServiceSchema = /"@type"\s*:\s*"LegalService"/i.test(content);
+      const hasHedgeLanguage = /presun[çc][ãa]o de inoc[êe]ncia|repercuss[ãa]o p[úu]blica noticiada|cases de mercado/i.test(content);
+      const mentionsRealBrand = /ultrafarma|sidney oliveira|ambev/i.test(content);
+      const corporateLegalMeta = isCorporateLegal ? {
+        has_impact_analysis: hasImpactAnalysis,
+        has_tech_article_schema: hasTechArticleSchema,
+        has_legal_service_schema: hasLegalServiceSchema,
+        mentions_real_brand: mentionsRealBrand,
+        has_hedge_language: hasHedgeLanguage,
+        hedge_ok: !mentionsRealBrand || hasHedgeLanguage,
+      } : null;
+      if (isCorporateLegal) {
+        log.info("corporate_legal_checks", corporateLegalMeta as Record<string, unknown>);
+      }
+
       // ====== Registrar histórico de geração hiperlocal ======
       try {
         await supabase.from("hyperlocal_generation_history").insert({
@@ -1150,7 +1169,14 @@ REESCREVA o artigo COMPLETO. O PRIMEIRO <p> DEVE:
 
       const sseData = `data: ${JSON.stringify({
         choices: [{ delta: { content } }],
-        _meta: { frontload_validation: validation, regen_attempts: attempts, history: validations, category: pickedTitleCategory, fewshot_count: injectedFewShotExamples.length },
+        _meta: {
+          frontload_validation: validation,
+          regen_attempts: attempts,
+          history: validations,
+          category: pickedTitleCategory,
+          fewshot_count: injectedFewShotExamples.length,
+          corporate_legal: corporateLegalMeta,
+        },
       })}\n\ndata: [DONE]\n\n`;
       return new Response(sseData, {
         headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
