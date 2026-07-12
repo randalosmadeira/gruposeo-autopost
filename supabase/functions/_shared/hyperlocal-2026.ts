@@ -53,6 +53,8 @@ export interface HyperlocalDetection {
   cityHint?: string;
   isUrgency: boolean;
   reason: string;
+  spLocation?: SpLocationDetection;
+  airportCrime?: AirportCrimeDetection;
 }
 
 // ==================== DETECÇÃO DE INTENÇÃO ====================
