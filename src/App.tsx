@@ -110,6 +110,7 @@ const App = () => (
                 <Route path="/bnmp-repost" element={<BNMPRepost />} />
                 <Route path="/electoral-campaign" element={<ElectoralCampaign />} />
                 <Route path="/auditoria-gbp" element={<AuditoriaGBP />} />
+                <Route path="/hiperlocal" element={<Hiperlocal />} />
                 <Route path="/system-prompts" element={<SettingsPage />} />
 
               </Route>
