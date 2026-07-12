@@ -468,8 +468,13 @@ export function buildHyperlocalSchema(cfg: HyperlocalSchemaConfig): string {
     );
   }
   if (localBusiness) {
+    const label = poi.is_24_7 && !isUrgency
+      ? 'LocalBusiness (POI 24/7)'
+      : isUrgency
+      ? 'LocalBusiness 24/7 (urgência — plantão)'
+      : 'LocalBusiness';
     blocks.push(
-      `### 3) LocalBusiness 24/7 (urgência — plantão)\n\`\`\`json\n${JSON.stringify(localBusiness, null, 2)}\n\`\`\``,
+      `### 3) ${label}\n\`\`\`json\n${JSON.stringify(localBusiness, null, 2)}\n\`\`\``,
     );
   }
   blocks.push(
