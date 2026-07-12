@@ -691,6 +691,54 @@ export type Database = {
         }
         Relationships: []
       }
+      hyperlocal_title_templates: {
+        Row: {
+          category: string
+          city_hint: string | null
+          created_at: string
+          id: string
+          is_urgency: boolean
+          neighborhood_hint: string | null
+          poi_type: string | null
+          source: string
+          status: string
+          title: string
+          updated_at: string
+          user_id: string | null
+          ymyl_subarea: string | null
+        }
+        Insert: {
+          category: string
+          city_hint?: string | null
+          created_at?: string
+          id?: string
+          is_urgency?: boolean
+          neighborhood_hint?: string | null
+          poi_type?: string | null
+          source?: string
+          status?: string
+          title: string
+          updated_at?: string
+          user_id?: string | null
+          ymyl_subarea?: string | null
+        }
+        Update: {
+          category?: string
+          city_hint?: string | null
+          created_at?: string
+          id?: string
+          is_urgency?: boolean
+          neighborhood_hint?: string | null
+          poi_type?: string | null
+          source?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string | null
+          ymyl_subarea?: string | null
+        }
+        Relationships: []
+      }
       internal_link_suggestions: {
         Row: {
           anchor_context: string | null
