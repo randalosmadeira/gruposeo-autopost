@@ -4,10 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import {
   Eye, EyeOff, Copy, Check, ShieldAlert, Key, Download, Loader2,
-  Code2, Database, AlertTriangle, Info, FileCode,
+  Code2, Database, AlertTriangle, Info, FileCode, Rocket, XCircle, CheckCircle2,
 } from 'lucide-react';
 
 interface MigrationData {
@@ -76,6 +78,17 @@ function SecretRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function PreCheck({ ok, label, warn }: { ok: boolean; label: string; warn?: boolean }) {
+  const Icon = ok ? CheckCircle2 : warn ? AlertTriangle : XCircle;
+  const color = ok ? 'text-green-500' : warn ? 'text-amber-500' : 'text-destructive';
+  return (
+    <div className="flex items-center gap-2">
+      <Icon className={`w-4 h-4 ${color}`} />
+      <span className="text-xs">{label}</span>
+    </div>
+  );
+}
+
 function SectionDivider({ label }: { label?: string }) {
   return (
     <div className="flex items-center gap-2 my-2">
@@ -86,11 +99,71 @@ function SectionDivider({ label }: { label?: string }) {
   );
 }
 
+interface RemoteResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+  code?: string;
+  detail?: string;
+  position?: string;
+  elapsed_ms?: number;
+  sql_bytes?: number;
+  destination?: { db?: string; version?: string; role?: string };
+}
+
 export default function PainelMigracao() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<MigrationData | null>(null);
+  const [destDbUrl, setDestDbUrl] = useState('');
+  const [showDbUrl, setShowDbUrl] = useState(false);
+  const [executing, setExecuting] = useState(false);
+  const [remoteResult, setRemoteResult] = useState<RemoteResult | null>(null);
+  const [confirmText, setConfirmText] = useState('');
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+
+  // Pré-requisitos de execução remota
+  const dbUrlValid = /^postgres(ql)?:\/\/[^@]+@[^:/]+(:\d+)?\/[^?]+/i.test(destDbUrl.trim());
+  const confirmOk = confirmText.trim().toUpperCase() === 'EXECUTAR';
+  const preReqs = {
+    dbUrlValid,
+    hasPassword: /:\/\/[^:]+:[^@]+@/.test(destDbUrl),
+    hasSslHint: destDbUrl.includes('sslmode=') || destDbUrl.includes('supabase.co') || destDbUrl.includes('pooler.supabase.com'),
+    confirmOk,
+  };
+  const canExecute = preReqs.dbUrlValid && preReqs.hasPassword && preReqs.confirmOk && !executing;
+
+  const buildMigrationsSql = (): string => {
+    const modules = import.meta.glob('/supabase/migrations/*.sql', {
+      query: '?raw', import: 'default', eager: true,
+    }) as Record<string, string>;
+    const entries = Object.entries(modules).sort(([a], [b]) => a.localeCompare(b));
+    return entries.map(([p, src]) => `-- ═════════ ${p.split('/').pop()} ═════════\n${src}`).join('\n\n');
+  };
+
+  const executeRemoteMigration = async () => {
+    setExecuting(true);
+    setRemoteResult(null);
+    try {
+      const sql = buildMigrationsSql();
+      const res = await fetch(`${supabaseUrl}/functions/v1/execute-migration-remote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ db_url: destDbUrl.trim(), sql }),
+      });
+      const json = (await res.json()) as RemoteResult;
+      setRemoteResult(json);
+      if (json.success) toast.success('Migração executada com sucesso!');
+      else toast.error(`Falha: ${json.error ?? 'erro desconhecido'}`);
+    } catch (e) {
+      const msg = (e as Error).message;
+      setRemoteResult({ success: false, error: msg });
+      toast.error(`Erro de rede: ${msg}`);
+    } finally {
+      setExecuting(false);
+    }
+  };
+
 
   const revealAll = async () => {
     setLoading(true);
@@ -368,15 +441,133 @@ export default function PainelMigracao() {
                 em ordem cronológica. Execute no banco de destino para recriar schema, policies, funções e triggers.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               <Button onClick={downloadMigrations}>
                 <Download className="w-4 h-4 mr-2" /> Baixar migrations.sql
               </Button>
+
+              <Alert>
+                <Info className="w-4 h-4" />
+                <AlertTitle>Opção A — Executar localmente com psql</AlertTitle>
+                <AlertDescription className="space-y-2">
+                  <p>Pré-requisitos: <code>psql</code> instalado, <code>migrations.sql</code> baixado, DB URL do destino em mãos.</p>
+                  <pre className="bg-muted p-2 rounded text-xs overflow-x-auto">
+{`# 1) Testar conexão
+psql "postgresql://postgres:SENHA@db.SEU-REF.supabase.co:5432/postgres?sslmode=require" -c "SELECT version();"
+
+# 2) Executar migrations (transação única — falha reverte tudo)
+psql "postgresql://postgres:SENHA@db.SEU-REF.supabase.co:5432/postgres?sslmode=require" \\
+  --single-transaction \\
+  --set ON_ERROR_STOP=on \\
+  -f migrations.sql
+
+# 3) Conferir tabelas criadas
+psql "postgresql://postgres:SENHA@db.SEU-REF.supabase.co:5432/postgres?sslmode=require" \\
+  -c "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY 1;"`}
+                  </pre>
+                </AlertDescription>
+              </Alert>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Rocket className="w-5 h-5 text-primary" />
+                  <h3 className="font-semibold">Opção B — Executar remotamente</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  A edge function <code>execute-migration-remote</code> abre uma conexão Postgres direta
+                  ao destino (SSL) e executa o SQL em uma única transação.
+                </p>
+
+                <div className="space-y-2">
+                  <Label htmlFor="dest-db-url">DB URL do destino</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="dest-db-url"
+                      type={showDbUrl ? 'text' : 'password'}
+                      placeholder="postgresql://postgres:SENHA@db.REF.supabase.co:5432/postgres?sslmode=require"
+                      value={destDbUrl}
+                      onChange={(e) => setDestDbUrl(e.target.value)}
+                      autoComplete="off"
+                      className="font-mono text-sm"
+                    />
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      type="button"
+                      onClick={() => setShowDbUrl((v) => !v)}
+                    >
+                      {showDbUrl ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="border rounded-md p-3 space-y-1 text-sm bg-muted/30">
+                  <div className="font-medium mb-1 text-xs uppercase tracking-wide text-muted-foreground">
+                    Pré-requisitos
+                  </div>
+                  <PreCheck ok={preReqs.dbUrlValid} label="Formato postgres:// ou postgresql:// válido" />
+                  <PreCheck ok={preReqs.hasPassword} label="Senha presente na URL" />
+                  <PreCheck ok={preReqs.hasSslHint} label="SSL detectado (sslmode ou host Supabase)" warn />
+                  <PreCheck ok={preReqs.confirmOk} label='Confirmação digitada: "EXECUTAR"' />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirm">Digite <strong>EXECUTAR</strong> para liberar o botão</Label>
+                  <Input
+                    id="confirm"
+                    value={confirmText}
+                    onChange={(e) => setConfirmText(e.target.value)}
+                    placeholder="EXECUTAR"
+                  />
+                </div>
+
+                <Button
+                  onClick={executeRemoteMigration}
+                  disabled={!canExecute}
+                  variant="destructive"
+                  size="lg"
+                >
+                  {executing ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Executando migração...</>
+                  ) : (
+                    <><Rocket className="w-4 h-4 mr-2" /> Executar migração no destino</>
+                  )}
+                </Button>
+
+                {remoteResult && (
+                  <Alert variant={remoteResult.success ? 'default' : 'destructive'}>
+                    {remoteResult.success ? (
+                      <CheckCircle2 className="w-4 h-4" />
+                    ) : (
+                      <XCircle className="w-4 h-4" />
+                    )}
+                    <AlertTitle>
+                      {remoteResult.success ? 'Migração concluída' : 'Falha na execução'}
+                    </AlertTitle>
+                    <AlertDescription className="space-y-1 text-xs font-mono">
+                      {remoteResult.message && <div>{remoteResult.message}</div>}
+                      {remoteResult.destination && (
+                        <div>DB: {remoteResult.destination.db} · role: {remoteResult.destination.role}</div>
+                      )}
+                      {remoteResult.elapsed_ms !== undefined && (
+                        <div>Tempo: {remoteResult.elapsed_ms}ms · Bytes: {remoteResult.sql_bytes}</div>
+                      )}
+                      {remoteResult.error && <div>Erro: {remoteResult.error}</div>}
+                      {remoteResult.code && <div>Código: {remoteResult.code}</div>}
+                      {remoteResult.detail && <div>Detalhe: {remoteResult.detail}</div>}
+                      {remoteResult.position && <div>Posição: {remoteResult.position}</div>}
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+
               <Alert>
                 <Info className="w-4 h-4" />
                 <AlertTitle>Ordem de execução no destino</AlertTitle>
                 <AlertDescription>
-                  1) Rodar <code>migrations.sql</code> → 2) Deploy das edge functions → 3) Configurar secrets → 4) Importar dados das tabelas essenciais.
+                  1) Rodar <code>migrations.sql</code> → 2) Deploy das edge functions → 3) Configurar secrets → 4) Importar dados.
                 </AlertDescription>
               </Alert>
             </CardContent>
