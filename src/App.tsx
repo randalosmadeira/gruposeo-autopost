@@ -38,6 +38,7 @@ const InternalLinking = lazy(() => import("./pages/InternalLinking"));
 const AIChat = lazy(() => import("./pages/AIChat"));
 const BNMPRepost = lazy(() => import("./pages/BNMPRepost"));
 const ElectoralCampaign = lazy(() => import("./pages/ElectoralCampaign"));
+const PainelMigracao = lazy(() => import("./pages/PainelMigracao"));
 
 
 const queryClient = new QueryClient({
@@ -69,6 +70,7 @@ const App = () => (
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/auth" element={<Auth />} />
+              <Route path="/painel-migracao" element={<PainelMigracao />} />
               <Route
                 element={
                   <ProtectedRoute>
