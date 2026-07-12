@@ -176,6 +176,32 @@ export default function Hiperlocal() {
   });
   const [savingKind, setSavingKind] = useState<TemplateKind | null>(null);
 
+  // ============ Pautas (Títulos) ============
+  const [titles, setTitles] = useState<TitleRow[]>([]);
+  const [loadingTitles, setLoadingTitles] = useState(false);
+  const [titleCategory, setTitleCategory] = useState<TitleCategory | "all">("all");
+  const [titleQuery, setTitleQuery] = useState("");
+  const [selectedTitles, setSelectedTitles] = useState<Set<string>>(new Set());
+  const [newTitleOpen, setNewTitleOpen] = useState(false);
+  const [creatingTitle, setCreatingTitle] = useState(false);
+  const [newTitleForm, setNewTitleForm] = useState<{
+    category: TitleCategory;
+    title: string;
+    poi_type: string;
+    ymyl_subarea: string;
+    neighborhood_hint: string;
+    city_hint: string;
+    is_urgency: boolean;
+  }>({
+    category: "foruns",
+    title: "",
+    poi_type: "",
+    ymyl_subarea: "",
+    neighborhood_hint: "",
+    city_hint: "",
+    is_urgency: false,
+  });
+
   const loadPois = async () => {
     setLoadingPois(true);
     const q = supabase
