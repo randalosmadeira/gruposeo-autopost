@@ -584,6 +584,7 @@ export default function Hiperlocal() {
           <TabsTrigger value="pois">POIs</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="pautas">Pautas ({titles.length})</TabsTrigger>
+          <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
 
 
