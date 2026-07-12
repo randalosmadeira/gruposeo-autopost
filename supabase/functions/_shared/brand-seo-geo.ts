@@ -197,7 +197,16 @@ function buildOutputFormatRules(): string {
 /**
  * Build brand-specific SEO+GEO system prompt section.
  */
-export function buildBrandSEOGeoPrompt(brand: BrandDetectionResult, config?: ProjectConfig): string {
+export interface BrandPromptContext {
+  contentHint?: string;
+  hyperlocalPoi?: HyperlocalPoi | null;
+}
+
+export function buildBrandSEOGeoPrompt(
+  brand: BrandDetectionResult,
+  config?: ProjectConfig,
+  ctx?: BrandPromptContext,
+): string {
   const currentYear = new Date().getFullYear();
 
   const geoRules = `
@@ -240,7 +249,7 @@ export function buildBrandSEOGeoPrompt(brand: BrandDetectionResult, config?: Pro
 
   switch (brand.brand) {
     case 'rdm':
-      return buildRDMPrompt(config, currentYear) + '\n\n' + geoRules + '\n\n' + seoTechRules + '\n\n' + outputRules;
+      return buildRDMPrompt(config, currentYear, ctx?.contentHint, ctx?.hyperlocalPoi) + '\n\n' + geoRules + '\n\n' + seoTechRules + '\n\n' + outputRules;
     case 'elas_tracy':
       return buildElasTracyPrompt(config, currentYear) + '\n\n' + geoRules + '\n\n' + seoTechRules + '\n\n' + outputRules;
     case 'grupo_seo':
