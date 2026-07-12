@@ -546,7 +546,7 @@ Deno.serve(async (req) => {
         image_style: imageStyle,
         image_source: imageSource,
         config: {
-          type: isBNMP ? "rewrite_bnmp_madeira_neles" : isMadeiraNeles ? "rewrite_madeira_neles" : "rewrite",
+          type: isMadeiraNeles ? "rewrite_madeira_neles" : "rewrite",
           rewrite_mode: rewriteMode,
           source_url: sourceUrl,
           source_name: sourceName,
