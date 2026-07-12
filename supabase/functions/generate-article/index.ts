@@ -946,6 +946,7 @@ Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
           { cat: 'foruns', test: () => /f[óo]rum|comarca|tribunal|juizado|vara/.test(hint) },
         ];
         const picked = categoryMatchers.find((m) => m.test())?.cat ?? 'foruns';
+        pickedTitleCategory = picked;
         const { data: titleRows } = await supabase
           .from('hyperlocal_title_templates')
           .select('title')
@@ -953,6 +954,7 @@ Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
           .eq('category', picked)
           .limit(6);
         const examples = (titleRows ?? []).map((r: any) => r.title).filter(Boolean);
+        injectedFewShotExamples = examples;
         if (examples.length > 0) {
           log.info('title_fewshot_injected', { category: picked, count: examples.length });
           titleFewShotBlock = `
