@@ -571,6 +571,38 @@ function buildPromptConfig(config: ArticleConfig): PromptConfig {
   };
 }
 
+/**
+ * Consume an SSE stream body from callAIStream() and return the concatenated
+ * assistant content. Used to buffer output for post-generation validation
+ * (frontloading regeneration on RDM brand).
+ */
+async function consumeSSEContent(body: ReadableStream<Uint8Array>): Promise<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let content = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf('\n')) !== -1) {
+      let line = buf.slice(0, idx);
+      buf = buf.slice(idx + 1);
+      if (line.endsWith('\r')) line = line.slice(0, -1);
+      if (!line.startsWith('data: ')) continue;
+      const json = line.slice(6).trim();
+      if (json === '[DONE]') continue;
+      try {
+        const parsed = JSON.parse(json);
+        const delta = parsed?.choices?.[0]?.delta?.content;
+        if (typeof delta === 'string') content += delta;
+      } catch { /* ignore partial */ }
+    }
+  }
+  return content;
+}
+
 Deno.serve(async (req) => {
   const requestId = createRequestId();
   const log = createLogger(FUNCTION_NAME, requestId);
