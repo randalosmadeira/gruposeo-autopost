@@ -938,11 +938,17 @@ Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
       try {
         const hint = (contentHint || config.keyword || '').toLowerCase();
         const categoryMatchers: Array<{ cat: string; test: () => boolean }> = [
+          // Corporate legal (higher priority than generic colarinho_branco)
+          { cat: 'tributario', test: () => /icms|lei 8\.?137|apropria[çc][ãa]o ind[ée]bita tribut[áa]ria|sonega[çc][ãa]o fiscal|tema 999|substitui[çc][ãa]o tribut[áa]ria|cr[ée]dito frio|sefaz|auto de infra[çc][ãa]o/.test(hint) },
+          { cat: 'execucao_fiscal', test: () => /execu[çc][ãa]o fiscal|art\.?\s*135\s*ctn|s[úu]mula 435|cda|certid[ãa]o de d[íi]vida ativa|redirecionamento|penhora de faturamento|dissolu[çc][ãa]o irregular|exce[çc][ãa]o de pr[ée][- ]?executividade|leil[ãa]o judicial/.test(hint) },
+          { cat: 'credito_fomento', test: () => /bndes|pronamp|fgi|fgo|ccb|c[ée]dula de cr[ée]dito banc[áa]rio|lei 7\.?492|financiamento mediante fraude|fomento empresarial|fiador de empr[ée]stimo|desvio de finalidade/.test(hint) },
+          { cat: 'ordem_economica', test: () => /cartel|dumping|fixa[çc][ãa]o artificial de pre[çc]o|publicidade enganosa|art\.?\s*66\s*cdc|lei 9\.?279|propriedade industrial|concorr[êe]ncia desleal|inpi|desvio de clientela/.test(hint) },
+          // Existing hyperlocal categories
           { cat: 'aeroporto', test: () => /aeroporto|gru|congonhas|deain|receita federal|cumbica|contrabando|descaminho|evas[ãa]o de divisas|tr[áa]fico internacional/.test(hint) },
           { cat: 'criminal_24h', test: () => /custódia|custodia|flagrante|plantão|plantao|preso|habeas corpus|intima[çc][ãa]o|delegacia|inqu[ée]rito|criminalista/.test(hint) },
           { cat: 'isp', test: () => /provedor|isp|anatel|marco civil|lgpd|banda larga|telecomunica|tr[âa]nsito ip/.test(hint) },
           { cat: 'fraude_bancaria', test: () => /pix|fraude bancária|fraude bancaria|golpe|clonagem|deepfake|boleto falso|banco/.test(hint) },
-          { cat: 'colarinho_branco', test: () => /icms|sonega|holding|colarinho|lavagem|compliance|ordem econ[ôo]mica|societário|societario/.test(hint) },
+          { cat: 'colarinho_branco', test: () => /holding|colarinho|lavagem|compliance|societário|societario/.test(hint) },
           { cat: 'foruns', test: () => /f[óo]rum|comarca|tribunal|juizado|vara/.test(hint) },
         ];
         const picked = categoryMatchers.find((m) => m.test())?.cat ?? 'foruns';
