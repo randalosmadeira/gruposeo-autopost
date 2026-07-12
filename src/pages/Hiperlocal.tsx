@@ -1018,6 +1018,120 @@ export default function Hiperlocal() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* ============ Edit title dialog ============ */}
+      <Dialog open={editTitleOpen} onOpenChange={setEditTitleOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar título hiperlocal</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Categoria</Label>
+              <Select
+                value={editTitleForm.category}
+                onValueChange={(v) => setEditTitleForm({ ...editTitleForm, category: v as TitleCategory })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TITLE_CATEGORIES.map((c) => (
+                    <SelectItem key={c.key} value={c.key}>{c.emoji} {c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Título</Label>
+              <Textarea
+                rows={3}
+                value={editTitleForm.title}
+                onChange={(e) => setEditTitleForm({ ...editTitleForm, title: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Bairro (hint)</Label>
+                <Input
+                  value={editTitleForm.neighborhood_hint}
+                  onChange={(e) => setEditTitleForm({ ...editTitleForm, neighborhood_hint: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Cidade (hint)</Label>
+                <Input
+                  value={editTitleForm.city_hint}
+                  onChange={(e) => setEditTitleForm({ ...editTitleForm, city_hint: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="edit-is-urgency"
+                type="checkbox"
+                checked={editTitleForm.is_urgency}
+                onChange={(e) => setEditTitleForm({ ...editTitleForm, is_urgency: e.target.checked })}
+              />
+              <Label htmlFor="edit-is-urgency">Urgência (24h / plantão)</Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Cada edição salva uma nova versão automaticamente. Use o ícone <History className="h-3 w-3 inline" /> para consultar/restaurar.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditTitleOpen(false)}>Cancelar</Button>
+            <Button onClick={saveEdit} disabled={savingEdit}>
+              {savingEdit ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============ Versions dialog ============ */}
+      <Dialog open={versionsOpen} onOpenChange={setVersionsOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" /> Histórico de versões
+            </DialogTitle>
+            {versionsFor && (
+              <p className="text-sm text-muted-foreground line-clamp-2">
+                {versionsFor.title}
+              </p>
+            )}
+          </DialogHeader>
+          {loadingVersions ? (
+            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+          ) : versionsList.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              Nenhuma versão anterior. Este é o estado inicial do título.
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {versionsList.map((v) => (
+                <div key={v.id} className="border rounded p-3 flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="outline">v{v.version_number}</Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(v.created_at).toLocaleString("pt-BR")}
+                      </span>
+                      {v.change_reason && (
+                        <Badge variant="secondary" className="text-[10px]">{v.change_reason}</Badge>
+                      )}
+                    </div>
+                    <div className="text-sm">{v.title}</div>
+                    <div className="text-xs text-muted-foreground mt-1">categoria: {v.category}</div>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => restoreVersion(v.id)}>
+                    <RefreshCcw className="h-3 w-3 mr-1" /> Restaurar
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
