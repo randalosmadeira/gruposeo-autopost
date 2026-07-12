@@ -8,6 +8,7 @@ import { mapSegmentToSector } from "../_shared/sector-config.ts";
 import { orchestrate } from "../_shared/verniz-orchestrator.ts";
 import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
 import { detectBrand, buildBrandSEOGeoPrompt } from "../_shared/brand-seo-geo.ts";
+import { validateFrontloading } from "../_shared/geo-aeo-2026.ts";
 
 const FUNCTION_NAME = "generate-article";
 
@@ -570,6 +571,38 @@ function buildPromptConfig(config: ArticleConfig): PromptConfig {
   };
 }
 
+/**
+ * Consume an SSE stream body from callAIStream() and return the concatenated
+ * assistant content. Used to buffer output for post-generation validation
+ * (frontloading regeneration on RDM brand).
+ */
+async function consumeSSEContent(body: ReadableStream<Uint8Array>): Promise<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let content = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf('\n')) !== -1) {
+      let line = buf.slice(0, idx);
+      buf = buf.slice(idx + 1);
+      if (line.endsWith('\r')) line = line.slice(0, -1);
+      if (!line.startsWith('data: ')) continue;
+      const json = line.slice(6).trim();
+      if (json === '[DONE]') continue;
+      try {
+        const parsed = JSON.parse(json);
+        const delta = parsed?.choices?.[0]?.delta?.content;
+        if (typeof delta === 'string') content += delta;
+      } catch { /* ignore partial */ }
+    }
+  }
+  return content;
+}
+
 Deno.serve(async (req) => {
   const requestId = createRequestId();
   const log = createLogger(FUNCTION_NAME, requestId);
@@ -872,6 +905,56 @@ Se QUALQUER item está faltando, CORRIJA antes de entregar. Conteúdo sem links 
       ],
       { maxTokens: 8000, temperature: 0.5 }
     );
+
+    // ====== RDM: buffer stream, validate frontloading, auto-regenerate on fail ======
+    if (brandDetection.brand === 'rdm') {
+      const MAX_REGEN = 2;
+      let content = await consumeSSEContent(streamResponse.body!);
+      let validation = validateFrontloading(content);
+      let attempts = 0;
+      const validations: Array<{ attempt: number; passes: boolean; reason?: string; wordCount: number }> = [
+        { attempt: 0, passes: validation.passes, reason: validation.reason, wordCount: validation.wordCount },
+      ];
+
+      while (!validation.passes && attempts < MAX_REGEN) {
+        attempts++;
+        log.info("frontload_regen_attempt", { attempt: attempts, reason: validation.reason });
+        const correctivePrompt = enforcedUserPrompt + `
+
+⚠️ REGENERAÇÃO OBRIGATÓRIA — TENTATIVA ${attempts}/${MAX_REGEN}
+O parágrafo §1 anterior falhou na validação GEO 2026:
+- Palavras detectadas: ${validation.wordCount} (obrigatório: 40-60)
+- Base legal presente: ${validation.hasLegalBase ? 'sim' : 'NÃO'}
+- Jurisdição presente: ${validation.hasJurisdiction ? 'sim' : 'NÃO'}
+
+REESCREVA o artigo COMPLETO. O PRIMEIRO <p> DEVE:
+1. Ter class="lead-answer" data-geo="frontload"
+2. Conter 40-60 palavras
+3. Citar base legal explícita (art. X, Lei Y/AAAA, ou tribunal + ano)
+4. Mencionar jurisdição (São Paulo/Brasil/federal)
+5. Responder diretamente ao tema em 1 frase técnica.`;
+        const regen = await callAIStream(
+          [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: correctivePrompt },
+          ],
+          { maxTokens: 8000, temperature: 0.4 }
+        );
+        content = await consumeSSEContent(regen.body!);
+        validation = validateFrontloading(content);
+        validations.push({ attempt: attempts, passes: validation.passes, reason: validation.reason, wordCount: validation.wordCount });
+      }
+
+      log.info("frontload_final", { passes: validation.passes, attempts, wordCount: validation.wordCount });
+
+      const sseData = `data: ${JSON.stringify({
+        choices: [{ delta: { content } }],
+        _meta: { frontload_validation: validation, regen_attempts: attempts, history: validations },
+      })}\n\ndata: [DONE]\n\n`;
+      return new Response(sseData, {
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+      });
+    }
 
     return new Response(streamResponse.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },

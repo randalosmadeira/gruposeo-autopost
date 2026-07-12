@@ -7,6 +7,7 @@
 
 export type SectorType =
   | 'legal'
+  | 'legal-high-complexity'
   | 'marketing_digital'
   | 'beauty_aesthetics'
   | 'health_general'
@@ -15,6 +16,58 @@ export type SectorType =
   | 'health_medical'
   | 'real_estate'
   | 'accounting';
+
+/**
+ * YMYL sub-area mapping for 'legal-high-complexity' sector.
+ * Maps SectorType 'legal-high-complexity' + free-text hint → geo-aeo-2026 sub-area.
+ * Used by prompt builders to route to the correct YMYL block.
+ */
+export const LEGAL_HIGH_COMPLEXITY_SUBAREAS = {
+  criminal_empresarial: {
+    label: 'Penal Empresarial / Colarinho Branco',
+    schema: 'LegalService+Attorney+TechArticle+FAQPage+Legislation',
+    keywords: ['penal empresarial', 'colarinho branco', 'busca e apreensão', 'condução coercitiva'],
+  },
+  ordem_economica_tributaria: {
+    label: 'Tributário / Ordem Econômica',
+    schema: 'LegalService+Attorney+TechArticle+FAQPage+Legislation',
+    keywords: ['tributário', 'sonegação', 'crime tributário', 'lei 8137', 'ordem econômica'],
+  },
+  fraudes_icms: {
+    label: 'ICMS / Autuações Fiscais',
+    schema: 'LegalService+Attorney+TechArticle+FAQPage+Legislation',
+    keywords: ['icms', 'sefaz', 'autuação fiscal', 'kandir'],
+  },
+  assessoria_isp: {
+    label: 'Digital / ISPs / LGPD',
+    schema: 'LegalService+Attorney+TechArticle+FAQPage+Legislation',
+    keywords: ['isp', 'provedor', 'marco civil', 'lgpd', 'anatel'],
+  },
+  lavagem_dinheiro: {
+    label: 'Lavagem de Dinheiro',
+    schema: 'LegalService+Attorney+TechArticle+FAQPage+Legislation',
+    keywords: ['lavagem', 'coaf', 'ocultação de bens'],
+  },
+  audiencia_custodia: {
+    label: 'Audiência de Custódia (Urgência 24/7)',
+    schema: 'LegalService+Attorney+TechArticle+FAQPage+Legislation+LocalBusiness',
+    keywords: ['audiência de custódia', 'flagrante', 'plantão criminal'],
+  },
+} as const;
+
+export type LegalHighComplexitySubArea = keyof typeof LEGAL_HIGH_COMPLEXITY_SUBAREAS;
+
+/**
+ * Resolve sub-area from free-text (keyword+title) for 'legal-high-complexity' sector.
+ * Returns null when no sub-area matches so callers can fall back to 'generico'.
+ */
+export function resolveLegalHighComplexitySubArea(text: string): LegalHighComplexitySubArea | null {
+  const t = (text || '').toLowerCase();
+  for (const [area, cfg] of Object.entries(LEGAL_HIGH_COMPLEXITY_SUBAREAS)) {
+    if (cfg.keywords.some((k) => t.includes(k))) return area as LegalHighComplexitySubArea;
+  }
+  return null;
+}
 
 export interface SectorConfig {
   sector: SectorType;
@@ -71,6 +124,38 @@ export const SECTOR_CONFIGS: Record<SectorType, SectorConfig> = {
     ],
     exampleOpening: 'A cada hora, mais de 100 trabalhadores brasileiros são demitidos sem receber todos os seus direitos. Você pode ser um deles.\n\nSe você foi demitido recentemente – ou está prestes a ser – provavelmente está se perguntando: recebi tudo que me era devido?',
   },
+
+  'legal-high-complexity': {
+    sector: 'legal-high-complexity',
+    displayName: 'Advocacia — Alta Complexidade (Penal Empresarial / Tributário / Digital)',
+    complianceLevel: 'strict',
+    complianceBody: 'OAB',
+    primaryCTA: 'Agende análise sigilosa com o Dr. Rândalos Madeira',
+    secondaryCTAs: [
+      'Solicite parecer técnico especializado',
+      'Fale com defesa criminal empresarial',
+      'Atendimento 24h para audiência de custódia',
+    ],
+    forbiddenWords: [
+      'garantimos', 'certeza de ganho', 'arquivamento garantido', 'absolvição garantida',
+      'preço', 'valor', 'honorário', 'promoção', 'desconto', 'melhor advogado', 'somos os melhores',
+    ],
+    requiredDisclaimer: 'Este conteúdo é informativo e não substitui consulta jurídica individualizada. Casos de alta complexidade (penal empresarial, tributário, ISPs, LGPD) exigem análise sigilosa caso a caso.',
+    tone: 'formal',
+    pronounUsage: 'nos',
+    openingStyle: 'statistic',
+    closingStyle: 'urgency',
+    preferredAI: 'anthropic',
+    conversionTechniques: [
+      'Autoridade técnica: cite base legal + tribunal + ano em cada tese apresentada.',
+      'Sigilo institucional: reforce a proteção da imagem e do patrimônio do cliente empresarial.',
+      'Urgência ética: prazos decadenciais/prescricionais de operações fiscais e criminais empresariais.',
+      'Prova social anonimizada: casos sem valor de causa, sem identificação de cliente, seguindo OAB 205/2021.',
+    ],
+    exampleOpening: 'Empresários alvos de operação de busca e apreensão têm entre 24 e 72 horas para estruturar defesa técnica antes de decisões cautelares (CPP arts. 240-250). Neste guia, os passos jurídicos imediatos para preservar patrimônio e reputação em São Paulo.',
+  },
+
+
 
   marketing_digital: {
     sector: 'marketing_digital',
@@ -288,6 +373,8 @@ export const SECTOR_CONFIGS: Record<SectorType, SectorConfig> = {
 export function mapSegmentToSector(segment: string): SectorType | null {
   const mapping: Record<string, SectorType> = {
     'legal': 'legal',
+    'legal-high-complexity': 'legal-high-complexity',
+    'legal_high_complexity': 'legal-high-complexity',
     'health': 'health_general',
     'fintech': 'accounting',
     'ecommerce': 'marketing_digital',
