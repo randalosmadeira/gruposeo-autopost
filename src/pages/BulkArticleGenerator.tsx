@@ -227,6 +227,8 @@ export default function BulkArticleGenerator() {
         // Call generation function with full globalConfig including tone/voice
         const { error } = await supabase.functions.invoke('generate-article', {
           body: {
+            articleId: createdArticle.id,
+            source: 'bulk',
             config: {
               keyword: article.keyword,
               title: article.title || `${article.keyword}: Guia Completo ${new Date().getFullYear()}`,
