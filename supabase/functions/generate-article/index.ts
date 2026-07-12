@@ -1062,6 +1062,9 @@ Parágrafos curtos, negrito nas KWs, use <cite> quando referenciar acórdão/tes
 □ TODAS as redes sociais do projeto foram citadas?
 □ Linguagem simples que qualquer pessoa entende?
 □ [RDM] §1 tem 40-60 palavras E a 1ª frase (resposta direta) tem ≤30 palavras (regra ouro AEO 2026)?
+□ [Corporate Legal] Se aplicável, H2 "Análise Jurídica do Impacto Empresarial" está presente ANTES do FAQ/CTA?
+□ [Corporate Legal] Menções a marcas/pessoas públicas usam hedge textual e nunca imputam crime?
+□ [Corporate Legal] Blocos JSON-LD TechArticle + LegalService (com areaServed) emitidos em <script type="application/ld+json">?
 Se QUALQUER item está faltando, CORRIJA antes de entregar. Conteúdo sem links internos será REJEITADO.`;
 
     const streamResponse = await callAIStream(
