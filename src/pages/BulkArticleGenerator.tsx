@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useCallback, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -63,8 +63,35 @@ const articleSizes = [
 export default function BulkArticleGenerator() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+  const [searchParams] = useSearchParams();
+
   const [articles, setArticles] = useState<ArticleRow[]>([]);
+
+  // Pre-fill from ?titles=<encoded JSON array> (e.g. from /hiperlocal Pautas)
+  useEffect(() => {
+    const titlesParam = searchParams.get('titles');
+    if (!titlesParam) return;
+    try {
+      const parsed = JSON.parse(decodeURIComponent(titlesParam));
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const items: ArticleRow[] = parsed.map((title: string, i: number) => ({
+          id: `preseed-${Date.now()}-${i}`,
+          keyword: String(title).slice(0, 80),
+          title: String(title),
+          size: 'medio',
+          status: 'pending',
+        }));
+        setArticles(items);
+        toast({
+          title: `${items.length} título(s) importados`,
+          description: 'Vindos da biblioteca de pautas hiperlocais. Ajuste o tamanho/config e clique em Iniciar.',
+        });
+      }
+    } catch (e) {
+      console.error('Failed to parse titles param', e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [showTitlesDialog, setShowTitlesDialog] = useState(false);
@@ -227,6 +254,8 @@ export default function BulkArticleGenerator() {
         // Call generation function with full globalConfig including tone/voice
         const { error } = await supabase.functions.invoke('generate-article', {
           body: {
+            articleId: createdArticle.id,
+            source: 'bulk',
             config: {
               keyword: article.keyword,
               title: article.title || `${article.keyword}: Guia Completo ${new Date().getFullYear()}`,

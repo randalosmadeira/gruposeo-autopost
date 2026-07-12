@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.snapshot_hyperlocal_title_version() FROM PUBLIC, anon, authenticated;

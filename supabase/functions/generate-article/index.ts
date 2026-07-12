@@ -654,8 +654,14 @@ Deno.serve(async (req) => {
     // Load user's BYOK API keys into environment for this request
     await setEnvKeysForUser(user.id);
 
-    const { config, projectId: bodyProjectId } = await req.json() as { config: ArticleConfig; projectId?: string };
+    const { config, projectId: bodyProjectId, articleId: bodyArticleId, source: bodySource } = await req.json() as { config: ArticleConfig; projectId?: string; articleId?: string; source?: string };
     const effectiveProjectId = config.projectId || bodyProjectId;
+    const historyArticleId = bodyArticleId ?? null;
+    const historySource = bodySource || 'single';
+
+    // Trackers for hyperlocal generation history (populated below)
+    let pickedTitleCategory: string | null = null;
+    let injectedFewShotExamples: string[] = [];
 
     // ====== AUTO-FETCH INTERNAL LINKS from project if not manually provided ======
     if (effectiveProjectId && (!config.internalLinks || config.internalLinks.length < 3)) {
@@ -940,6 +946,7 @@ Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
           { cat: 'foruns', test: () => /f[óo]rum|comarca|tribunal|juizado|vara/.test(hint) },
         ];
         const picked = categoryMatchers.find((m) => m.test())?.cat ?? 'foruns';
+        pickedTitleCategory = picked;
         const { data: titleRows } = await supabase
           .from('hyperlocal_title_templates')
           .select('title')
@@ -947,6 +954,7 @@ Comece com <!-- META_DESCRIPTION: ... --> na primeira linha:`;
           .eq('category', picked)
           .limit(6);
         const examples = (titleRows ?? []).map((r: any) => r.title).filter(Boolean);
+        injectedFewShotExamples = examples;
         if (examples.length > 0) {
           log.info('title_fewshot_injected', { category: picked, count: examples.length });
           titleFewShotBlock = `
@@ -1032,9 +1040,38 @@ REESCREVA o artigo COMPLETO. O PRIMEIRO <p> DEVE:
 
       log.info("frontload_final", { passes: validation.passes, attempts, wordCount: validation.wordCount });
 
+      // ====== Registrar histórico de geração hiperlocal ======
+      try {
+        await supabase.from("hyperlocal_generation_history").insert({
+          user_id: user.id,
+          article_id: historyArticleId,
+          title: config.title || config.keyword || '(sem título)',
+          keyword: config.keyword,
+          brand: brandDetection.brand,
+          category: pickedTitleCategory,
+          fewshot_examples: injectedFewShotExamples,
+          fewshot_count: injectedFewShotExamples.length,
+          template_kind: hyperlocalPoi ? (await import("../_shared/hyperlocal-2026.ts")).poiTypeToTemplateKind(hyperlocalPoi.poi_type) : null,
+          poi_id: hyperlocalPoi?.id ?? null,
+          regen_attempts: attempts,
+          frontload_passes: validation.passes,
+          frontload_word_count: validation.wordCount,
+          first_sentence_words: (validation as any).firstSentenceWordCount ?? null,
+          first_sentence_ok: typeof (validation as any).firstSentenceWordCount === 'number'
+            ? ((validation as any).firstSentenceWordCount <= 30)
+            : null,
+          has_legal_base: (validation as any).hasLegalBase ?? null,
+          has_jurisdiction: (validation as any).hasJurisdiction ?? null,
+          validation_history: validations,
+          source: historySource,
+        });
+      } catch (histErr) {
+        log.warn("hyperlocal_history_insert_failed", { error: (histErr as Error).message });
+      }
+
       const sseData = `data: ${JSON.stringify({
         choices: [{ delta: { content } }],
-        _meta: { frontload_validation: validation, regen_attempts: attempts, history: validations },
+        _meta: { frontload_validation: validation, regen_attempts: attempts, history: validations, category: pickedTitleCategory, fewshot_count: injectedFewShotExamples.length },
       })}\n\ndata: [DONE]\n\n`;
       return new Response(sseData, {
         headers: { ...corsHeaders, "Content-Type": "text/event-stream" },

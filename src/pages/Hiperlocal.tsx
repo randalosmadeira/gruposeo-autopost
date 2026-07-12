@@ -18,7 +18,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Copy, FileText, Loader2, MapPin, Plus, Radar, RefreshCcw, Save, Sparkles, Trash2, Wand2 } from "lucide-react";
+import { Copy, FileText, History, Loader2, MapPin, Pencil, Plus, Radar, RefreshCcw, Save, Sparkles, Trash2, Wand2 } from "lucide-react";
 
 type TemplateKind = "forum" | "delegacia" | "polo";
 type PoiType = "forum" | "delegacia" | "polo" | "tribunal" | "cartorio" | "outro";
@@ -202,6 +202,52 @@ export default function Hiperlocal() {
     is_urgency: false,
   });
 
+  // Edit / versions dialogs
+  const [editTitleOpen, setEditTitleOpen] = useState(false);
+  const [editingTitle, setEditingTitle] = useState<TitleRow | null>(null);
+  const [editTitleForm, setEditTitleForm] = useState<{ title: string; category: TitleCategory; neighborhood_hint: string; city_hint: string; is_urgency: boolean }>({
+    title: "", category: "foruns", neighborhood_hint: "", city_hint: "", is_urgency: false,
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [versionsFor, setVersionsFor] = useState<TitleRow | null>(null);
+  const [versionsList, setVersionsList] = useState<Array<{ id: string; version_number: number; title: string; category: string; created_at: string; change_reason: string | null; }>>([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+
+  // ============ Histórico de gerações ============
+  interface HistoryRow {
+    id: string;
+    article_id: string | null;
+    title: string;
+    category: string | null;
+    fewshot_count: number;
+    fewshot_examples: string[];
+    template_kind: string | null;
+    regen_attempts: number;
+    frontload_passes: boolean | null;
+    frontload_word_count: number | null;
+    first_sentence_words: number | null;
+    first_sentence_ok: boolean | null;
+    source: string;
+    created_at: string;
+  }
+  const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const loadHistory = async () => {
+    setLoadingHistory(true);
+    const { data, error } = await supabase
+      .from("hyperlocal_generation_history")
+      .select("id, article_id, title, category, fewshot_count, fewshot_examples, template_kind, regen_attempts, frontload_passes, frontload_word_count, first_sentence_words, first_sentence_ok, source, created_at")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    setLoadingHistory(false);
+    if (error) {
+      toast({ title: "Erro ao carregar histórico", description: error.message, variant: "destructive" });
+      return;
+    }
+    setHistory((data ?? []) as any);
+  };
+
   const loadPois = async () => {
     setLoadingPois(true);
     const q = supabase
@@ -258,6 +304,7 @@ export default function Hiperlocal() {
     loadPois();
     loadTemplates();
     loadTitles();
+    loadHistory();
   }, []);
 
   // ============ Discover ============
@@ -454,6 +501,106 @@ export default function Hiperlocal() {
     });
   };
 
+  // ============ Edit + Versions ============
+  const openEditDialog = async (t: TitleRow) => {
+    // If seed (no user_id), clone into user_id before editing
+    let target = t;
+    if (!t.user_id) {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        toast({ title: "Não autenticado", variant: "destructive" });
+        return;
+      }
+      const { data: cloned, error } = await supabase.from("hyperlocal_title_templates").insert({
+        user_id: userData.user.id,
+        category: t.category,
+        title: t.title,
+        poi_type: t.poi_type,
+        ymyl_subarea: t.ymyl_subarea,
+        neighborhood_hint: t.neighborhood_hint,
+        city_hint: t.city_hint,
+        is_urgency: t.is_urgency,
+        status: "approved",
+        source: "user_clone_of_seed",
+      }).select("id, user_id, category, title, poi_type, ymyl_subarea, neighborhood_hint, city_hint, is_urgency, status, source").single();
+      if (error || !cloned) {
+        toast({ title: "Erro ao clonar seed", description: error?.message, variant: "destructive" });
+        return;
+      }
+      target = cloned as TitleRow;
+      setTitles((prev) => [target, ...prev]);
+      toast({ title: "Cópia criada", description: "Você editará sua própria versão. O seed original é preservado." });
+    }
+    setEditingTitle(target);
+    setEditTitleForm({
+      title: target.title,
+      category: target.category,
+      neighborhood_hint: target.neighborhood_hint ?? "",
+      city_hint: target.city_hint ?? "",
+      is_urgency: target.is_urgency,
+    });
+    setEditTitleOpen(true);
+  };
+
+  const saveEdit = async () => {
+    if (!editingTitle) return;
+    if (!editTitleForm.title.trim()) {
+      toast({ title: "Título obrigatório", variant: "destructive" });
+      return;
+    }
+    setSavingEdit(true);
+    const { error } = await supabase.from("hyperlocal_title_templates").update({
+      title: editTitleForm.title.trim(),
+      category: editTitleForm.category,
+      neighborhood_hint: editTitleForm.neighborhood_hint || null,
+      city_hint: editTitleForm.city_hint || null,
+      is_urgency: editTitleForm.is_urgency,
+    }).eq("id", editingTitle.id);
+    setSavingEdit(false);
+    if (error) {
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Título atualizado", description: "Versão anterior salva no histórico." });
+    setEditTitleOpen(false);
+    setEditingTitle(null);
+    loadTitles();
+  };
+
+  const openVersions = async (t: TitleRow) => {
+    setVersionsFor(t);
+    setVersionsOpen(true);
+    setLoadingVersions(true);
+    const { data, error } = await supabase
+      .from("hyperlocal_title_template_versions")
+      .select("id, version_number, title, category, created_at, change_reason")
+      .eq("template_id", t.id)
+      .order("version_number", { ascending: false });
+    setLoadingVersions(false);
+    if (error) {
+      toast({ title: "Erro ao carregar versões", description: error.message, variant: "destructive" });
+      return;
+    }
+    setVersionsList((data ?? []) as any);
+  };
+
+  const restoreVersion = async (versionId: string) => {
+    if (!versionsFor) return;
+    const v = versionsList.find((x) => x.id === versionId);
+    if (!v) return;
+    const { error } = await supabase.from("hyperlocal_title_templates").update({
+      title: v.title,
+      category: v.category as TitleCategory,
+    }).eq("id", versionsFor.id);
+    if (error) {
+      toast({ title: "Erro ao restaurar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: `Versão v${v.version_number} restaurada` });
+    setVersionsOpen(false);
+    loadTitles();
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -472,6 +619,7 @@ export default function Hiperlocal() {
           <TabsTrigger value="pois">POIs</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="pautas">Pautas ({titles.length})</TabsTrigger>
+          <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
 
 
@@ -878,6 +1026,14 @@ export default function Hiperlocal() {
                               <Button size="sm" variant="default" onClick={() => usarTitulo(t.title)}>
                                 <Sparkles className="h-3 w-3 mr-1" /> Usar
                               </Button>
+                              <Button size="sm" variant="ghost" title="Editar (clona seed se necessário)" onClick={() => openEditDialog(t)}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              {t.user_id && (
+                                <Button size="sm" variant="ghost" title="Ver versões" onClick={() => openVersions(t)}>
+                                  <History className="h-4 w-4" />
+                                </Button>
+                              )}
                               <Button size="sm" variant="ghost" onClick={() => copiarTitulo(t.title)}>
                                 <Copy className="h-4 w-4" />
                               </Button>
@@ -897,7 +1053,211 @@ export default function Hiperlocal() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* ============ Histórico de gerações ============ */}
+        <TabsContent value="historico" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="h-5 w-5" /> Histórico de artigos hiperlocais gerados
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Registro por artigo: categoria detectada, few-shot injetado, tentativas de regeneração e regra ≤30 palavras.
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={loadHistory} disabled={loadingHistory}>
+                <RefreshCcw className="h-4 w-4 mr-2" /> Recarregar
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {loadingHistory ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>
+              ) : history.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">
+                  Nenhuma geração hiperlocal registrada ainda.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data</TableHead>
+                        <TableHead>Título</TableHead>
+                        <TableHead>Categoria</TableHead>
+                        <TableHead>Few-shot</TableHead>
+                        <TableHead>Regen</TableHead>
+                        <TableHead>§1 · 1ª frase</TableHead>
+                        <TableHead>Origem</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {history.map((h) => {
+                        const cat = TITLE_CATEGORIES.find((c) => c.key === h.category);
+                        return (
+                          <TableRow key={h.id}>
+                            <TableCell className="text-xs whitespace-nowrap">
+                              {new Date(h.created_at).toLocaleString("pt-BR")}
+                            </TableCell>
+                            <TableCell className="max-w-md">
+                              <div className="text-sm font-medium line-clamp-2">{h.title}</div>
+                              {h.template_kind && (
+                                <div className="text-xs text-muted-foreground">template: {h.template_kind}</div>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {h.category ? (
+                                <Badge variant="outline">{cat?.emoji} {cat?.label ?? h.category}</Badge>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <Badge variant="secondary">{h.fewshot_count} ex.</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={h.regen_attempts === 0 ? "default" : h.regen_attempts >= 2 ? "destructive" : "secondary"}>
+                                {h.regen_attempts}×
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <div className="flex items-center gap-1">
+                                <Badge variant={h.first_sentence_ok ? "default" : "destructive"} className="text-[10px]">
+                                  {h.first_sentence_words ?? "—"}w / 30
+                                </Badge>
+                                <Badge variant={h.frontload_passes ? "default" : "destructive"} className="text-[10px]">
+                                  §1 {h.frontload_passes ? "OK" : "FAIL"}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">{h.source}</Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* ============ Edit title dialog ============ */}
+      <Dialog open={editTitleOpen} onOpenChange={setEditTitleOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar título hiperlocal</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Categoria</Label>
+              <Select
+                value={editTitleForm.category}
+                onValueChange={(v) => setEditTitleForm({ ...editTitleForm, category: v as TitleCategory })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TITLE_CATEGORIES.map((c) => (
+                    <SelectItem key={c.key} value={c.key}>{c.emoji} {c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Título</Label>
+              <Textarea
+                rows={3}
+                value={editTitleForm.title}
+                onChange={(e) => setEditTitleForm({ ...editTitleForm, title: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Bairro (hint)</Label>
+                <Input
+                  value={editTitleForm.neighborhood_hint}
+                  onChange={(e) => setEditTitleForm({ ...editTitleForm, neighborhood_hint: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Cidade (hint)</Label>
+                <Input
+                  value={editTitleForm.city_hint}
+                  onChange={(e) => setEditTitleForm({ ...editTitleForm, city_hint: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="edit-is-urgency"
+                type="checkbox"
+                checked={editTitleForm.is_urgency}
+                onChange={(e) => setEditTitleForm({ ...editTitleForm, is_urgency: e.target.checked })}
+              />
+              <Label htmlFor="edit-is-urgency">Urgência (24h / plantão)</Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Cada edição salva uma nova versão automaticamente. Use o ícone <History className="h-3 w-3 inline" /> para consultar/restaurar.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditTitleOpen(false)}>Cancelar</Button>
+            <Button onClick={saveEdit} disabled={savingEdit}>
+              {savingEdit ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============ Versions dialog ============ */}
+      <Dialog open={versionsOpen} onOpenChange={setVersionsOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" /> Histórico de versões
+            </DialogTitle>
+            {versionsFor && (
+              <p className="text-sm text-muted-foreground line-clamp-2">
+                {versionsFor.title}
+              </p>
+            )}
+          </DialogHeader>
+          {loadingVersions ? (
+            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+          ) : versionsList.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              Nenhuma versão anterior. Este é o estado inicial do título.
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {versionsList.map((v) => (
+                <div key={v.id} className="border rounded p-3 flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="outline">v{v.version_number}</Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(v.created_at).toLocaleString("pt-BR")}
+                      </span>
+                      {v.change_reason && (
+                        <Badge variant="secondary" className="text-[10px]">{v.change_reason}</Badge>
+                      )}
+                    </div>
+                    <div className="text-sm">{v.title}</div>
+                    <div className="text-xs text-muted-foreground mt-1">categoria: {v.category}</div>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => restoreVersion(v.id)}>
+                    <RefreshCcw className="h-3 w-3 mr-1" /> Restaurar
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
