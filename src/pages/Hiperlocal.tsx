@@ -723,6 +723,180 @@ export default function Hiperlocal() {
             </Card>
           ))}
         </TabsContent>
+
+        {/* ============ Pautas (Títulos GEO 2026) ============ */}
+        <TabsContent value="pautas" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" /> Biblioteca de Pautas GEO 2026
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  60 títulos-modelo hiperlocais (Criminal 24h, Colarinho Branco, ISPs, Fraude Bancária, Aeroporto, Fóruns) —
+                  a IA usa esta biblioteca como few-shot ao gerar artigos RDM.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={loadTitles} disabled={loadingTitles}>
+                  <RefreshCcw className="h-4 w-4 mr-2" /> Recarregar
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={selectedTitles.size === 0}
+                  onClick={enviarParaBulk}
+                >
+                  <Wand2 className="h-4 w-4 mr-2" /> Gerar em lote ({selectedTitles.size})
+                </Button>
+                <Dialog open={newTitleOpen} onOpenChange={setNewTitleOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm">
+                      <Plus className="h-4 w-4 mr-2" /> Novo título
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>Novo título hiperlocal</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                      <div>
+                        <Label>Categoria</Label>
+                        <Select
+                          value={newTitleForm.category}
+                          onValueChange={(v) => setNewTitleForm({ ...newTitleForm, category: v as TitleCategory })}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {TITLE_CATEGORIES.map((c) => (
+                              <SelectItem key={c.key} value={c.key}>{c.emoji} {c.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Título</Label>
+                        <Textarea
+                          rows={3}
+                          value={newTitleForm.title}
+                          onChange={(e) => setNewTitleForm({ ...newTitleForm, title: e.target.value })}
+                          placeholder="Ex.: Preso em flagrante no Fórum de Itaquera: Como funciona a audiência de custódia?"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label>Bairro (hint)</Label>
+                          <Input
+                            value={newTitleForm.neighborhood_hint}
+                            onChange={(e) => setNewTitleForm({ ...newTitleForm, neighborhood_hint: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label>Cidade (hint)</Label>
+                          <Input
+                            value={newTitleForm.city_hint}
+                            onChange={(e) => setNewTitleForm({ ...newTitleForm, city_hint: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="ghost" onClick={() => setNewTitleOpen(false)}>Cancelar</Button>
+                      <Button onClick={criarTitulo} disabled={creatingTitle}>
+                        {creatingTitle ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                        Salvar
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex gap-2">
+                <Select value={titleCategory} onValueChange={(v) => setTitleCategory(v as TitleCategory | "all")}>
+                  <SelectTrigger className="w-64"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as categorias</SelectItem>
+                    {TITLE_CATEGORIES.map((c) => (
+                      <SelectItem key={c.key} value={c.key}>{c.emoji} {c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Buscar por termo (bairro, fórum, delegacia…)"
+                  value={titleQuery}
+                  onChange={(e) => setTitleQuery(e.target.value)}
+                />
+              </div>
+
+              {loadingTitles ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>
+              ) : filteredTitles.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">Nenhum título encontrado.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10"></TableHead>
+                        <TableHead>Título</TableHead>
+                        <TableHead>Categoria</TableHead>
+                        <TableHead>Bairro / Cidade</TableHead>
+                        <TableHead>Origem</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredTitles.map((t) => {
+                        const cat = TITLE_CATEGORIES.find((c) => c.key === t.category);
+                        return (
+                          <TableRow key={t.id}>
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                checked={selectedTitles.has(t.id)}
+                                onChange={() => toggleSelect(t.id)}
+                              />
+                            </TableCell>
+                            <TableCell className="max-w-xl">
+                              <div className="text-sm font-medium">{t.title}</div>
+                              {t.is_urgency && <Badge variant="destructive" className="mt-1 text-xs">urgência</Badge>}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{cat?.emoji} {cat?.label ?? t.category}</Badge>
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {t.neighborhood_hint ? <div>{t.neighborhood_hint}</div> : null}
+                              <div className="text-muted-foreground">{t.city_hint || "—"}</div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={t.user_id ? "default" : "secondary"} className="text-xs">
+                                {t.user_id ? "custom" : "seed"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right space-x-1">
+                              <Button size="sm" variant="default" onClick={() => usarTitulo(t.title)}>
+                                <Sparkles className="h-3 w-3 mr-1" /> Usar
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => copiarTitulo(t.title)}>
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                              {t.user_id && (
+                                <Button size="sm" variant="ghost" onClick={() => excluirTitulo(t.id)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
