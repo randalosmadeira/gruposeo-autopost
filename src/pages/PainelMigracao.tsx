@@ -132,6 +132,34 @@ export default function PainelMigracao() {
     toast.success(`${count} edge functions exportadas`);
   };
 
+  const downloadMigrations = () => {
+    const modules = import.meta.glob('/supabase/migrations/*.sql', {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }) as Record<string, string>;
+    const entries = Object.entries(modules).sort(([a], [b]) => a.localeCompare(b));
+    const parts: string[] = [
+      '-- ═══════════════════════════════════════════════════════════',
+      '-- MIGRATIONS CONSOLIDADAS — execute em ordem no destino',
+      `-- Total: ${entries.length} arquivos`,
+      '-- ═══════════════════════════════════════════════════════════',
+      '',
+    ];
+    for (const [path, source] of entries) {
+      const name = path.split('/').pop();
+      parts.push(`-- ═════════ ${name} ═════════\n${source}`);
+    }
+    const blob = new Blob([parts.join('\n\n')], { type: 'text/sql' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'migrations.sql';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${entries.length} migrations exportadas`);
+  };
+
   const downloadSecrets = () => {
     if (!data) return;
     const entries = Object.entries(data.secrets)
