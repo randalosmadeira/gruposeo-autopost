@@ -419,7 +419,8 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
           />
 
           {/* Content with scroll */}
-          <div className="flex-1 overflow-hidden p-4">
+          <div className="flex-1 overflow-hidden p-4 space-y-3">
+            <FirstSentencePreview content={editedArticle.content} />
             <ArticleEditorContent
               content={editedArticle.content}
               featuredImageUrl={editedArticle.featured_image_url}
