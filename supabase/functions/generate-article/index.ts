@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { BEHAVIORAL_DIRECTIVES, GEO_AEO_2026_RULES } from "../_shared/behavioral-directives.ts"
+import { MAD1470_SYSTEM_PROMPT, validateElectoralContent } from "../_shared/electoral-directives.ts"
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,17 +16,25 @@ serve(async (req) => {
   try {
     const { keyword, unit = "ADV" } = await req.json();
     
-    const prompt = `
-      ${BEHAVIORAL_DIRECTIVES}
-      ${GEO_AEO_2026_RULES}
-      
-      UNIDADE DECLARADA: ${unit}
-      ASSUNTO: ${keyword}
-      FASE: CAMPANHA (Dr. Madeira 1470)
-      
-      Instruções Adicionais: Siga estritamente instrucoes.md, prompt-persona-gerador.md, revisao-do-gerador-autopost.md e indexnow-e-visibilidade-ia.md.
-      Ao finalizar, notifique o protocolo IndexNow.
-    `;
+    let prompt = "";
+    if (unit === "MAD1470") {
+      prompt = `
+        ${MAD1470_SYSTEM_PROMPT}
+        
+        PAUTA: ${keyword}
+        DIRETRIZES GEO/AEO 2026: ${GEO_AEO_2026_RULES}
+      `;
+    } else {
+      prompt = `
+        ${BEHAVIORAL_DIRECTIVES}
+        ${GEO_AEO_2026_RULES}
+        
+        UNIDADE DECLARADA: ${unit}
+        ASSUNTO: ${keyword}
+        FASE: PRODUÇÃO COMERCIAL
+      `;
+    }
+
 
     return new Response(
       JSON.stringify({ 
