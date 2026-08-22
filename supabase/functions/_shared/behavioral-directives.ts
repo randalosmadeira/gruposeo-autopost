@@ -31,4 +31,16 @@ export const GEO_AEO_2026_RULES = `
 - Frontloading: Frase curta inicial (máx 30 palavras) para AI Overviews.
 - Citações: 40% citados / 60% original.
 - Tags [VERIFICAR] para qualquer dado não confirmado em fonte primária.
+
+ANATOMIA DO PROMPT DE IMAGEM (v1.0):
+1. Gênero (ex: fotografia documental)
+2. Sujeito (ambiente ou objeto, evite rosto)
+3. Ambiente (específico brasileiro)
+4. Luz (natural, natural de fim de tarde)
+5. Enquadramento (plano aberto, médio)
+6. Paleta (ADV: vinho/bordô, preto, branco quente)
+7. Técnica (fotorrealista, 8k, lente 35mm)
+8. Negativos Universais: sem texto, sem letras, sem martelo, sem balança, sem algemas, sem logotipo.
+
+FORMATOS OBRIGATÓRIOS: 1:1, 1.91:1 e 9:16.
 `;
