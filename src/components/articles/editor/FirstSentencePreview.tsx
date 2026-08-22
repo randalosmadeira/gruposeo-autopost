@@ -47,6 +47,9 @@ export function FirstSentencePreview({ content }: FirstSentencePreviewProps) {
 
   if (!sentence) return null;
 
+  const isPillar = content?.length && content.length > 5000; // Rough check for 1500+ words
+  const targetWords = 30;
+
   return (
     <div
       className={`rounded-lg border px-3 py-2 text-xs flex items-start gap-2 ${

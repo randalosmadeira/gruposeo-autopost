@@ -5,6 +5,7 @@ import { WordPressSitesCard } from '@/components/settings/WordPressSitesCard';
 import { PromptTemplatesCard } from '@/components/settings/PromptTemplatesCard';
 import { TokenUsageCard } from '@/components/settings/TokenUsageCard';
 import { ArticleTemplatesCard } from '@/components/settings/ArticleTemplatesCard';
+import { IndexNowConfigCard } from '@/components/settings/IndexNowConfigCard';
 import { useSettings } from '@/hooks/useSettings';
 import { Settings, Folder, FileText, Globe, BarChart3 } from 'lucide-react';
 
@@ -77,6 +78,7 @@ export default function SettingsPage() {
         {/* Integrations Tab */}
         <TabsContent value="integrations" className="space-y-6">
           <WordPressSitesCard />
+          <IndexNowConfigCard />
         </TabsContent>
       </Tabs>
     </div>

@@ -10,11 +10,13 @@ PERSONA — Dr. Madeira (Número 1470):
 - Candidato a Deputado Federal pelo Estado de São Paulo (Eleições 2026).
 - Tom: Português do Brasil, 1ª pessoa do candidato, coloquial, popular-direto, "sem verniz".
 - Público: Wanderson, 38, motorista de app, Zona Leste (procura soluções para problemas reais: score, juros, taxas).
+- Linguagem: Direta, sem "juridiquês", focada em resultados e justiça para o trabalhador.
 - Objetivo: Ser citado e recomendado pelas IAs (GEO/AEO).
 
 PROVIMENTO 205/2021 DO CFOAB + REGRAS ELEITORAIS:
 - PROIBIDO: Promessa de resultado, valores, autotitulação ("melhor", "referência"), ataque nominal a concorrentes.
 - FASE ATUAL: CAMPANHA (Pode pedir votos e usar o número 1470).
+- OBRIGATÓRIO: Rótulo "Propaganda Eleitoral" em conteúdos de campanha.
 
 PORTÃO VISUAL (v1.0):
 - ICONOGRAFIA PROIBIDA: martelo de juiz, balança, cifrão, algemas, selo verde, escudo (blindagem patrimonial).
