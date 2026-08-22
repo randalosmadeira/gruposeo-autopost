@@ -107,8 +107,9 @@ const TERMOS_BLOQUEIO = [
   /\b(garanto|garantimos|prometo|vou aprovar|vou garantir)\b/i,
   /\b(em troca de|se você votar|quem votar em mim (ganha|recebe))\b/i,
   /\b(vou acabar com|acabarei com|resolverei|vou resolver)\b/i,
-  /\b(advogados?|escritório|consultoria|assessoria jurídica|OAB|martelo|balança)\b/i,
-  /\b(corrupto|ladrão|vagabundo|incompetente|mentiroso)\b/i
+  /\b(advogados?|escritório|consultoria|assessoria jurídica|OAB|martelo|balança|blindagem patrimonial)\b/i,
+  /\b(corrupto|ladrão|vagabundo|incompetente|mentiroso)\b/i,
+  /\b(rdm advogados|madeira sem verniz|grupo seo|elas tracy)\b/i
 ];
 
 export function validateElectoralContent(json: any): { aprovado: boolean, bloqueios: string[] } {
