@@ -33,7 +33,7 @@ export function countWords(sentence: string): number {
 }
 
 export function FirstSentencePreview({ content }: FirstSentencePreviewProps) {
-  const { sentence, words, ok, hasLead } = useMemo(() => {
+  const { sentence, words, ok, hasLead, hasLabels } = useMemo(() => {
     const html = content || "";
     const s = extractFirstSentence(html);
     const w = countWords(s);
@@ -42,13 +42,14 @@ export function FirstSentencePreview({ content }: FirstSentencePreviewProps) {
       words: w,
       ok: w > 0 && w <= 30,
       hasLead: /class=["'][^"']*lead-answer/.test(html),
+      hasLabels: /\[VERIFICAR\]/.test(html) || /\[ROTULAGEM PENDENTE/.test(html),
     };
   }, [content]);
 
   if (!sentence) return null;
 
-  const isPillar = content?.length && content.length > 5000; // Rough check for 1500+ words
   const targetWords = 30;
+
 
   return (
     <div
@@ -83,7 +84,13 @@ export function FirstSentencePreview({ content }: FirstSentencePreviewProps) {
               ? `${words - 30} palavra(s) acima do limite`
               : "—"}
           </span>
+          {hasLabels && (
+            <Badge variant="destructive" className="text-[10px] h-5 animate-pulse">
+              [Pendente Revisão]
+            </Badge>
+          )}
         </div>
+
         <p className="mt-1 text-muted-foreground line-clamp-2 italic">"{sentence}"</p>
       </div>
     </div>
