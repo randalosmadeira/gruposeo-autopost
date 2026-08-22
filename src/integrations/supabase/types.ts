@@ -871,6 +871,66 @@ export type Database = {
         }
         Relationships: []
       }
+      indexnow_config: {
+        Row: {
+          active: boolean | null
+          api_key: string
+          created_at: string | null
+          host: string
+          id: string
+          key_location: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          api_key: string
+          created_at?: string | null
+          host: string
+          id?: string
+          key_location: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          api_key?: string
+          created_at?: string | null
+          host?: string
+          id?: string
+          key_location?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      indexnow_logs: {
+        Row: {
+          created_at: string | null
+          id: string
+          response_body: string | null
+          status_code: number | null
+          url: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          response_body?: string | null
+          status_code?: number | null
+          url: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          response_body?: string | null
+          status_code?: number | null
+          url?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       internal_link_suggestions: {
         Row: {
           anchor_context: string | null

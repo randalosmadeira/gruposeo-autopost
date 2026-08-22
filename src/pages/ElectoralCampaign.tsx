@@ -56,7 +56,7 @@ const defaultConfig: CandidateConfig = {
   candidateName: '',
   politicalParty: '',
   candidateRole: 'deputado-federal',
-  campaignPhase: 'pre-campanha',
+  campaignPhase: 'campanha',
   city: '',
   state: 'SP',
   slogan: '',
@@ -80,7 +80,7 @@ const contentTemplates = [
   { id: 'debate-position', title: 'Posicionamento & Debate', description: 'Artigo opinativo com posicionamento firme', icon: Megaphone, color: 'hsl(var(--primary))' },
   { id: 'track-record', title: 'Histórico & Realizações', description: 'Retrospectiva de atuação com dados e provas sociais', icon: Shield, color: 'hsl(var(--accent))' },
   { id: 'city-targeted', title: 'Artigo por Cidade', description: 'Conteúdo segmentado para cidades específicas de SP', icon: MapPin, color: 'hsl(var(--primary))' },
-  { id: 'competitor-comparison', title: 'Comparativo Eleitoral', description: 'Quem são os candidatos, em quem votar em 2026', icon: Target, color: 'hsl(var(--accent))' },
+  // Card "Comparativo Eleitoral" removido por diretriz de segurança v5.0
 ];
 
 export default function ElectoralCampaign() {

@@ -20,8 +20,10 @@ serve(async (req) => {
       
       UNIDADE DECLARADA: ${unit}
       ASSUNTO: ${keyword}
+      FASE: CAMPANHA (Dr. Madeira 1470)
       
-      Instruções Adicionais: Siga estritamente instrucoes.md, agentes-conteudo-v5-atualizados-2.md e agente-imagens-e-conteudos-v1.md.
+      Instruções Adicionais: Siga estritamente instrucoes.md, prompt-persona-gerador.md, revisao-do-gerador-autopost.md e indexnow-e-visibilidade-ia.md.
+      Ao finalizar, notifique o protocolo IndexNow.
     `;
 
     return new Response(

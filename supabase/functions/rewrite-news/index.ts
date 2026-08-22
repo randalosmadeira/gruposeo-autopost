@@ -20,12 +20,13 @@ serve(async (req) => {
       
       UNIDADE DECLARADA: ${unit}
       FONTE: ${sourceUrl}
+      FASE: CAMPANHA (Dr. Madeira 1470)
       
       REGRAS DE REESCRITA:
       - Originalidade ≥ 40% (Corpo).
       - Originalidade ≥ 80% (Título).
       - Tag [VERIFICAR] obrigatória para incertezas.
-      - Siga agente-imagens-e-conteudos-v1.md para prompts de imagem.
+      - Siga estritamente instrucoes.md, prompt-persona-gerador.md, revisao-do-gerador-autopost.md e indexnow-e-visibilidade-ia.md.
     `;
 
     return new Response(
