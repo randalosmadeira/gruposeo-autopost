@@ -10,6 +10,7 @@ import { Layout } from "@/components/layout/Layout";
 
 // Lazy load all pages for code splitting
 const Dashboard = lazy(() => import("./pages/DashboardNew"));
+const Index = lazy(() => import("./pages/index"));
 const ContentCalendar = lazy(() => import("./pages/ContentCalendar"));
 const ArticleTypeSelection = lazy(() => import("./pages/ArticleTypeSelection"));
 const ArticleGenerator = lazy(() => import("./pages/ArticleGenerator"));
@@ -80,7 +81,8 @@ const App = () => (
                   </ProtectedRoute>
                 }
               >
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={<Index />} />
+              <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/calendar" element={<ContentCalendar />} />
                 <Route path="/academia" element={<Academy />} />
               <Route path="/articles" element={<ArticlesList />} />
