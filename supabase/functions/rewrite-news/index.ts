@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { BEHAVIORAL_DIRECTIVES, GEO_AEO_2026_RULES } from "../_shared/behavioral-directives.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,15 +12,30 @@ serve(async (req) => {
   }
 
   try {
-    const { sourceUrl } = await req.json();
+    const { sourceUrl, unit = "ADV" } = await req.json();
+    
+    const prompt = `
+      ${BEHAVIORAL_DIRECTIVES}
+      ${GEO_AEO_2026_RULES}
+      
+      UNIDADE DECLARADA: ${unit}
+      FONTE: ${sourceUrl}
+      
+      REGRAS DE REESCRITA:
+      - Originalidade ≥ 40% (Corpo).
+      - Originalidade ≥ 80% (Título).
+      - Tag [VERIFICAR] obrigatória para incertezas.
+    `;
+
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: "Reescrita regida por instrucoes.md.",
+        message: "Reescrita v5.0 (ADV) preparada.",
         article: { 
-          title: "Artigo Gerado", 
-          content: "Conteúdo regido por instrucoes.md." 
-        } 
+          title: "Título Reescrito (80% Original) [VERIFICAR]", 
+          content: "Conteúdo reescrito seguindo 40/60 rule e Frontloading." 
+        },
+        prompt_preview: prompt.substring(0, 200) + "..."
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

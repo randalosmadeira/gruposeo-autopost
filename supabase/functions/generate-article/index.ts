@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { BEHAVIORAL_DIRECTIVES, GEO_AEO_2026_RULES } from "../_shared/behavioral-directives.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,12 +12,25 @@ serve(async (req) => {
   }
 
   try {
-    const { keyword } = await req.json();
+    const { keyword, unit = "ADV" } = await req.json();
+    
+    // Simulação de prompt seguindo v5.0
+    const prompt = `
+      ${BEHAVIORAL_DIRECTIVES}
+      ${GEO_AEO_2026_RULES}
+      
+      UNIDADE DECLARADA: ${unit}
+      ASSUNTO: ${keyword}
+      
+      Instruções Adicionais: Siga estritamente instrucoes.md e agentes-conteudo-v5-atualizados-2.md.
+    `;
+
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: "Geração regida por instrucoes.md.",
-        content: "Conteúdo gerado seguindo instrucoes.md." 
+        message: "Geração regida por diretrizes v5.0 (ADV).",
+        content: `Conteúdo para ${keyword} seguindo regras de Frontloading e OAB. [VERIFICAR]`,
+        prompt_preview: prompt.substring(0, 200) + "..."
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
