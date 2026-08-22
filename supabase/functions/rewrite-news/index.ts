@@ -25,15 +25,28 @@ serve(async (req) => {
       - Originalidade ≥ 40% (Corpo).
       - Originalidade ≥ 80% (Título).
       - Tag [VERIFICAR] obrigatória para incertezas.
+      - Siga agente-imagens-e-conteudos-v1.md para prompts de imagem.
     `;
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: "Reescrita v5.0 (ADV) preparada.",
+        message: "Reescrita v5.0 (ADV) e Imagens v1.0 preparada.",
         article: { 
           title: "Título Reescrito (80% Original) [VERIFICAR]", 
           content: "Conteúdo reescrito seguindo 40/60 rule e Frontloading." 
+        },
+        image_metadata: {
+          unidade: unit,
+          imagem: {
+            prompt: "Fotografia documental, fachada de tribunal em São Paulo sob luz natural, plano aberto, paleta bordô e concreto, fotorrealista 8k. Sem martelo, sem balança, sem logotipo, sem escudo.",
+            alt: "Fachada de prédio jurídico com colunas clássicas sob céu azul claro.",
+            formatos: ["1:1 1080x1080", "1.91:1 1200x628", "9:16 1080x1920"]
+          },
+          copy: {
+            legenda: "Atualização jurídica relevante. OAB/SP [VERIFICAR]",
+            cta: "Consulte a íntegra da decisão."
+          }
         },
         prompt_preview: prompt.substring(0, 200) + "..."
       }),
