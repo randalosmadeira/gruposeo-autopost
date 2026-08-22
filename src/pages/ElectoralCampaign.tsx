@@ -239,8 +239,22 @@ export default function ElectoralCampaign() {
                   </Select>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div><Label>Cidade Base</Label><Input placeholder="São Paulo" value={config.city} onChange={e => updateConfig('city', e.target.value)} /></div>
-                  <div><Label>Estado</Label><Input value={config.state} onChange={e => updateConfig('state', e.target.value)} /></div>
+                  <div>
+                    <Label>Cidade Base</Label>
+                    <Select value={config.city} onValueChange={v => updateConfig('city', v)}>
+                      <SelectTrigger><SelectValue placeholder="Selecione a cidade" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sao-paulo">São Paulo (Capital)</SelectItem>
+                        <SelectItem value="guarulhos">Guarulhos</SelectItem>
+                        <SelectItem value="santo-andre">Santo André</SelectItem>
+                        <SelectItem value="sao-bernardo">São Bernardo do Campo</SelectItem>
+                        <SelectItem value="sao-caetano">São Caetano do Sul</SelectItem>
+                        <SelectItem value="diadema">Diadema</SelectItem>
+                        <SelectItem value="osasco">Osasco</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>Estado</Label><Input value={config.state} disabled /></div>
                 </div>
                 <div><Label>Slogan</Label><Input placeholder="Madeira Neles! Sem verniz, com atitude!" value={config.slogan} onChange={e => updateConfig('slogan', e.target.value)} /></div>
               </CardContent>
