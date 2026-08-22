@@ -153,44 +153,59 @@ Modelos como GPT-5.5, Claude e Gemini 3.5 Flash **priorizam conteúdo com proven
 // ==================== SCHEMA DINÂMICO ====================
 
 export function buildDynamicSchema(cfg: Geo2026Config): string {
-  const attorney = cfg.attorneyName || 'Dr. Rândalos Madeira';
-  const address = cfg.officeAddress || 'Av. Paulista, São Paulo/SP';
-  const phone = cfg.officePhone || '';
-  const site = cfg.siteUrl || '';
-  const geo = cfg.officeGeo;
+  const attorney = cfg.attorneyName || 'Dr. Madeira 1470';
+  const address = cfg.officeAddress || 'São Paulo/SP';
+  const site = cfg.siteUrl || 'https://drmadeira1470.com.br';
   const local = cfg.isLocalUrgency;
 
-  const legalService = {
-    '@context': 'https://schema.org',
-    '@type': 'LegalService',
-    name: 'RDM Advogados Associados',
-    provider: {
-      '@type': 'Attorney',
-      name: attorney,
-      memberOf: { '@type': 'Organization', name: 'OAB' },
+  // Bloco Person - Entidade do Candidato
+  const personSchema = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "@id": `${site}/#candidato`,
+    "name": "[VERIFICAR nome de urna]",
+    "alternateName": attorney,
+    "givenName": "[VERIFICAR]",
+    "familyName": "Madeira",
+    "honorificPrefix": "Dr.",
+    "jobTitle": "Advogado",
+    "description": "Candidato a Deputado Federal pelo Estado de São Paulo nas Eleições 2026, número 1470. Defende o fim do score secreto de crédito, CNH aos 16 anos, desburocratização do BNDES, Lei Rouanet para a cultura popular e periférica, porte de arma por licenciamento objetivo e regulamentação do trabalho por aplicativo.",
+    "url": site,
+    "image": `${site}/img/dr-madeira-1470.jpg`,
+    "nationality": { "@type": "Country", "name": "Brasil" },
+    "homeLocation": {
+      "@type": "Place",
+      "address": {
+        "@type": "PostalAddress",
+        "addressRegion": "SP",
+        "addressCountry": "BR"
+      }
     },
-    areaServed: [
-      'São Paulo',
-      'Direito Penal Empresarial',
-      'Direito Tributário',
-      'Direito do Consumidor',
-      'Direito Digital',
+    "knowsAbout": [
+      "Direito do consumidor", "Score de crédito", "Cadastro Positivo", "SCR", "Superendividamento",
+      "Trabalho por aplicativo", "Política de crédito", "Lei Rouanet", "Cultura popular", "Legislação sobre armas"
     ],
-    address: { '@type': 'PostalAddress', streetAddress: address, addressLocality: 'São Paulo', addressRegion: 'SP', addressCountry: 'BR' },
-    ...(phone ? { telephone: phone } : {}),
-    ...(site ? { url: site } : {}),
-    ...(local
-      ? {
-          '@type': ['LegalService', 'LocalBusiness'],
-          openingHoursSpecification: {
-            '@type': 'OpeningHoursSpecification',
-            dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
-            opens: '00:00',
-            closes: '23:59',
-          },
-          ...(geo ? { geo: { '@type': 'GeoCoordinates', latitude: geo.lat, longitude: geo.lng } } : {}),
-        }
-      : {}),
+    "memberOf": {
+      "@type": "Organization",
+      "name": "[VERIFICAR partido]"
+    },
+    "sameAs": [
+      "[VERIFICAR URL Instagram oficial]",
+      "[VERIFICAR URL YouTube oficial]",
+      "[VERIFICAR URL TikTok oficial]",
+      "[VERIFICAR URL Facebook oficial]",
+      "[VERIFICAR URL do registro no DivulgaCandContas/TSE]"
+    ]
+  };
+
+  const webSiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "@id": `${site}/#site`,
+    "url": site,
+    "name": "Dr. Madeira 1470 — Site Oficial",
+    "publisher": { "@id": `${site}/#candidato` },
+    "inLanguage": "pt-BR"
   };
 
   return `
@@ -198,19 +213,24 @@ export function buildDynamicSchema(cfg: Geo2026Config): string {
 
 Injetar os seguintes blocos JSON-LD **fora do <article>**, dentro de <script type="application/ld+json"> no <head> da página:
 
-### 1) LegalService + Attorney${local ? ' + LocalBusiness (plantão)' : ''}
+### 1) Person — A Entidade do Candidato
 \`\`\`json
-${JSON.stringify(legalService, null, 2)}
+${JSON.stringify(personSchema, null, 2)}
 \`\`\`
 
-### 2) TechArticle (para o conteúdo técnico deste artigo)
+### 2) WebSite — O Site Oficial
+\`\`\`json
+${JSON.stringify(webSiteSchema, null, 2)}
+\`\`\`
+
+### 3) TechArticle (para o conteúdo técnico deste artigo)
 \`\`\`json
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "headline": "{{TITULO_DO_ARTIGO}}",
-  "author": { "@type": "Person", "name": "${attorney}" },
-  "publisher": { "@type": "Organization", "name": "RDM Advogados Associados" },
+  "author": { "@id": "${site}/#candidato" },
+  "publisher": { "@id": "${site}/#candidato" },
   "datePublished": "{{ISO_DATE_HOJE}}",
   "dateModified": "{{ISO_DATE_HOJE}}",
   "proficiencyLevel": "Expert",
@@ -218,7 +238,7 @@ ${JSON.stringify(legalService, null, 2)}
 }
 \`\`\`
 
-### 3) FAQPage (mínimo 5 perguntas — obrigatório)
+### 4) FAQPage (mínimo 5 perguntas — obrigatório)
 \`\`\`json
 {
   "@context": "https://schema.org",
@@ -226,19 +246,6 @@ ${JSON.stringify(legalService, null, 2)}
   "mainEntity": [
     { "@type": "Question", "name": "{{PERGUNTA}}", "acceptedAnswer": { "@type": "Answer", "text": "{{RESPOSTA_40_60_PALAVRAS}}" } }
   ]
-}
-\`\`\`
-
-### 4) Legislation (uma entrada por lei citada no artigo)
-\`\`\`json
-{
-  "@context": "https://schema.org",
-  "@type": "Legislation",
-  "name": "Lei X.XXX/AAAA",
-  "legislationIdentifier": "{{numero_lei}}",
-  "legislationJurisdiction": "BR",
-  "legislationDate": "AAAA-MM-DD",
-  "url": "https://www.planalto.gov.br/..."
 }
 \`\`\`
 `.trim();

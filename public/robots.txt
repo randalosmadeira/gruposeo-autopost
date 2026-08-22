@@ -1,19 +1,61 @@
-# ContentFactory RDM - GRUPO SEO MARKETING - robots.txt
+# https://drmadeira1470.com.br — robots.txt
+# Dr. Madeira 1470 — Deputado Federal / SP — Eleições 2026
+#
+# Decisão registrada: crawlers de IA LIBERADOS.
+# Motivo: o risco de um assistente sintetizar informação sobre o candidato
+# SEM a fonte oficial é maior que o risco de ele citar a fonte oficial.
+# Fonte oficial indexada é defesa preventiva contra alucinação.
 
+# ---- Buscadores ----
 User-agent: Googlebot
 Allow: /
 
 User-agent: Bingbot
 Allow: /
 
-User-agent: Twitterbot
+# ---- Crawlers de IA generativa ----
+User-agent: GPTBot
 Allow: /
 
-User-agent: facebookexternalhit
+User-agent: OAI-SearchBot
 Allow: /
 
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: meta-externalagent
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+# ---- Padrão ----
 User-agent: *
 Allow: /
+Disallow: /wp-admin/
+Disallow: /admin/
+Disallow: /*?s=
+Disallow: /*?utm_
 
-# Sitemap
-# Sitemap: https://contentfactory.gruposeomarketing.com.br/sitemap.xml
+Sitemap: https://drmadeira1470.com.br/sitemap.xml
