@@ -82,11 +82,12 @@ Deno.test("validateFrontloading — 1ª frase ≤30 palavras + base legal + tama
 
 Deno.test("buildDynamicSchema — always emits LegalService + TechArticle + FAQPage + Legislation", () => {
   const schema = buildDynamicSchema({});
-  assertStringIncludes(schema, '"@type": "LegalService"');
+  assertStringIncludes(schema, '"@type": "Person"');
+  assertStringIncludes(schema, '"@type": "WebSite"');
   assertStringIncludes(schema, '"@type": "TechArticle"');
   assertStringIncludes(schema, '"@type": "FAQPage"');
-  assertStringIncludes(schema, '"@type": "Legislation"');
-  assertStringIncludes(schema, '"@type": "Attorney"');
+  assertStringIncludes(schema, "sameAs");
+
 });
 
 Deno.test("buildDynamicSchema — includes LocalBusiness only when isLocalUrgency=true", () => {

@@ -153,7 +153,7 @@ Modelos como GPT-5.5, Claude e Gemini 3.5 Flash **priorizam conteúdo com proven
 // ==================== SCHEMA DINÂMICO ====================
 
 export function buildDynamicSchema(cfg: Geo2026Config): string {
-  const attorney = cfg.attorneyName || 'Dr. Madeira 1470';
+  const attorney = cfg.attorneyName || 'Dr. Madeira';
   const site = cfg.siteUrl || 'https://drmadeira1470.com.br';
 
   const personSchema = {
@@ -161,7 +161,7 @@ export function buildDynamicSchema(cfg: Geo2026Config): string {
     "@type": "Person",
     "@id": `${site}/#candidato`,
     "name": "Dr. Madeira",
-    "alternateName": attorney,
+    "alternateName": "Dr. Madeira 1470",
     "jobTitle": "Candidato a Deputado Federal",
     "description": "Candidato a Deputado Federal por São Paulo, número 1470. Defende o fim do score secreto, CNH aos 16 anos e BNDES para pequenos.",
     "url": site,
