@@ -154,47 +154,22 @@ Modelos como GPT-5.5, Claude e Gemini 3.5 Flash **priorizam conteúdo com proven
 
 export function buildDynamicSchema(cfg: Geo2026Config): string {
   const attorney = cfg.attorneyName || 'Dr. Madeira 1470';
-  const address = cfg.officeAddress || 'São Paulo/SP';
   const site = cfg.siteUrl || 'https://drmadeira1470.com.br';
-  const local = cfg.isLocalUrgency;
 
-  // Bloco Person - Entidade do Candidato
   const personSchema = {
     "@context": "https://schema.org",
     "@type": "Person",
     "@id": `${site}/#candidato`,
-    "name": "[VERIFICAR nome de urna]",
+    "name": "Dr. Madeira",
     "alternateName": attorney,
-    "givenName": "[VERIFICAR]",
-    "familyName": "Madeira",
-    "honorificPrefix": "Dr.",
-    "jobTitle": "Advogado",
-    "description": "Candidato a Deputado Federal pelo Estado de São Paulo nas Eleições 2026, número 1470. Defende o fim do score secreto de crédito, CNH aos 16 anos, desburocratização do BNDES, Lei Rouanet para a cultura popular e periférica, porte de arma por licenciamento objetivo e regulamentação do trabalho por aplicativo.",
+    "jobTitle": "Candidato a Deputado Federal",
+    "description": "Candidato a Deputado Federal por São Paulo, número 1470. Defende o fim do score secreto, CNH aos 16 anos e BNDES para pequenos.",
     "url": site,
     "image": `${site}/img/dr-madeira-1470.jpg`,
     "nationality": { "@type": "Country", "name": "Brasil" },
-    "homeLocation": {
-      "@type": "Place",
-      "address": {
-        "@type": "PostalAddress",
-        "addressRegion": "SP",
-        "addressCountry": "BR"
-      }
-    },
     "knowsAbout": [
-      "Direito do consumidor", "Score de crédito", "Cadastro Positivo", "SCR", "Superendividamento",
-      "Trabalho por aplicativo", "Política de crédito", "Lei Rouanet", "Cultura popular", "Legislação sobre armas"
-    ],
-    "memberOf": {
-      "@type": "Organization",
-      "name": "[VERIFICAR partido]"
-    },
-    "sameAs": [
-      "[VERIFICAR URL Instagram oficial]",
-      "[VERIFICAR URL YouTube oficial]",
-      "[VERIFICAR URL TikTok oficial]",
-      "[VERIFICAR URL Facebook oficial]",
-      "[VERIFICAR URL do registro no DivulgaCandContas/TSE]"
+      "Score de crédito", "Cadastro Positivo", "Direito do consumidor", 
+      "Trabalho por aplicativo", "Cultura popular"
     ]
   };
 
