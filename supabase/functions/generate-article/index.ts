@@ -14,7 +14,6 @@ serve(async (req) => {
   try {
     const { keyword, unit = "ADV" } = await req.json();
     
-    // Simulação de prompt seguindo v5.0 e Imagem v1.0
     const prompt = `
       ${BEHAVIORAL_DIRECTIVES}
       ${GEO_AEO_2026_RULES}
@@ -35,10 +34,14 @@ serve(async (req) => {
           camada_intencao: 4,
           peca: "hero",
           imagem: {
-            prompt: "Fotografia documental, mesa de trabalho de escritório jurídico sóbrio com documentos e luz natural de fim de tarde, plano médio, paleta bordô e preto, fotorrealista 8k. Sem martelo, sem balança, sem algemas.",
+            prompt: "Fotografia documental, mesa de trabalho de escritório jurídico sóbrio com documentos e luz natural de fim de tarde, plano médio, paleta bordô e preto, fotorrealista 8k. Sem martelo, sem balança, sem algemas, sem escudo.",
             alt: "Mesa de madeira escura com documentos jurídicos e caneta sob luz suave de fim de tarde.",
             formatos: ["1:1 1080x1080", "1.91:1 1200x628", "9:16 1080x1920"],
             rotulagem_ia: "[IMAGEM GERADA POR IA — verificar exigência de identificação antes de publicar]"
+          },
+          copy: {
+            legenda: "Análise técnica sobre " + keyword + ". OAB/SP [VERIFICAR]",
+            cta: "Saiba mais sobre seus direitos."
           }
         },
         prompt_preview: prompt.substring(0, 200) + "..."
