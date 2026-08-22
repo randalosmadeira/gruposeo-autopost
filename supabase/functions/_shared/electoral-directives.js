@@ -1,4 +1,3 @@
-
 export const MAD1470_SYSTEM_PROMPT = `
 Você é redator de conteúdo eleitoral para a campanha de Dr. Madeira,
 número 1470, candidato a Deputado Federal por São Paulo pelo partido
@@ -102,30 +101,26 @@ Se alguma regra inegociável for violada pelo pedido, devolva
 "aprovado": false, liste o motivo em "bloqueios", deixe "conteudo"
 vazio e explique qual seria a alternativa conforme.
 `.trim();
-
 const TERMOS_BLOQUEIO = [
-  /\b(garanto|garantimos|prometo|vou aprovar|vou garantir)\b/i,
-  /\b(em troca de|se você votar|quem votar em mim (ganha|recebe))\b/i,
-  /\b(vou acabar com|acabarei com|resolverei|vou resolver)\b/i,
-  /\b(advogados?|escritório|consultoria|assessoria jurídica|OAB|martelo|balança|blindagem patrimonial)\b/i,
-  /\b(corrupto|ladrão|vagabundo|incompetente|mentiroso)\b/i,
-  /\b(rdm advogados|madeira sem verniz|grupo seo|elas tracy)\b/i
+    /\b(garanto|garantimos|prometo|vou aprovar|vou garantir)\b/i,
+    /\b(em troca de|se você votar|quem votar em mim (ganha|recebe))\b/i,
+    /\b(vou acabar com|acabarei com|resolverei|vou resolver)\b/i,
+    /\b(advogados?|escritório|consultoria|assessoria jurídica|OAB|martelo|balança|blindagem patrimonial)\b/i,
+    /\b(corrupto|ladrão|vagabundo|incompetente|mentiroso)\b/i,
+    /\b(rdm advogados|madeira sem verniz|grupo seo|elas tracy)\b/i
 ];
-
-export function validateElectoralContent(json: any): { aprovado: boolean, bloqueios: string[] } {
-  const texto = `${json.titulo || ''} ${json.conteudo || ''} ${json.cta || ''}`;
-  const bloqueios: string[] = [];
-
-  for (const re of TERMOS_BLOQUEIO) {
-    if (re.test(texto)) {
-      bloqueios.push(`termo bloqueado: ${re.source}`);
+export function validateElectoralContent(json) {
+    const texto = `${json.titulo || ''} ${json.conteudo || ''} ${json.cta || ''}`;
+    const bloqueios = [];
+    for (const re of TERMOS_BLOQUEIO) {
+        if (re.test(texto)) {
+            bloqueios.push(`termo bloqueado: ${re.source}`);
+        }
     }
-  }
-
-  const semFonte = (json.fontes || []).filter((f: any) => !f.url || !f.data);
-  if (semFonte.length) bloqueios.push("fonte sem url ou sem data");
-
-  if (!json.rotulagem_ia) bloqueios.push("rotulagem de IA ausente");
-
-  return { aprovado: bloqueios.length === 0 && (json.aprovado !== false), bloqueios };
+    const semFonte = (json.fontes || []).filter((f) => !f.url || !f.data);
+    if (semFonte.length)
+        bloqueios.push("fonte sem url ou sem data");
+    if (!json.rotulagem_ia)
+        bloqueios.push("rotulagem de IA ausente");
+    return { aprovado: bloqueios.length === 0 && (json.aprovado !== false), bloqueios };
 }

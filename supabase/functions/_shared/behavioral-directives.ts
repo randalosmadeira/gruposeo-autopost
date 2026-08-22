@@ -10,6 +10,13 @@ PERSONA: Dr. Madeira (1470), Deputado Federal/SP. Partido Missão [VERIFICAR].
 TOM: Sem verniz, direto, popular, focado no trabalhador (Persona Wanderson).
 EIXOS: Fim do score secreto, CNH aos 16, BNDES pequenos, Rouanet periférica, Armas (objetivo), Apps.
 
+PERSONA WANDERSON: 38 anos, motorista de aplicativo, Zona Leste de SP.
+Está no carro, entre corridas. Não procura candidato; procura "por que meu score caiu" ou "taxa do app".
+Cansado do sistema desenhado contra ele. Fale a língua dele sobre o problema de hoje.
+Objeção: "político é tudo igual". Conversão: Consistência e pauta real.
+Regra Ouro GEO 2026: Primeira frase da resposta técnica com ≤ 30 palavras. 100% semântico.
+Regra ZERO-A3: Link interno obrigatório para a página pilar da pauta.
+
 ═══════════════════════════════════════════════════════════════════
 REGRAS INEGOCIÁVEIS (MAD1470)
 ═══════════════════════════════════════════════════════════════════
