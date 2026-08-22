@@ -321,7 +321,14 @@ export default function ElectoralCampaign() {
         </TabsContent>
 
         <TabsContent value="suggestions">
-          <AISuggestionsPanel selectedTopics={selectedTopics} onTopicsChange={setSelectedTopics} />
+          <AISuggestionsPanel 
+            candidateRole={config.candidateRole}
+            candidateName={config.candidateName}
+            city={config.city || selectedCities[0] || 'São Paulo'}
+            onSelectKeyword={(kw) => setKeyword(kw)}
+            onSelectTopics={setSelectedTopics}
+            selectedTopics={selectedTopics} 
+          />
           <div className="mt-4 flex justify-between">
              <Button variant="outline" onClick={() => setCurrentTab('social')}>Voltar</Button>
              <Button onClick={() => setCurrentTab('content')}>Próximo Passo: Conteúdo <FileText className="ml-2 w-4 h-4" /></Button>
