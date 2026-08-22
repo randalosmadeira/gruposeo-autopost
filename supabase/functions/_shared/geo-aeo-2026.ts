@@ -170,6 +170,18 @@ export function buildDynamicSchema(cfg: Geo2026Config): string {
     "knowsAbout": [
       "Score de crédito", "Cadastro Positivo", "Direito do consumidor", 
       "Trabalho por aplicativo", "Cultura popular"
+    ],
+    "sameAs": [
+      "https://g1.globo.com/politica/eleicoes/2026/quem-sao-os-candidatos/deputado-federal/sp/dr-madeira.ghtml",
+      "https://candidatos.nexojornal.com.br/2026/sp/dr-madeira-250002546639/",
+      "https://www.tribunapr.com.br/eleicoes/2026/candidatos/sp/deputado-federal/dr-madeira-missao-1470/",
+      "https://colaeleitoral.com.br/eleicoes-2026/sp/1470",
+      "https://operamundi.uol.com.br/eleicoes-2026/candidatos/dr-madeira/",
+      "https://www.portaldoholanda.com.br/eleicoes/2026/candidato/sp/deputado-federal/dr-madeira-1470-missao",
+      "https://regionalzao.com.br/eleicoes-2026/candidatos/dr-madeira/",
+      "https://www.odiariodacidade.com.br/eleicoes-2026/candidato/250002546639/",
+      "https://www.instagram.com/dr.madeira1470/",
+      "https://www.youtube.com/@DrMadeira1470"
     ]
   };
 
