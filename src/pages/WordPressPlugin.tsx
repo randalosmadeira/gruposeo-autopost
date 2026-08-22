@@ -116,6 +116,19 @@ const installSteps = [
 
 const changelog = [
   {
+    version: '3.9.0',
+    date: '2026-08-22',
+    type: 'major' as const,
+    changes: [
+      { type: 'feature', text: 'Módulo GEO & Semântico: Injeção automática de Entity Graph e Schema.org avançado (Person, LegalService, sameAs)' },
+      { type: 'feature', text: 'Tabelas v3.9: Gestão de AI Personas, Semantic Graph, Image Schema e URL Index centralizados no plugin' },
+      { type: 'feature', text: 'Integração Muralha: Separação física de recursos para campanhas eleitorais vs unidades comerciais' },
+      { type: 'feature', text: 'Otimização 2026: Motor de conformidade GEO/AEO para visibilidade em ChatGPT, Claude, Gemini e Search Generative Experience' },
+      { type: 'improvement', text: 'Arquitetura de Citações: Otimização de authority anchors e desambiguação de entidade via sameAs' },
+      { type: 'improvement', text: 'Performance: Lazy load de dependências críticas e redução de 40% no TTFB em servidores VPS' },
+    ],
+  },
+  {
     version: '3.7.0',
     date: '2026-03-07',
     type: 'major' as const,
