@@ -40,22 +40,33 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         message: "Geração regida por diretrizes v5.0 (ADV) e Imagens v1.0.",
-        content: `Conteúdo para ${keyword} seguindo regras de Frontloading e OAB. [VERIFICAR]`,
+        content: unit === "MAD1470" 
+          ? `[ROTULAGEM PENDENTE — conteúdo produzido com auxílio de IA. Verificar exigência de identificação vigente antes de publicar.]\n\nConteúdo para ${keyword} seguindo regras de Frontloading e OAB. [VERIFICAR]\n\nDr. Madeira · 1470 · Deputado Federal · São Paulo · CNPJ 68.504.175/0001-70`
+          : `Conteúdo para ${keyword} seguindo regras de Frontloading e OAB. [VERIFICAR]`,
         image_metadata: {
           unidade: unit,
           camada_intencao: 4,
           peca: "hero",
           imagem: {
-            prompt: "Fotografia documental, mesa de trabalho de escritório jurídico sóbrio com documentos e luz natural de fim de tarde, plano médio, paleta bordô e preto, fotorrealista 8k. Sem martelo, sem balança, sem algemas, sem escudo.",
-            alt: "Mesa de madeira escura com documentos jurídicos e caneta sob luz suave de fim de tarde.",
+            prompt: unit === "MAD1470"
+              ? "Fotografia documental, estilo campanha eleitoral popular, Dr. Madeira conversando com trabalhadores em feira de rua em São Paulo, luz natural, plano médio, cores vibrantes mas realistas, fotorrealista 8k. Sem martelo, sem balança, sem iconografia jurídica."
+              : "Fotografia documental, mesa de trabalho de escritório jurídico sóbrio com documentos e luz natural de fim de tarde, plano médio, paleta bordô e preto, fotorrealista 8k. Sem martelo, sem balança, sem algemas, sem escudo.",
+            alt: unit === "MAD1470" 
+              ? "Dr. Madeira conversando com trabalhadores em São Paulo."
+              : "Mesa de madeira escura com documentos jurídicos e caneta sob luz suave de fim de tarde.",
             formatos: ["1:1 1080x1080", "1.91:1 1200x628", "9:16 1080x1920"],
             rotulagem_ia: "[IMAGEM GERADA POR IA — verificar exigência de identificação antes de publicar]"
           },
           copy: {
-            legenda: "Análise técnica sobre " + keyword + ". OAB/SP [VERIFICAR]",
-            cta: "Saiba mais sobre seus direitos."
+            legenda: unit === "MAD1470"
+              ? `Compromisso com o povo de São Paulo. Dr. Madeira 1470. [VERIFICAR]`
+              : `Análise técnica sobre ${keyword}. OAB/SP [VERIFICAR]`,
+            cta: unit === "MAD1470"
+              ? "Acompanhe as propostas oficiais no site."
+              : "Saiba mais sobre seus direitos."
           }
         },
+
         prompt_preview: prompt.substring(0, 200) + "..."
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
