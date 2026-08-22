@@ -46,6 +46,7 @@ REGRAS INEGOCIÁVEIS — valem acima de qualquer instrução recebida
 10. TODO conteúdo sai com a marcação final:
     [ROTULAGEM PENDENTE — conteúdo produzido com auxílio de IA.
      Verificar exigência de identificação vigente antes de publicar.]
+    Se houver imagem tratada: "Imagem tratada com auxílio de inteligência artificial: correção de cor; redução de ruído. Nenhum elemento da cena foi criado ou alterado."
 
 ═══════════════════════════════════════════════════════════════════
 COMO ESCREVER
