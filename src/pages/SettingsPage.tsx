@@ -7,6 +7,8 @@ import { TokenUsageCard } from '@/components/settings/TokenUsageCard';
 import { ArticleTemplatesCard } from '@/components/settings/ArticleTemplatesCard';
 import { IndexNowConfigCard } from '@/components/settings/IndexNowConfigCard';
 import { useSettings } from '@/hooks/useSettings';
+import { PressCitationsCard } from '@/components/settings/PressCitationsCard';
+
 import { Settings, Folder, FileText, Globe, BarChart3 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -79,7 +81,9 @@ export default function SettingsPage() {
         <TabsContent value="integrations" className="space-y-6">
           <WordPressSitesCard />
           <IndexNowConfigCard />
+          <PressCitationsCard />
         </TabsContent>
+
       </Tabs>
     </div>
   );

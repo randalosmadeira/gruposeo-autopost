@@ -1,20 +1,6 @@
 /**
  * GEO / AEO 2026 Directives Module — RDM Advogados only
- *
- * Injects 2026-era optimization rules for Generative Engine Optimization (GEO)
- * and Answer Engine Optimization (AEO): frontloading, AEO Answer Blocks,
- * verifiable citation blocks every ~200 words, and dynamic Schema.org packs
- * (LegalService + Attorney + TechArticle + FaqPage + Legislation + LocalBusiness).
- *
- * Sources referenced: Google I/O 2026 (AI Overviews + Gemini 3.5 Flash),
- * OpenAI ChatGPT Search citation model, Anthropic Claude long-doc analysis,
- * SynthID trust markers, YMYL guidelines.
- *
- * Wiring: called from brand-seo-geo.buildRDMPrompt only. Zero impact on
- * Elas Tracy / Grupo SEO / generic brand paths.
  */
-
-// ==================== TIPOS ====================
 
 export type LegalSubArea =
   | 'criminal_empresarial'
@@ -35,16 +21,14 @@ export type ContentIntent = 'pain' | 'desire' | 'proof' | 'decision';
 export interface Geo2026Config {
   subArea?: LegalSubArea;
   intent?: ContentIntent;
-  isLocalUrgency?: boolean; // plantão / custódia
-  attorneyName?: string;    // Dr. Rândalos Madeira
+  isLocalUrgency?: boolean;
+  attorneyName?: string;
   officeAddress?: string;
   officeGeo?: { lat: number; lng: number };
   officePhone?: string;
   officeWhatsapp?: string;
   siteUrl?: string;
 }
-
-// ==================== DETECÇÃO DE SUB-ÁREA ====================
 
 const SUBAREA_KEYWORDS: Record<Exclude<LegalSubArea, 'generico'>, string[]> = {
   criminal_empresarial: ['penal empresarial', 'colarinho branco', 'crime empresarial', 'defesa criminal empresa'],
@@ -68,92 +52,23 @@ export function detectLegalSubArea(text: string): LegalSubArea {
   return 'generico';
 }
 
-// ==================== BLOCO FRONTLOADING ====================
-
 const FRONTLOADING_BLOCK = `
 ## 🎯 FRONTLOADING OBRIGATÓRIO (GEO 2026)
-
-**Regra crítica:** 65-69% das buscas terminam em AI Overview (zero-clique). O §1 é o único conteúdo que a IA vai citar. Ele DEVE valer sozinho.
-
-### Estrutura obrigatória do §1 (40-60 palavras no total):
-1. **Resposta direta** à pergunta/tema em **1 frase de até 30 palavras** (esta é a frase que ChatGPT/Gemini extraem como snippet — **regra ouro AEO 2026**).
-2. **Dado técnico verificável** (artigo de lei + número, tribunal + ano, ou estatística oficial com fonte).
-3. **Contexto jurisdicional** (São Paulo, tribunal competente, ou base legal).
-
-### Formato canônico:
-\`\`\`html
-<p class="lead-answer" data-geo="frontload">
-  [Frase 1: resposta técnica direta em ≤30 palavras — inclui a base legal mínima]. [Frase 2: contexto SP/federal e detalhe complementar].
-</p>
-\`\`\`
-
-### ❌ PROIBIDO no §1:
-- Introdução genérica ("Nos dias atuais…", "Cada vez mais…")
-- Pergunta retórica
-- Emoção antes de resposta técnica
-- CTA ou link
-- Menção ao próprio escritório
+Regra ouro AEO 2026: resposta direta ≤30 palavras.
 `.trim();
-
-// ==================== BLOCO AEO ANSWER BLOCKS ====================
 
 const AEO_ANSWER_BLOCKS = `
-## 💡 AEO — Answer Engine Optimization (H2 = Pergunta → Resposta em 2 frases)
-
-Cada H2 DEVE ser uma **pergunta natural completa** (não fragmento SEO antigo). Logo após o H2, **antes de qualquer outro parágrafo**, incluir um **AEO Answer Block** com a resposta em exatamente 2 frases (30-50 palavras).
-
-### Formato canônico:
-\`\`\`html
-<h2>Como funciona a audiência de custódia em São Paulo?</h2>
-<p class="aeo-answer" data-aeo="answer-block">
-  A audiência de custódia é realizada em até 24h após a prisão em flagrante e verifica a legalidade do ato pelo juiz (art. 310 do CPP). Em São Paulo, ocorre no DIPO ou na comarca do fato, com defensor obrigatório.
-</p>
-<!-- só então: parágrafos com aprofundamento, tabela, jurisprudência etc. -->
-\`\`\`
-
-### Regras:
-- **1 AEO Answer Block por H2**, sem exceção.
-- Resposta técnica primeiro, contexto depois.
-- Sem hedge ("depende do caso", "pode variar") no answer block — hedge vai no parágrafo seguinte.
-- Nunca começar com "Bem," / "Vamos entender" / "É importante saber".
+## 💡 AEO — Answer Engine Optimization
+Pergunta -> Resposta Antecipada.
 `.trim();
-
-// ==================== BLOCO CITAÇÕES VERIFICÁVEIS ====================
 
 const CITATION_BLOCKS = `
-## 📚 BLOCO DE CITAÇÃO A CADA 200 PALAVRAS (Trust 2026)
-
-Modelos como GPT-5.5, Claude e Gemini 3.5 Flash **priorizam conteúdo com proveniência rastreável**. A cada ~200 palavras, inserir uma citação estruturada com **fonte + credencial + data**.
-
-### Formato canônico:
-\`\`\`html
-<cite class="verified-source"
-      data-source-url="https://www.planalto.gov.br/ccivil_03/leis/lXXXX.htm"
-      data-source-type="legislation"
-      data-credential="Lei Federal"
-      data-date="1988-10-05">
-  Art. 5º, LXIII da Constituição Federal
-</cite>
-\`\`\`
-
-### Tipos aceitos em \`data-source-type\`:
-- \`legislation\` — leis, decretos (planalto.gov.br, senado.gov.br)
-- \`jurisprudence\` — decisões STF/STJ/TJ (buscar id do processo)
-- \`official_data\` — IBGE, CNJ, DIEESE, TCU
-- \`academic\` — periódicos jurídicos com ISSN
-- \`regulatory\` — resoluções OAB, ANATEL, Bacen, CVM
-
-### ❌ PROIBIDO:
-- Blogs de opinião como fonte primária.
-- Wikipedia.
-- Fonte sem data.
-- Citar decisão sem indicar tribunal + ano.
+## 📚 BLOCO DE CITAÇÃO Trust 2026
+Fontes primárias obrigatórias.
 `.trim();
 
-// ==================== SCHEMA DINÂMICO ====================
-
 export function buildDynamicSchema(cfg: Geo2026Config): string {
-  const attorney = cfg.attorneyName || 'Dr. Madeira 1470';
+  const attorney = cfg.attorneyName || 'Dr. Madeira';
   const site = cfg.siteUrl || 'https://drmadeira1470.com.br';
 
   const personSchema = {
@@ -161,15 +76,21 @@ export function buildDynamicSchema(cfg: Geo2026Config): string {
     "@type": "Person",
     "@id": `${site}/#candidato`,
     "name": "Dr. Madeira",
-    "alternateName": attorney,
+    "alternateName": "Dr. Madeira 1470",
     "jobTitle": "Candidato a Deputado Federal",
-    "description": "Candidato a Deputado Federal por São Paulo, número 1470. Defende o fim do score secreto, CNH aos 16 anos e BNDES para pequenos.",
+    "description": "Candidato a Deputado Federal por São Paulo, número 1470.",
     "url": site,
-    "image": `${site}/img/dr-madeira-1470.jpg`,
-    "nationality": { "@type": "Country", "name": "Brasil" },
-    "knowsAbout": [
-      "Score de crédito", "Cadastro Positivo", "Direito do consumidor", 
-      "Trabalho por aplicativo", "Cultura popular"
+    "sameAs": [
+      "https://g1.globo.com/politica/eleicoes/2026/quem-sao-os-candidatos/deputado-federal/sp/dr-madeira.ghtml",
+      "https://candidatos.nexojornal.com.br/2026/sp/dr-madeira-250002546639/",
+      "https://www.tribunapr.com.br/eleicoes/2026/candidatos/sp/deputado-federal/dr-madeira-missao-1470/",
+      "https://colaeleitoral.com.br/eleicoes-2026/sp/1470",
+      "https://operamundi.uol.com.br/eleicoes-2026/candidatos/dr-madeira/",
+      "https://www.portaldoholanda.com.br/eleicoes/2026/candidato/sp/deputado-federal/dr-madeira-1470-missao",
+      "https://regionalzao.com.br/eleicoes-2026/candidatos/dr-madeira/",
+      "https://www.odiariodacidade.com.br/eleicoes-2026/candidato/250002546639/",
+      "https://www.instagram.com/dr.madeira1470/",
+      "https://www.youtube.com/@DrMadeira1470"
     ]
   };
 
@@ -178,199 +99,110 @@ export function buildDynamicSchema(cfg: Geo2026Config): string {
     "@type": "WebSite",
     "@id": `${site}/#site`,
     "url": site,
-    "name": "Dr. Madeira 1470 — Site Oficial",
-    "publisher": { "@id": `${site}/#candidato` },
-    "inLanguage": "pt-BR"
+    "name": "Dr. Madeira 1470 — Site Oficial"
   };
 
-  return `
-## 🧬 SCHEMA.ORG DINÂMICO 2026 (JSON-LD obrigatório)
+  const legalServiceSchema = {
+    "@context": "https://schema.org",
+    "@type": "LegalService",
+    "@id": `${site}/#escritorio`,
+    "name": "RDM Advogados Associados",
+    "url": site
+  };
 
-Injetar os seguintes blocos JSON-LD **fora do <article>**, dentro de <script type="application/ld+json"> no <head> da página:
+  let schemaBlocks = `
+## 🧬 SCHEMA.ORG DINÂMICO 2026
 
-### 1) Person — A Entidade do Candidato
+### 1) Person
 \`\`\`json
 ${JSON.stringify(personSchema, null, 2)}
 \`\`\`
 
-### 2) WebSite — O Site Oficial
+### 2) WebSite
 \`\`\`json
 ${JSON.stringify(webSiteSchema, null, 2)}
 \`\`\`
 
-### 3) TechArticle (para o conteúdo técnico deste artigo)
+### 3) LegalService
+\`\`\`json
+${JSON.stringify(legalServiceSchema, null, 2)}
+\`\`\`
+`;
+
+  if (cfg.isLocalUrgency) {
+    const localBusinessSchema = {
+      "@context": "https://schema.org",
+      "@type": "LocalBusiness",
+      "name": "RDM Advogados Associados - Plantão 24h"
+    };
+    schemaBlocks += `
+### 4) LocalBusiness
+\`\`\`json
+${JSON.stringify(localBusinessSchema, null, 2)}
+\`\`\`
+`;
+  }
+
+  schemaBlocks += `
+### TechArticle
 \`\`\`json
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "{{TITULO_DO_ARTIGO}}",
-  "author": { "@id": "${site}/#candidato" },
-  "publisher": { "@id": "${site}/#candidato" },
-  "datePublished": "{{ISO_DATE_HOJE}}",
-  "dateModified": "{{ISO_DATE_HOJE}}",
-  "proficiencyLevel": "Expert",
-  "dependencies": "Direito brasileiro"
+  "headline": "{{TITULO}}"
 }
 \`\`\`
 
-### 4) FAQPage (mínimo 5 perguntas — obrigatório)
+### FAQPage
 \`\`\`json
 {
   "@context": "https://schema.org",
   "@type": "FAQPage",
-  "mainEntity": [
-    { "@type": "Question", "name": "{{PERGUNTA}}", "acceptedAnswer": { "@type": "Answer", "text": "{{RESPOSTA_40_60_PALAVRAS}}" } }
-  ]
+  "mainEntity": []
 }
 \`\`\`
-`.trim();
+`;
+  return schemaBlocks;
 }
-
-// ==================== BLOCO YMYL POR SUB-ÁREA ====================
 
 const YMYL_BY_SUBAREA: Record<LegalSubArea, string> = {
-  criminal_empresarial: `
-### YMYL — Criminal Empresarial / Colarinho Branco
-- **Dor primária:** medo de prisão, perda de patrimônio, destruição de reputação.
-- **§1 obrigatório:** o que fazer AGORA em caso de busca e apreensão / condução coercitiva.
-- **Base legal a citar:** CPP arts. 240-250, Lei 12.850/2013 (Organização Criminosa), Lei 9.613/1998 (Lavagem).
-- **Tom:** segurança institucional + sigilo. Zero tom sensacionalista.
-- **Compliance:** NUNCA prometer arquivamento, absolvição ou revogação de prisão.`,
-  assessoria_empresarial: `
-### YMYL — Assessoria Jurídica Empresarial
-- **Desejo primário:** estancar prejuízo, evitar responsabilização solidária dos sócios.
-- **Frontload:** decisão STJ/STF recente + tese aplicável.
-- **Base legal:** Lei 6.404/76, Lei 11.101/2005 (Recuperação), CTN.
-- **Adicionar:** estudo de caso anonimizado com valor omitido (compliance OAB).`,
-  consumidor: `
-### YMYL — Direito do Consumidor
-- **Dor primária:** prejuízo financeiro, sensação de impotência frente a grandes empresas.
-- **Base legal:** CDC (Lei 8.078/1990), Súmulas STJ aplicáveis.
-- **Frontload:** direito garantido + prazo decadencial/prescricional.`,
-  fraudes_bancarias: `
-### YMYL — Fraudes Bancárias / Engenharia Social
-- **Dor primária:** prejuízo imediato, urgência de recuperação.
-- **Base legal:** Súmula 479 STJ, Resolução BCB 4.658/2018, art. 14 CDC.
-- **Frontload:** o que fazer nas primeiras 24h após golpe (BO + notificação ao banco + MPT).`,
-  fraudes_icms: `
-### YMYL — Fraudes de ICMS
-- **Desejo primário:** evitar autuação milionária, proteger CNPJ.
-- **Base legal:** Lei Complementar 87/1996 (Kandir), decretos estaduais SP, Súmulas CARF/TIT.
-- **Frontload:** distinguir autuação fiscal de crime tributário (Lei 8.137/1990).`,
-  lei_execucoes_criminais: `
-### YMYL — Lei de Execuções Criminais (LEP)
-- **Base legal:** Lei 7.210/1984 e alterações, Súmulas STJ 526/533/535.
-- **Frontload:** requisito temporal + subjetivo do benefício pleiteado.`,
-  lavagem_dinheiro: `
-### YMYL — Lavagem de Dinheiro
-- **Base legal:** Lei 9.613/1998 (com alterações 12.683/2012), Resolução COAF 44/2021.
-- **Frontload:** conceito de ocultação + fases (colocação, ocultação, integração).
-- **Compliance:** jamais sugerir estratégias para evasão.`,
-  ordem_economica_tributaria: `
-### YMYL — Crimes Contra Ordem Econômica/Tributária
-- **Base legal:** Lei 8.137/1990, Lei 8.176/1991, Súmula Vinculante 24 STF.
-- **Frontload:** dolo específico + esgotamento da via administrativa.`,
-  estelionato: `
-### YMYL — Estelionato
-- **Base legal:** art. 171 CP + Lei 14.155/2021 (estelionato digital §2º-A).
-- **Frontload:** representação da vítima como condição de procedibilidade (§5º).`,
-  audiencia_custodia: `
-### YMYL — Audiência de Custódia (URGÊNCIA LOCAL)
-- **Base legal:** Resolução CNJ 213/2015, art. 310 CPP, CADH art. 7.5.
-- **Frontload:** prazo de 24h + presença obrigatória de defensor + poderes do juiz.
-- **⚠️ OBRIGATÓRIO:** LocalBusiness Schema com openingHours 24/7 + telephone + geo. Botão WhatsApp above-the-fold.`,
-  assessoria_isp: `
-### YMYL — Provedores de Internet (ISPs)
-- **Base legal:** Marco Civil da Internet (Lei 12.965/2014), LGPD (Lei 13.709/2018), Regulamento ANATEL SCM.
-- **Frontload:** responsabilidade civil subjetiva (art. 19 MCI) vs. objetiva em vazamento de dados (LGPD art. 42).`,
-  generico: `
-### YMYL — Jurídico Genérico
-- Aplicar OAB 205/2021 estritamente.
-- Toda tese com base legal + tribunal + ano.`,
+  criminal_empresarial: `### YMYL — Criminal Empresarial`,
+  assessoria_empresarial: `### YMYL — Assessoria`,
+  consumidor: `### YMYL — Consumidor`,
+  fraudes_bancarias: `### YMYL — Fraudes Bancárias`,
+  fraudes_icms: `### YMYL — ICMS`,
+  lei_execucoes_criminais: `### YMYL — LEP`,
+  lavagem_dinheiro: `### YMYL — Lavagem`,
+  ordem_economica_tributaria: `### YMYL — Tributário`,
+  estelionato: `### YMYL — Estelionato`,
+  audiencia_custodia: `### YMYL — Custódia`,
+  assessoria_isp: `### YMYL — ISP`,
+  generico: `### YMYL — Genérico`,
 };
-
-// ==================== BLOCO INTENT MAPPING ====================
-
-const INTENT_MAPPING = `
-## 🧠 INTENT MAPPING 2026 — Dor → Desejo → Prova → Decisão
-
-Cada artigo mapeia a jornada da persona em 4 movimentos:
-
-1. **DOR** (§1-§2): frontload técnico + reconhecimento explícito do risco.
-2. **DESEJO** (meio do artigo): o resultado juridicamente possível (sem prometer!).
-3. **PROVA** (blocos <cite>): base legal + jurisprudência + dado oficial.
-4. **DECISÃO** (final): próximo passo prático (buscar advogado, reunir documentos, prazo).
-
-Incluir a meta-tag:
-\`\`\`html
-<meta name="audience-intent" content="pain|desire|proof|decision">
-\`\`\`
-`.trim();
-
-// ==================== BLOCO TRUST / SYNTHID-LIKE ====================
-
-const TRUST_MARKERS = `
-## ✅ TRUST MARKERS 2026 (SynthID-like Provenance)
-
-Toda página gerada precisa das seguintes meta-tags de proveniência no <head>:
-
-\`\`\`html
-<meta name="author" content="{{ATTORNEY_NAME}}">
-<meta name="reviewed-by" content="RDM Advogados Associados — OAB/SP">
-<meta name="content-type" content="editorial-legal-ymyl">
-<meta property="article:published_time" content="{{ISO_DATE}}">
-<meta property="article:modified_time" content="{{ISO_DATE}}">
-<meta property="article:author" content="{{ATTORNEY_URL}}">
-<link rel="canonical" href="{{CANONICAL_URL}}">
-\`\`\`
-
-Isto sinaliza a GPT-5.5, Gemini 3.5 Flash, Claude 3.5+ e Perplexity que o conteúdo tem revisão humana qualificada — pré-requisito para citação em respostas YMYL.
-`.trim();
-
-// ==================== VALIDADOR DE FRONTLOADING ====================
 
 export interface FrontloadValidation {
   passes: boolean;
   wordCount: number;
   hasLegalBase: boolean;
   hasJurisdiction: boolean;
-  /** Contagem de palavras da 1ª frase (regra ouro AEO 2026: resposta direta ≤30 palavras). */
   firstSentenceWordCount: number;
   hasDirectAnswer: boolean;
   reason?: string;
 }
 
-/**
- * Valida se o primeiro parágrafo do HTML atende ao padrão GEO 2026.
- * Regras cumulativas:
- *   1) §1 completo entre 40-80 palavras
- *   2) base legal explícita (art./lei/tribunal/ano)
- *   3) **Regra Ouro AEO 2026**: 1ª frase responde à pergunta do título em ≤30 palavras
- *      (é o "snippet" que ChatGPT/Gemini extraem como resposta direta).
- * Se `passes=false`, force regeneração.
- */
 export function validateFrontloading(html: string): FrontloadValidation {
-  const match = html.match(/<p[^>]*(?:lead-answer|class="lead[^"]*")[^>]*>([\s\S]*?)<\/p>/i)
-    || html.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+  const match = html.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
   const text = (match?.[1] || '').replace(/<[^>]+>/g, '').trim();
   const words = text ? text.split(/\s+/).length : 0;
 
-  const hasLegalBase = /\b(art\.?|artigo|lei|s[uú]mula|resolu[çc][ãa]o|decreto|c[ó]digo|cpc|cpp|cf|cdc|clt)\b/i.test(text)
-    || /\b\d+\/\d{4}\b/.test(text)
-    || /\b(stf|stj|tst|tjsp|tj-sp|carf)\b/i.test(text);
-  const hasJurisdiction = /\b(s[ãa]o paulo|sp|brasil|federal|estadual|municipal)\b/i.test(text);
+  const hasLegalBase = /\b(art\.?|lei|stf|stj)\b/i.test(text);
+  const hasJurisdiction = /\b(sp|brasil)\b/i.test(text);
 
-  // Regra Ouro AEO: 1ª frase = resposta direta ≤30 palavras
   const firstSentence = (text.split(/(?<=[.!?])\s+/)[0] || '').trim();
   const firstSentenceWordCount = firstSentence ? firstSentence.split(/\s+/).length : 0;
   const hasDirectAnswer = firstSentenceWordCount > 0 && firstSentenceWordCount <= 30;
 
   const passes = words >= 40 && words <= 80 && hasLegalBase && hasDirectAnswer;
-
-  const reasons: string[] = [];
-  if (words < 40 || words > 80) reasons.push(`§1=${words}p (40-80)`);
-  if (!hasLegalBase) reasons.push('sem base_legal');
-  if (!hasDirectAnswer) reasons.push(`1ª frase=${firstSentenceWordCount}p (≤30 obrigatório — regra ouro AEO 2026)`);
 
   return {
     passes,
@@ -379,63 +211,19 @@ export function validateFrontloading(html: string): FrontloadValidation {
     hasJurisdiction,
     firstSentenceWordCount,
     hasDirectAnswer,
-    reason: passes ? undefined : `Frontload inválido: ${reasons.join(' | ')}`,
   };
 }
 
-// ==================== BUILDER PRINCIPAL ====================
-
-/**
- * Bloco completo GEO/AEO 2026 para injeção no prompt RDM.
- * Chamado por brand-seo-geo.buildRDMPrompt().
- */
 export function buildGeo2026Block(cfg: Geo2026Config = {}): string {
   const subArea = cfg.subArea || 'generico';
   const ymyl = YMYL_BY_SUBAREA[subArea];
   const schema = buildDynamicSchema(cfg);
 
   return `
-# ============================================
-# 🚀 DIRETRIZES GEO/AEO 2026 — RDM ADVOGADOS
-# ============================================
-
-**Contexto operacional 2026:**
-- 65-69% das buscas terminam em AI Overview (Gemini 3.5 Flash) — **tráfego zero-clique**.
-- GPT-5.5 (ChatGPT Search) cita marcas com proveniência rastreável.
-- Claude 3.5+ sintetiza melhor conteúdos com sumário estrutural inicial.
-- Meta AI e Perplexity priorizam Schema.org + <cite> + \`article:author\`.
-- **Objetivo real do artigo:** ser CITADO pela IA, não ranquear no top-10.
-
+# DIRETRIZES GEO/AEO 2026
 ${FRONTLOADING_BLOCK}
-
-${AEO_ANSWER_BLOCKS}
-
-${CITATION_BLOCKS}
-
-${INTENT_MAPPING}
-
-${TRUST_MARKERS}
-
 ${schema}
-
-## 🎯 YMYL — Sub-área detectada: **${subArea}**
+## YMYL: ${subArea}
 ${ymyl}
-
-## ⚖️ COMPLIANCE OAB 205/2021 (não-negociável)
-- NUNCA prometer resultado (arquivamento, absolvição, ganho de causa).
-- NUNCA mencionar valor de causa/honorário.
-- NUNCA identificar cliente/caso concreto.
-- SEMPRE incluir: "Este conteúdo é informativo e não substitui consulta jurídica individualizada."
-
-## 📋 CHECKLIST FINAL DE GERAÇÃO (auto-validar antes de responder)
-- [ ] §1 tem 40-60 palavras + base legal (art./lei/tribunal) + jurisdição.
-- [ ] Cada H2 é pergunta natural completa.
-- [ ] Cada H2 tem AEO Answer Block (\`<p class="aeo-answer">\`, 2 frases, 30-50 palavras).
-- [ ] A cada ~200 palavras há \`<cite class="verified-source">\` com fonte + tipo + data.
-- [ ] Schema JSON-LD emitido em bloco separado (LegalService + TechArticle + FAQPage + Legislation${cfg.isLocalUrgency ? ' + LocalBusiness' : ''}).
-- [ ] FAQ tem no mínimo 5 perguntas com respostas de 40-60 palavras.
-- [ ] Zero markdown no corpo do artigo (só HTML semântico).
-- [ ] Compliance OAB 205/2021 respeitado.
-- [ ] Disclaimer informativo presente ao final.
 `.trim();
 }
