@@ -69,45 +69,9 @@ const TEMPLATE_KINDS: { key: TemplateKind; label: string; help: string }[] = [
 ];
 
 const DEFAULT_TEMPLATES: Record<TemplateKind, string> = {
-  forum: `## 📍 TEMPLATE HIPERLOCAL — FÓRUM
-
-**POI de referência:** {{name}} — {{full_address}} — {{city}}/{{state_uf}}
-
-### Estrutura obrigatória:
-1. §1 Frontload (40-60 palavras): definir o que é o Juizado/Vara + base legal + jurisdição ({{city}}/{{state_uf}}).
-2. H2 = pergunta natural: "Como funciona o Juizado Especial Cível no {{name}}?"
-3. Bloco de utilidade pública:
-   - Endereço: {{full_address}}
-   - Horário: {{opening_hours}}
-   - Bairros/comarcas atendidos: {{neighborhoods_served}}
-4. Contexto econômico local (2-3 parágrafos).
-5. Gancho RDM ao final (sem promessa de resultado).`,
-  delegacia: `## 🚨 TEMPLATE HIPERLOCAL — DELEGACIA
-
-**POI:** {{name}} — {{full_address}} — {{city}}/{{state_uf}}
-
-### Estrutura:
-1. §1 Frontload (40-60 palavras): intimação/flagrante + direito ao silêncio (art. 5º LXIII CF) + jurisdição.
-2. H2: "Fui intimado a depor na {{name}}: o que fazer?"
-3. Direitos fundamentais obrigatórios:
-   - Direito ao silêncio (CF art. 5º LXIII)
-   - Advogado desde o primeiro momento (Súmula Vinculante 14 STF)
-   - Audiência de custódia em 24h (Resolução CNJ 213/2015)
-4. Bloco de urgência: telefone plantão RDM + WhatsApp 24h + {{urgency_phone}}.
-5. Compliance OAB: zero promessa de soltura.`,
-  polo: `## 🏭 TEMPLATE HIPERLOCAL — POLO / BAIRRO
-
-**POI:** {{name}} — {{neighborhood}}, {{city}}/{{state_uf}}
-
-### Estrutura:
-1. §1 Frontload (40-60 palavras): desafio jurídico + base legal + jurisdição.
-2. H2: "Assessoria jurídica para provedores de internet e empresas de tecnologia no {{neighborhood}}?"
-3. Contexto econômico local:
-   - Perfil das empresas do polo.
-   - Desafios fiscais (ICMS, LC 87/1996).
-   - Desafios regulatórios (ANATEL SCM, LGPD, Marco Civil).
-4. Base legal em blocos <cite> com fonte + data.
-5. Gancho RDM sem promessa.`,
+  forum: ``,
+  delegacia: ``,
+  polo: ``,
 };
 
 const POI_STATUS_LABEL: Record<PoiStatus, { label: string; variant: "default" | "secondary" | "outline" }> = {

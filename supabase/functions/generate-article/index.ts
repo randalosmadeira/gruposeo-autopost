@@ -208,79 +208,13 @@ const pointOfViewMap: Record<string, string> = {
   terceira: "terceira pessoa",
 };
 
-// Legacy prompt builder for backward compatibility
+// Basic prompt builder
 function buildLegacySystemPrompt(config: ArticleConfig): string {
-  const wordRange = wordCountRanges[config.wordCount];
   const pov = pointOfViewMap[config.pointOfView] || "segunda pessoa (você)";
   
-  let systemPrompt = `Você é um redator SEO especialista em criar conteúdo de alta qualidade para ranquear no Google. 
-
-REGRAS IMPORTANTES:
-- Escreva em português brasileiro (${config.language})
-- Use o tom "${config.tone}"
-- Use ${pov}
-- O artigo deve ter entre ${wordRange.min} e ${wordRange.max} palavras
-- Use APENAS HTML semântico: <h2>, <h3>, <p>, <strong>, <ul>, <li>, <ol>, <table>, <a href="...">
-- NUNCA use markdown: **negrito**, [link](url), ## título, - item
-- A palavra-chave principal "${config.keyword}" deve aparecer naturalmente no título, introdução, headers e conclusão
-- Otimize para SEO: use variações semânticas, escreva parágrafos curtos, use headers descritivos`;
-
-  if (config.secondaryKeywords) {
-    systemPrompt += `\n- Incorpore naturalmente as seguintes palavras-chave secundárias: ${config.secondaryKeywords}`;
-  }
-
-  if (config.includeFaq) {
-    systemPrompt += `\n- Inclua uma seção de FAQ com ${config.faqCount} perguntas frequentes ao final`;
-  }
-
-  if (config.includeTable) {
-    systemPrompt += `\n- Inclua pelo menos uma tabela comparativa ou informativa quando relevante`;
-  }
-
-  if (config.includeList) {
-    systemPrompt += `\n- Use listas (bullet points ou numeradas) para organizar informações importantes`;
-  }
-
-  if (config.includeConclusion) {
-    systemPrompt += `\n- Finalize com uma conclusão que resume os pontos principais e inclui um call-to-action`;
-  }
-
-  if (config.type === 'sales') {
-    systemPrompt += `\n\nEste é um artigo de página de vendas. Informações do negócio:`;
-    if (config.companyName) systemPrompt += `\n- Empresa: ${config.companyName}`;
-    if (config.companyPhone) systemPrompt += `\n- Telefone: ${config.companyPhone}`;
-    if (config.companyAddress) systemPrompt += `\n- Endereço: ${config.companyAddress}`;
-    if (config.targetAudience) systemPrompt += `\n- Público-alvo: ${config.targetAudience}`;
-    if (config.painPoints) systemPrompt += `\n- Dores do cliente: ${config.painPoints}`;
-    if (config.differentials) systemPrompt += `\n- Diferenciais: ${config.differentials}`;
-    if (config.ctaObjective) systemPrompt += `\n- Objetivo do CTA: ${config.ctaObjective}`;
-    systemPrompt += `\n\nFoque em persuasão, benefícios, prova social e CTAs claros.`;
-  }
-
-  if (config.customInstructions) {
-    systemPrompt += `\n\nInstruções adicionais do usuário:\n${config.customInstructions}`;
-  }
-
-  // Auto-injected internal links (backlinks)
-  if (config.internalLinks && config.internalLinks.length > 0) {
-    const minLinks = Math.max(4, Math.min(10, config.internalLinks.length));
-    systemPrompt += `\n\n## LINKS INTERNOS OBRIGATÓRIOS (BACKLINKS) — REGRA INEGOCIÁVEL
-Distribua os seguintes links NATURALMENTE ao longo do artigo. Use anchor text variado.
-Cada link deve usar: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora</a>
-
-MÍNIMO: 4 links internos | MÁXIMO: 10 links internos | IDEAL: ${minLinks}
-LINKS DISPONÍVEIS (use no MÍNIMO ${minLinks} deles):
-${config.internalLinks.slice(0, 20).map((l, i) => `${i + 1}. "${l.anchor}" → ${l.url}`).join('\n')}
-
-REGRAS DE DISTRIBUIÇÃO:
-- 1-2 links na introdução (primeiros 2 parágrafos)
-- 4-6 links no corpo do artigo (distribuídos entre as seções H2)
-- 1-2 links na conclusão
-- VARIE o anchor text: use sinônimos, parciais e contextuais (não repita o mesmo texto)
-- Links devem ser CONTEXTUAIS: inseridos em frases que façam sentido semântico`;
-  }
-
-  return systemPrompt;
+  return `Você é um redator especialista em criar conteúdo de alta qualidade.
+Escreva em português brasileiro (${config.language}) usando o tom "${config.tone}" e ${pov}.
+Use APENAS HTML semântico. A palavra-chave "${config.keyword}" deve ser o foco central.`;
 }
 
 // Check if config has advanced fields - safely handle undefined values
@@ -413,18 +347,8 @@ function isCriminalLawKeyword(keyword: string, title?: string): boolean {
 }
 
 function buildCriminalLawGeoPrompt(keyword: string): string {
-  return `
-
-ESTRATÉGIA GEO CRIMINAL — SÃO PAULO (AUTO-DETECTADO)
-=====================================================
-A keyword "${keyword}" foi identificada como conteúdo de DIREITO CRIMINAL/PENAL.
-Aplique OBRIGATORIAMENTE as seguintes diretrizes de geolocalização e AEO:
-
-REGIÕES DE SÃO PAULO (mencionar estrategicamente no artigo):
-- ZONA LESTE: Tatuapé, Mooca, Penha, Itaquera, São Mateus, Sapopemba, Guaianases, Cidade Tiradentes, Ermelino Matarazzo, São Miguel Paulista, Vila Prudente, Aricanduva, Itaim Paulista
-- ZONA SUL: Santo Amaro, Jabaquara, Interlagos, Campo Limpo, Capão Redondo, Jardim Ângela, Grajaú, Socorro, Cidade Ademar, Pedreira, Parelheiros
-- ZONA NORTE: Santana, Tucuruvi, Casa Verde, Vila Maria, Jaçanã, Tremembé, Brasilândia, Freguesia do Ó, Pirituba, Vila Medeiros
-- ZONA OESTE: Pinheiros, Lapa, Butantã, Perdizes, Vila Madalena, Jaguaré, Rio Pequeno, Raposo Tavares
+  return `O conteúdo "${keyword}" é da área criminal.`;
+}
 - CENTRO: Sé, República, Liberdade, Bela Vista, Santa Cecília, Bom Retiro, Brás, Consolação
 - GRANDE SÃO PAULO: Guarulhos, Osasco, São Bernardo do Campo, Santo André, São Caetano do Sul, Diadema, Mauá, Suzano, Mogi das Cruzes, Taboão da Serra, Barueri, Cotia, Carapicuíba, Itaquaquecetuba, Ferraz de Vasconcelos, Poá, Arujá, Francisco Morato, Franco da Rocha, Caieiras
 
