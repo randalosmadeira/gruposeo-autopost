@@ -8,7 +8,7 @@ const Index = () => {
           Instruções de Operação
         </h1>
         <p className="text-lg text-muted-foreground">
-          Leia o arquivo instrucoes.md em anexo e siga as instruções. Analise também os demais arquivos anexados. \u200B
+          Leia o arquivo instrucoes.md em anexo e siga as instruções. Analise também os demais arquivos anexados.
         </p>
       </div>
     </div>
