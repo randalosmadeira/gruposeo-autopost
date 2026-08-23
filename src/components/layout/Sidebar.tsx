@@ -51,7 +51,7 @@ const navGroups: NavGroup[] = [
   {
     title: 'Início',
     items: [
-      { label: 'Início', icon: LayoutDashboard, href: '/' },
+      { label: 'Início', icon: LayoutDashboard, href: '/dashboard' },
       { label: 'Painel', icon: Activity, href: '/dashboard' },
       { label: 'Calendário', icon: Calendar, href: '/calendar', badge: 'Novo', badgeVariant: 'orange', iconColor: '#10B981' },
       { label: 'Academia', icon: GraduationCap, href: '/academia' },
