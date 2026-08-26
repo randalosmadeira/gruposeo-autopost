@@ -7,7 +7,7 @@
 
 export const PLUGIN_VERSION = "3.9.0";
 export const PLUGIN_MINIMUM_VERSION = "3.0.0";
-export const PLUGIN_RELEASED = "2026-08-22";
+export const PLUGIN_RELEASED = "2026-08-26";
 
 export const PLUGIN_FEATURES = [
   "auto_notifications",
@@ -88,6 +88,15 @@ export const PLUGIN_FEATURES = [
   "ssl_hsts_verification",
   "llms_txt_auto_regenerate",
   "indexnow_key_verification",
+  // v3.9.0 — GEO & Semantic Layer
+  "geo_optimizer",
+  "entity_graph_schema",
+  "image_object_schema",
+  "image_sitemap",
+  "ai_persona_manager",
+  "faq_autoextract",
+  "speakable_schema",
+  "canonical_url_index",
 ] as const;
 
 /**
@@ -141,4 +150,9 @@ Módulos disponíveis no plugin instalado nos sites:
 - **Site Crawler**: Auditorias reais via HTTP com detecção de redirect chains e conteúdo duplicado
 - **Schema Validator**: Valida JSON-LD para Article, FAQ, HowTo, Product e Review
 - **Image Optimizer**: Converte imagens para WebP com compressão inteligente
-- **Structured Logs**: Sistema de logs para diagnóstico em tempo real`;
+- **Structured Logs**: Sistema de logs para diagnóstico em tempo real
+- **Entity Graph (v${PLUGIN_VERSION})**: Injeta Organization/LegalService, Person (autor, credencial OAB, sameAs) e BreadcrumbList em um único @graph JSON-LD por página — sinais de E-E-A-T e citação por buscadores de IA
+- **GEO Optimizer (v${PLUGIN_VERSION})**: Extrai blocos de pergunta/resposta do conteúdo para FAQPage schema, gera bloco Speakable e mantém índice canônico de URLs (hreflang, prioridade, changefreq)
+- **Image Schema (v${PLUGIN_VERSION})**: Gera ImageObject schema.org por imagem publicada, audita alt-text ausente/fraco e mantém sitemap de imagens dedicado em /image-sitemap.xml
+- **AI Persona Manager (v${PLUGIN_VERSION})**: Perfis de prompt/voz reutilizáveis e auditáveis (log por execução) para agentes de IA operarem o site com escopo e permissões definidos
+- **REST API GEO/Persona**: /cfrdm/v1/personas, /entities, /geo/answers, /geo/url-index, /images/needs-review — para agentes de IA externos lerem e atualizarem esses dados diretamente`;
