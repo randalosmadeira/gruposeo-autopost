@@ -903,7 +903,7 @@ export default function AIChat() {
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
-            Powered by Lovable AI · Anexe arquivos GSC, Google Ads, AdSense, Tag Manager (CSV/XLSX/PDF/JSON/XML) para análise automática
+            Anexe arquivos GSC, Google Ads, AdSense, Tag Manager (CSV/XLSX/PDF/JSON/XML) para análise automática
           </p>
         </div>
       </Card>
