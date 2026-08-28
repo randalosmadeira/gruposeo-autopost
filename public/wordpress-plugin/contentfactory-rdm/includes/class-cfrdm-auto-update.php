@@ -21,8 +21,8 @@ class CFRDM_Auto_Update {
     const BACKUP_DIR = 'cfrdm-backups';
     
     // ContentFactory update server URLs
-    const UPDATE_API_URL = 'https://gruposeo-autopost.lovable.app/api/plugin-updates';
-    const PLUGIN_DOWNLOAD_URL = 'https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/';
+    const UPDATE_API_URL = 'https://app.zicapost.zicajuris.com.br/api/plugin-updates';
+    const PLUGIN_DOWNLOAD_URL = 'https://app.zicapost.zicajuris.com.br/wordpress-plugin/contentfactory-rdm/';
     
     private static $instance = null;
     

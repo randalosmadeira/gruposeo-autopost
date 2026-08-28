@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
 
     log.info("article_created", { article_id: article.id });
 
-    // Generate article content using Lovable AI
+    // Generate article content using the AI orchestrator
     const wordRange = wordCountRanges[wordCount];
     const systemPrompt = `Você é um redator SEO especialista em criar conteúdo de alta qualidade para ranquear no Google.
 
