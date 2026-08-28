@@ -117,15 +117,15 @@ const installSteps = [
 const changelog = [
   {
     version: '3.9.0',
-    date: '2026-08-22',
+    date: '2026-08-26',
     type: 'major' as const,
     changes: [
-      { type: 'feature', text: 'Módulo GEO & Semântico: Injeção automática de Entity Graph e Schema.org avançado (Person, LegalService, sameAs)' },
-      { type: 'feature', text: 'Tabelas v3.9: Gestão de AI Personas, Semantic Graph, Image Schema e URL Index centralizados no plugin' },
-      { type: 'feature', text: 'Integração Muralha: Separação física de recursos para campanhas eleitorais vs unidades comerciais' },
-      { type: 'feature', text: 'Otimização 2026: Motor de conformidade GEO/AEO para visibilidade em ChatGPT, Claude, Gemini e Search Generative Experience' },
-      { type: 'improvement', text: 'Arquitetura de Citações: Otimização de authority anchors e desambiguação de entidade via sameAs' },
-      { type: 'improvement', text: 'Performance: Lazy load de dependências críticas e redução de 40% no TTFB em servidores VPS' },
+      { type: 'feature', text: 'Entity Graph: injeta automaticamente Organization/LegalService, Person (autor, com credencial OAB e sameAs) e BreadcrumbList em um único @graph JSON-LD por página, para sinais de E-E-A-T e citação por buscadores de IA' },
+      { type: 'feature', text: 'GEO Optimizer: extrai blocos de pergunta/resposta do conteúdo para FAQPage schema, gera bloco Speakable e mantém um índice canônico de URLs (hreflang, prioridade, changefreq) usado pelo sitemap e IndexNow' },
+      { type: 'feature', text: 'Image Schema: gera ImageObject schema.org para cada imagem publicada, audita alt-text ausente/fraco e publica um sitemap de imagens dedicado em /image-sitemap.xml' },
+      { type: 'feature', text: 'AI Persona Manager: perfis de voz/prompt reutilizáveis (system prompt, tom, escopo, ações permitidas) para IAs operarem o site de forma governada, com log de auditoria por execução' },
+      { type: 'feature', text: 'Novos endpoints REST (cfrdm/v1/personas, /entities, /geo/answers, /images/needs-review) para agentes de IA externos consultarem e atualizarem esses dados' },
+      { type: 'improvement', text: 'Enriquecimento automático ao publicar: schema de imagem, extração de FAQ e vínculo autor/organização rodam sozinhos em cada post publicado' },
     ],
   },
   {
@@ -538,6 +538,21 @@ export default function WordPressPluginPage() {
         { path: 'includes/class-cfrdm-ai-source-rules.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-source-rules.php' },
         { path: 'includes/class-cfrdm-google-indexing-submitter.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-google-indexing-submitter.php' },
         { path: 'includes/class-cfrdm-gmb-poster.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-gmb-poster.php' },
+        // v3.4.3+
+        { path: 'includes/class-cfrdm-redirect-manager.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-redirect-manager.php' },
+        // v3.5.0
+        { path: 'includes/class-cfrdm-site-crawler.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-site-crawler.php' },
+        // v3.6.0
+        { path: 'includes/class-cfrdm-bulk-meta.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-bulk-meta.php' },
+        { path: 'includes/class-cfrdm-ai-auto-seo-fix.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-auto-seo-fix.php' },
+        { path: 'includes/class-cfrdm-noindex-manager.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-noindex-manager.php' },
+        // v3.7.0
+        { path: 'includes/class-cfrdm-instant-indexing.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-instant-indexing.php' },
+        // v3.9.0 - GEO / Semantic / AI Persona & Advanced Indexing modules
+        { path: 'includes/class-cfrdm-ai-persona-manager.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-persona-manager.php' },
+        { path: 'includes/class-cfrdm-geo-optimizer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-geo-optimizer.php' },
+        { path: 'includes/class-cfrdm-image-schema.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-image-schema.php' },
+        { path: 'includes/class-cfrdm-entity-graph.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-entity-graph.php' },
         // Assets
         { path: 'assets/css/admin.css', url: '/wordpress-plugin/contentfactory-rdm/assets/css/admin.css' },
         { path: 'assets/js/admin.js', url: '/wordpress-plugin/contentfactory-rdm/assets/js/admin.js' },

@@ -8,7 +8,7 @@
  */
 
 import { AIOrchestrator, getOrchestrator, type AIMessage, type TaskType } from "../ai-orchestrator.ts";
-import { type SectorConfig, SECTOR_CONFIGS, mapSegmentToSector, buildSectorPromptSection } from "../sector-config.ts";
+import { type SectorConfig, type SectorType, SECTOR_CONFIGS, mapSegmentToSector, buildSectorPromptSection } from "../sector-config.ts";
 
 export interface AgentPipelineConfig {
   keyword: string;

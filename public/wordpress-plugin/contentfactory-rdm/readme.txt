@@ -4,7 +4,7 @@ Tags: content, seo, articles, automation, ai, image-optimization, indexing, inde
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.4.6
+Stable tag: 3.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,6 +65,14 @@ Sim! Na versão 2.1, o plugin notifica automaticamente o Google e o Bing quando 
 Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject schema) e FAQs automaticamente.
 
 == Changelog ==
+
+= 3.9.0 =
+* **NOVO**: Entity Graph - Organization/LegalService, Person (autor, credencial OAB, sameAs) e BreadcrumbList injetados em um único @graph JSON-LD por página
+* **NOVO**: GEO Optimizer - extração automática de blocos pergunta/resposta para FAQPage schema, bloco Speakable, índice canônico de URLs (hreflang, prioridade, changefreq)
+* **NOVO**: Image Schema - ImageObject schema.org por imagem, auditoria de alt-text ausente/fraco, sitemap dedicado em /image-sitemap.xml
+* **NOVO**: AI Persona Manager - perfis de prompt/voz reutilizáveis e auditáveis (log de execução por ação) para agentes de IA operarem o site
+* **NOVO**: Endpoints REST cfrdm/v1/personas, /entities, /geo/answers, /geo/url-index, /images/needs-review
+* **NOVO**: Enriquecimento automático ao publicar (schema de imagem + FAQ + vínculo autor/organização)
 
 = 3.4.5 =
 * **NOVO**: Suporte a blocos Gutenberg para inserção de links internos
@@ -229,6 +237,9 @@ Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject s
 * **NOVO**: AI Content Enhancer
 
 == Upgrade Notice ==
+
+= 3.9.0 =
+Camada GEO/Semântica: Entity Graph, GEO Optimizer (FAQ/Speakable), Image Schema e AI Persona Manager. Recomendado para todos os usuários que publicam conteúdo destinado a ser citado por buscadores de IA generativa.
 
 = 3.2.4 =
 Method Validator com safe_call() previne WSOD. 20+ contratos de validação. Recomendado para todos os usuários.

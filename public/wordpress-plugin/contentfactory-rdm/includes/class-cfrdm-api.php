@@ -569,7 +569,7 @@ class CFRDM_API {
                 'stats_endpoint' => version_compare(CFRDM_VERSION, '3.2.0', '>='),
                 'apply_internal_link' => version_compare(CFRDM_VERSION, '3.2.0', '>='),
             ),
-            'changelog_url' => 'https://gruposeo-autopost.lovable.app/wordpress-plugin',
+            'changelog_url' => 'https://app.zicapost.zicajuris.com.br/wordpress-plugin',
         ), 200);
     }
     
