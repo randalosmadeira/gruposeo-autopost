@@ -8,9 +8,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Layout } from "@/components/layout/Layout";
 
-// Lazy load all pages for code splitting
 const Dashboard = lazy(() => import("./pages/DashboardNew"));
-
 const ContentCalendar = lazy(() => import("./pages/ContentCalendar"));
 const ArticleTypeSelection = lazy(() => import("./pages/ArticleTypeSelection"));
 const ArticleGenerator = lazy(() => import("./pages/ArticleGenerator"));
@@ -37,18 +35,15 @@ const QueueMonitor = lazy(() => import("./pages/QueueMonitor"));
 const Academy = lazy(() => import("./pages/Academy"));
 const InternalLinking = lazy(() => import("./pages/InternalLinking"));
 const AIChat = lazy(() => import("./pages/AIChat"));
-
 const ElectoralCampaign = lazy(() => import("./pages/ElectoralCampaign"));
-const PainelMigracao = lazy(() => import("./pages/PainelMigracao"));
 const AuditoriaGBP = lazy(() => import("./pages/AuditoriaGBP"));
 const Hiperlocal = lazy(() => import("./pages/Hiperlocal"));
-
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 60000,       // 1 min - avoid refetching data that's still fresh
-      gcTime: 300000,          // 5 min - keep cache longer
+      staleTime: 60000,
+      gcTime: 300000,
       refetchOnWindowFocus: false,
       retry: 2,
       retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
@@ -56,7 +51,6 @@ const queryClient = new QueryClient({
   },
 });
 
-// Minimal loading fallback
 const PageLoader = () => (
   <div className="flex min-h-screen items-center justify-center">
     <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -73,7 +67,6 @@ const App = () => (
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/auth" element={<Auth />} />
-              <Route path="/painel-migracao" element={<PainelMigracao />} />
               <Route
                 element={
                   <ProtectedRoute>
@@ -81,11 +74,11 @@ const App = () => (
                   </ProtectedRoute>
                 }
               >
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/calendar" element={<ContentCalendar />} />
                 <Route path="/academia" element={<Academy />} />
-              <Route path="/articles" element={<ArticlesList />} />
+                <Route path="/articles" element={<ArticlesList />} />
                 <Route path="/articles/types" element={<ArticleTypeSelection />} />
                 <Route path="/articles/new" element={<ArticleGeneratorV2 />} />
                 <Route path="/articles/new/:type" element={<ArticleGenerator />} />
@@ -110,12 +103,10 @@ const App = () => (
                 <Route path="/news-rewriter" element={<NewsRewriter />} />
                 <Route path="/bulk-generator" element={<BulkKeywordGenerator />} />
                 <Route path="/ai-chat" element={<AIChat />} />
-                
                 <Route path="/electoral-campaign" element={<ElectoralCampaign />} />
                 <Route path="/auditoria-gbp" element={<AuditoriaGBP />} />
                 <Route path="/hiperlocal" element={<Hiperlocal />} />
                 <Route path="/system-prompts" element={<SettingsPage />} />
-
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
