@@ -32,7 +32,6 @@ import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { format, subDays, isToday, isThisWeek, isThisMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import logoSeo from '@/assets/logo-grupo-seo.png';
 import { WordPressHealthCard } from '@/components/dashboard/WordPressHealthCard';
 import { CronNotificationsPanel } from '@/components/dashboard/CronNotificationsPanel';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
@@ -253,11 +252,11 @@ export default function DashboardNew() {
       <header className="bg-card border-b px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <img src={logoSeo} alt="Zica.ai" className="w-10 h-10" />
+            <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground font-black text-xl flex items-center justify-center shadow-glow-primary">Z</div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Painel de Controle</h1>
+              <h1 className="text-2xl font-bold text-foreground">Cérebro de Tráfego</h1>
               <p className="text-sm text-muted-foreground">
-                Visão 360° da sua produção de conteúdo
+                Ondas orgânicas, GEO e sinais semânticos em uma visão 360°
               </p>
             </div>
           </div>
@@ -275,7 +274,7 @@ export default function DashboardNew() {
               className="bg-gradient-accent hover:opacity-90"
             >
               <Plus className="w-4 h-4 mr-2" />
-              Novo Conteúdo
+              Gerar Onda de Conteúdo
             </Button>
           </div>
         </div>
