@@ -534,7 +534,7 @@ Retorne APENAS o HTML otimizado, sem explicações.";
         $response = wp_remote_post($endpoint, array(
             'headers' => array(
                 'Content-Type' => 'application/json',
-                'X-CFRDM-API-Key' => $api_key,
+                'X-ZICA-AI-API-Key' => $api_key,
             ),
             'body' => json_encode(array(
                 'action' => 'generate-text',

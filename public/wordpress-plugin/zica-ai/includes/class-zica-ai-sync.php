@@ -25,7 +25,7 @@ class ZICA_AI_Sync {
         $response = wp_remote_post($api_url . '/functions/v1/webhooks', array(
             'headers' => array(
                 'Content-Type' => 'application/json',
-                'X-CFRDM-API-Key' => $api_key,
+                'X-ZICA-AI-API-Key' => $api_key,
             ),
             'body' => json_encode(array(
                 'event' => 'stats_sync',
@@ -133,7 +133,7 @@ class ZICA_AI_Sync {
                 'content' => 'A nova versão inclui otimização automática de imagens, sistema de logs completo e autocorreções inteligentes.',
                 'news_type' => 'update',
                 'priority' => 1,
-                'link' => 'https://contentfactory.rdm.com.br/changelog',
+                'link' => 'https://zica.ai/changelog',
                 'published_at' => current_time('mysql'),
             ),
         );
