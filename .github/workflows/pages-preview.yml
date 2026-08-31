@@ -17,6 +17,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      VITE_APP_NAME: Zica.ai
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,6 +29,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Validate public runtime config
+        shell: bash
+        run: |
+          test -n "$VITE_SUPABASE_URL" || { echo "VITE_SUPABASE_URL ausente" >&2; exit 1; }
+          test -n "$VITE_SUPABASE_PUBLISHABLE_KEY" || { echo "VITE_SUPABASE_PUBLISHABLE_KEY ausente" >&2; exit 1; }
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
