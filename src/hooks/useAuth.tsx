@@ -140,12 +140,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = useCallback(
     async (email: string, password: string, fullName?: string) => {
       const result = await withRetry(async () => {
+        const emailRedirectTo = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
         const { error } = await withTimeout(
           supabase.auth.signUp({
             email,
             password,
             options: {
-              emailRedirectTo: window.location.origin,
+              emailRedirectTo,
               data: {
                 full_name: fullName,
               },
