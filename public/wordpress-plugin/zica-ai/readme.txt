@@ -1,0 +1,264 @@
+=== Zica.ai ===
+Contributors: gruposeomarketing
+Tags: content, seo, articles, automation, ai, image-optimization, indexing, indexnow, llms, meta-auditor
+Requires at least: 5.8
+Tested up to: 6.9
+Requires PHP: 7.4
+Stable tag: 3.4.6
+License: GPLv2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+
+Integração avançada com Zica.ai para publicação automática de artigos SEO, sincronização bidirecional, otimização de imagens, links internos, indexação automática Google/Bing e schema markup.
+
+== Description ==
+
+O **Zica.ai** é um plugin WordPress desenvolvido pelo Equipe Zica.ai que conecta seu site à plataforma Zica.ai, permitindo:
+
+* **Publicação Automática**: Artigos criados na plataforma são publicados automaticamente no seu WordPress
+* **Sincronização Bidirecional**: Alterações no WordPress são refletidas na plataforma e vice-versa
+* **Gestão de Categorias e Tags**: Organize seus artigos automaticamente
+* **Suporte a SEO**: Integração com Yoast SEO e Rank Math
+* **Webhooks**: Notificações em tempo real sobre alterações
+* **API Completa**: REST API para integrações personalizadas
+* **Otimização de Imagens**: Compressão automática, redimensionamento e geração de WebP
+* **Links Internos Inteligentes**: Análise e sugestão de links internos semanticamente relacionados
+* **Logging Avançado**: Registro detalhado de todas as operações com exportação CSV
+* **Auto-correções SEO**: Detecção e correção automática de problemas de SEO
+* **Indexação Automática**: Notificação automática para Google e Bing quando artigos são publicados
+* **Schema Markup**: JSON-LD automático para artigos, imagens e FAQs
+
+== Installation ==
+
+1. Faça upload dos arquivos do plugin para o diretório `/wp-content/plugins/zica-ai`
+2. Ative o plugin através do menu 'Plugins' no WordPress
+3. Acesse 'Zica.ai' no menu lateral para configurar
+4. Copie a API Key e cole nas configurações do projeto no Zica.ai
+
+== Frequently Asked Questions ==
+
+= Como obter a API Key? =
+
+A API Key é gerada automaticamente quando você ativa o plugin. Acesse Zica.ai > Dashboard para visualizá-la.
+
+= O plugin é compatível com Yoast SEO? =
+
+Sim! O plugin detecta automaticamente se você tem Yoast SEO ou Rank Math instalado e sincroniza os metadados de SEO.
+
+= Como funcionam os webhooks? =
+
+Quando um post é criado, editado ou excluído no WordPress, o plugin envia uma notificação para a plataforma Zica.ai, mantendo tudo sincronizado.
+
+= O plugin otimiza imagens automaticamente? =
+
+Sim! O plugin comprime, redimensiona e gera versões WebP das imagens automaticamente para melhorar a performance do site.
+
+= Como funciona o sistema de links internos? =
+
+O plugin analisa o conteúdo do seu site e sugere links internos semanticamente relacionados para melhorar a arquitetura de SEO.
+
+= O plugin envia artigos para indexação no Google? =
+
+Sim! Na versão 2.1, o plugin notifica automaticamente o Google e o Bing quando um artigo é publicado, acelerando a indexação.
+
+= O plugin gera schema markup automaticamente? =
+
+Sim! O plugin gera JSON-LD para artigos (Article schema), imagens (ImageObject schema) e FAQs automaticamente.
+
+== Changelog ==
+
+= 3.4.5 =
+* **NOVO**: Suporte a blocos Gutenberg para inserção de links internos
+* **NOVO**: Fallback append-to-end — nunca mais erro 422 para posts válidos
+* **NOVO**: Agentes SEO tratam 422 com retry automático via WP REST API
+* **CORRIGIDO**: Parâmetro source_post_id corrigido em todos os payloads de link
+
+= 3.4.4 =
+* **CORRIGIDO**: llms.txt agora grava arquivo físico na raiz como fallback para ambientes com cache/CDN
+* **CORRIGIDO**: Resolve issue IDX-005 (llms.txt ausente) em auditorias SEO
+* **MELHORADO**: Endpoint refresh-llms usa regenerate() completo com escrita física
+
+= 3.4.3 =
+* **NOVO**: Redirect Manager com tabela dedicada e API REST completa
+* **NOVO**: Limpeza automática de URLs duplicadas (sufixos -2, -3, hello-world, parâmetros)
+* **NOVO**: AI SEO Generator — gera slugs, meta descriptions, focus keywords, tags e títulos virais via IA
+* **NOVO**: GEO Schema Injection — LocalBusiness, Attorney, HealthAndBeautyBusiness JSON-LD automáticos
+* **CORRIGIDO**: CFRDM_VERSION sincronizado em todos os arquivos (era 3.4.1 no define, 3.4.2 no header)
+* **MELHORADO**: PLUGIN_PROMPT_BLOCK atualizado com todos os novos módulos para agentes IA
+* **MELHORADO**: Agente SEO agora executa limpeza de duplicatas e injeção de GEO schemas autonomamente
+
+= 3.2.4 =
+* **NOVO**: Method Validator com validação automática de assinaturas de métodos via ReflectionMethod
+* **NOVO**: Wrapper safe_call() para chamadas estáticas seguras com fallback (previne WSOD)
+* **NOVO**: Relatório de validação integrado ao endpoint /diagnostics
+* **CORRIGIDO**: Migração de chamadas críticas em Social Admin e IndexNow para safe_call()
+* **MELHORADO**: 20+ contratos de validação cobrindo todos os módulos críticos
+* **MELHORADO**: Cache de resultados com transient (1h, invalidado por versão)
+
+= 3.2.2 =
+* **CORRIGIDO**: Registro de 6 endpoints REST ausentes (indexnow-batch, meta-audit, update-seo-meta, refresh-sitemap, refresh-llms, set-ai-headers)
+* **CORRIGIDO**: Erros 404 na indexação IndexNow corrigidos
+* **MELHORADO**: Verniz DNA v3.0 integrado em 100% dos agentes SEO
+
+= 2.6.2 =
+* **MELHORADO**: Paginação completa para buscar TODOS os artigos (sem limite de 100)
+* **MELHORADO**: Retorno de total de páginas no endpoint articles-for-indexing
+* **CORRIGIDO**: Sincronização agora processa sites com centenas de artigos
+
+= 2.6.1 =
+* **CRÍTICO**: Corrigido registro de endpoints REST do Article Indexer para funcionar fora do contexto admin
+* **CORRIGIDO**: Endpoints /articles-for-indexing e /export-articles-batch agora respondem corretamente via API externa
+* **MELHORADO**: Article Indexer é carregado nas dependências principais para suporte completo à REST API
+
+= 2.6.0 =
+* **NOVO**: Verificação automática de saúde do plugin ao selecionar projeto
+* **NOVO**: Barra de status de qualidade de conexão com latência em tempo real
+* **NOVO**: Testes de conectividade integrados no painel de integrações
+* **NOVO**: Guia visual de instalação do plugin quando não detectado
+* **NOVO**: Fallback automático para REST API padrão quando plugin não instalado
+* **MELHORADO**: Sistema de indexação automática com crawling periódico (2x/dia)
+* **MELHORADO**: Endpoints REST para sincronização em batch de artigos
+* **MELHORADO**: Detecção de clusters temáticos com análise semântica
+* **CORRIGIDO**: Erros específicos do WordPress agora exibem mensagens claras
+
+= 2.5.2 =
+* **MELHORADO**: Sincronização de artigos diretamente pelo painel de Linkagem Interna do app
+* **MELHORADO**: Busca via IA agora funciona corretamente no Gerador de Artigos V2
+* **MELHORADO**: Endpoint de exportação em batch para melhor performance
+* **CORRIGIDO**: Compatibilidade com REST API padrão do WordPress para sites sem plugin
+
+= 2.5.1 =
+* **NOVO**: Sistema de linkagem interna inteligente com IA para sincronização automática
+* **NOVO**: Indexador de artigos com análise semântica e detecção de clusters temáticos
+* **NOVO**: Regras de linkagem automática por palavras-chave com priorização
+* **MELHORADO**: Integração de links internos em todos os geradores de conteúdo
+
+= 2.2.1 =
+* **CRÍTICO**: Corrigido conflito com Elementor e page builders que causava tela branca
+* **CRÍTICO**: Corrigido erro de tabela não existente durante ativação
+* **CORRIGIDO**: Lazy loading de dependências para evitar conflitos de memória
+* **CORRIGIDO**: Hooks agora verificam se page builders estão salvando antes de executar
+* **CORRIGIDO**: Logger não falha mais quando tabelas não existem
+* **MELHORADO**: Detecção de Elementor, Beaver Builder, Divi e WPBakery
+* **MELHORADO**: Hooks de save_post usam prioridade baixa (100) para evitar conflitos
+* **MELHORADO**: Classes são carregadas sob demanda (lazy loading)
+
+= 2.2.0 =
+* **NOVO**: Validador de Schema JSON-LD antes da publicação
+* **NOVO**: Endpoints REST para validação e preview de schemas
+* **NOVO**: Integração com Google Rich Results Test
+* **NOVO**: Avisos no admin para problemas de schema
+* **NOVO**: Schema Product para artigos de review de produtos
+* **NOVO**: Schema Review com rating, prós e contras
+* **NOVO**: Schema ItemList para artigos de comparação
+* **NOVO**: Extração automática de produtos do conteúdo
+* **NOVO**: Suporte a prós/contras estruturados (positiveNotes/negativeNotes)
+* **MELHORADO**: Detecção automática de tipo de artigo (review/comparison)
+
+= 2.1.0 =
+* **NOVO**: Indexação automática - notificação para Google e Bing ao publicar
+* **NOVO**: Schema markup JSON-LD automático para artigos
+* **NOVO**: Schema markup para imagens destacadas (ImageObject)
+* **NOVO**: Extração automática de FAQ schema do conteúdo
+* **NOVO**: API endpoint para verificar status de indexação
+* **NOVO**: Meta tag de disclosure para conteúdo gerado por IA
+* **MELHORADO**: Compatibilidade com WordPress 6.7
+* **MELHORADO**: Branding atualizado para Equipe Zica.ai
+
+= 2.0.0 =
+* **NOVO**: Sistema de logging detalhado com exportação CSV
+* **NOVO**: Otimização automática de imagens (compressão, redimensionamento, WebP)
+* **NOVO**: Geração automática de imagens OpenGraph
+* **NOVO**: Análise e sugestão de links internos
+* **NOVO**: Auto-correções de SEO (títulos, excerpts, meta descriptions)
+* **NOVO**: Portal de notícias e atualizações da plataforma
+* **NOVO**: Dashboard administrativo aprimorado com métricas
+* **MELHORADO**: Performance geral do plugin
+* **MELHORADO**: Compatibilidade com WordPress 6.5
+* **CORRIGIDO**: Diversos bugs menores
+
+= 1.0.0 =
+* Lançamento inicial
+* Sistema de API Key para autenticação segura
+* REST API completa para artigos, categorias e tags
+* Webhooks para sincronização em tempo real
+* Painel administrativo com estatísticas
+* Suporte a Yoast SEO e Rank Math
+* Upload de mídia via API
+* Logs de atividade
+
+= 3.2.1 =
+* **CORRIGIDO**: Erro 'verificação cookie falhou' em Autocorreções e Sincronização (migrado de REST para AJAX)
+* **CORRIGIDO**: Linkagem interna usa fallback 'Leia também' quando âncora exata não é encontrada
+* **CORRIGIDO**: Regex Unicode-safe para matching de texto âncora com caracteres acentuados
+* **CORRIGIDO**: Posts que já contêm link para URL alvo retornam sucesso em vez de erro
+* **MELHORADO**: Pré-verificação com mb_stripos antes de regex para melhor performance
+
+= 3.2.0 =
+* **NOVO**: Notificações automáticas no dashboard para artigos gerados por cron
+* **NOVO**: Monitoramento de portais com scraping HTML e RSS integrado
+* **NOVO**: Reescrita automática com score de originalidade (95%+)
+* **NOVO**: Painel de diagnóstico com reparo de tabelas via AJAX fallback
+* **INTEGRAÇÃO**: Pipeline completo: portal monitoring → rewrite → publish → notify
+* **MELHORADO**: Notificações com badge de não-lidas e link direto ao editor
+* **MELHORADO**: Sincronização de WordPress Stats otimizada com upsert
+
+= 3.1.0 =
+* **NOVO**: Auditor de Meta Descriptions com IA (cron a cada 6h)
+* **NOVO**: IndexNow - notificação automática ao Bing/Google/Yandex
+* **NOVO**: llms.txt + headers AI-friendly para ChatGPT/Claude/Gemini
+* **NOVO**: Duplicador de Posts/Páginas com ação em lote
+* **NOVO**: Exclusão em massa de posts selecionados
+* **NOVO**: News Sitemap para Google News
+* **NOVO**: Sitemap Optimizer com prioridades dinâmicas
+* **NOVO**: robots.txt otimizado para crawlers de IA
+* **NOVO**: Open Graph e Twitter Cards auto-preenchidos
+* **INTEGRAÇÃO**: Publicação → Meta Audit → IndexNow → llms.txt invalidação
+* **SEGURANÇA**: Pre-update checks (PHP, WP, disco, DB, erros recentes)
+* **SEGURANÇA**: Rollback automático em caso de falha na atualização
+
+= 3.0.2 =
+* **CORRIGIDO**: Ordem de registro de cron intervals
+* **CORRIGIDO**: Fallback para intervalos customizados
+* **CORRIGIDO**: Prevenção de fatal errors durante init
+
+= 3.0.0 =
+* **NOVO**: Integração Google Search Console via OAuth 2.0
+* **NOVO**: AI Auto-Fix para erros 404
+* **NOVO**: Ubersuggest Sync
+* **NOVO**: HTTPS Enforcer
+* **NOVO**: AI Content Enhancer
+
+== Upgrade Notice ==
+
+= 3.2.4 =
+Method Validator com safe_call() previne WSOD. 20+ contratos de validação. Recomendado para todos os usuários.
+
+= 3.2.2 =
+Correção de 6 endpoints REST ausentes e erros 404 no IndexNow. Verniz DNA v3.0 em todos os agentes. Recomendado para todos os usuários.
+
+= 3.2.1 =
+Correção do erro de cookie em Autocorreções/Sincronização e melhorias na linkagem interna com suporte Unicode. Recomendado para todos os usuários.
+
+= 3.2.0 =
+Notificações automáticas, monitoramento de portais com reescrita IA e pipeline completo de automação. Recomendado para todos os usuários.
+
+= 3.1.0 =
+Atualização major com Meta Auditor IA, IndexNow, llms.txt, Duplicador de Posts, Sitemap Optimizer e sistema de atualização segura com rollback automático.
+
+= 3.0.0 =
+Integração Google Search Console, AI Auto-Fix e novos módulos de SEO avançado. Faça backup antes de atualizar.
+
+= 2.2.0 =
+Nova versão com validador de schema JSON-LD, suporte a Product/Review schemas e integração com Google Rich Results Test.
+
+= 1.0.0 =
+Primeira versão do plugin.
+
+== Screenshots ==
+
+1. Dashboard principal com estatísticas
+2. Configurações do plugin
+3. Lista de artigos sincronizados
+4. Sistema de logs detalhado
+5. Análise de links internos
+6. Status de indexação dos artigos

@@ -1067,7 +1067,7 @@ export default function BulkSalesPagesGenerator() {
                   {globalConfig.seoOptimization && (
                     <Badge className="bg-green-100 text-green-700 hover:bg-green-100 gap-1">
                       <Sparkles className="w-3 h-3" />
-                      Otimização SEO
+                      GEO & Semântica LLMs
                     </Badge>
                   )}
                   {globalConfig.humanizeContent && (

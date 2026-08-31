@@ -161,7 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (result) {
         toast({
           title: 'Conta criada com sucesso!',
-          description: 'Você já pode começar a usar o ContentFactory.',
+          description: 'Você já pode começar a usar o Zica.ai.',
         });
       }
     },

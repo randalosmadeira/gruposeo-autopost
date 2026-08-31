@@ -385,7 +385,7 @@ export function useWordPressAPI(projectId: string | null) {
           return {
             success: false,
             status: 'offline',
-            message: 'Site WordPress com erro crítico (HTTP 500). Desative plugins conflitantes ou reinstale o plugin ContentFactory RDM v2.2.1+.',
+            message: 'Site WordPress com erro crítico (HTTP 500). Desative plugins conflitantes ou reinstale o plugin Zica.ai v2.2.1+.',
             details,
           };
         }

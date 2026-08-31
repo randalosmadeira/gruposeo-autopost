@@ -540,7 +540,7 @@ export default function ArticlesList() {
           <Button asChild className="bg-primary hover:bg-primary/90">
             <Link to="/articles/new">
               <Plus className="w-4 h-4 mr-2" />
-              Novo Artigo
+              Gerar Onda
             </Link>
           </Button>
         </div>

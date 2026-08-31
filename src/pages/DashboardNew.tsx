@@ -253,7 +253,7 @@ export default function DashboardNew() {
       <header className="bg-card border-b px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <img src={logoSeo} alt="GRUPO SEO MKT" className="w-10 h-10" />
+            <img src={logoSeo} alt="Zica.ai" className="w-10 h-10" />
             <div>
               <h1 className="text-2xl font-bold text-foreground">Painel de Controle</h1>
               <p className="text-sm text-muted-foreground">
@@ -358,7 +358,7 @@ export default function DashboardNew() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <QuickActionCard
                 icon={FileText}
-                title="Novo Artigo"
+                title="Gerar Onda"
                 description="Criar artigo com IA"
                 href="/articles/new"
                 color="bg-primary"

@@ -229,7 +229,7 @@ export function AdvancedSettings({
       {/* SEO Optimization */}
       <SettingsToggle
         icon={Search}
-        title="Otimização SEO Avançada"
+        title="GEO & Semântica LLMs Avançada"
         description="Análise e otimização automática para mecanismos de busca"
         checked={seoOptimization}
         onCheckedChange={onSeoOptimizationChange}

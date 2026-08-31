@@ -71,3 +71,16 @@ verify_jwt = true
 
 [functions.analyze-file]
 verify_jwt = true
+
+
+[auth.email.template.confirmation]
+subject = "Acesse seu Cérebro de Tráfego - Zica.ai"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.magic_link]
+subject = "Acesse seu Cérebro de Tráfego - Zica.ai"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.recovery]
+subject = "Acesse seu Cérebro de Tráfego - Zica.ai"
+content_path = "./supabase/templates/recovery.html"

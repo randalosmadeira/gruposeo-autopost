@@ -60,7 +60,7 @@ export function PluginInstallGuide({
     {
       icon: Download,
       title: 'Baixar o Plugin',
-      description: 'Acesse a página "Plugin WP" no menu lateral e baixe o arquivo .zip do plugin ContentFactory RDM.',
+      description: 'Acesse a página "Plugin WP" no menu lateral e baixe o arquivo .zip do plugin Zica.ai.',
       action: (
         <Button variant="outline" size="sm" asChild>
           <a href="/wordpress-plugin">
@@ -79,12 +79,12 @@ export function PluginInstallGuide({
     {
       icon: Plug,
       title: 'Ativar o Plugin',
-      description: 'Após instalar, clique em "Ativar" para habilitar o plugin ContentFactory RDM.',
+      description: 'Após instalar, clique em "Ativar" para habilitar o plugin Zica.ai.',
     },
     {
       icon: Key,
       title: 'Copiar a API Key',
-      description: 'Acesse ContentFactory → Configurações no menu do WordPress e copie a API Key gerada automaticamente.',
+      description: 'Acesse Zica.ai → Configurações no menu do WordPress e copie a API Key gerada automaticamente.',
     },
     {
       icon: Settings,
@@ -106,7 +106,7 @@ export function PluginInstallGuide({
                 <div>
                   <CardTitle className="text-lg">Plugin Não Detectado</CardTitle>
                   <CardDescription>
-                    O plugin ContentFactory RDM não está instalado ou ativo neste site
+                    O plugin Zica.ai não está instalado ou ativo neste site
                   </CardDescription>
                 </div>
               </div>

@@ -20,12 +20,12 @@ export const Header = memo(function Header() {
         <div className="flex items-center gap-4 flex-1 max-w-md">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Buscar artigos, projetos..." className="pl-10 bg-muted/50 border-0 focus-visible:ring-1" />
+            <Input placeholder="Buscar ondas, projetos e sinais..." className="pl-10 bg-muted/50 border-0 focus-visible:ring-1" />
           </div>
         </div>
         <div className="flex items-center gap-3">
           <Button asChild size="sm" className="bg-gradient-accent hover:opacity-90 shadow-glow-accent/30">
-            <Link to="/articles/new"><Plus className="w-4 h-4 mr-1" />Novo Artigo</Link>
+            <Link to="/articles/new"><Plus className="w-4 h-4 mr-1" />Gerar Onda</Link>
           </Button>
           <Button variant="ghost" size="icon"><Bell className="w-5 h-5 text-muted-foreground" /></Button>
           <DropdownMenu>

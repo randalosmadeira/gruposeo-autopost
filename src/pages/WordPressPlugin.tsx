@@ -30,7 +30,7 @@ const features = [
   {
     icon: Plug,
     title: 'Conexão Segura',
-    description: 'API Key única com verificação automática de conexão entre WordPress e ContentFactory.',
+    description: 'API Key única com verificação automática de conexão entre WordPress e Zica.ai.',
   },
   {
     icon: FileText,
@@ -110,8 +110,8 @@ const installSteps = [
   { step: 2, title: 'Acesse o WordPress', description: 'No painel do WordPress, vá em Plugins → Adicionar Novo → Enviar Plugin.' },
   { step: 3, title: 'Faça Upload', description: 'Selecione o arquivo ZIP baixado e clique em "Instalar Agora".' },
   { step: 4, title: 'Ative o Plugin', description: 'Após a instalação, clique em "Ativar Plugin".' },
-  { step: 5, title: 'Copie a API Key', description: 'Acesse ContentFactory no menu lateral e copie sua API Key.' },
-  { step: 6, title: 'Configure o Projeto', description: 'No ContentFactory, vá em Configurações do projeto e cole a API Key.' },
+  { step: 5, title: 'Copie a API Key', description: 'Acesse Zica.ai no menu lateral e copie sua API Key.' },
+  { step: 6, title: 'Configure o Projeto', description: 'No Zica.ai, vá em Configurações do projeto e cole a API Key.' },
 ];
 
 const changelog = [
@@ -421,7 +421,7 @@ const changelog = [
     type: 'minor' as const,
     changes: [
       { type: 'feature', text: 'Validador de Schema JSON-LD integrado' },
-      { type: 'feature', text: 'Sincronização bidirecional com ContentFactory' },
+      { type: 'feature', text: 'Sincronização bidirecional com Zica.ai' },
       { type: 'improvement', text: 'Interface administrativa redesenhada' },
     ],
   },
@@ -604,7 +604,7 @@ export default function WordPressPluginPage() {
         <div>
           <h1 className="text-3xl font-bold">Plugin WordPress</h1>
           <p className="text-muted-foreground mt-1">
-            Instale o plugin oficial para integrar seu WordPress com o ContentFactory
+            Instale o plugin oficial para integrar seu WordPress com o Zica.ai
           </p>
         </div>
         <div className="flex gap-3">
@@ -783,7 +783,7 @@ export default function WordPressPluginPage() {
                   <div className="border rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Badge variant="outline">GET</Badge>
-                      <code className="text-sm font-mono">/wp-json/cfrdm/v1/health</code>
+                      <code className="text-sm font-mono">/wp-json/zica-ai/v1/health</code>
                     </div>
                     <p className="text-sm text-muted-foreground">Verifica se o plugin está ativo</p>
                   </div>
@@ -791,7 +791,7 @@ export default function WordPressPluginPage() {
                   <div className="border rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Badge variant="outline">GET</Badge>
-                      <code className="text-sm font-mono">/wp-json/cfrdm/v1/test</code>
+                      <code className="text-sm font-mono">/wp-json/zica-ai/v1/test</code>
                     </div>
                     <p className="text-sm text-muted-foreground">Testa a conexão com API Key</p>
                   </div>
@@ -800,7 +800,7 @@ export default function WordPressPluginPage() {
                     <div className="flex items-center gap-2 mb-2">
                       <Badge variant="outline">GET</Badge>
                       <Badge variant="outline">POST</Badge>
-                      <code className="text-sm font-mono">/wp-json/cfrdm/v1/articles</code>
+                      <code className="text-sm font-mono">/wp-json/zica-ai/v1/articles</code>
                     </div>
                     <p className="text-sm text-muted-foreground">Lista ou cria artigos</p>
                   </div>
@@ -810,7 +810,7 @@ export default function WordPressPluginPage() {
                       <Badge variant="outline">GET</Badge>
                       <Badge variant="outline">PUT</Badge>
                       <Badge variant="outline">DELETE</Badge>
-                      <code className="text-sm font-mono">/wp-json/cfrdm/v1/articles/{'{id}'}</code>
+                      <code className="text-sm font-mono">/wp-json/zica-ai/v1/articles/{'{id}'}</code>
                     </div>
                     <p className="text-sm text-muted-foreground">Operações em artigo específico</p>
                   </div>
@@ -818,7 +818,7 @@ export default function WordPressPluginPage() {
                   <div className="border rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Badge variant="outline">GET</Badge>
-                      <code className="text-sm font-mono">/wp-json/cfrdm/v1/categories</code>
+                      <code className="text-sm font-mono">/wp-json/zica-ai/v1/categories</code>
                     </div>
                     <p className="text-sm text-muted-foreground">Lista todas as categorias</p>
                   </div>
@@ -826,7 +826,7 @@ export default function WordPressPluginPage() {
                   <div className="border rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Badge variant="outline">GET</Badge>
-                      <code className="text-sm font-mono">/wp-json/cfrdm/v1/tags</code>
+                      <code className="text-sm font-mono">/wp-json/zica-ai/v1/tags</code>
                     </div>
                     <p className="text-sm text-muted-foreground">Lista todas as tags</p>
                   </div>
@@ -834,7 +834,7 @@ export default function WordPressPluginPage() {
                   <div className="border rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Badge variant="outline">POST</Badge>
-                      <code className="text-sm font-mono">/wp-json/cfrdm/v1/media</code>
+                      <code className="text-sm font-mono">/wp-json/zica-ai/v1/media</code>
                     </div>
                     <p className="text-sm text-muted-foreground">Upload de imagem (base64)</p>
                   </div>

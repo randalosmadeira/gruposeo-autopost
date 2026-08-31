@@ -70,7 +70,7 @@ function sanitizeWordPressUrl(url: string): string {
   
   // Remove sufixos de API que não devem estar na URL base
   const apiSuffixes = [
-    '/wp-json/cfrdm/v1/',
+    '/wp-json/zica-ai/v1/',
     '/wp-json/cfrdm/v1',
     '/wp-json/wp/v2/',
     '/wp-json/wp/v2',

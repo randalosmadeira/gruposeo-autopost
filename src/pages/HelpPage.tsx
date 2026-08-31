@@ -108,7 +108,7 @@ export default function HelpPage() {
               />
               <FeatureCard
                 icon={TrendingUp}
-                title="Otimização SEO"
+                title="GEO & Semântica LLMs"
                 description="Análise completa de SEO on-page para máximo rankeamento."
                 items={[
                   'Score SEO (0-100)',

@@ -153,7 +153,7 @@ export function BulkPublishModal({
             errorMsg.includes('</p>')) {
           return { 
             categories: [], 
-            error: 'O site WordPress está com erro crítico (HTTP 500). Possíveis soluções:\n\n1. Desative o plugin ContentFactory RDM via FTP ou WP Admin\n2. Instale a versão 2.2.1 do plugin (com correções de compatibilidade)\n3. Verifique conflitos com Elementor, Divi ou outros page builders' 
+            error: 'O site WordPress está com erro crítico (HTTP 500). Possíveis soluções:\n\n1. Desative o plugin Zica.ai via FTP ou WP Admin\n2. Instale a versão 2.2.1 do plugin (com correções de compatibilidade)\n3. Verifique conflitos com Elementor, Divi ou outros page builders' 
           };
         }
         return { categories: [], error: errorMsg };

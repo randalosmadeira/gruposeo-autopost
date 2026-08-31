@@ -772,7 +772,7 @@ export function BulkAdvancedConfig({
               
               <ToggleCard
                 icon={Search}
-                title="Otimização SEO Avançada"
+                title="GEO & Semântica LLMs Avançada"
                 description="Análise e otimização automática para mecanismos de busca"
                 checked={config.seoOptimization}
                 onCheckedChange={(v) => updateConfig({ seoOptimization: v })}

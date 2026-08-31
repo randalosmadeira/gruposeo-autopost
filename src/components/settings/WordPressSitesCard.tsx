@@ -397,7 +397,7 @@ export function WordPressSitesCard() {
 
     try {
       if (isPluginAuth) {
-        // Test via ContentFactory RDM Plugin API
+        // Test via Zica.ai Plugin API
         const { data, error } = await supabase.functions.invoke('test-wordpress-connection', {
           body: {
             wordpress_url: project.wordpress_url,
@@ -434,7 +434,7 @@ export function WordPressSitesCard() {
             });
           }
         } else {
-          let errorDescription = data?.error || 'Verifique se o plugin ContentFactory RDM está ativo e a API Key está correta.';
+          let errorDescription = data?.error || 'Verifique se o plugin Zica.ai está ativo e a API Key está correta.';
           if (data?.hint) {
             errorDescription += ` ${data.hint}`;
           }
@@ -795,7 +795,7 @@ export function WordPressSitesCard() {
                   <Plug className="w-4 h-4 text-emerald-600 mt-0.5" />
                   <div className="text-xs space-y-1">
                     <p className="font-medium text-emerald-900 dark:text-emerald-100">
-                      Conexão via Plugin ContentFactory RDM:
+                      Conexão via Plugin Zica.ai:
                     </p>
                     <ol className="list-decimal list-inside space-y-0.5 text-emerald-800 dark:text-emerald-200">
                       <li>
@@ -803,7 +803,7 @@ export function WordPressSitesCard() {
                           Baixe e instale o plugin
                         </Link>
                       </li>
-                      <li>No WordPress: <strong>ContentFactory → Dashboard</strong></li>
+                      <li>No WordPress: <strong>Zica.ai → Dashboard</strong></li>
                       <li>Copie a API Key gerada automaticamente</li>
                       <li>Cole abaixo junto com a URL do site</li>
                     </ol>
@@ -835,7 +835,7 @@ export function WordPressSitesCard() {
                 />
               </div>
               <Input
-                placeholder="API Key do Plugin (encontrada em ContentFactory → Dashboard)"
+                placeholder="API Key do Plugin (encontrada em Zica.ai → Dashboard)"
                 value={pluginApiKey}
                 onChange={(e) => setPluginApiKey(e.target.value)}
                 className="font-mono"

@@ -30,7 +30,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import logoSeo from '@/assets/logo-grupo-seo.png';
 
 interface NavItem {
   label: string;
@@ -52,7 +51,7 @@ const navGroups: NavGroup[] = [
     title: 'Início',
     items: [
       { label: 'Início', icon: LayoutDashboard, href: '/' },
-      { label: 'Painel', icon: Activity, href: '/' },
+      { label: 'Cérebro de Tráfego', icon: Activity, href: '/' },
       { label: 'Calendário', icon: Calendar, href: '/calendar', badge: 'Novo', badgeVariant: 'orange', iconColor: '#10B981' },
       { label: 'Academia', icon: GraduationCap, href: '/academia' },
       { label: 'Chat IA', icon: MessageSquare, href: '/ai-chat', badge: 'Novo', badgeVariant: 'orange', iconColor: '#8B5CF6' },
@@ -62,7 +61,7 @@ const navGroups: NavGroup[] = [
     title: 'Geradores',
     items: [
       { 
-        label: 'Artigos IA', 
+        label: 'Ondas IA', 
         icon: Zap, 
         href: '/articles/bulk',
         iconColor: '#4169E1',
@@ -132,7 +131,7 @@ const bottomNavItems: NavItem[] = [
 
 export const Sidebar = memo(function Sidebar() {
   const [collapsed] = useState(true);
-  const [expandedMenu, setExpandedMenu] = useState<string | null>('Artigos IA');
+  const [expandedMenu, setExpandedMenu] = useState<string | null>('Ondas IA');
   const location = useLocation();
 
   const isActive = (href: string) => {
@@ -322,20 +321,16 @@ export const Sidebar = memo(function Sidebar() {
         'h-screen flex flex-col bg-gradient-sidebar border-r border-sidebar-border',
         'transition-all duration-300 ease-in-out w-[72px]'
       )}>
-        {/* Logo - GRUPO SEO MKT */}
+        {/* Logo - Zica.ai */}
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
             <div className="flex items-center justify-center px-2 h-16 border-b border-sidebar-border cursor-pointer hover:bg-sidebar-accent/50 transition-colors duration-200">
-              <img 
-                src={logoSeo} 
-                alt="GRUPO SEO MKT" 
-                className="w-10 h-10 rounded-xl transition-transform duration-300 hover:scale-110"
-              />
+              <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground font-black text-xl flex items-center justify-center shadow-glow-primary">Z</div>
             </div>
           </TooltipTrigger>
           <TooltipContent side="right" className="font-medium">
-            <p>ContentFactory</p>
-            <p className="text-xs text-muted-foreground">by GRUPO SEO MKT</p>
+            <p className="font-bold">Zica.ai</p>
+            <p className="text-xs text-muted-foreground">Cérebro de Tráfego 24/7</p>
           </TooltipContent>
         </Tooltip>
 

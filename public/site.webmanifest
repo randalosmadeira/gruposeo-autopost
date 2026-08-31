@@ -1,0 +1,16 @@
+{
+  "name": "Zica.ai",
+  "short_name": "Zica.ai",
+  "description": "Autonomous Organic Traffic Engine",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0D1117",
+  "theme_color": "#D4FF00",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

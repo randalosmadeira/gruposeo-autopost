@@ -1,35 +1,87 @@
-# ContentFactory RDM - GRUPO SEO MARKETING
+# Zica.ai
 
-Plataforma inteligente para geração de conteúdo SEO otimizado com IA.
+![Zica.ai - Autonomous Organic Traffic Engine](https://img.shields.io/badge/Zica.ai-Autonomous_Organic_Traffic_Engine-D4FF00?style=for-the-badge&labelColor=0D1117)
 
-## Funcionalidades
+**Seu tráfego tá na zica? Deszica com Zica.ai.**
 
-- **Gerador de Artigos**: Crie artigos de blog e páginas de vendas otimizados para SEO
-- **Planejador de Autoridade**: Gere planos de conteúdo com artigos pilar e satélites
-- **Calendário de Conteúdo**: Visualize e gerencie sua linha editorial
-- **News Agents**: Automatize a criação de conteúdo baseado em notícias
-- **Integração WordPress**: Publique diretamente no seu site WordPress
+Zica.ai é um SaaS de automação de tráfego orgânico, produção editorial, GEO e otimização semântica para mecanismos de busca e LLMs. Coordena artigos, ondas virais, IndexNow, `llms.txt`, linkagem interna, auditoria técnica e publicação WordPress para Advocacia, Saúde, Imobiliário, Educação e E-commerce.
 
-## Stack Tecnológica
+## Cérebro Central
 
-- React + TypeScript + Vite
+**Cérebro Central de Tráfego Orgânico e Ondas Virais 24/7**, combinando SEO, GEO e Semântica LLMs para superfícies como ChatGPT, Perplexity e Claude.
+
+## Arquitetura
+
+```mermaid
+flowchart LR
+  A[Cérebro Central Zica.ai] --> B[Ondas Virais de Conteúdo]
+  B --> C[GEO e Semântica LLMs]
+  C --> D[IndexNow / llms.txt / Search]
+  D --> E[WordPress Plugin Zica.ai]
+  E --> F[Publicação e Manutenção Autônoma]
+  F --> A
+```
+
+## Stack
+
+- React 18 + TypeScript + Vite
 - Tailwind CSS + shadcn/ui
-- Backend Cloud (Supabase)
-- AI Gateway (Gemini, GPT-5)
+- Supabase Database, Auth e Edge Functions
+- OpenAI, Gemini e Anthropic via BYOK ou configuração de plataforma
+- WordPress REST API + plugin oficial Zica.ai
+- IndexNow, `llms.txt`, linkagem interna e automações editoriais
 
-## Desenvolvimento Local
+## Ambiente
 
-```sh
+```bash
+cp .env.example .env.local
 npm install
 npm run dev
 ```
 
-## Build de Produção
+## Variáveis
 
-```sh
-npm run build
+```bash
+VITE_APP_NAME="Zica.ai"
+VITE_SUPABASE_URL="https://PROJECT_REF.supabase.co"
+VITE_SUPABASE_PUBLISHABLE_KEY="sb_publishable_..."
+SUPABASE_URL="https://PROJECT_REF.supabase.co"
+SUPABASE_PUBLISHABLE_KEY="sb_publishable_..."
+SUPABASE_SECRET_KEY="sb_secret_..."
+OPENAI_API_KEY=""
+GEMINI_API_KEY=""
+ANTHROPIC_API_KEY=""
 ```
 
-## Licença
+Nunca publique `SUPABASE_SECRET_KEY` ou chaves privadas no frontend.
 
-Proprietário © 2026 GRUPO SEO MARKETING - Todos os direitos reservados.
+## Testes
+
+```bash
+npm run test
+npm run build
+npm run lint
+```
+
+Testes e build são bloqueantes no CI. O lint permanece como relatório enquanto a dívida técnica herdada é saneada.
+
+## Deploy
+
+O workflow `deploy.yml` gera `zica-ai-web-dist` e utiliza configuração com prefixo `ZICA_AI_`. A publicação externa ocorre somente quando um destino autorizado estiver configurado.
+
+## WordPress
+
+Código canônico: `public/wordpress-plugin/zica-ai/zica-ai-connector.php`.
+
+Namespace REST canônico: `/wp-json/zica-ai/v1/`.
+
+Durante a transição, o namespace legado permanece como alias de compatibilidade para não interromper instalações existentes.
+
+## Segurança
+
+- RLS nas tabelas públicas expostas.
+- Segredos somente em backend, Vault ou Edge Function secrets.
+- Idempotência em RSS e publicação.
+- Sem executor remoto genérico de SQL na superfície operacional.
+
+© 2026 Zica.ai.

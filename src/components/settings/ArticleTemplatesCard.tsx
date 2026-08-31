@@ -784,7 +784,7 @@ export function ArticleTemplatesCard() {
                       <div className="flex items-center gap-3">
                         <Sparkles className="w-4 h-4 text-primary" />
                         <div>
-                          <Label className="text-sm font-medium">Otimização SEO</Label>
+                          <Label className="text-sm font-medium">GEO & Semântica LLMs</Label>
                           <p className="text-xs text-muted-foreground">Aplicar técnicas avançadas de SEO</p>
                         </div>
                       </div>

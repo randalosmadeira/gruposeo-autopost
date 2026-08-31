@@ -91,7 +91,7 @@ async function showBrowserNotification(item: QueueItem) {
   if (!("Notification" in window)) return;
 
   if (Notification.permission === "granted") {
-    new Notification("ContentFactory - Falha na Fila", {
+    new Notification("Zica.ai - Falha na Fila", {
       body: `${item.action}\n${item.error_message || "Erro desconhecido"}`,
       icon: "/favicon.png",
       tag: `queue-failure-${item.id}`,

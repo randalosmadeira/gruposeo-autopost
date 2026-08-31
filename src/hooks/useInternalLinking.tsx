@@ -351,10 +351,10 @@ export function useInternalLinking(projectId: string | null) {
           if (e instanceof Error && e.message.includes('Plugin')) throw e;
         }
 
-        const isPluginNotFound = errorMsg.includes('rest_no_route') || errorMsg.includes('plugin ContentFactory não está instalado');
+        const isPluginNotFound = errorMsg.includes('rest_no_route') || errorMsg.includes('plugin Zica.ai não está instalado');
         if (isPluginNotFound) {
           setSyncState(prev => ({ ...prev, pluginNotFound: true }));
-          throw new Error('Plugin não encontrado: O plugin ContentFactory não está instalado ou ativo.');
+          throw new Error('Plugin não encontrado: O plugin Zica.ai não está instalado ou ativo.');
         }
         throw new Error(errorMsg);
       }

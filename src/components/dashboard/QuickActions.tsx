@@ -51,7 +51,7 @@ function QuickAction({ title, description, icon: Icon, href, variant }: QuickAct
 export function QuickActions() {
   const actions: QuickActionProps[] = [
     {
-      title: 'Novo Artigo',
+      title: 'Gerar Onda',
       description: 'Criar conteúdo com IA',
       icon: PenTool,
       href: '/articles/new',

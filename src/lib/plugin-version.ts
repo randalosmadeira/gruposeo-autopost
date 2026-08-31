@@ -1,5 +1,5 @@
 /**
- * Versão centralizada do Plugin ContentFactory RDM — Frontend.
+ * Versão centralizada do Plugin Zica.ai — Frontend.
  * Ao atualizar o plugin, altere APENAS este arquivo + supabase/functions/_shared/plugin-version.ts
  */
 export const PLUGIN_VERSION = '3.9.0';

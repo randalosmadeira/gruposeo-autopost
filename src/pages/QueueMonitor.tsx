@@ -127,7 +127,7 @@ export default function QueueMonitor() {
         throw new Error("Projeto não conectado");
       }
 
-      const response = await fetch(`${selectedProjectData.wordpress_url}/wp-json/cfrdm/v1/queue/stats`, {
+      const response = await fetch(`${selectedProjectData.wordpress_url}/wp-json/zica-ai/v1/queue/stats`, {
         headers: {
           'X-CFRDM-API-Key': selectedProjectData.wordpress_app_password || '',
         },
@@ -151,7 +151,7 @@ export default function QueueMonitor() {
         throw new Error("Projeto não conectado");
       }
 
-      const response = await fetch(`${selectedProjectData.wordpress_url}/wp-json/cfrdm/v1/queue?limit=50`, {
+      const response = await fetch(`${selectedProjectData.wordpress_url}/wp-json/zica-ai/v1/queue?limit=50`, {
         headers: {
           'X-CFRDM-API-Key': selectedProjectData.wordpress_app_password || '',
         },
@@ -176,7 +176,7 @@ export default function QueueMonitor() {
         throw new Error("Projeto não conectado");
       }
 
-      const response = await fetch(`${selectedProjectData.wordpress_url}/wp-json/cfrdm/v1/social/queue-stats`, {
+      const response = await fetch(`${selectedProjectData.wordpress_url}/wp-json/zica-ai/v1/social/queue-stats`, {
         headers: {
           'X-CFRDM-API-Key': selectedProjectData.wordpress_app_password || '',
         },
@@ -200,7 +200,7 @@ export default function QueueMonitor() {
         throw new Error("Projeto não conectado");
       }
 
-      const response = await fetch(`${selectedProjectData.wordpress_url}/wp-json/cfrdm/v1/social/queue?limit=50`, {
+      const response = await fetch(`${selectedProjectData.wordpress_url}/wp-json/zica-ai/v1/social/queue?limit=50`, {
         headers: {
           'X-CFRDM-API-Key': selectedProjectData.wordpress_app_password || '',
         },
@@ -222,8 +222,8 @@ export default function QueueMonitor() {
 
     try {
       const endpoint = queueType === 'content' 
-        ? `${selectedProjectData.wordpress_url}/wp-json/cfrdm/v1/queue/${itemId}/retry`
-        : `${selectedProjectData.wordpress_url}/wp-json/cfrdm/v1/social/queue/${itemId}/retry`;
+        ? `${selectedProjectData.wordpress_url}/wp-json/zica-ai/v1/queue/${itemId}/retry`
+        : `${selectedProjectData.wordpress_url}/wp-json/zica-ai/v1/social/queue/${itemId}/retry`;
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -246,7 +246,7 @@ export default function QueueMonitor() {
     if (!selectedProjectData?.wordpress_url) return;
 
     try {
-      const response = await fetch(`${selectedProjectData.wordpress_url}/wp-json/cfrdm/v1/queue/${itemId}/pause`, {
+      const response = await fetch(`${selectedProjectData.wordpress_url}/wp-json/zica-ai/v1/queue/${itemId}/pause`, {
         method: 'POST',
         headers: {
           'X-CFRDM-API-Key': selectedProjectData.wordpress_app_password || '',

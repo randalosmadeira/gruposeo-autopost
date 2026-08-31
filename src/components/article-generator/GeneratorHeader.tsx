@@ -37,7 +37,7 @@ export function GeneratorHeader({
           </div>
           <div className="min-w-0">
             <h1 className="text-base md:text-lg font-semibold text-foreground truncate">
-              Gerador de Artigos IA
+              Gerador de Ondas IA
             </h1>
             <p className="text-xs hidden sm:block text-muted-foreground truncate">
               Crie conteúdo de alta qualidade com IA

@@ -232,7 +232,7 @@ export default function ArticleGenerator() {
           className="mb-4"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          {step === 4 ? 'Novo Artigo' : 'Voltar'}
+          {step === 4 ? 'Gerar Onda' : 'Voltar'}
         </Button>
 
         <div className="flex items-center gap-4 mb-4">
@@ -637,7 +637,7 @@ export default function ArticleGenerator() {
                 <AccordionContent className="pt-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label>Otimização SEO</Label>
+                      <Label>GEO & Semântica LLMs</Label>
                       <p className="text-sm text-muted-foreground">
                         Analisa concorrentes e otimiza para buscadores
                       </p>
@@ -864,7 +864,7 @@ export default function ArticleGenerator() {
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleNewArticle}>
                   <RotateCcw className="w-4 h-4 mr-2" />
-                  Novo Artigo
+                  Gerar Onda
                 </Button>
               </div>
             </div>

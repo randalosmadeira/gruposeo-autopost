@@ -96,9 +96,9 @@ export default function Auth() {
               <Sparkles className="w-6 h-6 text-primary-foreground" />
             </div>
           </div>
-          <CardTitle className="text-2xl">ContentFactory RDM</CardTitle>
+          <CardTitle className="text-2xl">Zica.ai</CardTitle>
           <CardDescription>
-            Plataforma interna de geração de conteúdo SEO
+            Seu tráfego tá na zica? Deszica com Zica.ai.
           </CardDescription>
 
           {/* Health Check Indicator */}

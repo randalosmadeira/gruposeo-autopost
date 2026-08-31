@@ -1,5 +1,5 @@
 {
-  "name": "gruposeo-autopost",
+  "name": "zica-ai",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -11,7 +11,10 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run lint && npm run test && npm run build"
+    "check": "npm run lint && npm run test && npm run build",
+    "build:zica": "vite build --mode production",
+    "test:zica": "vitest run",
+    "verify:zica": "npm run test && npm run build"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -85,5 +88,6 @@
     "typescript-eslint": "^8.38.0",
     "vite": "^5.4.19",
     "vitest": "^3.2.4"
-  }
+  },
+  "description": "Zica.ai - Autonomous Organic Traffic Engine for SEO, GEO and LLM semantic optimization."
 }
