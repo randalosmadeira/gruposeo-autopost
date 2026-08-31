@@ -1,0 +1,198 @@
+name: Zica.ai Neural Product Finalizer
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply neural product patches
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          def patch(path, old, new, label):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if new in text:
+                  print(f'{label}: already applied')
+                  return
+              if old not in text:
+                  raise SystemExit(f'{label}: target not found in {path}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+              print(f'{label}: applied')
+
+          # Dashboard: real observability + approved neural hero.
+          patch(
+              'src/pages/DashboardNew.tsx',
+              "import { useNewsAgents } from '@/hooks/useNewsAgents';",
+              "import { useNewsAgents } from '@/hooks/useNewsAgents';\nimport { useZicaTrafficKpis } from '@/hooks/useZicaTrafficKpis';",
+              'dashboard KPI hook import',
+          )
+          patch(
+              'src/pages/DashboardNew.tsx',
+              "import { AuditScoreHistoryChart } from '@/components/dashboard/AuditScoreHistoryChart';",
+              "import { AuditScoreHistoryChart } from '@/components/dashboard/AuditScoreHistoryChart';\nimport { TrafficBrainHero } from '@/components/brand/TrafficBrainHero';",
+              'dashboard hero import',
+          )
+          patch(
+              'src/pages/DashboardNew.tsx',
+              "  const { agents, activeAgentsCount, totalArticles: agentArticles } = useNewsAgents();",
+              "  const { agents, activeAgentsCount, totalArticles: agentArticles } = useNewsAgents();\n  const { data: zicaKpis } = useZicaTrafficKpis();",
+              'dashboard real KPI query',
+          )
+
+          p = Path('src/pages/DashboardNew.tsx')
+          text = p.read_text(encoding='utf-8')
+          text, count = re.subn(
+              r'\n\s*\{/\* Header \*/\}\n\s*<header className="bg-card border-b px-6 py-4">.*?</header>\n',
+              '\n',
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count:
+              print('dashboard duplicate local header: removed')
+          p.write_text(text, encoding='utf-8')
+
+          patch(
+              'src/pages/DashboardNew.tsx',
+              '      <div className="p-6 space-y-6">\n        {/* Connection Error Banner */}',
+              '''      <div className="space-y-6 p-4 sm:p-6">
+        <TrafficBrainHero
+          totalWaves={zicaKpis?.totalWaves ?? dashboardStats.total}
+          activeWaves={zicaKpis?.activeWaves ?? dashboardStats.published}
+          indexingSubmitted={zicaKpis?.indexingSubmitted ?? 0}
+          indexingConfirmed={zicaKpis?.indexingConfirmed ?? 0}
+          llmVisibility={zicaKpis?.avgLlmVisibility ?? null}
+          semanticAuthority={zicaKpis?.avgSemanticAuthority ?? null}
+        />
+
+        {/* Connection Error Banner */}''',
+              'dashboard neural hero',
+          )
+          patch(
+              'src/pages/DashboardNew.tsx',
+              '            value={dashboardStats.total}',
+              '            value={zicaKpis?.totalWaves ?? dashboardStats.total}',
+              'dashboard total waves truth',
+          )
+          patch(
+              'src/pages/DashboardNew.tsx',
+              '''            value={dashboardStats.published}
+            change={`${Math.round((dashboardStats.published / Math.max(dashboardStats.total, 1)) * 100)}% do total`}
+            changeType="up"''',
+              '''            value={`${zicaKpis?.activeWaves ?? dashboardStats.published} / ${zicaKpis?.indexingConfirmed ?? 0}`}
+            change={`${zicaKpis?.indexingSubmitted ?? 0} submetidos • ${zicaKpis?.indexingConfirmed ?? 0} confirmados`}
+            changeType="neutral"''',
+              'dashboard indexing truth',
+          )
+
+          # Existing SEO audit score must not impersonate an LLM visibility score.
+          p = Path('src/components/dashboard/SEOAgentPanel.tsx')
+          text = p.read_text(encoding='utf-8')
+          text = text.replace("label: 'Score de Autoridade LLMs'", "label: 'Score Técnico SEO/GEO'")
+          p.write_text(text, encoding='utf-8')
+
+          # Auth inherits the animated neural current layer without changing Supabase Auth.
+          patch(
+              'src/pages/Auth.tsx',
+              "import { supabase } from '@/integrations/supabase/client';",
+              "import { supabase } from '@/integrations/supabase/client';\nimport { NeuralEnergy } from '@/components/brand/NeuralEnergy';",
+              'auth neural import',
+          )
+          patch(
+              'src/pages/Auth.tsx',
+              '    <div className="relative min-h-screen overflow-hidden bg-[#0D1117] text-slate-100">',
+              '    <div className="neural-auth-shell relative min-h-screen overflow-hidden bg-[#0D1117] text-slate-100">\n      <NeuralEnergy variant="hero" />',
+              'auth animated neural layer',
+          )
+
+          # Desktop sidebar gets the same cortex surface; mobile uses MobileDock.
+          p = Path('src/components/layout/Sidebar.tsx')
+          text = p.read_text(encoding='utf-8')
+          text = text.replace(
+              "'h-screen flex flex-col bg-gradient-sidebar border-r border-sidebar-border'",
+              "'neural-sidebar h-screen flex flex-col bg-gradient-sidebar border-r border-sidebar-border'",
+          )
+          p.write_text(text, encoding='utf-8')
+
+          # Neural loading state for every lazy module.
+          patch(
+              'src/App.tsx',
+              '''const PageLoader = () => (
+  <div className="flex min-h-screen items-center justify-center">
+    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+  </div>
+);''',
+              '''const PageLoader = () => (
+  <div className="neural-auth-shell flex min-h-screen items-center justify-center bg-[#0D1117]">
+    <div className="neural-state flex flex-col items-center gap-4 px-8 py-7 text-center">
+      <div className="neural-loader-ring" />
+      <div>
+        <p className="text-sm font-black text-white">Sincronizando o córtex Zica.ai</p>
+        <p className="mt-1 text-xs text-slate-500">Carregando sinais, ondas e agentes...</p>
+      </div>
+    </div>
+  </div>
+);''',
+              'global neural page loader',
+          )
+
+          # Load the dedicated neural stylesheet only on Zica.ai WordPress admin pages.
+          patch(
+              'public/wordpress-plugin/zica-ai/zica-ai-connector.php',
+              "        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));",
+              """        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+        add_action('admin_enqueue_scripts', function($hook) {
+            if (strpos((string) $hook, 'zica-ai') === false) return;
+            wp_enqueue_style('zica-ai-neural', ZICA_AI_PLUGIN_URL . 'assets/css/zica-neural.css', array(), ZICA_AI_VERSION);
+        }, 99);""",
+              'WordPress neural stylesheet enqueue',
+          )
+
+          # Remove temporary build helpers and obsolete archive bundles.
+          for obsolete in [
+              '.github/workflows/zica-build-hotfix.yml',
+              'tmp/files_6.zip',
+              'tmp/indexmenow.zip',
+          ]:
+              p = Path(obsolete)
+              if p.exists():
+                  p.unlink()
+                  print(f'removed {obsolete}')
+
+          # Assertions: no fake LLM score label remains in the old SEO score widget.
+          dash = Path('src/pages/DashboardNew.tsx').read_text(encoding='utf-8')
+          assert 'TrafficBrainHero' in dash
+          assert 'indexingConfirmed' in dash
+          assert 'useZicaTrafficKpis' in dash
+          assert 'Score de Autoridade LLMs' not in Path('src/components/dashboard/SEOAgentPanel.tsx').read_text(encoding='utf-8')
+          print('Neural product assertions passed')
+          PY
+
+      - name: Validate PHP syntax
+        run: find public/wordpress-plugin/zica-ai -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Commit final product layer
+        run: |
+          if git diff --quiet; then
+            echo "No changes required"
+            exit 0
+          fi
+          git config user.name "Zica.ai Automation"
+          git config user.email "automation@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: apply neural cortex across Zica.ai product"
+          git push origin HEAD:main
