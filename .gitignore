@@ -1,5 +1,10 @@
+# Dependencies and builds
+node_modules/
+dist/
+dist-ssr/
+
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,15 +12,22 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Local environment files
+.env.local
+.env.*.local
 *.local
 
-# Editor directories and files
+# Removed legacy builder metadata
+.lovable/
+*lovable*
+
+# Supabase local state
+.supabase/
+
+# Editors and OS
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
