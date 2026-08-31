@@ -66,9 +66,9 @@ function basicSchemas(article: Record<string, unknown>, siteUrl: string) {
 }
 
 async function uploadPluginImage(baseUrl: string, apiKey: string, dataUrl: string, slug: string, alt: string) {
-  const res = await fetch(`${baseUrl}/wp-json/cfrdm/v1/media`, {
+  const res = await fetch(`${baseUrl}/wp-json/zica-ai/v1/media`, {
     method: "POST",
-    headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+    headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" },
     body: JSON.stringify({ image_data: dataUrl, filename: `${slug || "featured"}.png`, alt_text: alt }),
     signal: AbortSignal.timeout(30000),
   });
@@ -93,6 +93,7 @@ async function publishPlugin(project: Record<string, unknown>, article: Record<s
     excerpt: String(article.excerpt || ""),
     slug: String(article.slug || ""),
     status: "publish",
+    zica_ai_id: String(article.id),
     cfrdm_id: String(article.id),
     focus_keyword: String(config.focus_keyword || article.keyword || ""),
     seo_title: config.seo_title || undefined,
@@ -103,9 +104,9 @@ async function publishPlugin(project: Record<string, unknown>, article: Record<s
   if (Array.isArray(config.wordpress_categories)) payload.categories = config.wordpress_categories;
   if (Array.isArray(config.wordpress_tags)) payload.tags = config.wordpress_tags;
 
-  const res = await fetch(`${baseUrl}/wp-json/cfrdm/v1/articles`, {
+  const res = await fetch(`${baseUrl}/wp-json/zica-ai/v1/articles`, {
     method: "POST",
-    headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
+    headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(45000),
   });
@@ -207,7 +208,7 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, duplicate: true, postUrl: article.published_url, articleId: article.id });
     }
 
-    const result = project.wordpress_username === "__CFRDM_PLUGIN__"
+    const result = ["__ZICA_AI_PLUGIN__", "__CFRDM_PLUGIN__"].includes(String(project.wordpress_username))
       ? await publishPlugin(project, article)
       : await publishStandard(project, article);
 

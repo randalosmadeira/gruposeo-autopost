@@ -520,8 +520,11 @@ class ZICA_AI_API {
     }
     
     public static function verify_api_key($request) {
-        $api_key = $request->get_header('X-CFRDM-API-Key');
-        
+        // Canonical Zica.ai header. Legacy header remains as a transition fallback.
+        $api_key = $request->get_header('X-ZICA-AI-API-Key');
+        if (empty($api_key)) {
+            $api_key = $request->get_header('X-CFRDM-API-Key');
+        }
         if (empty($api_key)) {
             $api_key = $request->get_param('api_key');
         }

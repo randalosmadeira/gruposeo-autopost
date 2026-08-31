@@ -346,7 +346,7 @@ export function WordPressSitesCard() {
         name: pluginSiteName,
         domain,
         wordpress_url: finalUrl,
-        wordpress_username: '__CFRDM_PLUGIN__',
+        wordpress_username: '__ZICA_AI_PLUGIN__',
         wordpress_app_password: pluginApiKey,
         is_connected: true,
       });

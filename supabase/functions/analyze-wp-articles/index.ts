@@ -290,10 +290,10 @@ async function fetchArticlesViaPlugin(
   console.log("Fetching articles via ContentFactory plugin with pagination...");
   
   while (hasMore) {
-    const listUrl = `${baseUrl}/wp-json/cfrdm/v1/articles-for-indexing?per_page=${perPage}&page=${page}`;
+    const listUrl = `${baseUrl}/wp-json/zica-ai/v1/articles-for-indexing?per_page=${perPage}&page=${page}`;
     const listResp = await fetch(listUrl, {
       headers: {
-        'X-CFRDM-API-Key': apiKey,
+        'X-ZICA-AI-API-Key': apiKey,
       },
     });
 
@@ -322,12 +322,12 @@ async function fetchArticlesViaPlugin(
     const totalPages = listJson?.pages || 1;
     
     // Fetch content in batch
-    const batchUrl = `${baseUrl}/wp-json/cfrdm/v1/export-articles-batch`;
+    const batchUrl = `${baseUrl}/wp-json/zica-ai/v1/export-articles-batch`;
     const batchResp = await fetch(batchUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CFRDM-API-Key': apiKey,
+        'X-ZICA-AI-API-Key': apiKey,
       },
       body: JSON.stringify({ post_ids: ids }),
     });
@@ -1282,9 +1282,9 @@ Retorne APENAS JSON:
 
                   if (baseUrl3 && isPlugin3 && apiKey3 && seoFix.meta_title) {
                     try {
-                      const updateResp3 = await fetch(`${baseUrl3}/wp-json/cfrdm/v1/update-seo-meta`, {
+                      const updateResp3 = await fetch(`${baseUrl3}/wp-json/zica-ai/v1/update-seo-meta`, {
                         method: "POST",
-                        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey3 },
+                        headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey3 },
                         body: JSON.stringify({
                           post_id: article.wp_post_id,
                           meta_title: seoFix.meta_title,
@@ -1306,9 +1306,9 @@ Retorne APENAS JSON:
                     for (const target of sameCluster) {
                       const anchorText = seoFix.suggested_anchor_texts?.[0] || target.primary_keyword || target.wp_post_title.split(' ').slice(0, 3).join(' ');
                       try {
-                        const applyResp3 = await fetch(`${baseUrl3}/wp-json/cfrdm/v1/apply-internal-link`, {
+                        const applyResp3 = await fetch(`${baseUrl3}/wp-json/zica-ai/v1/apply-internal-link`, {
                           method: "POST",
-                          headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey3 },
+                          headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey3 },
                           body: JSON.stringify({
                             post_id: article.wp_post_id,
                             anchor_text: anchorText,

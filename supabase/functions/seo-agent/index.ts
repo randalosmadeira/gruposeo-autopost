@@ -22,7 +22,7 @@ async function verifyLinkInContent(
 ): Promise<boolean> {
   try {
     const resp = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${postId}?_fields=content`, {
-      headers: { "X-CFRDM-API-Key": apiKey },
+      headers: { "X-ZICA-AI-API-Key": apiKey },
       signal: AbortSignal.timeout(8000),
     });
     if (!resp.ok) return false;
@@ -61,9 +61,9 @@ async function detectBrokenLinks(
   // 1) Try plugin endpoint first (fastest, uses server-side crawl)
   if (isPlugin && apiKey && baseUrl) {
     try {
-      const resp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/scan-broken-links`, {
+      const resp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/scan-broken-links`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+        headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
         body: JSON.stringify({ limit: 500, check_redirects: true }),
       });
       if (resp.ok) {
@@ -155,9 +155,9 @@ async function detectDuplicateContent(
   // 1) Plugin endpoint
   if (isPlugin && apiKey && baseUrl) {
     try {
-      const resp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/scan-duplicates`, {
+      const resp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/scan-duplicates`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+        headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
         body: JSON.stringify({ limit: 500, check_meta: true }),
       });
       if (resp.ok) {
@@ -229,9 +229,9 @@ async function auditPageMetadata(
   }
 
   try {
-    const resp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/meta-audit`, {
+    const resp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/meta-audit`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+      headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
       body: JSON.stringify({ auto_fix: false, detailed: true }),
     });
     if (resp.ok) {
@@ -266,9 +266,9 @@ async function auditRedirects(
   }
 
   try {
-    const resp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/redirects/audit`, {
+    const resp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/redirects/audit`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+      headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
       body: JSON.stringify({ check_chains: true, check_loops: true }),
     });
     if (resp.ok) {
@@ -501,9 +501,9 @@ Deno.serve(async (req) => {
           if (isPlugin && apiKey && baseUrl) {
             try {
               const crawlTimeout = Math.min(60_000, MAX_EXECUTION_MS - elapsedMs() - 20_000);
-              const crawlResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/full-site-crawl`, {
+              const crawlResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/full-site-crawl`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+                headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
                 body: JSON.stringify({ limit: 200 }),
                 signal: AbortSignal.timeout(Math.max(crawlTimeout, 10_000)),
               });
@@ -696,9 +696,9 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
                     }));
 
                     try {
-                      const bulkResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/bulk-meta-update`, {
+                      const bulkResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/bulk-meta-update`, {
                         method: "POST",
-                        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+                        headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
                         body: JSON.stringify({ updates }),
                       });
                       if (bulkResp.ok) {
@@ -713,9 +713,9 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
                       // Fallback: apply individually via AI SEO endpoint
                       for (const fix of parsed.fixes) {
                         try {
-                          const singleResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/update-seo-meta`, {
+                          const singleResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/update-seo-meta`, {
                             method: "POST",
-                            headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+                            headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
                             body: JSON.stringify({ post_id: fix.wp_post_id, meta_title: fix.meta_title, meta_description: fix.meta_description, focus_keyword: fix.focus_keyword }),
                           });
                           if (singleResp.ok) bulkMetasFixed++;
@@ -767,9 +767,9 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
                     sitemapOptDetails.push(`⚠ ${dead404InSitemap} URLs mortas no sitemap (amostra de ${sampleUrls.length})`);
                     // Try to refresh sitemap to remove dead URLs
                     try {
-                      await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-sitemap`, {
+                      await fetch(`${baseUrl}/wp-json/zica-ai/v1/refresh-sitemap`, {
                         method: "POST",
-                        headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+                        headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" },
                         body: JSON.stringify({ remove_404: true }),
                       });
                       sitemapOptDetails.push("✅ Sitemap refresh solicitado (remoção de 404s)");
@@ -811,9 +811,9 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
 
         if (isPlugin && apiKey && baseUrl) {
           try {
-            const noindexResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/noindex-manager`, {
+            const noindexResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/noindex-manager`, {
               method: "POST",
-              headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+              headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
               body: JSON.stringify({
                 targets: [
                   "date_archives",
@@ -845,9 +845,9 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
                 console.log(`[SEO Agent] [${project.name}] Noindex Manager: ${noindexApplied} changes applied`);
                 // Refresh sitemap after noindex changes
                 try {
-                  await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-sitemap`, {
+                  await fetch(`${baseUrl}/wp-json/zica-ai/v1/refresh-sitemap`, {
                     method: "POST",
-                    headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+                    headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" },
                     body: JSON.stringify({ remove_noindex: true }),
                   });
                   noindexDetails.push("✅ Sitemap atualizado após noindex");
@@ -898,9 +898,9 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
               // Auto-fix via plugin
               if (isPlugin && apiKey) {
                 try {
-                  await fetch(`${baseUrl}/wp-json/cfrdm/v1/fix-robots-ai-crawlers`, {
+                  await fetch(`${baseUrl}/wp-json/zica-ai/v1/fix-robots-ai-crawlers`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+                    headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
                     body: JSON.stringify({ bots: blockedBots }),
                   });
                   vpsAuditDetails.push(`✅ Auto-fix: ${blockedBots.length} bots desbloqueados no robots.txt`);
@@ -937,9 +937,9 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
             // Auto-fix: force regenerate via plugin
             if (isPlugin && apiKey) {
               try {
-                await fetch(`${baseUrl}/wp-json/cfrdm/v1/llms-txt-regenerate`, {
+                await fetch(`${baseUrl}/wp-json/zica-ai/v1/llms-txt-regenerate`, {
                   method: "POST",
-                  headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+                  headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" },
                 });
                 vpsAuditDetails.push("✅ llms.txt regeneração solicitada");
               } catch { /* */ }
@@ -1036,8 +1036,8 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
         // 13e: Check plugin REST API accessibility
         if (isPlugin && apiKey) {
           try {
-            const pluginResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/diagnostics`, {
-              headers: { "X-CFRDM-API-Key": apiKey },
+            const pluginResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/diagnostics`, {
+              headers: { "X-ZICA-AI-API-Key": apiKey },
               signal: AbortSignal.timeout(10000),
             });
             if (pluginResp.ok) {
@@ -1226,11 +1226,11 @@ async function runMetaAuditWithFix(
   // 1) Try plugin meta-audit endpoint first
   if (baseUrl && isPlugin && apiKey) {
     try {
-      const auditResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/meta-audit`, {
+      const auditResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/meta-audit`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-CFRDM-API-Key": apiKey,
+          "X-ZICA-AI-API-Key": apiKey,
         },
         body: JSON.stringify({ auto_fix: true }),
       });
@@ -1352,11 +1352,11 @@ Retorne APENAS JSON:
     if (fixData.fixes && Array.isArray(fixData.fixes) && baseUrl && isPlugin && apiKey) {
       for (const fix of fixData.fixes) {
         try {
-          const updateResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/update-seo-meta`, {
+          const updateResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/update-seo-meta`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "X-CFRDM-API-Key": apiKey,
+              "X-ZICA-AI-API-Key": apiKey,
             },
             body: JSON.stringify({
               post_id: fix.wp_post_id,
@@ -1391,7 +1391,7 @@ Retorne APENAS JSON:
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                "X-CFRDM-API-Key": apiKey,
+                "X-ZICA-AI-API-Key": apiKey,
               },
               body: JSON.stringify({
                 meta: {
@@ -1462,11 +1462,11 @@ async function analyzeAndApplyLinks(
         if (!link.source_wp_post_id || !link.anchor_text || !link.target_url) continue;
 
         try {
-          const applyResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
+          const applyResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/apply-internal-link`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "X-CFRDM-API-Key": apiKey,
+              "X-ZICA-AI-API-Key": apiKey,
             },
             body: JSON.stringify({
               source_post_id: link.source_wp_post_id,
@@ -1621,11 +1621,11 @@ JSON:
           // Auto-apply if high relevance and plugin available
           if (suggestion.relevance_score >= 80 && sourceArticle?.wp_post_id && baseUrl && isPlugin && apiKey) {
             try {
-              const applyResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
+              const applyResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/apply-internal-link`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
-                  "X-CFRDM-API-Key": apiKey,
+                  "X-ZICA-AI-API-Key": apiKey,
                 },
                 body: JSON.stringify({
                   source_post_id: sourceArticle.wp_post_id,
@@ -1699,11 +1699,11 @@ async function submitIndexing(
 
     if (urls.length > 0) {
       try {
-        const indexNowResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/indexnow-batch`, {
+        const indexNowResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/indexnow-batch`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-CFRDM-API-Key": apiKey,
+            "X-ZICA-AI-API-Key": apiKey,
           },
           body: JSON.stringify({ urls: urls.slice(0, 1000) }),
         });
@@ -1729,9 +1729,9 @@ async function submitIndexing(
     }
 
     try {
-      const sitemapResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-sitemap`, {
+      const sitemapResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/refresh-sitemap`, {
         method: "POST",
-        headers: { "X-CFRDM-API-Key": apiKey },
+        headers: { "X-ZICA-AI-API-Key": apiKey },
       });
       sitemapRefreshed = sitemapResp.ok;
       if (sitemapRefreshed) detailsList.push("Sitemap atualizado");
@@ -1764,11 +1764,11 @@ async function submitIndexing(
 
     if (isPlugin && apiKey) {
       try {
-        const gscIndexResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/google-indexing/batch`, {
+        const gscIndexResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/google-indexing/batch`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-CFRDM-API-Key": apiKey,
+            "X-ZICA-AI-API-Key": apiKey,
           },
           body: JSON.stringify({}),
         });
@@ -1785,9 +1785,9 @@ async function submitIndexing(
     }
 
     try {
-      await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-llms`, {
+      await fetch(`${baseUrl}/wp-json/zica-ai/v1/refresh-llms`, {
         method: "POST",
-        headers: { "X-CFRDM-API-Key": apiKey },
+        headers: { "X-ZICA-AI-API-Key": apiKey },
       });
       detailsList.push("llms.txt atualizado");
     } catch { /* ignore */ }
@@ -1809,8 +1809,8 @@ async function submitDirectIndexNow(siteUrl: string, urls: string[], apiKey?: st
   let key = "";
   if (apiKey) {
     try {
-      const keyResp = await fetch(`${siteUrl}/wp-json/cfrdm/v1/info`, {
-        headers: { "X-CFRDM-API-Key": apiKey },
+      const keyResp = await fetch(`${siteUrl}/wp-json/zica-ai/v1/info`, {
+        headers: { "X-ZICA-AI-API-Key": apiKey },
         signal: AbortSignal.timeout(5000),
       });
       if (keyResp.ok) {
@@ -1869,18 +1869,18 @@ async function optimizeAIDiscovery(
   }
 
   try {
-    const llmsResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-llms`, {
+    const llmsResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/refresh-llms`, {
       method: "POST",
-      headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+      headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({ include_full_catalog: true }),
     });
     if (llmsResp.ok) { llmsTxtRefreshed = true; actions.push("llms.txt atualizado para AI crawlers"); }
   } catch { /* ignore */ }
 
   try {
-    const headersResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/set-ai-headers`, {
+    const headersResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/set-ai-headers`, {
       method: "POST",
-      headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+      headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({
         headers: { "X-Robots-Tag": "all", "X-Content-Type-Options": "nosniff" },
         ai_meta_tags: [
@@ -1894,9 +1894,9 @@ async function optimizeAIDiscovery(
   } catch { /* ignore */ }
 
   try {
-    const schemaResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/validate-schemas`, {
+    const schemaResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/validate-schemas`, {
       method: "POST",
-      headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" },
+      headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({ auto_fix: true, include_faq: true, include_howto: true }),
     });
     if (schemaResp.ok) {
@@ -2007,7 +2007,7 @@ async function runFullTechnicalAudit(
 
           if (isPlugin && apiKey) {
             try {
-              const fixResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/fix-ai-crawlers`, { method: "POST", headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" } });
+              const fixResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/fix-ai-crawlers`, { method: "POST", headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" } });
               if (fixResp.ok) {
                 const fixData = await fixResp.json();
                 if (fixData.unblocked > 0 || fixData.fixed > 0) {
@@ -2048,7 +2048,7 @@ async function runFullTechnicalAudit(
 
         if (isPlugin && apiKey) {
           try {
-            const fixResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-sitemap`, { method: "POST", headers: { "X-CFRDM-API-Key": apiKey } });
+            const fixResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/refresh-sitemap`, { method: "POST", headers: { "X-ZICA-AI-API-Key": apiKey } });
             if (fixResp.ok) {
               let sitemapVerified = false;
               for (const candidate of [`${siteRoot}/wp-sitemap.xml`, `${siteRoot}/sitemap_index.xml`, `${siteRoot}/sitemap.xml`]) {
@@ -2071,7 +2071,7 @@ async function runFullTechnicalAudit(
 
         if (isPlugin && apiKey) {
           try {
-            const fixResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/refresh-llms`, { method: "POST", headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ force_enable: true }) });
+            const fixResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/refresh-llms`, { method: "POST", headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ force_enable: true }) });
             if (fixResp.ok) {
               try {
                 const verifyResp = await fetch(`${baseUrl.replace(/\/blog\/?$/, "")}/llms.txt`, { signal: AbortSignal.timeout(5000) });
@@ -2093,7 +2093,7 @@ async function runFullTechnicalAudit(
   // ═══ AUDIT 2: Schema Markup ═══
   if (isPlugin && apiKey && baseUrl) {
     try {
-      const schemaResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/validate-schemas`, { method: "POST", headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ auto_fix: true, include_faq: true }) });
+      const schemaResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/validate-schemas`, { method: "POST", headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ auto_fix: true, include_faq: true }) });
       if (schemaResp.ok) {
         const schemaData = await schemaResp.json();
         const schemaErrors = schemaData.errors || 0;
@@ -2170,9 +2170,9 @@ JSON: {"links":[{"source_url":"...","anchor_text":"...","relevance":85}]}`;
                   if (!sourceArticle?.wp_post_id) continue;
 
                   try {
-                    const applyResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
+                    const applyResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/apply-internal-link`, {
                       method: "POST",
-                      headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+                      headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
                       body: JSON.stringify({ post_id: sourceArticle.wp_post_id, anchor_text: link.anchor_text, target_url: orphan.wp_post_url }),
                     });
                     if (applyResp.ok) {
@@ -2258,7 +2258,7 @@ JSON: {"links":[{"source_url":"...","anchor_text":"...","relevance":85}]}`;
             if (project.social_twitter) sameAs.push(project.social_twitter);
             if (sameAs.length > 0) localBusinessSchema.sameAs = sameAs;
 
-            const injectResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/inject-homepage-schema`, { method: "POST", headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey }, body: JSON.stringify({ schema: localBusinessSchema }) });
+            const injectResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/inject-homepage-schema`, { method: "POST", headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey }, body: JSON.stringify({ schema: localBusinessSchema }) });
             if (injectResp.ok) { issues[issues.length - 1].auto_fixed = true; totalFixed++; categories.geo.fixed++; categories.geo.score += 20; }
           } catch { /* endpoint may not exist yet */ }
         }
@@ -2283,7 +2283,7 @@ JSON: {"links":[{"source_url":"...","anchor_text":"...","relevance":85}]}`;
 
       if (isPlugin && apiKey) {
         try {
-          const faqResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/batch-inject-faq-schema`, { method: "POST", headers: { "X-CFRDM-API-Key": apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ limit: 50, post_type: "post" }) });
+          const faqResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/batch-inject-faq-schema`, { method: "POST", headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ limit: 50, post_type: "post" }) });
           if (faqResp.ok) {
             const faqData = await faqResp.json();
             if (faqData.injected > 0) { issues[issues.length - 1].auto_fixed = true; totalFixed++; categories.geo.fixed++; categories.geo.score += 10; }
@@ -2348,9 +2348,9 @@ async function runAutonomousSEOFix(
   }
 
   try {
-    const scanResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/scan-seo-issues`, {
+    const scanResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/scan-seo-issues`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+      headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
       body: JSON.stringify({ limit: 2000, checks: ["canonical", "https", "missing_h1", "duplicate_title", "missing_meta"] }),
     });
 
@@ -2386,9 +2386,9 @@ async function runAutonomousSEOFix(
     if (fixes.length > 0) {
       for (let i = 0; i < fixes.length; i += 50) {
         try {
-          const fixResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/autonomous-seo-fix`, {
+          const fixResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/autonomous-seo-fix`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+            headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
             body: JSON.stringify({ fixes: fixes.slice(i, i + 50) }),
           });
           if (fixResp.ok) {
@@ -2406,9 +2406,9 @@ async function runAutonomousSEOFix(
     if (applied > 0) {
       const fixedUrls = issuesList.map((i: any) => i.url).filter(Boolean).slice(0, 100);
       try {
-        await fetch(`${baseUrl}/wp-json/cfrdm/v1/indexnow-batch`, {
+        await fetch(`${baseUrl}/wp-json/zica-ai/v1/indexnow-batch`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+          headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
           body: JSON.stringify({ urls: fixedUrls }),
         });
         detailsList.push(`Re-indexação: ${fixedUrls.length} URLs corrigidas`);
@@ -2417,9 +2417,9 @@ async function runAutonomousSEOFix(
 
     // Duplicate URL Cleanup + Redirect Creation
     try {
-      const cleanupResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/redirects/cleanup-duplicates`, {
+      const cleanupResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/redirects/cleanup-duplicates`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+        headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
         body: JSON.stringify({ limit: 100, dry_run: false }),
       });
       if (cleanupResp.ok) {
@@ -2590,9 +2590,9 @@ JSON:
 
           if ((link.relevance || 0) >= 80) {
             try {
-              const applyResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
+              const applyResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/apply-internal-link`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+                headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
                 body: JSON.stringify({ post_id: sourceArticle.wp_post_id, anchor_text: link.anchor_text, target_url: crossLink.target_url, position: link.position || "auto" }),
               });
               if (applyResp.ok) {
@@ -2648,9 +2648,9 @@ JSON:
     const enrichedUrls = articlesNeedingLinks.slice(0, crossLinksCreated + 10).map(a => a.wp_post_url).filter(Boolean);
     if (enrichedUrls.length > 0) {
       try {
-        await fetch(`${baseUrl}/wp-json/cfrdm/v1/indexnow-batch`, {
+        await fetch(`${baseUrl}/wp-json/zica-ai/v1/indexnow-batch`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+          headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
           body: JSON.stringify({ urls: enrichedUrls }),
         });
         detailsList.push(`Re-indexação: ${enrichedUrls.length} artigos enriquecidos`);
@@ -2679,9 +2679,9 @@ async function manageRedirects(
   }
 
   try {
-    const resp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/redirects/batch`, {
+    const resp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/redirects/batch`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+      headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
       body: JSON.stringify({ redirects }),
     });
     if (resp.ok) {

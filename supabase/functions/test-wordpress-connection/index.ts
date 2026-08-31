@@ -140,7 +140,7 @@ Deno.serve(async (req) => {
       // Try to get version info first (public endpoint, no auth required)
       let versionInfo: { version?: string; is_current?: boolean; features?: Record<string, boolean> } | null = null;
       try {
-        const versionResponse = await fetch(`${baseUrl}/wp-json/cfrdm/v1/version`, {
+        const versionResponse = await fetch(`${baseUrl}/wp-json/zica-ai/v1/version`, {
           method: "GET",
           headers: { "Accept": "application/json" },
         });
@@ -156,13 +156,13 @@ Deno.serve(async (req) => {
         log.info("version_endpoint_not_available", { error: "non-critical" });
       }
 
-      log.info("testing_plugin", { url: `${baseUrl}/wp-json/cfrdm/v1/test` });
+      log.info("testing_plugin", { url: `${baseUrl}/wp-json/zica-ai/v1/test` });
       
       try {
-        const pluginResponse = await fetch(`${baseUrl}/wp-json/cfrdm/v1/test`, {
+        const pluginResponse = await fetch(`${baseUrl}/wp-json/zica-ai/v1/test`, {
           method: "GET",
           headers: {
-            "X-CFRDM-API-Key": api_key,
+            "X-ZICA-AI-API-Key": api_key,
             "Accept": "application/json",
           },
         });
@@ -174,7 +174,7 @@ Deno.serve(async (req) => {
 
         if (!contentType.includes("application/json")) {
           // Try health check endpoint first (doesn't require auth)
-          const healthResponse = await fetch(`${baseUrl}/wp-json/cfrdm/v1/health`, {
+          const healthResponse = await fetch(`${baseUrl}/wp-json/zica-ai/v1/health`, {
             method: "GET",
             headers: { "Accept": "application/json" },
           });

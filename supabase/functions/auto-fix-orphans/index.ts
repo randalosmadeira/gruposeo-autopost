@@ -325,9 +325,9 @@ JSON OBRIGATÓRIO:
     if (!decision || decision.action !== 'redirect' || !decision.redirectTo) continue;
 
     try {
-      const redirectResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/redirect-manager`, {
+      const redirectResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/redirect-manager`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+        headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
         body: JSON.stringify({
           source_url: orphan.wp_post_url,
           target_url: decision.redirectTo,
@@ -519,9 +519,9 @@ JSON OBRIGATÓRIO:
         if ((fix.suggest_menu || decision?.suggestMenu) && (fix.is_pillar || decision?.isPillar)) {
           fixDetails.push(`📌 PILAR: "${orphanArticle.wp_post_title}" — adicionar ao menu/rodapé/breadcrumb`);
           try {
-            await fetch(`${baseUrl}/wp-json/cfrdm/v1/suggest-menu-item`, {
+            await fetch(`${baseUrl}/wp-json/zica-ai/v1/suggest-menu-item`, {
               method: "POST",
-              headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+              headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
               body: JSON.stringify({
                 post_id: orphanArticle.wp_post_id,
                 title: orphanArticle.wp_post_title,
@@ -639,7 +639,7 @@ JSON OBRIGATÓRIO:
           // Inject snippet into the orphan article via WP REST API
           try {
             const wpResp = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${orphan.wp_post_id}`, {
-              headers: { "X-CFRDM-API-Key": apiKey },
+              headers: { "X-ZICA-AI-API-Key": apiKey },
               signal: AbortSignal.timeout(10000),
             });
 
@@ -659,7 +659,7 @@ JSON OBRIGATÓRIO:
 
             const updateResp = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${orphan.wp_post_id}`, {
               method: "POST",
-              headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+              headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
               body: JSON.stringify({ content: currentContent + wrappedSnippet }),
               signal: AbortSignal.timeout(10000),
             });
@@ -720,9 +720,9 @@ JSON OBRIGATÓRIO:
 
   if (fixedUrls.length > 0 && (linksApplied > 0 || redirectsCreated > 0)) {
     try {
-      const indexResp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/indexnow-batch`, {
+      const indexResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/indexnow-batch`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+        headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
         body: JSON.stringify({ urls: fixedUrls }),
       });
 
@@ -746,9 +746,9 @@ JSON OBRIGATÓRIO:
 
     // Google Indexing API
     try {
-      await fetch(`${baseUrl}/wp-json/cfrdm/v1/google-indexing/batch`, {
+      await fetch(`${baseUrl}/wp-json/zica-ai/v1/google-indexing/batch`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+        headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
         body: JSON.stringify({ urls: fixedUrls }),
       });
     } catch { /* optional */ }
@@ -808,9 +808,9 @@ async function applyLinkWithFallback(
 ): Promise<boolean> {
   // Try plugin endpoint first
   try {
-    const resp = await fetch(`${baseUrl}/wp-json/cfrdm/v1/apply-internal-link`, {
+    const resp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/apply-internal-link`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+      headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
       body: JSON.stringify({
         source_post_id: sourcePostId,
         post_id: sourcePostId,
@@ -840,7 +840,7 @@ async function wpRestFallbackAppend(
 ): Promise<boolean> {
   try {
     const wpPost = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${sourcePostId}`, {
-      headers: { "X-CFRDM-API-Key": apiKey },
+      headers: { "X-ZICA-AI-API-Key": apiKey },
     });
 
     if (!wpPost.ok) return false;
@@ -853,7 +853,7 @@ async function wpRestFallbackAppend(
     const linkHtml = `\n<p><strong>📖 Leia também:</strong> <a href="${targetUrl}" title="${targetTitle || anchorText}">${anchorText}</a></p>\n`;
     const updateResp = await fetch(`${baseUrl}/wp-json/wp/v2/posts/${sourcePostId}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-CFRDM-API-Key": apiKey },
+      headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
       body: JSON.stringify({ content: currentContent + linkHtml }),
     });
 
