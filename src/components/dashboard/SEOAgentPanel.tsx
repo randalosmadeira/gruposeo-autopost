@@ -175,8 +175,8 @@ export function SEOAgentPanel() {
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <CardTitle className="text-lg flex items-center gap-2">
           <Bot className="w-5 h-5 text-primary" />
-          Agente SEO Autônomo
-          <Badge variant="secondary" className="text-xs">v3.6.0</Badge>
+          Agente SEO & GEO Autônomo
+          <Badge variant="secondary" className="text-xs">v4.0</Badge>
         </CardTitle>
         <Button
           size="sm"
@@ -189,7 +189,7 @@ export function SEOAgentPanel() {
           ) : (
             <Play className="w-4 h-4 mr-2" />
           )}
-          Executar Agora
+          Disparar Agente Autônomo Agora
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -200,8 +200,8 @@ export function SEOAgentPanel() {
               <ClipboardList className="w-3 h-3 mr-1" />
               Artigos
             </TabsTrigger>
-            <TabsTrigger value="audit" className="text-xs">Auditoria</TabsTrigger>
-            <TabsTrigger value="fixes" className="text-xs">Correções</TabsTrigger>
+            <TabsTrigger value="audit" className="text-xs">Auditoria GEO</TabsTrigger>
+            <TabsTrigger value="fixes" className="text-xs">Correções 24/7</TabsTrigger>
             <TabsTrigger value="actions" className="text-xs">Ações</TabsTrigger>
             <TabsTrigger value="history" className="text-xs">Histórico</TabsTrigger>
           </TabsList>
@@ -211,8 +211,8 @@ export function SEOAgentPanel() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {[
                 { icon: FileCheck, value: totalFixed, label: 'Metas Fix', color: 'text-green-500' },
-                { icon: Link2, value: totalLinks, label: 'Links Aplicados', color: 'text-blue-500' },
-                { icon: Search, value: totalIndexed, label: 'URLs Indexadas', color: 'text-amber-500' },
+                { icon: Link2, value: totalLinks, label: 'Links Internos Aplicados', color: 'text-blue-500' },
+                { icon: Search, value: totalIndexed, label: 'URLs Indexadas (IndexNow/LLMs)', color: 'text-amber-500' },
                 { icon: ArrowRight, value: totalRedirects, label: 'Redirects 301', color: 'text-purple-500' },
               ].map((stat, i) => (
                 <div key={i} className="p-2.5 bg-muted/50 rounded-lg text-center">
@@ -224,9 +224,9 @@ export function SEOAgentPanel() {
             </div>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { icon: AlertTriangle, value: totalBrokenFixed, label: '404s Corrigidos', color: 'text-red-500' },
+                { icon: AlertTriangle, value: totalBrokenFixed, label: '404s Auto-Corrigidos', color: 'text-red-500' },
                 { icon: Zap, value: totalBulkMeta, label: 'Títulos/Metas IA', color: 'text-cyan-500' },
-                { icon: TrendingUp, value: latestAudit?.score || 0, label: 'SEO Score', color: scoreColor(latestAudit?.score || 0) },
+                { icon: TrendingUp, value: latestAudit?.score || 0, label: 'Score de Autoridade LLMs', color: scoreColor(latestAudit?.score || 0) },
               ].map((stat, i) => (
                 <div key={i} className="p-2.5 bg-muted/50 rounded-lg text-center">
                   <stat.icon className={cn("w-4 h-4 mx-auto mb-1", stat.color)} />

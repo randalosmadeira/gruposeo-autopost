@@ -254,9 +254,9 @@ export default function DashboardNew() {
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground font-black text-xl flex items-center justify-center shadow-glow-primary">Z</div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Cérebro de Tráfego</h1>
+              <h1 className="text-2xl font-bold text-foreground">ZICA.AI - Cérebro de Tráfego Orgânico</h1>
               <p className="text-sm text-muted-foreground">
-                Ondas orgânicas, GEO e sinais semânticos em uma visão 360°
+                Cérebro Central de Tráfego: Visão 360° da sua máquina de autoridade orgânica e GEO
               </p>
             </div>
           </div>
@@ -314,7 +314,7 @@ export default function DashboardNew() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
-            title="Total de Artigos"
+            title="Total de Ondas Criadas"
             value={dashboardStats.total}
             change={`${dashboardStats.thisWeek} esta semana`}
             changeType="neutral"
@@ -322,7 +322,7 @@ export default function DashboardNew() {
             iconColor="bg-primary"
           />
           <StatCard
-            title="Publicados"
+            title="Artigos Ativos & Indexados"
             value={dashboardStats.published}
             change={`${Math.round((dashboardStats.published / Math.max(dashboardStats.total, 1)) * 100)}% do total`}
             changeType="up"
@@ -330,13 +330,13 @@ export default function DashboardNew() {
             iconColor="bg-green-500"
           />
           <StatCard
-            title="Projetos Ativos"
+            title="Ecossistemas Conectados"
             value={projects?.length || 0}
             icon={FolderKanban}
             iconColor="bg-amber-500"
           />
           <StatCard
-            title="Agentes de Notícias"
+            title="Agentes Autônomos de Notícias"
             value={activeAgentsCount}
             change={`${agentArticles} artigos gerados`}
             changeType="neutral"
@@ -357,29 +357,29 @@ export default function DashboardNew() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <QuickActionCard
                 icon={FileText}
-                title="Gerar Onda"
-                description="Criar artigo com IA"
+                title="Nova Onda Viral"
+                description="Artigo IA Multi-Nicho com GEO e Semântica"
                 href="/articles/new"
                 color="bg-primary"
               />
               <QuickActionCard
                 icon={Target}
-                title="Landing Page"
-                description="Página de vendas"
+                title="Página de Alta Conversão / Vendas"
+                description="Landing page orientada à conversão"
                 href="/landing-page/new"
                 color="bg-gradient-accent"
               />
               <QuickActionCard
                 icon={Newspaper}
-                title="Novo Agente"
-                description="Automatizar notícias"
+                title="Novo Agente Autônomo 24/7"
+                description="Monitorar e publicar notícias continuamente"
                 href="/news-agents/new"
                 color="bg-purple-500"
               />
               <QuickActionCard
                 icon={Calendar}
-                title="Calendário"
-                description="Ver linha editorial"
+                title="Calendário de Ondas Editoriais"
+                description="Planejar ondas e linha editorial"
                 href="/calendar"
                 color="bg-green-500"
               />
@@ -409,7 +409,7 @@ export default function DashboardNew() {
           {/* Recent Content */}
           <Card className="lg:col-span-2 border-0 shadow-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-lg">Conteúdo Recente</CardTitle>
+              <CardTitle className="text-lg">Ondas de Conteúdo Recentes</CardTitle>
               <Button variant="ghost" size="sm" onClick={() => navigate('/articles')}>
                 Ver todos
                 <ChevronRight className="w-4 h-4 ml-1" />
