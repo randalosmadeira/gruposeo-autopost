@@ -57,12 +57,15 @@ const PageLoader = () => (
   </div>
 );
 
+const viteBaseUrl = import.meta.env.BASE_URL || "/";
+const routerBasename = viteBaseUrl === "/" ? "/" : viteBaseUrl.replace(/\/$/, "");
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter basename={routerBasename}>
         <AuthProvider>
           <Suspense fallback={<PageLoader />}>
             <Routes>
