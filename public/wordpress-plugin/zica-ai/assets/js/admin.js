@@ -20,8 +20,8 @@
 
         // Tab Navigation
         initTabs: function() {
-            const $tabs = $('.cfrdm-tab');
-            const $contents = $('.cfrdm-tab-content');
+            const $tabs = $('.zica-ai-tab');
+            const $contents = $('.zica-ai-tab-content');
             
             $tabs.on('click', function(e) {
                 e.preventDefault();
@@ -31,7 +31,7 @@
                 $(this).addClass('active');
                 
                 $contents.removeClass('active');
-                $('#cfrdm-tab-' + target).addClass('active').addClass('cfrdm-fade-in');
+                $('#zica-ai-tab-' + target).addClass('active').addClass('zica-ai-fade-in');
                 
                 // Save active tab
                 localStorage.setItem('cfrdm_active_tab', target);
@@ -47,53 +47,53 @@
         // Bind all events
         bindEvents: function() {
             // Copy API Key
-            $(document).on('click', '#cfrdm-copy-key', this.copyApiKey.bind(this));
+            $(document).on('click', '#zica-ai-copy-key', this.copyApiKey.bind(this));
             
             // Test Connection
-            $(document).on('click', '#cfrdm-test-connection', this.testConnection.bind(this));
+            $(document).on('click', '#zica-ai-test-connection', this.testConnection.bind(this));
             
             // Regenerate API Key
-            $(document).on('click', '#cfrdm-regenerate-key', this.regenerateKey.bind(this));
+            $(document).on('click', '#zica-ai-regenerate-key', this.regenerateKey.bind(this));
             
             // Manual Sync
-            $(document).on('click', '#cfrdm-manual-sync, #cfrdm-sync-now', this.manualSync.bind(this));
+            $(document).on('click', '#zica-ai-manual-sync, #zica-ai-sync-now', this.manualSync.bind(this));
             
             // Optimize Images
-            $(document).on('click', '#cfrdm-optimize-images', this.optimizeImages.bind(this));
+            $(document).on('click', '#zica-ai-optimize-images', this.optimizeImages.bind(this));
             
             // Run Auto-corrections
-            $(document).on('click', '#cfrdm-run-autocorrect', this.runAutocorrect.bind(this));
+            $(document).on('click', '#zica-ai-run-autocorrect', this.runAutocorrect.bind(this));
             
             // Clear Logs
-            $(document).on('click', '#cfrdm-clear-logs', this.clearLogs.bind(this));
+            $(document).on('click', '#zica-ai-clear-logs', this.clearLogs.bind(this));
             
             // Export Logs
-            $(document).on('click', '#cfrdm-export-logs', this.exportLogs.bind(this));
+            $(document).on('click', '#zica-ai-export-logs', this.exportLogs.bind(this));
             
             // Refresh Stats
-            $(document).on('click', '#cfrdm-refresh-stats', this.refreshStats.bind(this));
+            $(document).on('click', '#zica-ai-refresh-stats', this.refreshStats.bind(this));
             
             // Toggle Log Details
-            $(document).on('click', '.cfrdm-log-toggle', this.toggleLogDetails);
+            $(document).on('click', '.zica-ai-log-toggle', this.toggleLogDetails);
             
             // Filter Logs
-            $(document).on('change', '#cfrdm-log-filter-type, #cfrdm-log-filter-category', this.filterLogs);
-            $(document).on('keyup', '#cfrdm-log-search', this.debounce(this.filterLogs, 300));
+            $(document).on('change', '#zica-ai-log-filter-type, #zica-ai-log-filter-category', this.filterLogs);
+            $(document).on('keyup', '#zica-ai-log-search', this.debounce(this.filterLogs, 300));
             
             // Analyze Internal Links
-            $(document).on('click', '#cfrdm-analyze-links', this.analyzeInternalLinks.bind(this));
+            $(document).on('click', '#zica-ai-analyze-links', this.analyzeInternalLinks.bind(this));
             
             // Generate Internal Links
-            $(document).on('click', '#cfrdm-generate-links', this.generateInternalLinks.bind(this));
+            $(document).on('click', '#zica-ai-generate-links', this.generateInternalLinks.bind(this));
             
             // Sync Stats to Platform
-            $(document).on('click', '#cfrdm-sync-stats', this.syncStatsToPlatform.bind(this));
+            $(document).on('click', '#zica-ai-sync-stats', this.syncStatsToPlatform.bind(this));
         },
 
         // Copy API Key
         copyApiKey: function(e) {
             e.preventDefault();
-            const $input = $('#cfrdm-api-key');
+            const $input = $('#zica-ai-api-key');
             const $btn = $(e.currentTarget);
             
             navigator.clipboard.writeText($input.val()).then(() => {
@@ -158,7 +158,7 @@
                 },
                 success: (response) => {
                     if (response.success) {
-                        $('#cfrdm-api-key').val(response.api_key);
+                        $('#zica-ai-api-key').val(response.api_key);
                         cfrdmAdmin.apiKey = response.api_key;
                         this.showNotice('success', response.message);
                     } else {
@@ -383,33 +383,33 @@
 
         // Display Link Analysis Results
         displayLinkAnalysis: function(data) {
-            const $container = $('#cfrdm-link-analysis-results');
+            const $container = $('#zica-ai-link-analysis-results');
             if (!$container.length) return;
             
-            let html = '<div class="cfrdm-grid cfrdm-grid-2">';
+            let html = '<div class="zica-ai-grid zica-ai-grid-2">';
             
             // Orphan pages (no incoming links)
-            html += '<div class="cfrdm-card">';
-            html += '<div class="cfrdm-card-header"><h2><span class="dashicons dashicons-warning"></span> Páginas Órfãs</h2></div>';
-            html += '<div class="cfrdm-card-body">';
+            html += '<div class="zica-ai-card">';
+            html += '<div class="zica-ai-card-header"><h2><span class="dashicons dashicons-warning"></span> Páginas Órfãs</h2></div>';
+            html += '<div class="zica-ai-card-body">';
             if (data.orphan_pages && data.orphan_pages.length > 0) {
-                html += '<ul class="cfrdm-simple-list">';
+                html += '<ul class="zica-ai-simple-list">';
                 data.orphan_pages.forEach(function(page) {
                     html += '<li><a href="' + page.url + '" target="_blank">' + page.title + '</a></li>';
                 });
                 html += '</ul>';
             } else {
-                html += '<p class="cfrdm-text-muted">Nenhuma página órfã encontrada!</p>';
+                html += '<p class="zica-ai-text-muted">Nenhuma página órfã encontrada!</p>';
             }
             html += '</div></div>';
             
             // Link opportunities
-            html += '<div class="cfrdm-card">';
-            html += '<div class="cfrdm-card-header"><h2><span class="dashicons dashicons-admin-links"></span> Oportunidades de Links</h2></div>';
-            html += '<div class="cfrdm-card-body">';
+            html += '<div class="zica-ai-card">';
+            html += '<div class="zica-ai-card-header"><h2><span class="dashicons dashicons-admin-links"></span> Oportunidades de Links</h2></div>';
+            html += '<div class="zica-ai-card-body">';
             if (data.opportunities && data.opportunities.length > 0) {
                 data.opportunities.slice(0, 10).forEach(function(opp) {
-                    html += '<div class="cfrdm-link-card">';
+                    html += '<div class="zica-ai-link-card">';
                     html += '<div class="link-icon"><span class="dashicons dashicons-admin-links"></span></div>';
                     html += '<div class="link-content">';
                     html += '<div class="link-title">' + opp.from_title + '</div>';
@@ -418,13 +418,13 @@
                     html += '</div>';
                 });
             } else {
-                html += '<p class="cfrdm-text-muted">Nenhuma oportunidade encontrada.</p>';
+                html += '<p class="zica-ai-text-muted">Nenhuma oportunidade encontrada.</p>';
             }
             html += '</div></div>';
             
             html += '</div>';
             
-            $container.html(html).addClass('cfrdm-fade-in');
+            $container.html(html).addClass('zica-ai-fade-in');
         },
 
         // Clear Logs (via AJAX)
@@ -448,8 +448,8 @@
                 success: (response) => {
                     if (response.success) {
                         this.showNotice('success', 'Logs limpos com sucesso!');
-                        $('#cfrdm-logs-container').html(
-                            '<div class="cfrdm-empty-state">' +
+                        $('#zica-ai-logs-container').html(
+                            '<div class="zica-ai-empty-state">' +
                             '<span class="dashicons dashicons-marker"></span>' +
                             '<h3>Nenhum log registrado</h3>' +
                             '<p>Os logs aparecerão aqui conforme as atividades ocorrerem.</p>' +
@@ -491,7 +491,7 @@
                     const a = document.createElement('a');
                     a.style.display = 'none';
                     a.href = url;
-                    a.download = 'cfrdm-logs-' + new Date().toISOString().split('T')[0] + '.csv';
+                    a.download = 'zica-ai-logs-' + new Date().toISOString().split('T')[0] + '.csv';
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(url);
@@ -510,7 +510,7 @@
         // Refresh Stats
         refreshStats: function(e) {
             if (e) e.preventDefault();
-            const $btn = $('#cfrdm-refresh-stats');
+            const $btn = $('#zica-ai-refresh-stats');
             
             if ($btn.length) {
                 this.setButtonLoading($btn, '');
@@ -572,15 +572,15 @@
 
         // Filter Logs
         filterLogs: function() {
-            const type = $('#cfrdm-log-filter-type').val();
-            const category = $('#cfrdm-log-filter-category').val();
-            const search = $('#cfrdm-log-search').val().toLowerCase();
+            const type = $('#zica-ai-log-filter-type').val();
+            const category = $('#zica-ai-log-filter-category').val();
+            const search = $('#zica-ai-log-search').val().toLowerCase();
             
-            $('.cfrdm-log-item').each(function() {
+            $('.zica-ai-log-item').each(function() {
                 const $item = $(this);
                 const itemType = $item.data('type');
                 const itemCategory = $item.data('category');
-                const itemMessage = $item.find('.cfrdm-log-message').text().toLowerCase();
+                const itemMessage = $item.find('.zica-ai-log-message').text().toLowerCase();
                 
                 let visible = true;
                 
@@ -594,12 +594,12 @@
 
         // Toggle Log Details
         toggleLogDetails: function() {
-            $(this).closest('.cfrdm-log-item').find('.cfrdm-log-context').slideToggle();
+            $(this).closest('.zica-ai-log-item').find('.zica-ai-log-context').slideToggle();
         },
 
         // Initialize Charts
         initCharts: function() {
-            const $chartCanvas = $('#cfrdm-activity-chart');
+            const $chartCanvas = $('#zica-ai-activity-chart');
             if (!$chartCanvas.length || typeof Chart === 'undefined') return;
             
             const ctx = $chartCanvas[0].getContext('2d');
@@ -686,7 +686,7 @@
 
         // Update Connection Status
         updateConnectionStatus: function(isConnected, version) {
-            const $card = $('.cfrdm-connection-card');
+            const $card = $('.zica-ai-connection-card');
             const $indicator = $('.status-indicator');
             const $text = $('.status-text');
             
@@ -713,10 +713,10 @@
 
         // Display Autocorrect Results
         displayAutocorrectResults: function(issues) {
-            const $container = $('#cfrdm-autocorrect-results');
+            const $container = $('#zica-ai-autocorrect-results');
             if (!$container.length) return;
             
-            let html = '<div class="cfrdm-table-container"><table class="cfrdm-table">';
+            let html = '<div class="zica-ai-table-container"><table class="zica-ai-table">';
             html += '<thead><tr><th>Artigo</th><th>Problema</th><th>Status</th></tr></thead>';
             html += '<tbody>';
             
@@ -727,13 +727,13 @@
                 html += '<tr>';
                 html += '<td><a href="' + issue.edit_url + '" target="_blank">' + issue.title + '</a></td>';
                 html += '<td>' + issue.description + '</td>';
-                html += '<td><span class="cfrdm-status-badge ' + statusClass + '">' + statusText + '</span></td>';
+                html += '<td><span class="zica-ai-status-badge ' + statusClass + '">' + statusText + '</span></td>';
                 html += '</tr>';
             });
             
             html += '</tbody></table></div>';
             
-            $container.html(html).addClass('cfrdm-fade-in');
+            $container.html(html).addClass('zica-ai-fade-in');
         },
 
         // Helper Functions
@@ -759,7 +759,7 @@
 
         showNotice: function(type, message) {
             const $notice = $(
-                '<div class="notice notice-' + type + ' is-dismissible cfrdm-fade-in">' +
+                '<div class="notice notice-' + type + ' is-dismissible zica-ai-fade-in">' +
                 '<p>' + message + '</p>' +
                 '<button type="button" class="notice-dismiss">' +
                 '<span class="screen-reader-text">Dispensar este aviso.</span>' +
@@ -767,10 +767,10 @@
             );
             
             // Remove existing notices
-            $('.cfrdm-wrap > .notice').remove();
+            $('.zica-ai-wrap > .notice').remove();
             
             // Add new notice
-            $('.cfrdm-wrap h1').after($notice);
+            $('.zica-ai-wrap h1').after($notice);
             
             // Bind dismiss button
             $notice.find('.notice-dismiss').on('click', function() {

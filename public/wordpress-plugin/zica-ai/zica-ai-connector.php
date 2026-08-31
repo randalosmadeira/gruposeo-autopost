@@ -20,26 +20,26 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('CFRDM_VERSION', '3.8.0');
-define('CFRDM_PLUGIN_DIR', plugin_dir_path(__FILE__));
-define('CFRDM_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('CFRDM_PLUGIN_BASENAME', plugin_basename(__FILE__));
-define('CFRDM_LOG_TABLE', 'cfrdm_logs');
-define('CFRDM_NEWS_TABLE', 'cfrdm_news');
-define('CFRDM_STRUCTURED_LOGS_TABLE', 'cfrdm_structured_logs');
-define('CFRDM_SOCIAL_QUEUE_TABLE', 'cfrdm_social_queue');
-define('CFRDM_SOCIAL_ACCOUNTS_TABLE', 'cfrdm_social_accounts');
-define('CFRDM_CRON_JOBS_TABLE', 'cfrdm_cron_jobs');
-define('CFRDM_CRON_HISTORY_TABLE', 'cfrdm_cron_history');
-define('CFRDM_CONTENT_QUEUE_TABLE', 'cfrdm_content_queue');
-define('CFRDM_FIX_QUEUE_TABLE', 'cfrdm_fix_queue');
-define('CFRDM_UBERSUGGEST_TABLE', 'cfrdm_ubersuggest_data');
+define('ZICA_AI_VERSION', '3.8.0');
+define('ZICA_AI_PLUGIN_DIR', plugin_dir_path(__FILE__));
+define('ZICA_AI_PLUGIN_URL', plugin_dir_url(__FILE__));
+define('ZICA_AI_PLUGIN_BASENAME', plugin_basename(__FILE__));
+define('ZICA_AI_LOG_TABLE', 'cfrdm_logs');
+define('ZICA_AI_NEWS_TABLE', 'cfrdm_news');
+define('ZICA_AI_STRUCTURED_LOGS_TABLE', 'cfrdm_structured_logs');
+define('ZICA_AI_SOCIAL_QUEUE_TABLE', 'cfrdm_social_queue');
+define('ZICA_AI_SOCIAL_ACCOUNTS_TABLE', 'cfrdm_social_accounts');
+define('ZICA_AI_CRON_JOBS_TABLE', 'cfrdm_cron_jobs');
+define('ZICA_AI_CRON_HISTORY_TABLE', 'cfrdm_cron_history');
+define('ZICA_AI_CONTENT_QUEUE_TABLE', 'cfrdm_content_queue');
+define('ZICA_AI_FIX_QUEUE_TABLE', 'cfrdm_fix_queue');
+define('ZICA_AI_UBERSUGGEST_TABLE', 'cfrdm_ubersuggest_data');
 
 /**
  * CRITICAL: Lazy load includes to prevent conflicts with page builders
  * Only load classes when needed to avoid memory issues and conflicts
  */
-function cfrdm_load_dependencies() {
+function zica_ai_load_dependencies() {
     static $loaded = false;
     
     if ($loaded) {
@@ -49,96 +49,96 @@ function cfrdm_load_dependencies() {
     $loaded = true;
     
     // Core classes - always needed
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-logger.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-diagnostics.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-webhooks.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-api.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-articles.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-media.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-seo.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-structured-logs.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-seo.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-image-filter.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-logger.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-diagnostics.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-webhooks.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-api.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-articles.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-media.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-seo.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-structured-logs.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-ai-seo.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-image-filter.php';
     
     // Article Indexer - needed for REST API endpoints (must be loaded always, not just in admin)
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-article-indexer.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-article-indexer.php';
     
     // Advanced modules
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-social-poster.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-social-admin.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-cron-scheduler.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-content-queue.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-social-poster.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-social-admin.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-cron-scheduler.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-content-queue.php';
     
     // v3.0.0 - AI Auto-Fix modules
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-gsc-integration.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-auto-fix.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ubersuggest-sync.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-https-enforcer.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-auto-update.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-content-enhancer.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-gsc-integration.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-ai-auto-fix.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-ubersuggest-sync.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-https-enforcer.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-auto-update.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-ai-content-enhancer.php';
     
     // v3.1.0 - SEO Discovery & Automation modules
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-meta-auditor.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-indexnow.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-llms-txt.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-post-duplicator.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-sitemap-optimizer.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-meta-auditor.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-indexnow.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-llms-txt.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-post-duplicator.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-sitemap-optimizer.php';
     
     // v3.2.3 - AI Traffic Detection & SEO Checklist
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-traffic-detector.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-seo-checklist.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-ai-traffic-detector.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-seo-checklist.php';
     
     // v3.2.4 - Method Signature Validator (prevents fatal errors from missing/incompatible methods)
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-method-validator.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-method-validator.php';
     
     // v3.4.3 - Redirect Manager
-    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-redirect-manager.php')) {
-        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-redirect-manager.php';
+    if (file_exists(ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-redirect-manager.php')) {
+        require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-redirect-manager.php';
     }
     
     // v3.5.0 - Site Crawler (real HTTP-based SEO audit)
-    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-site-crawler.php')) {
-        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-site-crawler.php';
+    if (file_exists(ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-site-crawler.php')) {
+        require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-site-crawler.php';
     }
     
     // v3.6.0 - Bulk Meta Update API (Rank Math / Yoast compatible)
-    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-bulk-meta.php')) {
-        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-bulk-meta.php';
+    if (file_exists(ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-bulk-meta.php')) {
+        require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-bulk-meta.php';
     }
     
     // v3.6.0 - AI Auto SEO Fix (404 redirects, bulk title/meta correction)
-    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-auto-seo-fix.php')) {
-        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-auto-seo-fix.php';
-        CFRDM_AI_Auto_SEO_Fix::init();
+    if (file_exists(ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-ai-auto-seo-fix.php')) {
+        require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-ai-auto-seo-fix.php';
+        ZICA_AI_AI_Auto_SEO_Fix::init();
     }
     
     // v3.6.0 - Noindex Manager (autonomous low-value page handler)
-    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-noindex-manager.php')) {
-        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-noindex-manager.php';
+    if (file_exists(ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-noindex-manager.php')) {
+        require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-noindex-manager.php';
     }
     
     // v3.7.0 - Instant Indexing Engine (IndexMeNow-style)
-    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-instant-indexing.php')) {
-        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-instant-indexing.php';
+    if (file_exists(ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-instant-indexing.php')) {
+        require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-instant-indexing.php';
     }
     
     // v3.2.7 - AI Source Rules, Google Indexing Submitter, GMB Auto-Poster
-    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-source-rules.php')) {
-        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-ai-source-rules.php';
+    if (file_exists(ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-ai-source-rules.php')) {
+        require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-ai-source-rules.php';
     }
-    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-google-indexing-submitter.php')) {
-        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-google-indexing-submitter.php';
+    if (file_exists(ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-google-indexing-submitter.php')) {
+        require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-google-indexing-submitter.php';
     }
-    if (file_exists(CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-gmb-poster.php')) {
-        require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-gmb-poster.php';
+    if (file_exists(ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-gmb-poster.php')) {
+        require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-gmb-poster.php';
     }
 }
 
 /**
  * Load admin dependencies only when needed
  */
-function cfrdm_load_admin_dependencies() {
-    cfrdm_load_dependencies();
+function zica_ai_load_admin_dependencies() {
+    zica_ai_load_dependencies();
     
     static $admin_loaded = false;
     
@@ -148,23 +148,23 @@ function cfrdm_load_admin_dependencies() {
     
     $admin_loaded = true;
     
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-admin.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-diagnostics-page.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-image-optimizer.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-sync.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-internal-links.php';
-    // Note: class-cfrdm-article-indexer.php is now loaded in cfrdm_load_dependencies() for REST API access
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-indexing.php';
-    require_once CFRDM_PLUGIN_DIR . 'includes/class-cfrdm-schema-validator.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-admin.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-diagnostics-page.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-image-optimizer.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-sync.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-internal-links.php';
+    // Note: class-zica-ai-article-indexer.php is now loaded in zica_ai_load_dependencies() for REST API access
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-indexing.php';
+    require_once ZICA_AI_PLUGIN_DIR . 'includes/class-zica-ai-schema-validator.php';
 }
 
 /**
  * Check if tables exist
  */
-function cfrdm_tables_exist() {
+function zica_ai_tables_exist() {
     global $wpdb;
     
-    $logs_table = $wpdb->prefix . CFRDM_LOG_TABLE;
+    $logs_table = $wpdb->prefix . ZICA_AI_LOG_TABLE;
     $result = $wpdb->get_var($wpdb->prepare(
         "SHOW TABLES LIKE %s",
         $logs_table
@@ -201,35 +201,35 @@ class Zica_AI_Connector_Core {
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
         
         // Load core dependencies for REST API
-        cfrdm_load_dependencies();
+        zica_ai_load_dependencies();
         
         // Initialize Article Indexer for REST API endpoints (must work for external API calls)
-        if (class_exists('CFRDM_Article_Indexer')) {
-            new CFRDM_Article_Indexer();
+        if (class_exists('ZICA_AI_Article_Indexer')) {
+            new ZICA_AI_Article_Indexer();
         }
         
         // Initialize v3.1.0 modules (work in all contexts)
         try {
-            if (class_exists('CFRDM_IndexNow')) CFRDM_IndexNow::get_instance()->init();
-            if (class_exists('CFRDM_LLMS_Txt')) CFRDM_LLMS_Txt::get_instance()->init();
-            if (class_exists('CFRDM_Sitemap_Optimizer')) CFRDM_Sitemap_Optimizer::get_instance()->init();
-            if (class_exists('CFRDM_Meta_Auditor')) CFRDM_Meta_Auditor::get_instance()->init();
+            if (class_exists('ZICA_AI_IndexNow')) ZICA_AI_IndexNow::get_instance()->init();
+            if (class_exists('ZICA_AI_LLMS_Txt')) ZICA_AI_LLMS_Txt::get_instance()->init();
+            if (class_exists('ZICA_AI_Sitemap_Optimizer')) ZICA_AI_Sitemap_Optimizer::get_instance()->init();
+            if (class_exists('ZICA_AI_Meta_Auditor')) ZICA_AI_Meta_Auditor::get_instance()->init();
         } catch (\Throwable $e) {
             error_log('Zica.ai v3.1.0 init error: ' . $e->getMessage());
         }
         
         // Initialize v3.2.3 modules
         try {
-            if (class_exists('CFRDM_AI_Traffic_Detector')) CFRDM_AI_Traffic_Detector::get_instance()->init();
-            if (class_exists('CFRDM_SEO_Checklist')) CFRDM_SEO_Checklist::get_instance()->init();
+            if (class_exists('ZICA_AI_AI_Traffic_Detector')) ZICA_AI_AI_Traffic_Detector::get_instance()->init();
+            if (class_exists('ZICA_AI_SEO_Checklist')) ZICA_AI_SEO_Checklist::get_instance()->init();
         } catch (\Throwable $e) {
             error_log('Zica.ai v3.2.3 init error: ' . $e->getMessage());
         }
         
         // Initialize v3.4.3 - Redirect Manager
         try {
-            if (class_exists('CFRDM_Redirect_Manager')) {
-                CFRDM_Redirect_Manager::get_instance()->init();
+            if (class_exists('ZICA_AI_Redirect_Manager')) {
+                ZICA_AI_Redirect_Manager::get_instance()->init();
             }
         } catch (\Throwable $e) {
             error_log('Zica.ai Redirect Manager init error: ' . $e->getMessage());
@@ -237,8 +237,8 @@ class Zica_AI_Connector_Core {
         
         // Initialize v3.6.0 - Bulk Meta API
         try {
-            if (class_exists('CFRDM_Bulk_Meta')) {
-                CFRDM_Bulk_Meta::get_instance()->init();
+            if (class_exists('ZICA_AI_Bulk_Meta')) {
+                ZICA_AI_Bulk_Meta::get_instance()->init();
             }
         } catch (\Throwable $e) {
             error_log('Zica.ai Bulk Meta init error: ' . $e->getMessage());
@@ -246,9 +246,9 @@ class Zica_AI_Connector_Core {
         
         // Initialize v3.6.0 - Noindex Manager
         try {
-            if (class_exists('CFRDM_Noindex_Manager')) {
-                CFRDM_Noindex_Manager::get_instance()->init();
-                add_action('wp_head', array('CFRDM_Noindex_Manager', 'inject_noindex_tags'), 1);
+            if (class_exists('ZICA_AI_Noindex_Manager')) {
+                ZICA_AI_Noindex_Manager::get_instance()->init();
+                add_action('wp_head', array('ZICA_AI_Noindex_Manager', 'inject_noindex_tags'), 1);
             }
         } catch (\Throwable $e) {
             error_log('Zica.ai Noindex Manager init error: ' . $e->getMessage());
@@ -256,8 +256,8 @@ class Zica_AI_Connector_Core {
         
         // Initialize v3.7.0 - Instant Indexing Engine
         try {
-            if (class_exists('CFRDM_Instant_Indexing')) {
-                CFRDM_Instant_Indexing::get_instance()->init();
+            if (class_exists('ZICA_AI_Instant_Indexing')) {
+                ZICA_AI_Instant_Indexing::get_instance()->init();
             }
         } catch (\Throwable $e) {
             error_log('Zica.ai Instant Indexing init error: ' . $e->getMessage());
@@ -265,14 +265,14 @@ class Zica_AI_Connector_Core {
         
         // Initialize v3.2.7 modules
         try {
-            if (class_exists('CFRDM_AI_Source_Rules')) {
-                CFRDM_AI_Source_Rules::get_instance()->init();
+            if (class_exists('ZICA_AI_AI_Source_Rules')) {
+                ZICA_AI_AI_Source_Rules::get_instance()->init();
             }
-            if (class_exists('CFRDM_Google_Indexing_Submitter')) {
-                CFRDM_Google_Indexing_Submitter::get_instance()->init();
+            if (class_exists('ZICA_AI_Google_Indexing_Submitter')) {
+                ZICA_AI_Google_Indexing_Submitter::get_instance()->init();
             }
-            if (class_exists('CFRDM_GMB_Poster')) {
-                CFRDM_GMB_Poster::get_instance()->init();
+            if (class_exists('ZICA_AI_GMB_Poster')) {
+                ZICA_AI_GMB_Poster::get_instance()->init();
             }
         } catch (\Throwable $e) {
             error_log('Zica.ai v3.2.7 init error: ' . $e->getMessage());
@@ -280,12 +280,12 @@ class Zica_AI_Connector_Core {
         
         // Initialize v3.0.0 modules (cron callbacks + hooks)
         try {
-            if (class_exists('CFRDM_GSC_Integration')) CFRDM_GSC_Integration::get_instance()->init();
-            if (class_exists('CFRDM_AI_Auto_Fix')) CFRDM_AI_Auto_Fix::get_instance()->init();
-            if (class_exists('CFRDM_Ubersuggest_Sync')) CFRDM_Ubersuggest_Sync::get_instance()->init();
-            if (class_exists('CFRDM_HTTPS_Enforcer')) CFRDM_HTTPS_Enforcer::get_instance()->init();
-            if (class_exists('CFRDM_Auto_Update')) CFRDM_Auto_Update::get_instance()->init();
-            if (class_exists('CFRDM_AI_Content_Enhancer')) CFRDM_AI_Content_Enhancer::get_instance()->init();
+            if (class_exists('ZICA_AI_GSC_Integration')) ZICA_AI_GSC_Integration::get_instance()->init();
+            if (class_exists('ZICA_AI_AI_Auto_Fix')) ZICA_AI_AI_Auto_Fix::get_instance()->init();
+            if (class_exists('ZICA_AI_Ubersuggest_Sync')) ZICA_AI_Ubersuggest_Sync::get_instance()->init();
+            if (class_exists('ZICA_AI_HTTPS_Enforcer')) ZICA_AI_HTTPS_Enforcer::get_instance()->init();
+            if (class_exists('ZICA_AI_Auto_Update')) ZICA_AI_Auto_Update::get_instance()->init();
+            if (class_exists('ZICA_AI_AI_Content_Enhancer')) ZICA_AI_AI_Content_Enhancer::get_instance()->init();
         } catch (\Throwable $e) {
             error_log('Zica.ai v3.0.0 init error: ' . $e->getMessage());
         }
@@ -296,7 +296,7 @@ class Zica_AI_Connector_Core {
             
             // Post Duplicator (admin only)
             try {
-                if (class_exists('CFRDM_Post_Duplicator')) CFRDM_Post_Duplicator::get_instance()->init();
+                if (class_exists('ZICA_AI_Post_Duplicator')) ZICA_AI_Post_Duplicator::get_instance()->init();
             } catch (\Throwable $e) {
                 error_log('Zica.ai Post Duplicator init error: ' . $e->getMessage());
             }
@@ -306,10 +306,10 @@ class Zica_AI_Connector_Core {
         add_action('rest_api_init', array($this, 'register_rest_routes'));
         
         // Plugin action links
-        add_filter('plugin_action_links_' . CFRDM_PLUGIN_BASENAME, array($this, 'add_action_links'));
+        add_filter('plugin_action_links_' . ZICA_AI_PLUGIN_BASENAME, array($this, 'add_action_links'));
         
         // Register custom cron intervals
-        add_filter('cron_schedules', array('CFRDM_Cron_Scheduler', 'register_intervals'));
+        add_filter('cron_schedules', array('ZICA_AI_Cron_Scheduler', 'register_intervals'));
         
         // Cron jobs - only schedule if not already scheduled
         add_action('init', array($this, 'schedule_cron_jobs'));
@@ -361,11 +361,11 @@ class Zica_AI_Connector_Core {
     
 private function init_admin_hooks() {
         // Run diagnostics BEFORE enabling operational hooks
-        cfrdm_load_dependencies();
-        if (class_exists('CFRDM_Diagnostics')) {
-            $this->diagnostics_report = CFRDM_Diagnostics::get_report();
+        zica_ai_load_dependencies();
+        if (class_exists('ZICA_AI_Diagnostics')) {
+            $this->diagnostics_report = ZICA_AI_Diagnostics::get_report();
             $status = $this->diagnostics_report['status'] ?? 'ok';
-            $this->operational_hooks_enabled = ($status !== CFRDM_Diagnostics::STATUS_CRITICAL);
+            $this->operational_hooks_enabled = ($status !== ZICA_AI_Diagnostics::STATUS_CRITICAL);
         } else {
             $this->operational_hooks_enabled = true;
         }
@@ -376,7 +376,7 @@ private function init_admin_hooks() {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
         add_action('admin_init', array($this, 'register_settings'));
-        add_action('admin_init', array('CFRDM_Method_Validator', 'validate'), 999);
+        add_action('admin_init', array('ZICA_AI_Method_Validator', 'validate'), 999);
 
         // AJAX handlers - load dependencies only when AJAX is called
         add_action('wp_ajax_cfrdm_clear_logs', array($this, 'handle_ajax_clear_logs'));
@@ -439,7 +439,7 @@ private function init_admin_hooks() {
             echo '<p><strong>Avisos:</strong> ' . esc_html(implode(' | ', array_slice($warn, 0, 3))) . '</p>';
         }
 
-        echo '<p><a href="' . esc_url(admin_url('admin.php?page=cfrdm-diagnostics')) . '">Abrir Diagnóstico</a></p>';
+        echo '<p><a href="' . esc_url(admin_url('admin.php?page=zica-ai-diagnostics')) . '">Abrir Diagnóstico</a></p>';
         echo '</div>';
     }
     
@@ -447,43 +447,43 @@ private function init_admin_hooks() {
      * AJAX Handlers with lazy loading
      */
     public function handle_ajax_clear_logs() {
-        cfrdm_load_admin_dependencies();
-        CFRDM_Admin::ajax_clear_logs();
+        zica_ai_load_admin_dependencies();
+        ZICA_AI_Admin::ajax_clear_logs();
     }
     
     public function handle_ajax_export_logs() {
-        cfrdm_load_admin_dependencies();
-        CFRDM_Admin::ajax_export_logs();
+        zica_ai_load_admin_dependencies();
+        ZICA_AI_Admin::ajax_export_logs();
     }
     
     public function handle_ajax_sync_stats() {
-        cfrdm_load_admin_dependencies();
-        CFRDM_Admin::ajax_sync_stats();
+        zica_ai_load_admin_dependencies();
+        ZICA_AI_Admin::ajax_sync_stats();
     }
     
     public function handle_ajax_dismiss_news() {
-        cfrdm_load_admin_dependencies();
-        CFRDM_Admin::ajax_dismiss_news();
+        zica_ai_load_admin_dependencies();
+        ZICA_AI_Admin::ajax_dismiss_news();
     }
     
     public function handle_ajax_run_autocorrect() {
-        cfrdm_load_admin_dependencies();
-        CFRDM_Admin::ajax_run_autocorrect();
+        zica_ai_load_admin_dependencies();
+        ZICA_AI_Admin::ajax_run_autocorrect();
     }
     
     public function handle_ajax_analyze_links() {
-        cfrdm_load_admin_dependencies();
-        CFRDM_Admin::ajax_analyze_links();
+        zica_ai_load_admin_dependencies();
+        ZICA_AI_Admin::ajax_analyze_links();
     }
     
     public function handle_ajax_generate_links() {
-        cfrdm_load_admin_dependencies();
-        CFRDM_Admin::ajax_generate_links();
+        zica_ai_load_admin_dependencies();
+        ZICA_AI_Admin::ajax_generate_links();
     }
     
     public function handle_ajax_validate_schema() {
-        cfrdm_load_admin_dependencies();
-        CFRDM_Admin::ajax_validate_schema();
+        zica_ai_load_admin_dependencies();
+        ZICA_AI_Admin::ajax_validate_schema();
     }
     
     /**
@@ -497,7 +497,7 @@ private function init_admin_hooks() {
             return;
         }
         
-        cfrdm_load_dependencies();
+        zica_ai_load_dependencies();
         
         global $wpdb;
         $charset_collate = $wpdb->get_charset_collate();
@@ -615,8 +615,8 @@ private function init_admin_hooks() {
         }
         
         // Create tables from modules
-        if (class_exists('CFRDM_Social_Poster')) {
-            CFRDM_Social_Poster::create_tables();
+        if (class_exists('ZICA_AI_Social_Poster')) {
+            ZICA_AI_Social_Poster::create_tables();
             if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $wpdb->prefix . 'cfrdm_social_queue'))) {
                 $created[] = 'cfrdm_social_queue';
             }
@@ -625,8 +625,8 @@ private function init_admin_hooks() {
             }
         }
         
-        if (class_exists('CFRDM_Cron_Scheduler')) {
-            CFRDM_Cron_Scheduler::create_tables();
+        if (class_exists('ZICA_AI_Cron_Scheduler')) {
+            ZICA_AI_Cron_Scheduler::create_tables();
             if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $wpdb->prefix . 'cfrdm_cron_jobs'))) {
                 $created[] = 'cfrdm_cron_jobs';
             }
@@ -635,8 +635,8 @@ private function init_admin_hooks() {
             }
         }
         
-        if (class_exists('CFRDM_Content_Queue')) {
-            CFRDM_Content_Queue::create_table();
+        if (class_exists('ZICA_AI_Content_Queue')) {
+            ZICA_AI_Content_Queue::create_table();
             if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $wpdb->prefix . 'cfrdm_content_queue'))) {
                 $created[] = 'cfrdm_content_queue';
             }
@@ -680,8 +680,8 @@ private function init_admin_hooks() {
             return;
         }
         
-        cfrdm_load_admin_dependencies();
-        CFRDM_Webhooks::on_post_status_change($new_status, $old_status, $post);
+        zica_ai_load_admin_dependencies();
+        ZICA_AI_Webhooks::on_post_status_change($new_status, $old_status, $post);
     }
     
     public function handle_post_delete($post_id) {
@@ -690,8 +690,8 @@ private function init_admin_hooks() {
             return;
         }
         
-        cfrdm_load_admin_dependencies();
-        CFRDM_Webhooks::on_post_delete($post_id);
+        zica_ai_load_admin_dependencies();
+        ZICA_AI_Webhooks::on_post_delete($post_id);
     }
     
     public function handle_attachment_upload($attachment_id) {
@@ -700,13 +700,13 @@ private function init_admin_hooks() {
             return;
         }
         
-        cfrdm_load_admin_dependencies();
-        CFRDM_Image_Optimizer::optimize_on_upload($attachment_id);
+        zica_ai_load_admin_dependencies();
+        ZICA_AI_Image_Optimizer::optimize_on_upload($attachment_id);
     }
     
     public function handle_attachment_metadata($metadata, $attachment_id) {
-        cfrdm_load_admin_dependencies();
-        return CFRDM_Image_Optimizer::optimize_thumbnails($metadata, $attachment_id);
+        zica_ai_load_admin_dependencies();
+        return ZICA_AI_Image_Optimizer::optimize_thumbnails($metadata, $attachment_id);
     }
     
     public function handle_save_post($post_id, $post, $update) {
@@ -724,8 +724,8 @@ private function init_admin_hooks() {
             return;
         }
         
-        cfrdm_load_admin_dependencies();
-        CFRDM_Sync::auto_correct_post($post_id, $post, $update);
+        zica_ai_load_admin_dependencies();
+        ZICA_AI_Sync::auto_correct_post($post_id, $post, $update);
     }
     
     /**
@@ -791,29 +791,29 @@ private function init_admin_hooks() {
     public function activate() {
         // CRITICAL: Register cron intervals FIRST before any module init
         // This prevents fatal errors when modules try to use custom intervals
-        if (class_exists('CFRDM_Cron_Scheduler')) {
-            add_filter('cron_schedules', array('CFRDM_Cron_Scheduler', 'register_intervals'));
+        if (class_exists('ZICA_AI_Cron_Scheduler')) {
+            add_filter('cron_schedules', array('ZICA_AI_Cron_Scheduler', 'register_intervals'));
         }
         
         // Create database tables
         $this->create_tables();
         
         // Create advanced module tables
-        cfrdm_load_dependencies();
+        zica_ai_load_dependencies();
         
         try {
-            CFRDM_Structured_Logs::create_table();
-            CFRDM_Social_Poster::create_tables();
-            CFRDM_Cron_Scheduler::create_tables();
-            CFRDM_Content_Queue::create_table();
+            ZICA_AI_Structured_Logs::create_table();
+            ZICA_AI_Social_Poster::create_tables();
+            ZICA_AI_Cron_Scheduler::create_tables();
+            ZICA_AI_Content_Queue::create_table();
             
             // v3.0.0 - Create AI Auto-Fix tables
-            CFRDM_AI_Auto_Fix::create_table();
-            CFRDM_Ubersuggest_Sync::create_table();
+            ZICA_AI_AI_Auto_Fix::create_table();
+            ZICA_AI_Ubersuggest_Sync::create_table();
             
             // v3.2.7 - Create GMB table
-            if (class_exists('CFRDM_GMB_Poster')) {
-                CFRDM_GMB_Poster::create_tables();
+            if (class_exists('ZICA_AI_GMB_Poster')) {
+                ZICA_AI_GMB_Poster::create_tables();
             }
         } catch (\Throwable $e) {
             error_log('Zica.ai RDM table creation error: ' . $e->getMessage());
@@ -821,30 +821,30 @@ private function init_admin_hooks() {
         
         // Initialize modules AFTER cron intervals are registered
         try {
-            if (class_exists('CFRDM_GSC_Integration')) CFRDM_GSC_Integration::get_instance()->init();
-            if (class_exists('CFRDM_AI_Auto_Fix')) CFRDM_AI_Auto_Fix::get_instance()->init();
-            if (class_exists('CFRDM_Ubersuggest_Sync')) CFRDM_Ubersuggest_Sync::get_instance()->init();
-            if (class_exists('CFRDM_HTTPS_Enforcer')) CFRDM_HTTPS_Enforcer::get_instance()->init();
-            if (class_exists('CFRDM_Auto_Update')) CFRDM_Auto_Update::get_instance()->init();
-            if (class_exists('CFRDM_AI_Content_Enhancer')) CFRDM_AI_Content_Enhancer::get_instance()->init();
+            if (class_exists('ZICA_AI_GSC_Integration')) ZICA_AI_GSC_Integration::get_instance()->init();
+            if (class_exists('ZICA_AI_AI_Auto_Fix')) ZICA_AI_AI_Auto_Fix::get_instance()->init();
+            if (class_exists('ZICA_AI_Ubersuggest_Sync')) ZICA_AI_Ubersuggest_Sync::get_instance()->init();
+            if (class_exists('ZICA_AI_HTTPS_Enforcer')) ZICA_AI_HTTPS_Enforcer::get_instance()->init();
+            if (class_exists('ZICA_AI_Auto_Update')) ZICA_AI_Auto_Update::get_instance()->init();
+            if (class_exists('ZICA_AI_AI_Content_Enhancer')) ZICA_AI_AI_Content_Enhancer::get_instance()->init();
             
             // v3.1.0 modules
-            if (class_exists('CFRDM_Meta_Auditor')) CFRDM_Meta_Auditor::get_instance()->init();
-            if (class_exists('CFRDM_IndexNow')) CFRDM_IndexNow::get_instance()->init();
-            if (class_exists('CFRDM_LLMS_Txt')) CFRDM_LLMS_Txt::get_instance()->init();
-            if (class_exists('CFRDM_Post_Duplicator')) CFRDM_Post_Duplicator::get_instance()->init();
-            if (class_exists('CFRDM_Sitemap_Optimizer')) CFRDM_Sitemap_Optimizer::get_instance()->init();
+            if (class_exists('ZICA_AI_Meta_Auditor')) ZICA_AI_Meta_Auditor::get_instance()->init();
+            if (class_exists('ZICA_AI_IndexNow')) ZICA_AI_IndexNow::get_instance()->init();
+            if (class_exists('ZICA_AI_LLMS_Txt')) ZICA_AI_LLMS_Txt::get_instance()->init();
+            if (class_exists('ZICA_AI_Post_Duplicator')) ZICA_AI_Post_Duplicator::get_instance()->init();
+            if (class_exists('ZICA_AI_Sitemap_Optimizer')) ZICA_AI_Sitemap_Optimizer::get_instance()->init();
             
             // v3.2.7 modules
-            if (class_exists('CFRDM_AI_Source_Rules')) CFRDM_AI_Source_Rules::get_instance()->init();
-            if (class_exists('CFRDM_Google_Indexing_Submitter')) CFRDM_Google_Indexing_Submitter::get_instance()->init();
-            if (class_exists('CFRDM_GMB_Poster')) CFRDM_GMB_Poster::get_instance()->init();
+            if (class_exists('ZICA_AI_AI_Source_Rules')) ZICA_AI_AI_Source_Rules::get_instance()->init();
+            if (class_exists('ZICA_AI_Google_Indexing_Submitter')) ZICA_AI_Google_Indexing_Submitter::get_instance()->init();
+            if (class_exists('ZICA_AI_GMB_Poster')) ZICA_AI_GMB_Poster::get_instance()->init();
         } catch (\Throwable $e) {
             error_log('Zica.ai RDM activation error: ' . $e->getMessage());
         }
         
         // Register default cron jobs
-        CFRDM_Cron_Scheduler::register_default_jobs();
+        ZICA_AI_Cron_Scheduler::register_default_jobs();
         
         // Generate API key if not exists
         if (!get_option('zica_ai_api_key')) {
@@ -877,11 +877,11 @@ private function init_admin_hooks() {
         
         // Force-enable llms.txt on VPS activation and generate physical files immediately
         update_option('cfrdm_llms_txt_enabled', true);
-        if (class_exists('CFRDM_LLMS_Txt')) {
+        if (class_exists('ZICA_AI_LLMS_Txt')) {
             try {
-                CFRDM_LLMS_Txt::get_instance()->regenerate();
-                if (cfrdm_tables_exist()) {
-                    CFRDM_Logger::log('system', 'llms.txt gerado com sucesso na ativação (VPS)', array('path' => ABSPATH . 'llms.txt'));
+                ZICA_AI_LLMS_Txt::get_instance()->regenerate();
+                if (zica_ai_tables_exist()) {
+                    ZICA_AI_Logger::log('system', 'llms.txt gerado com sucesso na ativação (VPS)', array('path' => ABSPATH . 'llms.txt'));
                 }
             } catch (\Throwable $e) {
                 error_log('Zica.ai llms.txt generation error: ' . $e->getMessage());
@@ -892,8 +892,8 @@ private function init_admin_hooks() {
         flush_rewrite_rules();
         
         // Log activation AFTER tables are created
-        if (cfrdm_tables_exist()) {
-            CFRDM_Logger::log('system', 'Plugin ativado', array('version' => CFRDM_VERSION));
+        if (zica_ai_tables_exist()) {
+            ZICA_AI_Logger::log('system', 'Plugin ativado', array('version' => ZICA_AI_VERSION));
         }
     }
     
@@ -907,9 +907,9 @@ private function init_admin_hooks() {
         
         flush_rewrite_rules();
         
-        if (cfrdm_tables_exist()) {
-            cfrdm_load_dependencies();
-            CFRDM_Logger::log('system', 'Plugin desativado');
+        if (zica_ai_tables_exist()) {
+            zica_ai_load_dependencies();
+            ZICA_AI_Logger::log('system', 'Plugin desativado');
         }
     }
     
@@ -919,7 +919,7 @@ private function init_admin_hooks() {
         $charset_collate = $wpdb->get_charset_collate();
         
         // Logs table
-        $logs_table = $wpdb->prefix . CFRDM_LOG_TABLE;
+        $logs_table = $wpdb->prefix . ZICA_AI_LOG_TABLE;
         $sql_logs = "CREATE TABLE IF NOT EXISTS $logs_table (
             id bigint(20) NOT NULL AUTO_INCREMENT,
             log_type varchar(50) NOT NULL DEFAULT 'info',
@@ -938,7 +938,7 @@ private function init_admin_hooks() {
         ) $charset_collate;";
         
         // News/Updates table
-        $news_table = $wpdb->prefix . CFRDM_NEWS_TABLE;
+        $news_table = $wpdb->prefix . ZICA_AI_NEWS_TABLE;
         $sql_news = "CREATE TABLE IF NOT EXISTS $news_table (
             id bigint(20) NOT NULL AUTO_INCREMENT,
             news_id varchar(100) NOT NULL,
@@ -1007,12 +1007,12 @@ private function init_admin_hooks() {
     }
     
     public function add_admin_menu() {
-        cfrdm_load_admin_dependencies();
+        zica_ai_load_admin_dependencies();
         
         // Get unread news count safely
         $unread_count = 0;
-        if (cfrdm_tables_exist()) {
-            $unread_count = CFRDM_Sync::get_unread_news_count();
+        if (zica_ai_tables_exist()) {
+            $unread_count = ZICA_AI_Sync::get_unread_news_count();
         }
         
         $menu_title = __('Zica.ai', 'zica-ai');
@@ -1025,38 +1025,38 @@ private function init_admin_hooks() {
             __('Zica.ai RDM', 'zica-ai'),
             $menu_title,
             'manage_options',
-            'cfrdm-dashboard',
-            array('CFRDM_Admin', 'render_dashboard'),
+            'zica-ai-dashboard',
+            array('ZICA_AI_Admin', 'render_dashboard'),
             'dashicons-edit-page',
             30
         );
         
         // Submenus
         add_submenu_page(
-            'cfrdm-dashboard',
+            'zica-ai-dashboard',
             __('Dashboard', 'zica-ai'),
             __('Dashboard', 'zica-ai'),
             'manage_options',
-            'cfrdm-dashboard',
-            array('CFRDM_Admin', 'render_dashboard')
+            'zica-ai-dashboard',
+            array('ZICA_AI_Admin', 'render_dashboard')
         );
         
         add_submenu_page(
-            'cfrdm-dashboard',
+            'zica-ai-dashboard',
             __('Artigos', 'zica-ai'),
             __('Artigos', 'zica-ai'),
             'manage_options',
-            'cfrdm-articles',
-            array('CFRDM_Admin', 'render_articles')
+            'zica-ai-articles',
+            array('ZICA_AI_Admin', 'render_articles')
         );
         
         add_submenu_page(
-            'cfrdm-dashboard',
+            'zica-ai-dashboard',
             __('Sincronização', 'zica-ai'),
             __('Sincronização', 'zica-ai'),
             'manage_options',
-            'cfrdm-sync',
-            array('CFRDM_Admin', 'render_sync')
+            'zica-ai-sync',
+            array('ZICA_AI_Admin', 'render_sync')
         );
         
         $news_title = __('Notícias', 'zica-ai');
@@ -1064,57 +1064,57 @@ private function init_admin_hooks() {
             $news_title .= ' <span class="awaiting-mod">' . $unread_count . '</span>';
         }
         add_submenu_page(
-            'cfrdm-dashboard',
+            'zica-ai-dashboard',
             __('Notícias e Atualizações', 'zica-ai'),
             $news_title,
             'manage_options',
-            'cfrdm-news',
-            array('CFRDM_Admin', 'render_news')
+            'zica-ai-news',
+            array('ZICA_AI_Admin', 'render_news')
         );
         
         add_submenu_page(
-            'cfrdm-dashboard',
+            'zica-ai-dashboard',
             __('Logs', 'zica-ai'),
             __('Logs', 'zica-ai'),
             'manage_options',
-            'cfrdm-logs',
-            array('CFRDM_Admin', 'render_logs')
+            'zica-ai-logs',
+            array('ZICA_AI_Admin', 'render_logs')
         );
 
         add_submenu_page(
-            'cfrdm-dashboard',
+            'zica-ai-dashboard',
             __('Diagnóstico', 'zica-ai'),
             __('Diagnóstico', 'zica-ai'),
             'manage_options',
-            'cfrdm-diagnostics',
-            array('CFRDM_Diagnostics_Page', 'render')
+            'zica-ai-diagnostics',
+            array('ZICA_AI_Diagnostics_Page', 'render')
         );
         
         add_submenu_page(
-            'cfrdm-dashboard',
+            'zica-ai-dashboard',
             __('Configurações', 'zica-ai'),
             __('Configurações', 'zica-ai'),
             'manage_options',
-            'cfrdm-settings',
-            array('CFRDM_Admin', 'render_settings')
+            'zica-ai-settings',
+            array('ZICA_AI_Admin', 'render_settings')
         );
         
         add_submenu_page(
-            'cfrdm-dashboard',
+            'zica-ai-dashboard',
             __('Indexação de Artigos', 'zica-ai'),
             __('📊 Indexação', 'zica-ai'),
             'manage_options',
-            'cfrdm-indexation',
-            array('CFRDM_Admin', 'render_article_indexation')
+            'zica-ai-indexation',
+            array('ZICA_AI_Admin', 'render_article_indexation')
         );
         
         add_submenu_page(
-            'cfrdm-dashboard',
+            'zica-ai-dashboard',
             __('Redes Sociais', 'zica-ai'),
             __('Redes Sociais', 'zica-ai'),
             'manage_options',
-            'cfrdm-social',
-            array('CFRDM_Social_Admin', 'render')
+            'zica-ai-social',
+            array('ZICA_AI_Social_Admin', 'render')
         );
     }
     
@@ -1124,17 +1124,17 @@ private function init_admin_hooks() {
         }
         
         wp_enqueue_style(
-            'cfrdm-admin',
-            CFRDM_PLUGIN_URL . 'assets/css/admin.css',
+            'zica-ai-admin',
+            ZICA_AI_PLUGIN_URL . 'assets/css/admin.css',
             array(),
-            CFRDM_VERSION
+            ZICA_AI_VERSION
         );
         
         wp_enqueue_script(
-            'cfrdm-admin',
-            CFRDM_PLUGIN_URL . 'assets/js/admin.js',
+            'zica-ai-admin',
+            ZICA_AI_PLUGIN_URL . 'assets/js/admin.js',
             array('jquery'),
-            CFRDM_VERSION,
+            ZICA_AI_VERSION,
             true
         );
         
@@ -1147,7 +1147,7 @@ private function init_admin_hooks() {
             true
         );
         
-        wp_localize_script('cfrdm-admin', 'cfrdmAdmin', array(
+        wp_localize_script('zica-ai-admin', 'cfrdmAdmin', array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'restUrl' => rest_url('zica-ai/v1/'),
             'nonce' => wp_create_nonce('cfrdm_nonce'),
@@ -1226,103 +1226,103 @@ private function init_admin_hooks() {
     }
     
     public function register_rest_routes() {
-        cfrdm_load_dependencies();
-        CFRDM_API::register_routes();
+        zica_ai_load_dependencies();
+        ZICA_AI_API::register_routes();
     }
     
     public function add_action_links($links) {
         $plugin_links = array(
-            '<a href="' . admin_url('admin.php?page=cfrdm-settings') . '">' . __('Configurações', 'zica-ai') . '</a>',
+            '<a href="' . admin_url('admin.php?page=zica-ai-settings') . '">' . __('Configurações', 'zica-ai') . '</a>',
         );
         return array_merge($plugin_links, $links);
     }
     
     public function daily_cleanup() {
-        if (!cfrdm_tables_exist()) {
+        if (!zica_ai_tables_exist()) {
             return;
         }
         
-        cfrdm_load_admin_dependencies();
+        zica_ai_load_admin_dependencies();
         
         // Clean old logs
         $retention_days = get_option('cfrdm_log_retention_days', 30);
-        CFRDM_Logger::cleanup_old_logs($retention_days);
+        ZICA_AI_Logger::cleanup_old_logs($retention_days);
         
         // Clean old dismissed news
-        CFRDM_Sync::cleanup_old_news(60);
+        ZICA_AI_Sync::cleanup_old_news(60);
         
-        CFRDM_Logger::log('system', 'Limpeza diária executada', array(
+        ZICA_AI_Logger::log('system', 'Limpeza diária executada', array(
             'log_retention_days' => $retention_days
         ));
     }
     
     public function sync_stats_callback() {
-        if (!cfrdm_tables_exist()) {
+        if (!zica_ai_tables_exist()) {
             return;
         }
         
-        cfrdm_load_admin_dependencies();
-        CFRDM_Sync::sync_stats_to_platform();
+        zica_ai_load_admin_dependencies();
+        ZICA_AI_Sync::sync_stats_to_platform();
     }
     
     public function fetch_news_callback() {
-        if (!cfrdm_tables_exist()) {
+        if (!zica_ai_tables_exist()) {
             return;
         }
         
-        cfrdm_load_admin_dependencies();
-        CFRDM_Sync::fetch_platform_news();
+        zica_ai_load_admin_dependencies();
+        ZICA_AI_Sync::fetch_platform_news();
     }
     
     /**
      * Process social media queue
      */
     public function process_social_queue_callback() {
-        cfrdm_load_dependencies();
-        CFRDM_Social_Poster::process_queue(10);
-        CFRDM_Social_Poster::cleanup(30);
+        zica_ai_load_dependencies();
+        ZICA_AI_Social_Poster::process_queue(10);
+        ZICA_AI_Social_Poster::cleanup(30);
     }
     
     /**
      * Process content queue
      */
     public function process_content_queue_callback() {
-        cfrdm_load_dependencies();
-        CFRDM_Content_Queue::process(null, 5);
-        CFRDM_Content_Queue::reset_stuck(30);
+        zica_ai_load_dependencies();
+        ZICA_AI_Content_Queue::process(null, 5);
+        ZICA_AI_Content_Queue::reset_stuck(30);
     }
     
     /**
      * Cleanup structured logs
      */
     public function cleanup_structured_logs_callback() {
-        cfrdm_load_dependencies();
-        CFRDM_Structured_Logs::cleanup(30);
+        zica_ai_load_dependencies();
+        ZICA_AI_Structured_Logs::cleanup(30);
     }
     
     /**
      * Reset stuck cron jobs
      */
     public function reset_stuck_jobs_callback() {
-        cfrdm_load_dependencies();
-        CFRDM_Cron_Scheduler::reset_stuck_jobs(15);
+        zica_ai_load_dependencies();
+        ZICA_AI_Cron_Scheduler::reset_stuck_jobs(15);
     }
     
     /**
      * Self-healing: repair truncated history, stuck maintenance, missing jobs
      */
     public function self_healing_callback() {
-        cfrdm_load_dependencies();
-        $result = CFRDM_Cron_Scheduler::run_self_healing();
-        CFRDM_Logger::info('self_healing', 'Self-healing executado', $result);
+        zica_ai_load_dependencies();
+        $result = ZICA_AI_Cron_Scheduler::run_self_healing();
+        ZICA_AI_Logger::info('self_healing', 'Self-healing executado', $result);
     }
     
     /**
      * Auto-queue social post on publish
      */
     public function auto_queue_social_post($post_id, $post) {
-        cfrdm_load_dependencies();
-        CFRDM_Social_Poster::on_post_publish($post_id, $post);
+        zica_ai_load_dependencies();
+        ZICA_AI_Social_Poster::on_post_publish($post_id, $post);
     }
 }
 
@@ -1332,27 +1332,43 @@ add_action('plugins_loaded', function() {
 }, 5);
 
 
-/** Zica.ai canonical namespace and backward compatibility layer. */
-if (!defined('ZICA_AI_VERSION')) define('ZICA_AI_VERSION', CFRDM_VERSION);
-if (!defined('ZICA_AI_PLUGIN_DIR')) define('ZICA_AI_PLUGIN_DIR', CFRDM_PLUGIN_DIR);
-if (!defined('ZICA_AI_PLUGIN_URL')) define('ZICA_AI_PLUGIN_URL', CFRDM_PLUGIN_URL);
+/** Zica.ai backward compatibility layer.
+ * Legacy REST aliases are intentionally retained so existing installations do not break.
+ * Legacy WordPress database table names are also preserved as storage identifiers.
+ */
 function zica_ai_register_legacy_rest_aliases($endpoints) {
     foreach ($endpoints as $route => $handlers) {
         if (strpos($route, '/zica-ai/v1/') === 0) {
-            $legacy = str_replace('/zica-ai/v1/', '/zica-ai/v1/', $route);
+            $legacy = str_replace('/zica-ai/v1/', '/cfrdm/v1/', $route);
             if (!isset($endpoints[$legacy])) $endpoints[$legacy] = $handlers;
         }
     }
     return $endpoints;
 }
 add_filter('rest_endpoints', 'zica_ai_register_legacy_rest_aliases', 99);
+
 function zica_ai_migrate_brand_options() {
-    $map = array('zica_ai_api_key'=>'zica_ai_api_key','zica_ai_settings'=>'zica_ai_settings','zica_ai_auto_index'=>'zica_ai_auto_index');
-    foreach ($map as $legacy=>$canonical) {
-        $new_value=get_option($canonical,null);
-        $old_value=get_option($legacy,null);
-        if ($new_value===null && $old_value!==null) update_option($canonical,$old_value,false);
+    $map = array(
+        'cfrdm_api_key' => 'zica_ai_api_key',
+        'cfrdm_settings' => 'zica_ai_settings',
+        'cfrdm_auto_index' => 'zica_ai_auto_index',
+    );
+    foreach ($map as $legacy => $canonical) {
+        $new_value = get_option($canonical, null);
+        $old_value = get_option($legacy, null);
+        if ($new_value === null && $old_value !== null) {
+            update_option($canonical, $old_value, false);
+        }
     }
 }
-add_action('plugins_loaded','zica_ai_migrate_brand_options',1);
-if (class_exists('Zica_AI_Connector_Core') && !class_exists('Zica_AI_Connector')) class_alias('Zica_AI_Connector_Core','Zica_AI_Connector');
+add_action('plugins_loaded', 'zica_ai_migrate_brand_options', 1);
+
+// Read-only aliases for integrations that still inspect the historical constants.
+if (!defined('CFRDM_VERSION')) define('CFRDM_VERSION', ZICA_AI_VERSION);
+if (!defined('CFRDM_PLUGIN_DIR')) define('CFRDM_PLUGIN_DIR', ZICA_AI_PLUGIN_DIR);
+if (!defined('CFRDM_PLUGIN_URL')) define('CFRDM_PLUGIN_URL', ZICA_AI_PLUGIN_URL);
+if (!defined('CFRDM_PLUGIN_BASENAME')) define('CFRDM_PLUGIN_BASENAME', ZICA_AI_PLUGIN_BASENAME);
+
+if (class_exists('Zica_AI_Connector_Core') && !class_exists('Zica_AI_Connector')) {
+    class_alias('Zica_AI_Connector_Core', 'Zica_AI_Connector');
+}

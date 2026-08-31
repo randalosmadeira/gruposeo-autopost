@@ -1,6 +1,6 @@
 <?php
 /**
- * Unit Tests for CFRDM_Method_Validator
+ * Unit Tests for ZICA_AI_Method_Validator
  * 
  * Simulates missing methods, parameter mismatches, and validates 
  * that safe_call() prevents fatal errors.
@@ -16,8 +16,8 @@
 if (!defined('ABSPATH')) {
     define('ABSPATH', dirname(__DIR__) . '/');
 }
-if (!defined('CFRDM_VERSION')) {
-    define('CFRDM_VERSION', '3.2.4');
+if (!defined('ZICA_AI_VERSION')) {
+    define('ZICA_AI_VERSION', '3.2.4');
 }
 
 // Stub WordPress functions used by the validator
@@ -35,7 +35,7 @@ if (!function_exists('current_time')) {
 }
 
 // Stub Logger to capture warnings
-class CFRDM_Logger {
+class ZICA_AI_Logger {
     public static $logs = array();
     
     public static function success($channel, $message, $context = array(), $post_id = 0) {
@@ -72,7 +72,7 @@ class TestClass_Throws {
 }
 
 // ─── Load the validator ─────────────────────────────────────────────
-require_once dirname(__DIR__) . '/includes/class-cfrdm-method-validator.php';
+require_once dirname(__DIR__) . '/includes/class-zica-ai-method-validator.php';
 
 // ─── Test Runner ────────────────────────────────────────────────────
 
@@ -84,7 +84,7 @@ class MethodValidatorTest {
     
     public function run() {
         echo "\n╔══════════════════════════════════════════════╗\n";
-        echo "║  CFRDM_Method_Validator — Test Suite v3.2.4  ║\n";
+        echo "║  ZICA_AI_Method_Validator — Test Suite v3.2.4  ║\n";
         echo "╚══════════════════════════════════════════════╝\n\n";
         
         $this->test_safe_call_with_valid_class();
@@ -127,51 +127,51 @@ class MethodValidatorTest {
     // ─── Tests ──────────────────────────────────────────────────────
     
     private function test_safe_call_with_valid_class() {
-        CFRDM_Logger::reset();
-        $result = CFRDM_Method_Validator::safe_call('TestClass_Valid', 'no_params');
+        ZICA_AI_Logger::reset();
+        $result = ZICA_AI_Method_Validator::safe_call('TestClass_Valid', 'no_params');
         $this->assert($result === 'ok', 'safe_call() returns value from valid static method');
     }
     
     private function test_safe_call_with_missing_class() {
-        CFRDM_Logger::reset();
-        $result = CFRDM_Method_Validator::safe_call('NonExistentClass', 'foo', array(), 'fallback');
+        ZICA_AI_Logger::reset();
+        $result = ZICA_AI_Method_Validator::safe_call('NonExistentClass', 'foo', array(), 'fallback');
         $this->assert($result === 'fallback', 'safe_call() returns fallback for missing class');
         $this->assert(
-            !empty(CFRDM_Logger::$logs) && CFRDM_Logger::$logs[0]['level'] === 'warning',
+            !empty(ZICA_AI_Logger::$logs) && ZICA_AI_Logger::$logs[0]['level'] === 'warning',
             'safe_call() logs warning for missing class'
         );
     }
     
     private function test_safe_call_with_missing_method() {
-        CFRDM_Logger::reset();
-        $result = CFRDM_Method_Validator::safe_call('TestClass_Valid', 'nonexistent', array(), 'default');
+        ZICA_AI_Logger::reset();
+        $result = ZICA_AI_Method_Validator::safe_call('TestClass_Valid', 'nonexistent', array(), 'default');
         $this->assert($result === 'default', 'safe_call() returns fallback for missing method');
         $this->assert(
-            !empty(CFRDM_Logger::$logs) && strpos(CFRDM_Logger::$logs[0]['message'], 'não existe') !== false,
+            !empty(ZICA_AI_Logger::$logs) && strpos(ZICA_AI_Logger::$logs[0]['message'], 'não existe') !== false,
             'safe_call() logs warning mentioning missing method'
         );
     }
     
     private function test_safe_call_with_exception() {
-        CFRDM_Logger::reset();
-        $result = CFRDM_Method_Validator::safe_call('TestClass_Throws', 'explode', array(), 'caught');
+        ZICA_AI_Logger::reset();
+        $result = ZICA_AI_Method_Validator::safe_call('TestClass_Throws', 'explode', array(), 'caught');
         $this->assert($result === 'caught', 'safe_call() catches exceptions and returns fallback');
         $this->assert(
-            !empty(CFRDM_Logger::$logs) && CFRDM_Logger::$logs[0]['level'] === 'error',
+            !empty(ZICA_AI_Logger::$logs) && ZICA_AI_Logger::$logs[0]['level'] === 'error',
             'safe_call() logs error when exception is thrown'
         );
     }
     
     private function test_safe_call_returns_fallback() {
-        $result = CFRDM_Method_Validator::safe_call('Ghost', 'method', array(), array('empty'));
+        $result = ZICA_AI_Method_Validator::safe_call('Ghost', 'method', array(), array('empty'));
         $this->assert($result === array('empty'), 'safe_call() supports array as fallback value');
         
-        $result2 = CFRDM_Method_Validator::safe_call('Ghost', 'method');
+        $result2 = ZICA_AI_Method_Validator::safe_call('Ghost', 'method');
         $this->assert($result2 === null, 'safe_call() defaults to null fallback');
     }
     
     private function test_safe_call_passes_arguments() {
-        $result = CFRDM_Method_Validator::safe_call(
+        $result = ZICA_AI_Method_Validator::safe_call(
             'TestClass_Valid', 'one_required_one_optional', 
             array('hello', 'world')
         );
@@ -183,7 +183,7 @@ class MethodValidatorTest {
     
     private function test_validate_detects_missing_method() {
         // We can't easily inject contracts, but we can verify the structure
-        $report = CFRDM_Method_Validator::get_report();
+        $report = ZICA_AI_Method_Validator::get_report();
         $this->assert(isset($report['valid']), 'validate() returns report with "valid" key');
         $this->assert(isset($report['issues']), 'validate() returns report with "issues" array');
         $this->assert(isset($report['version']), 'validate() includes version in report');
@@ -191,17 +191,17 @@ class MethodValidatorTest {
     
     private function test_validate_detects_param_mismatch() {
         // Verify the report structure is correct even if classes aren't loaded
-        $report = CFRDM_Method_Validator::get_report();
+        $report = ZICA_AI_Method_Validator::get_report();
         $this->assert(is_array($report['issues']), 'validate() issues is always an array');
     }
     
     private function test_validate_passes_valid_class() {
-        $report = CFRDM_Method_Validator::get_report();
+        $report = ZICA_AI_Method_Validator::get_report();
         $this->assert(!empty($report['checked_at']), 'validate() includes checked_at timestamp');
     }
     
     private function test_clear_cache() {
-        CFRDM_Method_Validator::clear_cache();
+        ZICA_AI_Method_Validator::clear_cache();
         // If no exception thrown, cache clearing works
         $this->assert(true, 'clear_cache() executes without error');
     }
