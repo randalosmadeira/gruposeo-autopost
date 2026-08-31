@@ -18,8 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      # Supabase publishable credentials are designed for browser clients; authorization is enforced by RLS.
+      VITE_SUPABASE_URL: https://ubahrbgaxrkjxklytobl.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_8XzHfqXP8o3XOcGwRY35zw_P-jg1kiE
       VITE_APP_NAME: Zica.ai
     steps:
       - name: Checkout
