@@ -19,6 +19,9 @@ jobs:
       - name: Apply neural product patches
         run: python scripts/zica_neural_finalize.py
 
+      - name: Correct observability labels
+        run: sed -i 's/URLs Indexadas (IndexNow\/LLMs)/URLs Submetidas (IndexNow\/LLMs)/g' src/components/dashboard/SEOAgentPanel.tsx
+
       - name: Validate PHP syntax
         run: find public/wordpress-plugin/zica-ai -name '*.php' -print0 | xargs -0 -n1 php -l
 
@@ -31,5 +34,5 @@ jobs:
           git config user.name "Zica.ai Automation"
           git config user.email "automation@users.noreply.github.com"
           git add -A
-          git commit -m "feat: apply neural cortex across Zica.ai product"
+          git commit -m "fix: keep Zica.ai observability labels truthful"
           git push origin HEAD:main
