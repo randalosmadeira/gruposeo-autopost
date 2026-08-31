@@ -92,7 +92,7 @@ Fases futuras (após validação):
 - Expor as sub-áreas YMYL como variantes no `sector-config.ts`.
 - Portar validador de frontloading para `generate-article/index.ts` (regenerar se §1 não atende 40-60 palavras resolutivas).
 - Atualizar `_types/bulk-generation.ts` para incluir intent-mapping (pain/desire/proof/decision).
-- Modelos IA: aguardar chaves Gemini 3.5 Flash + GPT-5.5 do usuário (não usar Lovable AI conforme instrução).
+- Modelos IA: aguardar chaves Gemini 3.5 Flash + GPT-5.5 do usuário (usar somente provedores de IA configurados).
 
 ---
 

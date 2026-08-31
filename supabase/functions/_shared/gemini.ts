@@ -7,7 +7,7 @@
  * PROVIDER: Gemini is the EXCLUSIVE provider.
  * No OpenAI calls - all requests go through Gemini.
  * 
- * NO Lovable AI Gateway - Direct Gemini API calls only.
+ * Direct provider API calls only.
  */
 
 // API endpoints

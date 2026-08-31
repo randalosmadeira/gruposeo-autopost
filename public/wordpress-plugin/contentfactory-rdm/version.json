@@ -3,7 +3,7 @@
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
-  "download_url": "https://gruposeo-autopost.lovable.app/wordpress-plugin/contentfactory-rdm/",
+  "download_url": "https://github.com/randalosmadeira/gruposeo-autopost/releases/latest/download/contentfactory-rdm.zip",
   "changelog": "v3.8.0 - VPS Server Health Audit: auditoria automática de configurações VPS para SEO, verificação de 12+ bots de IA no robots.txt, monitoramento TTFB, SSL/HSTS, GZIP/Brotli, Cache-Control, auto-regeneração llms.txt, verificação IndexNow key, score de saúde VPS 0-100.",
   "released": "2026-03-18T12:00:00-03:00",
   "features": [
