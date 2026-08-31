@@ -1,0 +1,273 @@
+/* Zica.ai Neural Design System -------------------------------------------------
+   Product-wide visual layer: Dark Graphite + Volt + Electric Cyan.
+   This file deliberately styles shared surfaces inside .neural-shell so every
+   module inherits the same visual language without changing business logic.
+*/
+
+:root {
+  --zica-bg: #0D1117;
+  --zica-surface: #161B22;
+  --zica-border: #30363D;
+  --zica-volt: #D4FF00;
+  --zica-cyan: #00F0FF;
+  --zica-ink: #F8FAFC;
+}
+
+html { background: var(--zica-bg); }
+body { background: var(--zica-bg); }
+::selection { background: rgba(212, 255, 0, .28); color: #fff; }
+
+.neural-shell,
+.neural-auth-shell {
+  color-scheme: dark;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(0,240,255,.055), transparent 28%),
+    radial-gradient(circle at 90% 100%, rgba(212,255,0,.05), transparent 32%),
+    var(--zica-bg);
+}
+
+.neural-shell::before,
+.neural-auth-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .24;
+  background-image:
+    linear-gradient(rgba(0,240,255,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(212,255,0,.035) 1px, transparent 1px);
+  background-size: 54px 54px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,.9), transparent 92%);
+}
+
+.neural-shell main { position: relative; isolation: isolate; }
+.neural-shell main::before {
+  content: '';
+  position: fixed;
+  inset: 64px 0 0 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(0,240,255,.07), transparent 34%),
+    radial-gradient(circle at 60% 110%, rgba(212,255,0,.045), transparent 36%);
+}
+
+/* Shared cards, panels and popovers */
+.neural-shell .bg-card,
+.neural-shell [class*='shadow-card'],
+.neural-shell [role='dialog'],
+.neural-shell [data-radix-menu-content],
+.neural-shell [data-radix-popper-content-wrapper] > div {
+  border-color: rgba(48,54,61,.84) !important;
+  background-color: rgba(22,27,34,.9) !important;
+  backdrop-filter: blur(20px);
+}
+
+.neural-shell [class*='shadow-card'] {
+  box-shadow: 0 18px 60px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.025) !important;
+}
+
+.neural-shell [class*='shadow-card']:hover {
+  border-color: rgba(0,240,255,.2) !important;
+  box-shadow: 0 20px 70px rgba(0,0,0,.35), 0 0 26px rgba(0,240,255,.045) !important;
+}
+
+/* Inputs, selects and textareas */
+.neural-shell input,
+.neural-shell textarea,
+.neural-shell select,
+.neural-auth-shell input,
+.neural-auth-shell textarea,
+.neural-auth-shell select {
+  border-color: rgba(48,54,61,.9) !important;
+  background-color: rgba(13,17,23,.88) !important;
+}
+.neural-shell input:focus,
+.neural-shell textarea:focus,
+.neural-shell select:focus,
+.neural-auth-shell input:focus,
+.neural-auth-shell textarea:focus,
+.neural-auth-shell select:focus {
+  border-color: rgba(212,255,0,.7) !important;
+  box-shadow: 0 0 0 3px rgba(212,255,0,.075), 0 0 24px rgba(212,255,0,.055) !important;
+}
+
+/* Tabs and tables */
+.neural-shell [role='tablist'] {
+  border: 1px solid rgba(48,54,61,.7);
+  background: rgba(13,17,23,.72) !important;
+  backdrop-filter: blur(16px);
+}
+.neural-shell [role='tab'][data-state='active'] {
+  color: var(--zica-volt) !important;
+  background: rgba(212,255,0,.07) !important;
+  box-shadow: inset 0 -1px 0 rgba(212,255,0,.55);
+}
+.neural-shell table { border-collapse: separate; border-spacing: 0; }
+.neural-shell thead { background: rgba(0,240,255,.025); }
+.neural-shell tbody tr { transition: background .18s ease, box-shadow .18s ease; }
+.neural-shell tbody tr:hover { background: rgba(0,240,255,.025); }
+
+/* Scrollbars */
+.neural-shell * { scrollbar-width: thin; scrollbar-color: #30363D #0D1117; }
+.neural-shell *::-webkit-scrollbar { width: 9px; height: 9px; }
+.neural-shell *::-webkit-scrollbar-track { background: #0D1117; }
+.neural-shell *::-webkit-scrollbar-thumb { border: 2px solid #0D1117; border-radius: 999px; background: #30363D; }
+.neural-shell *::-webkit-scrollbar-thumb:hover { background: #3f4955; }
+
+/* Neural current SVG layer */
+.neural-energy { z-index: 0; opacity: .48; mix-blend-mode: screen; }
+.neural-energy--hero { opacity: .92; }
+.neural-energy--compact { opacity: .3; }
+.neural-current {
+  stroke-dasharray: .075 .055;
+  stroke-dashoffset: 0;
+  animation: zica-current 11s linear infinite;
+  vector-effect: non-scaling-stroke;
+}
+.neural-current-reverse { animation-direction: reverse; animation-duration: 14s; }
+.neural-current-2 { animation-duration: 15s; opacity: .72; }
+.neural-current-3 { animation-duration: 19s; opacity: .58; }
+.neural-current-4 { animation-duration: 23s; opacity: .45; }
+.neural-nodes circle { transform-box: fill-box; transform-origin: center; animation: zica-node-pulse 2.8s ease-in-out infinite; }
+.neural-nodes circle:nth-child(2n) { animation-delay: -1.3s; }
+.neural-nodes circle:nth-child(3n) { animation-delay: -.7s; }
+
+/* Traffic brain hero */
+.neural-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 0 42%, rgba(255,255,255,.022) 49%, transparent 56%);
+  transform: translateX(-70%);
+  animation: zica-scan 10s ease-in-out infinite;
+}
+.neural-mini-stat {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  min-height: 52px;
+  border: 1px solid rgba(48,54,61,.72);
+  border-radius: 13px;
+  background: rgba(13,17,23,.7);
+  padding: .65rem .75rem;
+  color: #94A3B8;
+  backdrop-filter: blur(12px);
+}
+.neural-mini-stat strong { color: #fff; font-size: 1rem; margin-right: .2rem; }
+.neural-orbit {
+  position: absolute;
+  left: 50%; top: 50%;
+  border-radius: 999px;
+  transform: translate(-50%,-50%);
+  border: 1px solid rgba(0,240,255,.3);
+  box-shadow: 0 0 35px rgba(0,240,255,.05), inset 0 0 35px rgba(0,240,255,.025);
+}
+.neural-orbit::after {
+  content: '';
+  position: absolute;
+  width: 8px; height: 8px;
+  left: 50%; top: -4px;
+  border-radius: 50%;
+  background: var(--zica-volt);
+  box-shadow: 0 0 16px rgba(212,255,0,.9);
+}
+.neural-orbit-1 { width: 76%; height: 48%; animation: zica-orbit 13s linear infinite; }
+.neural-orbit-2 { width: 94%; height: 62%; border-color: rgba(212,255,0,.23); animation: zica-orbit-reverse 18s linear infinite; }
+.neural-orbit-3 { width: 112%; height: 76%; opacity: .55; animation: zica-orbit 25s linear infinite; }
+.neural-core { animation: zica-core-breathe 4.4s ease-in-out infinite; }
+.neural-node {
+  display: grid;
+  place-items: center;
+  width: 42px; height: 42px;
+  border: 1px solid rgba(0,240,255,.28);
+  border-radius: 50%;
+  color: var(--zica-cyan);
+  background: rgba(7,19,26,.9);
+  box-shadow: 0 0 28px rgba(0,240,255,.1);
+  animation: zica-node-float 5s ease-in-out infinite;
+}
+.neural-node svg { width: 18px; height: 18px; }
+.neural-node:nth-of-type(even) { color: var(--zica-volt); border-color: rgba(212,255,0,.25); animation-delay: -2s; }
+.neural-outcome-card {
+  border: 1px solid rgba(48,54,61,.8);
+  border-radius: 15px;
+  background: linear-gradient(135deg, rgba(22,27,34,.9), rgba(13,17,23,.78));
+  padding: .85rem 1rem;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+  backdrop-filter: blur(18px);
+}
+.neural-outcome-card p { margin-bottom: .15rem; color: #94A3B8; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .12em; }
+.neural-outcome-card span:last-child { display: block; margin-top: .35rem; color: #64748B; font-size: 10px; }
+
+/* Global top shell */
+.neural-topbar {
+  border-bottom: 1px solid rgba(48,54,61,.72);
+  background: rgba(13,17,23,.78);
+  box-shadow: 0 12px 40px rgba(0,0,0,.2);
+  backdrop-filter: blur(22px) saturate(130%);
+}
+.neural-sidebar {
+  border-right-color: rgba(48,54,61,.75) !important;
+  background:
+    radial-gradient(circle at 40% 0%, rgba(0,240,255,.07), transparent 30%),
+    linear-gradient(180deg, rgba(13,17,23,.98), rgba(10,14,19,.99)) !important;
+  box-shadow: 18px 0 55px rgba(0,0,0,.24);
+}
+.neural-mobile-dock::before {
+  content: '';
+  position: absolute;
+  left: 15%; right: 15%; top: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #00F0FF, #D4FF00, transparent);
+  opacity: .65;
+}
+
+/* Product states */
+.neural-state {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(48,54,61,.75);
+  border-radius: 22px;
+  background: rgba(22,27,34,.72);
+  box-shadow: 0 25px 80px rgba(0,0,0,.35);
+  backdrop-filter: blur(22px);
+}
+.neural-loader-ring {
+  width: 58px; height: 58px;
+  border-radius: 50%;
+  border: 1px solid rgba(48,54,61,.8);
+  border-top-color: var(--zica-volt);
+  border-right-color: var(--zica-cyan);
+  box-shadow: 0 0 32px rgba(0,240,255,.11);
+  animation: zica-spin 1.1s linear infinite;
+}
+
+@keyframes zica-current { to { stroke-dashoffset: -1; } }
+@keyframes zica-node-pulse { 0%,100% { opacity:.32; transform:scale(.8); } 50% { opacity:1; transform:scale(1.35); } }
+@keyframes zica-scan { 0%,18% { transform:translateX(-85%); } 60%,100% { transform:translateX(95%); } }
+@keyframes zica-orbit { to { transform:translate(-50%,-50%) rotate(360deg); } }
+@keyframes zica-orbit-reverse { to { transform:translate(-50%,-50%) rotate(-360deg); } }
+@keyframes zica-core-breathe { 0%,100% { transform:scale(.97); box-shadow:0 0 58px rgba(0,240,255,.16); } 50% { transform:scale(1.03); box-shadow:0 0 86px rgba(0,240,255,.28),0 0 54px rgba(212,255,0,.09); } }
+@keyframes zica-node-float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-9px); } }
+@keyframes zica-spin { to { transform:rotate(360deg); } }
+
+@media (max-width: 767px) {
+  .neural-shell main { padding-bottom: 5.4rem; }
+  .neural-shell::before { background-size: 36px 36px; opacity: .16; }
+  .neural-energy { opacity: .34; }
+  .neural-energy--hero { opacity: .65; }
+  .neural-hero { border-radius: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neural-current,
+  .neural-nodes circle,
+  .neural-hero::after,
+  .neural-orbit,
+  .neural-core,
+  .neural-node,
+  .neural-loader-ring { animation: none !important; }
+}
