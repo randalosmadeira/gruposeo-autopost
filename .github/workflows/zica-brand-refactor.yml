@@ -1,4 +1,4 @@
-name: Zica.ai Brand Refactor
+name: Zica.ai WordPress Prefix Refactor
 
 on:
   workflow_dispatch:
@@ -19,26 +19,23 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
-      - name: Apply Zica.ai refactor
-        run: python .github/scripts/zica_brand_refactor.py
-      - name: Verify canonical branding
+      - name: Refactor canonical plugin prefixes
+        run: python .github/scripts/zica_plugin_prefix_refactor.py
+      - name: PHP syntax validation
+        run: find public/wordpress-plugin/zica-ai -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Verify canonical identifiers
         run: |
-          test -f public/favicon.svg
-          test -f public/site.webmanifest
-          test -f public/wordpress-plugin/zica-ai/zica-ai-connector.php
-          grep -q '"name": "zica-ai"' package.json
-          grep -q 'Zica.ai' index.html
-          grep -q '#D4FF00' src/index.css
-          grep -q 'zica-ai/v1' public/wordpress-plugin/zica-ai/zica-ai-connector.php
-          if grep -RniE 'ContentFactory RDM|GRUPO SEO MKT|Powered by Lovable' src index.html README.md public/wordpress-plugin/zica-ai --exclude-dir=.git; then
-            echo 'Residual visible legacy branding found.' >&2
+          grep -q "define('ZICA_AI_VERSION'" public/wordpress-plugin/zica-ai/zica-ai-connector.php
+          grep -q '/zica-ai/v1/' public/wordpress-plugin/zica-ai/zica-ai-connector.php
+          if grep -RniE 'function[[:space:]]+cfrdm_|class[[:space:]]+CFRDM_|class-cfrdm-' public/wordpress-plugin/zica-ai --include='*.php'; then
+            echo 'Legacy PHP identifier remains outside compatibility storage.' >&2
             exit 1
           fi
-      - name: Commit refactor
+      - name: Commit canonical plugin refactor
         run: |
-          git checkout HEAD -- .github/workflows/ci.yml .github/workflows/purge-legacy-builder.yml .github/workflows/zica-brand-refactor.yml
+          rm -f .github/scripts/zica_plugin_prefix_refactor.py
           git config user.name 'Zica.ai Automation'
           git config user.email 'automation@users.noreply.github.com'
           git add -A
-          git commit -m 'refactor: rename platform and plugin to Zica.ai'
+          git commit -m 'refactor: canonicalize Zica.ai WordPress identifiers'
           git push origin HEAD:main
