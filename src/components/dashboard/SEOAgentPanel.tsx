@@ -212,7 +212,7 @@ export function SEOAgentPanel() {
               {[
                 { icon: FileCheck, value: totalFixed, label: 'Metas Fix', color: 'text-green-500' },
                 { icon: Link2, value: totalLinks, label: 'Links Internos Aplicados', color: 'text-blue-500' },
-                { icon: Search, value: totalIndexed, label: 'URLs Indexadas (IndexNow/LLMs)', color: 'text-amber-500' },
+                { icon: Search, value: totalIndexed, label: 'URLs Submetidas (IndexNow/LLMs)', color: 'text-amber-500' },
                 { icon: ArrowRight, value: totalRedirects, label: 'Redirects 301', color: 'text-purple-500' },
               ].map((stat, i) => (
                 <div key={i} className="p-2.5 bg-muted/50 rounded-lg text-center">
