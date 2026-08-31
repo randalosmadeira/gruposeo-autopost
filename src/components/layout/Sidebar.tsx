@@ -318,7 +318,7 @@ export const Sidebar = memo(function Sidebar() {
   return (
     <TooltipProvider>
       <aside className={cn(
-        'h-screen flex flex-col bg-gradient-sidebar border-r border-sidebar-border',
+        'neural-sidebar h-screen flex flex-col bg-gradient-sidebar border-r border-sidebar-border',
         'transition-all duration-300 ease-in-out w-[72px]'
       )}>
         {/* Logo - Zica.ai */}

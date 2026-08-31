@@ -52,8 +52,14 @@ const queryClient = new QueryClient({
 });
 
 const PageLoader = () => (
-  <div className="flex min-h-screen items-center justify-center">
-    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+  <div className="neural-auth-shell flex min-h-screen items-center justify-center bg-[#0D1117]">
+    <div className="neural-state flex flex-col items-center gap-4 px-8 py-7 text-center">
+      <div className="neural-loader-ring" />
+      <div>
+        <p className="text-sm font-black text-white">Sincronizando o córtex Zica.ai</p>
+        <p className="mt-1 text-xs text-slate-500">Carregando sinais, ondas e agentes...</p>
+      </div>
+    </div>
   </div>
 );
 

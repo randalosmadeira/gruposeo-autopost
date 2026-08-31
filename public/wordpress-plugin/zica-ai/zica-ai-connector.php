@@ -375,6 +375,10 @@ private function init_admin_hooks() {
         // Admin UI hooks
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+        add_action('admin_enqueue_scripts', function($hook) {
+            if (strpos((string) $hook, 'zica-ai') === false) return;
+            wp_enqueue_style('zica-ai-neural', ZICA_AI_PLUGIN_URL . 'assets/css/zica-neural.css', array(), ZICA_AI_VERSION);
+        }, 99);
         add_action('admin_init', array($this, 'register_settings'));
         add_action('admin_init', array('ZICA_AI_Method_Validator', 'validate'), 999);
 

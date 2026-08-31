@@ -23,6 +23,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useBackendHealth } from '@/hooks/useBackendHealth';
 import { supabase } from '@/integrations/supabase/client';
+import { NeuralEnergy } from '@/components/brand/NeuralEnergy';
 
 type AuthView = 'login' | 'signup' | 'recovery';
 
@@ -184,7 +185,8 @@ export default function Auth() {
           : 'Verificando núcleo';
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#0D1117] text-slate-100">
+    <div className="neural-auth-shell relative min-h-screen overflow-hidden bg-[#0D1117] text-slate-100">
+      <NeuralEnergy variant="hero" />
       <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(212,255,0,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(0,240,255,0.035)_1px,transparent_1px)] [background-size:44px_44px]" />
       <div className="pointer-events-none absolute -left-40 top-[-180px] h-[520px] w-[520px] rounded-full bg-[#D4FF00]/8 blur-3xl" />
       <div className="pointer-events-none absolute -right-48 bottom-[-220px] h-[620px] w-[620px] rounded-full bg-[#00F0FF]/8 blur-3xl" />

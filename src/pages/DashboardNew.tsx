@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useArticles } from '@/hooks/useArticles';
 import { useProjects } from '@/hooks/useProjects';
 import { useNewsAgents } from '@/hooks/useNewsAgents';
+import { useZicaTrafficKpis } from '@/hooks/useZicaTrafficKpis';
 import { 
   LayoutDashboard,
   FileText,
@@ -38,6 +39,7 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { SEOAgentPanel } from '@/components/dashboard/SEOAgentPanel';
 import { AuditReportPanel } from '@/components/dashboard/AuditReportPanel';
 import { AuditScoreHistoryChart } from '@/components/dashboard/AuditScoreHistoryChart';
+import { TrafficBrainHero } from '@/components/brand/TrafficBrainHero';
 
 // Quick action card component
 function QuickActionCard({ 
@@ -178,6 +180,7 @@ export default function DashboardNew() {
   const { articles, stats, isLoading: articlesLoading, error: articlesError } = useArticles();
   const { projects, isLoading: projectsLoading, error: projectsError } = useProjects();
   const { agents, activeAgentsCount, totalArticles: agentArticles } = useNewsAgents();
+  const { data: zicaKpis } = useZicaTrafficKpis();
 
   const hasConnectionError = !!(articlesError || projectsError);
   const isCorsError = hasConnectionError && (
@@ -248,39 +251,17 @@ export default function DashboardNew() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground font-black text-xl flex items-center justify-center shadow-glow-primary">Z</div>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">ZICA.AI - Cérebro de Tráfego Orgânico</h1>
-              <p className="text-sm text-muted-foreground">
-                Cérebro Central de Tráfego: Visão 360° da sua máquina de autoridade orgânica e GEO
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <Button 
-              variant="outline"
-              onClick={() => navigate('/calendar')}
-            >
-              <Calendar className="w-4 h-4 mr-2" />
-              Calendário
-            </Button>
-            <Button 
-              onClick={() => navigate('/articles/new')} 
-              className="bg-gradient-accent hover:opacity-90"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Gerar Onda de Conteúdo
-            </Button>
-          </div>
-        </div>
-      </header>
 
-      <div className="p-6 space-y-6">
+      <div className="space-y-6 p-4 sm:p-6">
+        <TrafficBrainHero
+          totalWaves={zicaKpis?.totalWaves ?? dashboardStats.total}
+          activeWaves={zicaKpis?.activeWaves ?? dashboardStats.published}
+          indexingSubmitted={zicaKpis?.indexingSubmitted ?? 0}
+          indexingConfirmed={zicaKpis?.indexingConfirmed ?? 0}
+          llmVisibility={zicaKpis?.avgLlmVisibility ?? null}
+          semanticAuthority={zicaKpis?.avgSemanticAuthority ?? null}
+        />
+
         {/* Connection Error Banner */}
         {showErrorBanner && (
           <Alert variant="destructive" className="border-destructive/30 bg-destructive/5">
@@ -315,7 +296,7 @@ export default function DashboardNew() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             title="Total de Ondas Criadas"
-            value={dashboardStats.total}
+            value={zicaKpis?.totalWaves ?? dashboardStats.total}
             change={`${dashboardStats.thisWeek} esta semana`}
             changeType="neutral"
             icon={FileText}
@@ -323,9 +304,9 @@ export default function DashboardNew() {
           />
           <StatCard
             title="Artigos Ativos & Indexados"
-            value={dashboardStats.published}
-            change={`${Math.round((dashboardStats.published / Math.max(dashboardStats.total, 1)) * 100)}% do total`}
-            changeType="up"
+            value={`${zicaKpis?.activeWaves ?? dashboardStats.published} / ${zicaKpis?.indexingConfirmed ?? 0}`}
+            change={`${zicaKpis?.indexingSubmitted ?? 0} submetidos • ${zicaKpis?.indexingConfirmed ?? 0} confirmados`}
+            changeType="neutral"
             icon={CheckCircle2}
             iconColor="bg-green-500"
           />

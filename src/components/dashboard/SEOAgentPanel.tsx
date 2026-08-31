@@ -226,7 +226,7 @@ export function SEOAgentPanel() {
               {[
                 { icon: AlertTriangle, value: totalBrokenFixed, label: '404s Auto-Corrigidos', color: 'text-red-500' },
                 { icon: Zap, value: totalBulkMeta, label: 'Títulos/Metas IA', color: 'text-cyan-500' },
-                { icon: TrendingUp, value: latestAudit?.score || 0, label: 'Score de Autoridade LLMs', color: scoreColor(latestAudit?.score || 0) },
+                { icon: TrendingUp, value: latestAudit?.score || 0, label: 'Score Técnico SEO/GEO', color: scoreColor(latestAudit?.score || 0) },
               ].map((stat, i) => (
                 <div key={i} className="p-2.5 bg-muted/50 rounded-lg text-center">
                   <stat.icon className={cn("w-4 h-4 mx-auto mb-1", stat.color)} />
