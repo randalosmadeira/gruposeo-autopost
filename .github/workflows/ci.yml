@@ -1,4 +1,4 @@
-name: CI
+name: Zica.ai CI
 
 on:
   push:
@@ -29,16 +29,16 @@ jobs:
         continue-on-error: true
         run: npm run lint
 
-      - name: Test
-        run: npm run test
+      - name: Test Zica.ai
+        run: npm run test:zica
 
-      - name: Build
-        run: npm run build
+      - name: Build Zica.ai
+        run: npm run build:zica
 
-      - name: Upload production build
+      - name: Upload Zica.ai production build
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: gruposeo-autopost-dist
+          name: zica-ai-web-dist
           path: dist
           if-no-files-found: error
