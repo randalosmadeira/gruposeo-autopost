@@ -1,0 +1,38 @@
+name: Zica.ai Build Hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/zica-build-hotfix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Patch dashboard branding asset
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/pages/DashboardNew.tsx')
+          text = p.read_text(encoding='utf-8')
+          text = text.replace("import logoSeo from '@/assets/logo-grupo-seo.png';\n", '')
+          text = text.replace('<img src={logoSeo} alt="Zica.ai" className="w-10 h-10" />', '<div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground font-black text-xl flex items-center justify-center shadow-glow-primary">Z</div>')
+          text = text.replace('Painel de Controle', 'Cérebro de Tráfego')
+          text = text.replace('Visão 360° da sua produção de conteúdo', 'Ondas orgânicas, GEO e sinais semânticos em uma visão 360°')
+          text = text.replace('Novo Conteúdo', 'Gerar Onda de Conteúdo')
+          p.write_text(text, encoding='utf-8')
+          PY
+      - name: Commit source hotfix
+        run: |
+          git config user.name 'Zica.ai Automation'
+          git config user.email 'automation@users.noreply.github.com'
+          git add src/pages/DashboardNew.tsx
+          git commit -m 'fix: remove final legacy dashboard asset reference'
+          git push origin HEAD:main
