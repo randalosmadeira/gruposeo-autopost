@@ -148,10 +148,6 @@ export function evaluateElectoralCompliance(
     warnings.push('Impulsionamento eleitoral deve ser contratado e identificado conforme as regras eleitorais e da plataforma aplicável.');
   }
 
-  if (profile.socialMessagingRequested && false) {
-    // Kept intentionally unreachable for backwards compatibility with older saved JSON.
-  }
-
   if (!profile.messagingConsentConfirmed || !profile.unsubscribeMechanismConfirmed) {
     warnings.push('Disparos/mensageria em massa não devem ser habilitados sem base válida de consentimento e mecanismo de descadastramento quando aplicável.');
   }
@@ -177,11 +173,4 @@ export function evaluateElectoralCompliance(
     canGenerateDraft: blockers.filter((item) => /Nome completo|Nome de urna|Número de urna|Partido|Cargo|CNPJ/.test(item)).length === 0,
     canPublish: blockers.length === 0,
   };
-}
-
-// Declaration used only to make older persisted payloads safe to deserialize without enabling anything.
-declare module './electoralCompliance' {
-  interface ElectoralComplianceProfile {
-    socialMessagingRequested?: boolean;
-  }
 }
