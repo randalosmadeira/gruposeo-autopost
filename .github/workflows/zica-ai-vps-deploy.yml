@@ -27,7 +27,6 @@ jobs:
       ZICA_AI_VPS_PORT_RAW: ${{ secrets.ZICA_AI_VPS_PORT }}
       ZICA_AI_VPS_SSH_PRIVATE_KEY_B64: ${{ secrets.ZICA_AI_VPS_SSH_PRIVATE_KEY_B64 }}
       ZICA_AI_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.ZICA_AI_SUPABASE_SERVICE_ROLE_KEY }}
-      ZICA_AI_CREDENTIALS_JSON: ${{ secrets.ZICA_AI_CREDENTIALS_JSON }}
       ZICA_AI_SUPABASE_URL: https://ubahrbgaxrkjxklytobl.supabase.co
       TARGET_HOST: app.zica.posts.zicajuris.com.br
       TARGET_URL: https://app.zica.posts.zicajuris.com.br
@@ -82,7 +81,7 @@ jobs:
             printf 'PORT=8787\n'
             printf 'SUPABASE_URL=%s\n' "$ZICA_AI_SUPABASE_URL"
             printf 'SUPABASE_SERVICE_ROLE_KEY=%s\n' "$ZICA_AI_SUPABASE_SERVICE_ROLE_KEY"
-            printf 'ZICA_CREDENTIALS_JSON=%s\n' "${ZICA_AI_CREDENTIALS_JSON:-{}}"
+            printf 'ZICA_CREDENTIALS_JSON={}\n'
             printf 'AI_PROVIDER=none\n'
             printf 'OPENAI_API_KEY=\n'
             printf 'OPENAI_MODEL=gpt-5-mini\n'
@@ -172,7 +171,21 @@ jobs:
             exit 1
           fi
 
-          NGINX_FILE=/etc/nginx/sites-available/zica-ai-orchestrator
+          NGINX_DUMP="$(sudo nginx -T 2>&1)"
+          NGINX_LINK=''
+          if printf '%s\n' "$NGINX_DUMP" | grep -Eq 'include[[:space:]]+/etc/nginx/conf\.d/\*\.conf'; then
+            sudo mkdir -p /etc/nginx/conf.d
+            NGINX_FILE=/etc/nginx/conf.d/zica-ai-orchestrator.conf
+          elif printf '%s\n' "$NGINX_DUMP" | grep -Eq 'include[[:space:]]+/etc/nginx/sites-enabled/\*'; then
+            sudo mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+            NGINX_FILE=/etc/nginx/sites-available/zica-ai-orchestrator
+            NGINX_LINK=/etc/nginx/sites-enabled/zica-ai-orchestrator
+          else
+            echo 'ERRO: layout de includes do Nginx não reconhecido.' >&2
+            printf '%s\n' "$NGINX_DUMP" | grep -E '^[[:space:]]*include[[:space:]]+' >&2 || true
+            exit 1
+          fi
+
           sudo tee "$NGINX_FILE" >/dev/null <<NGINX
           server {
               listen 80;
@@ -189,9 +202,11 @@ jobs:
               }
           }
           NGINX
-          sudo ln -sfn "$NGINX_FILE" /etc/nginx/sites-enabled/zica-ai-orchestrator
+          if [ -n "$NGINX_LINK" ]; then
+            sudo ln -sfn "$NGINX_FILE" "$NGINX_LINK"
+          fi
           sudo nginx -t
-          sudo systemctl reload nginx
+          sudo systemctl reload nginx || sudo nginx -s reload
 
           if getent ahostsv4 "$TARGET_HOST" >/dev/null 2>&1; then
             if command -v certbot >/dev/null 2>&1; then
@@ -241,4 +256,5 @@ jobs:
           echo "- URL alvo: \`$TARGET_URL\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Root isolado: \`/opt/zica-ai/orchestrator\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- SSH: secret Base64 exclusivo do Zica.ai" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Vault inicial: vazio; credenciais de targets serão cadastradas separadamente." >> "$GITHUB_STEP_SUMMARY"
           echo "- No ZicaJuris files, credentials or containers are used." >> "$GITHUB_STEP_SUMMARY"
