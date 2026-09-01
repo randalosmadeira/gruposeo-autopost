@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Zica Electoral Analytics
- * Description: Telemetria editorial agregada para os portais eleitorais 1470, com configuração central no Zica.ai.
- * Version: 1.1.0
+ * Description: Telemetria editorial agregada e cadastro voluntario consentido para os portais eleitorais 1470, com configuracao central no Zica.ai.
+ * Version: 1.2.0
  * Author: Zica.ai
  */
 
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Zica_Electoral_Analytics {
-    private const VERSION = '1.1.0';
+    private const VERSION = '1.2.0';
     private const CENTRAL_CONFIG_URL = 'https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1/electoral-analytics-public-config';
     private const TRANSIENT_PREFIX = 'zica_electoral_analytics_';
 
@@ -24,6 +24,7 @@ final class Zica_Electoral_Analytics {
     private static function defaults(): array {
         return [
             'enabled' => false,
+            'analytics_enabled' => false,
             'portal_id' => '',
             'ga4_measurement_id' => '',
             'gtm_web_container_id' => '',
@@ -37,6 +38,16 @@ final class Zica_Electoral_Analytics {
             'allow_google_signals' => false,
             'allow_ad_personalization_signals' => false,
             'consent_mode_default' => 'denied',
+            'optin_enabled' => false,
+            'optin_api_url' => '',
+            'optin_scroll_trigger_percent' => 10,
+            'optin_exit_intent_enabled' => true,
+            'optin_dismiss_hours' => 24,
+            'optin_success_suppress_days' => 90,
+            'optin_privacy_url' => '',
+            'optin_title' => 'Quero ajudar na campanha',
+            'optin_subtitle' => 'Deixe seu contato e diga como quer ajudar.',
+            'optin_button_label' => '🪵 MADEIRAAA NELESS',
             'central_config_reachable' => false,
         ];
     }
@@ -54,6 +65,7 @@ final class Zica_Electoral_Analytics {
     private static function sanitize_remote(array $remote): array {
         $config = self::defaults();
         $config['enabled'] = !empty($remote['enabled']);
+        $config['analytics_enabled'] = !empty($remote['analytics_enabled']);
         $config['portal_id'] = sanitize_key((string) ($remote['portal_id'] ?? ''));
 
         $ga4 = (string) ($remote['ga4_measurement_id'] ?? '');
@@ -67,7 +79,19 @@ final class Zica_Electoral_Analytics {
         $portals = is_array($remote['primary_portals'] ?? null) ? $remote['primary_portals'] : [];
         $config['primary_portals'] = array_values(array_filter(array_map('esc_url_raw', $portals)));
 
-        // These controls are deliberately forced off in the WordPress runtime.
+        $optin = is_array($remote['optin'] ?? null) ? $remote['optin'] : [];
+        $config['optin_enabled'] = !empty($optin['enabled']);
+        $config['optin_api_url'] = esc_url_raw((string) ($optin['api_url'] ?? ''));
+        $config['optin_scroll_trigger_percent'] = max(1, min(90, absint($optin['scroll_trigger_percent'] ?? 10)));
+        $config['optin_exit_intent_enabled'] = !empty($optin['exit_intent_enabled']);
+        $config['optin_dismiss_hours'] = max(1, min(720, absint($optin['dismiss_hours'] ?? 24)));
+        $config['optin_success_suppress_days'] = max(1, min(365, absint($optin['success_suppress_days'] ?? 90)));
+        $config['optin_privacy_url'] = esc_url_raw((string) ($optin['privacy_url'] ?? ''));
+        $config['optin_title'] = sanitize_text_field((string) ($optin['title'] ?? $config['optin_title']));
+        $config['optin_subtitle'] = sanitize_text_field((string) ($optin['subtitle'] ?? $config['optin_subtitle']));
+        $config['optin_button_label'] = sanitize_text_field((string) ($optin['button_label'] ?? $config['optin_button_label']));
+
+        // Estes controles permanecem desligados no runtime dos portais.
         $config['allow_google_signals'] = false;
         $config['allow_ad_personalization_signals'] = false;
         $config['consent_mode_default'] = 'denied';
@@ -151,7 +175,7 @@ final class Zica_Electoral_Analytics {
 
     public static function render_google_loader(): void {
         $config = self::config();
-        if (!self::active($config)) {
+        if (!self::active($config) || empty($config['analytics_enabled'])) {
             return;
         }
 
@@ -187,39 +211,76 @@ final class Zica_Electoral_Analytics {
             return;
         }
 
-        wp_enqueue_script(
-            'zica-electoral-analytics',
-            plugins_url('assets/zica-electoral-analytics.js', __FILE__),
-            [],
-            self::VERSION,
-            true
-        );
+        if (!empty($config['analytics_enabled'])) {
+            wp_enqueue_script(
+                'zica-electoral-analytics',
+                plugins_url('assets/zica-electoral-analytics.js', __FILE__),
+                [],
+                self::VERSION,
+                true
+            );
 
-        $canonical = wp_get_canonical_url();
-        $post_id = is_singular() ? get_queried_object_id() : 0;
-        $post_type = $post_id ? get_post_type($post_id) : '';
+            $canonical = wp_get_canonical_url();
+            $post_id = is_singular() ? get_queried_object_id() : 0;
+            $post_type = $post_id ? get_post_type($post_id) : '';
 
-        wp_localize_script('zica-electoral-analytics', 'ZicaElectoralAnalytics', [
-            'enabled' => true,
-            'portalId' => sanitize_key((string) ($config['portal_id'] ?? '')),
-            'disableAfter' => sanitize_text_field((string) ($config['disable_after'] ?? '')),
-            'primaryPortals' => array_values((array) ($config['primary_portals'] ?? [])),
-            'geoReportingLevel' => ($config['geo_reporting_level'] ?? 'city') === 'state' ? 'state' : 'city',
-            'page' => [
-                'postId' => $post_id,
-                'postType' => sanitize_key((string) $post_type),
-                'canonicalUrl' => esc_url_raw($canonical ?: home_url(add_query_arg([], $GLOBALS['wp']->request ?? ''))),
-                'title' => wp_strip_all_tags(wp_get_document_title()),
-            ],
-            'privacy' => [
-                'individualVoterProfiles' => false,
-                'politicalPreferenceInference' => false,
-                'preciseLocationCollection' => false,
-                'rawIpStorage' => false,
-                'adPersonalization' => false,
-                'googleSignals' => false,
-            ],
-        ]);
+            wp_localize_script('zica-electoral-analytics', 'ZicaElectoralAnalytics', [
+                'enabled' => true,
+                'portalId' => sanitize_key((string) ($config['portal_id'] ?? '')),
+                'disableAfter' => sanitize_text_field((string) ($config['disable_after'] ?? '')),
+                'primaryPortals' => array_values((array) ($config['primary_portals'] ?? [])),
+                'geoReportingLevel' => ($config['geo_reporting_level'] ?? 'city') === 'state' ? 'state' : 'city',
+                'page' => [
+                    'postId' => $post_id,
+                    'postType' => sanitize_key((string) $post_type),
+                    'canonicalUrl' => esc_url_raw($canonical ?: home_url(add_query_arg([], $GLOBALS['wp']->request ?? ''))),
+                    'title' => wp_strip_all_tags(wp_get_document_title()),
+                ],
+                'privacy' => [
+                    'individualVoterProfiles' => false,
+                    'politicalPreferenceInference' => false,
+                    'preciseLocationCollection' => false,
+                    'rawIpStorage' => false,
+                    'adPersonalization' => false,
+                    'googleSignals' => false,
+                ],
+            ]);
+        }
+
+        if (!empty($config['optin_enabled']) && !empty($config['optin_api_url'])) {
+            wp_enqueue_style(
+                'zica-electoral-optin',
+                plugins_url('assets/zica-electoral-optin.css', __FILE__),
+                [],
+                self::VERSION
+            );
+            wp_enqueue_script(
+                'zica-electoral-optin',
+                plugins_url('assets/zica-electoral-optin.js', __FILE__),
+                [],
+                self::VERSION,
+                true
+            );
+            wp_localize_script('zica-electoral-optin', 'ZicaElectoralOptin', [
+                'enabled' => true,
+                'apiUrl' => esc_url_raw((string) $config['optin_api_url']),
+                'portalId' => sanitize_key((string) ($config['portal_id'] ?? '')),
+                'sourcePortal' => self::portal_host(),
+                'disableAfter' => sanitize_text_field((string) ($config['disable_after'] ?? '')),
+                'scrollTriggerPercent' => max(1, min(90, absint($config['optin_scroll_trigger_percent'] ?? 10))),
+                'exitIntentEnabled' => !empty($config['optin_exit_intent_enabled']),
+                'dismissHours' => max(1, absint($config['optin_dismiss_hours'] ?? 24)),
+                'successSuppressDays' => max(1, absint($config['optin_success_suppress_days'] ?? 90)),
+                'privacyUrl' => esc_url_raw((string) ($config['optin_privacy_url'] ?? '')),
+                'title' => sanitize_text_field((string) ($config['optin_title'] ?? 'Quero ajudar na campanha')),
+                'subtitle' => sanitize_text_field((string) ($config['optin_subtitle'] ?? 'Deixe seu contato e diga como quer ajudar.')),
+                'buttonLabel' => sanitize_text_field((string) ($config['optin_button_label'] ?? '🪵 MADEIRAAA NELESS')),
+                'privacy' => [
+                    'browsingHistoryLinkedToContact' => false,
+                    'personalizedPoliticalTargeting' => false,
+                ],
+            ]);
+        }
     }
 }
 

@@ -40,6 +40,12 @@ type Settings = {
   ga4_measurement_id: string | null;
   gtm_web_container_id: string | null;
   gtm_server_container_url: string | null;
+  optin_popup_enabled: boolean;
+  optin_scroll_trigger_percent: number;
+  optin_exit_intent_enabled: boolean;
+  optin_dismiss_hours: number;
+  optin_success_suppress_days: number;
+  optin_privacy_url: string | null;
 };
 
 const emptySettings: Settings = {
@@ -56,6 +62,12 @@ const emptySettings: Settings = {
   ga4_measurement_id: null,
   gtm_web_container_id: null,
   gtm_server_container_url: null,
+  optin_popup_enabled: true,
+  optin_scroll_trigger_percent: 10,
+  optin_exit_intent_enabled: true,
+  optin_dismiss_hours: 24,
+  optin_success_suppress_days: 90,
+  optin_privacy_url: null,
 };
 
 function validHttpUrl(value: string) {
@@ -145,12 +157,18 @@ export default function ElectoralPortalNetwork() {
     try {
       const min = Math.max(0, Math.min(12, Number(settings.min_links_per_post) || 0));
       const max = Math.max(min, Math.min(12, Number(settings.max_links_per_post) || min));
+      const optinScroll = Math.max(1, Math.min(90, Number(settings.optin_scroll_trigger_percent) || 10));
+      const dismissHours = Math.max(1, Math.min(720, Number(settings.optin_dismiss_hours) || 24));
+      const successDays = Math.max(1, Math.min(365, Number(settings.optin_success_suppress_days) || 90));
       const { error } = await db.from('electoral_portal_settings').upsert({
         ...settings,
         campaign_preset_id: PRESET,
         primary_portals: [...PRIMARY_PORTALS],
         min_links_per_post: min,
         max_links_per_post: max,
+        optin_scroll_trigger_percent: optinScroll,
+        optin_dismiss_hours: dismissHours,
+        optin_success_suppress_days: successDays,
         allow_individual_voter_profiles: false,
         allow_political_preference_inference: false,
         updated_at: new Date().toISOString(),
@@ -170,7 +188,7 @@ export default function ElectoralPortalNetwork() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-black"><Globe2 className="h-6 w-6" /> Rede de Portais Eleitorais</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Interlinking editorial, biblioteca administrável de referências e telemetria agregada do conteúdo.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Interlinking editorial, biblioteca administrável de referências, cadastro voluntário e telemetria agregada do conteúdo.</p>
         </div>
         <Button asChild variant="outline"><a href="/1470" target="_blank" rel="noreferrer"><Sparkles className="mr-2 h-4 w-4" /> Abrir construtor /1470</a></Button>
       </div>
@@ -178,7 +196,7 @@ export default function ElectoralPortalNetwork() {
       <Card className="border-emerald-500/30 bg-emerald-500/5">
         <CardContent className="flex gap-3 p-4 text-sm">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
-          <div><strong>Telemetria permitida neste módulo:</strong> audiência agregada por página, origem, campanha UTM, dispositivo, cidade aproximada e profundidade de rolagem. Não são criados perfis individuais de eleitor, inferência de preferência política ou personalização persuasiva por localização.</div>
+          <div><strong>Separação de dados:</strong> a navegação permanece agregada. O cadastro voluntário guarda somente os dados informados no formulário, consentimentos e o portal de origem; não vincula histórico individual de páginas ou rolagem ao contato cadastrado.</div>
         </CardContent>
       </Card>
 
@@ -205,12 +223,25 @@ export default function ElectoralPortalNetwork() {
       </Card>
 
       <Card>
+        <CardHeader><CardTitle className="text-base">Pop-up de cadastro voluntário</CardTitle><CardDescription>Dispara no início da rolagem e, em desktop, também por intenção de saída. No máximo dois disparos por sessão quando o visitante fecha o primeiro; após cadastro concluído, o navegador fica suprimido pelo período configurado.</CardDescription></CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="flex items-end"><Button variant="outline" className="w-full" onClick={() => setSettings((s) => ({ ...s, optin_popup_enabled: !s.optin_popup_enabled }))}>{settings.optin_popup_enabled ? <ToggleRight className="mr-2 h-4 w-4" /> : <ToggleLeft className="mr-2 h-4 w-4" />} Pop-up {settings.optin_popup_enabled ? 'ATIVO' : 'INATIVO'}</Button></div>
+          <div><Label>Disparar após rolagem</Label><Input type="number" min={1} max={90} value={settings.optin_scroll_trigger_percent} onChange={(e) => setSettings((s) => ({ ...s, optin_scroll_trigger_percent: Number(e.target.value) }))} /><div className="mt-1 text-xs text-muted-foreground">Percentual da página, padrão 10%.</div></div>
+          <div className="flex items-end"><Button variant="outline" className="w-full" onClick={() => setSettings((s) => ({ ...s, optin_exit_intent_enabled: !s.optin_exit_intent_enabled }))}>{settings.optin_exit_intent_enabled ? <ToggleRight className="mr-2 h-4 w-4" /> : <ToggleLeft className="mr-2 h-4 w-4" />} Saída desktop {settings.optin_exit_intent_enabled ? 'ATIVA' : 'INATIVA'}</Button></div>
+          <div><Label>Ocultar após fechar, horas</Label><Input type="number" min={1} max={720} value={settings.optin_dismiss_hours} onChange={(e) => setSettings((s) => ({ ...s, optin_dismiss_hours: Number(e.target.value) }))} /></div>
+          <div><Label>Ocultar após cadastro, dias</Label><Input type="number" min={1} max={365} value={settings.optin_success_suppress_days} onChange={(e) => setSettings((s) => ({ ...s, optin_success_suppress_days: Number(e.target.value) }))} /></div>
+          <div className="md:col-span-2 xl:col-span-3"><Label>Política de privacidade</Label><Input placeholder="https://.../politica-de-privacidade" value={settings.optin_privacy_url || ''} onChange={(e) => setSettings((s) => ({ ...s, optin_privacy_url: e.target.value.trim() || null }))} /></div>
+          <div className="md:col-span-2 xl:col-span-4 rounded-md border bg-muted/30 p-3 text-sm"><strong>Botão final:</strong> 🪵 MADEIRAAA NELESS<br /><span className="text-xs text-muted-foreground">Campos: nome, email, WhatsApp, cidade, UF, novidades por email, novidades por WhatsApp, voluntariado e consentimento do cadastro.</span></div>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader><CardTitle className="text-base">GA4 e GTM Server</CardTitle><CardDescription>Os identificadores ficam configuráveis. O código de portal deverá emitir somente eventos editoriais e agregados.</CardDescription></CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div><Label>GA4 Measurement ID</Label><Input placeholder="G-XXXXXXXXXX" value={settings.ga4_measurement_id || ''} onChange={(e) => setSettings((s) => ({ ...s, ga4_measurement_id: e.target.value.trim() || null }))} /></div>
           <div><Label>GTM Web Container</Label><Input placeholder="GTM-XXXXXXX" value={settings.gtm_web_container_id || ''} onChange={(e) => setSettings((s) => ({ ...s, gtm_web_container_id: e.target.value.trim() || null }))} /></div>
           <div className="md:col-span-2"><Label>URL do GTM Server first-party</Label><Input placeholder="https://metrics.drmadeira1470.com.br" value={settings.gtm_server_container_url || ''} onChange={(e) => setSettings((s) => ({ ...s, gtm_server_container_url: e.target.value.trim() || null }))} /></div>
-          <div><Label>Desativar analytics após</Label><Input type="datetime-local" value={settings.analytics_disable_after ? new Date(settings.analytics_disable_after).toISOString().slice(0, 16) : ''} onChange={(e) => setSettings((s) => ({ ...s, analytics_disable_after: e.target.value ? new Date(e.target.value).toISOString() : null }))} /></div>
+          <div><Label>Desativar analytics e pop-up após</Label><Input type="datetime-local" value={settings.analytics_disable_after ? new Date(settings.analytics_disable_after).toISOString().slice(0, 16) : ''} onChange={(e) => setSettings((s) => ({ ...s, analytics_disable_after: e.target.value ? new Date(e.target.value).toISOString() : null }))} /></div>
           <div className="flex items-end"><Button variant="outline" className="w-full" onClick={() => setSettings((s) => ({ ...s, aggregate_analytics_enabled: !s.aggregate_analytics_enabled }))}>{settings.aggregate_analytics_enabled ? <ToggleRight className="mr-2 h-4 w-4" /> : <ToggleLeft className="mr-2 h-4 w-4" />} Analytics agregado {settings.aggregate_analytics_enabled ? 'ATIVO' : 'INATIVO'}</Button></div>
           <div className="md:col-span-2"><Button onClick={() => void saveSettings()} disabled={saving}><Save className="mr-2 h-4 w-4" /> Salvar configurações</Button></div>
         </CardContent>

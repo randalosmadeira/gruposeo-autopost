@@ -1,0 +1,66 @@
+name: Electoral Opt-in Smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/pages/ElectoralPortalNetwork.tsx'
+      - 'wordpress/zica-electoral-analytics/**'
+      - 'supabase/functions/electoral-optin-public/**'
+      - 'supabase/functions/electoral-analytics-public-config/**'
+      - 'supabase/migrations/20260901235000_electoral_optin_popup.sql'
+      - '.github/workflows/electoral-optin-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate browser script syntax
+        run: node --check wordpress/zica-electoral-analytics/assets/zica-electoral-optin.js
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Validate WordPress plugin syntax
+        run: php -l wordpress/zica-electoral-analytics/zica-electoral-analytics.php
+
+      - name: Validate central portal config
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1/electoral-analytics-public-config?portal=quemvotar.drmadeira1470.com.br'
+          curl --fail --silent --show-error "$URL" -o /tmp/config.json
+          jq -e '.ok == true' /tmp/config.json >/dev/null
+          jq -e '.optin.enabled == true' /tmp/config.json >/dev/null
+          jq -e '.optin.button_label == "🪵 MADEIRAAA NELESS"' /tmp/config.json >/dev/null
+          jq -e '.privacy.browsing_history_linked_to_contact == false' /tmp/config.json >/dev/null
+          jq -e '.privacy.personalized_political_targeting == false' /tmp/config.json >/dev/null
+
+      - name: Validate public opt-in rejection path
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1/electoral-optin-public'
+          STATUS="$(curl --silent --show-error -o /tmp/invalid.json -w '%{http_code}' \
+            -X POST "$URL" \
+            -H 'Origin: https://quemvotar.drmadeira1470.com.br' \
+            -H 'Content-Type: application/json' \
+            --data '{"fullName":"","consentContact":false}')"
+          test "$STATUS" = '422'
+          jq -e '.error == "full_name_required"' /tmp/invalid.json >/dev/null
+
+      - name: Verify no synthetic lead was created
+        run: echo 'Smoke uses only validation errors and never sends a valid contact payload.'

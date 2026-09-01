@@ -7,6 +7,7 @@ const PRESET = 'madeira-1470-sp-2026';
 const ALLOWED_PORTALS = new Set([
   'quemvotar.drmadeira1470.com.br',
   'votardeputadofederal.drmadeira1470.com.br',
+  'drmadeira1470.com.br',
 ]);
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false, autoRefreshToken: false } });
 
@@ -38,19 +39,21 @@ serve(async (req) => {
 
     const { data: settings, error } = await admin
       .from('electoral_portal_settings')
-      .select('primary_portals,aggregate_analytics_enabled,analytics_disable_after,geo_reporting_level,ga4_measurement_id,gtm_web_container_id,gtm_server_container_url')
+      .select('primary_portals,aggregate_analytics_enabled,analytics_disable_after,geo_reporting_level,ga4_measurement_id,gtm_web_container_id,gtm_server_container_url,optin_popup_enabled,optin_scroll_trigger_percent,optin_exit_intent_enabled,optin_dismiss_hours,optin_success_suppress_days,optin_privacy_url')
       .eq('campaign_preset_id', PRESET)
       .single();
     if (error || !settings) throw error || new Error('settings_not_found');
 
     const disableAfter = settings.analytics_disable_after ? new Date(settings.analytics_disable_after) : null;
     const withinWindow = !disableAfter || disableAfter.getTime() > Date.now();
-    const enabled = Boolean(settings.aggregate_analytics_enabled) && withinWindow;
+    const analyticsEnabled = Boolean(settings.aggregate_analytics_enabled) && withinWindow;
+    const optinEnabled = Boolean(settings.optin_popup_enabled) && withinWindow;
 
     return json({
       ok: true,
       portal_id: portalId(portal),
-      enabled,
+      enabled: analyticsEnabled || optinEnabled,
+      analytics_enabled: analyticsEnabled,
       ga4_measurement_id: settings.ga4_measurement_id || '',
       gtm_web_container_id: settings.gtm_web_container_id || '',
       gtm_server_container_url: settings.gtm_server_container_url || '',
@@ -60,12 +63,26 @@ serve(async (req) => {
       consent_mode_default: 'denied',
       allow_google_signals: false,
       allow_ad_personalization_signals: false,
+      optin: {
+        enabled: optinEnabled,
+        api_url: `${SUPABASE_URL}/functions/v1/electoral-optin-public`,
+        scroll_trigger_percent: Math.max(1, Math.min(90, Number(settings.optin_scroll_trigger_percent || 10))),
+        exit_intent_enabled: Boolean(settings.optin_exit_intent_enabled),
+        dismiss_hours: Math.max(1, Math.min(720, Number(settings.optin_dismiss_hours || 24))),
+        success_suppress_days: Math.max(1, Math.min(365, Number(settings.optin_success_suppress_days || 90))),
+        privacy_url: settings.optin_privacy_url || '',
+        title: 'Quero ajudar na campanha',
+        subtitle: 'Deixe seu contato e diga como quer ajudar.',
+        button_label: '🪵 MADEIRAAA NELESS',
+      },
       privacy: {
         individual_voter_profiles: false,
         political_preference_inference: false,
         precise_location_collection: false,
         raw_ip_storage: false,
         ad_personalization: false,
+        browsing_history_linked_to_contact: false,
+        personalized_political_targeting: false,
       },
     });
   } catch (error) {
