@@ -1,5 +1,6 @@
 name: Zica.ai VPS Preflight
 
+# Manual trigger marker: secrets configured on 2026-09-01.
 on:
   workflow_dispatch:
   push:
