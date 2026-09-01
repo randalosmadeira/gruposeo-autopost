@@ -1,10 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { formatElectoralFooter, resolveElectoralPreset } from "../_shared/electoral-campaign-presets.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
+const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const admin = SUPABASE_URL && SERVICE_ROLE ? createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 
 type ElectoralConfig = {
   campaignPresetId?: string;
@@ -28,6 +33,22 @@ type ElectoralConfig = {
   paidBoosting?: boolean;
   paidBoostingProvider?: string;
   compliance?: { blockers?: string[]; warnings?: string[]; canPublish?: boolean; score?: number };
+};
+
+type PortalResource = {
+  label: string;
+  url: string;
+  category: string;
+  tags: string[];
+  editorial_hook: string;
+  priority: number;
+};
+
+type PortalSettings = {
+  primary_portals?: string[];
+  min_links_per_post?: number;
+  max_links_per_post?: number;
+  contextual_linking_enabled?: boolean;
 };
 
 const digits = (value = '') => value.replace(/\D/g, '');
@@ -59,6 +80,59 @@ function escapeHtml(value = '') {
   }[char] || char));
 }
 
+function normalizeTokens(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(/\s+/)
+    .filter((token) => token.length >= 3);
+}
+
+async function loadPortalNetwork(presetId: string) {
+  if (!admin) return { settings: null as PortalSettings | null, resources: [] as PortalResource[] };
+  const [{ data: settings }, { data: resources }] = await Promise.all([
+    admin.from('electoral_portal_settings').select('primary_portals,min_links_per_post,max_links_per_post,contextual_linking_enabled').eq('campaign_preset_id', presetId).maybeSingle(),
+    admin.from('electoral_portal_resources').select('label,url,category,tags,editorial_hook,priority').eq('campaign_preset_id', presetId).eq('active', true).order('priority', { ascending: false }),
+  ]);
+  return { settings: (settings || null) as PortalSettings | null, resources: (resources || []) as PortalResource[] };
+}
+
+function choosePortalResources(keyword: string, electoral: ElectoralConfig, settings: PortalSettings | null, resources: PortalResource[]) {
+  if (!settings?.contextual_linking_enabled || !resources.length) return [] as PortalResource[];
+  const context = [keyword, ...(electoral.campaignTopics || []), ...(electoral.targetCities || []), ...(electoral.targetDistricts || [])].join(' ');
+  const contextTokens = new Set(normalizeTokens(context));
+  const min = Math.max(0, Math.min(12, Number(settings.min_links_per_post ?? 2)));
+  const max = Math.max(min, Math.min(12, Number(settings.max_links_per_post ?? 5)));
+  const desired = electoral.articleType === 'pillar' ? max : electoral.articleType === 'satellite' ? Math.min(max, min + 1) : min;
+  const primary = new Set((settings.primary_portals || []).map((url) => String(url).replace(/\/$/, '')));
+
+  return resources
+    .map((resource) => {
+      const searchable = normalizeTokens([resource.label, resource.category, ...(resource.tags || [])].join(' '));
+      const matches = searchable.reduce((sum, token) => sum + (contextTokens.has(token) ? 1 : 0), 0);
+      const isPrimary = primary.has(String(resource.url).replace(/\/$/, ''));
+      return { resource, score: Number(resource.priority || 0) + matches * 25 + (isPrimary ? 1000 : 0) };
+    })
+    .sort((a, b) => b.score - a.score || a.resource.label.localeCompare(b.resource.label))
+    .slice(0, desired)
+    .map((item) => item.resource);
+}
+
+function renderPortalReferences(resources: PortalResource[]) {
+  if (!resources.length) return '';
+  return [
+    '<aside class="zica-related-network" data-editorial-links="contextual">',
+    '<h2>Você também pode conhecer</h2>',
+    '<p>Referências e canais relacionados selecionados pelo contexto editorial desta publicação. A presença de um link não implica apoio, endosso ou vínculo político da página referenciada.</p>',
+    '<ul>',
+    ...resources.map((resource) => `<li><strong>${escapeHtml(resource.editorial_hook || 'Veja também')}:</strong> <a href="${escapeHtml(resource.url)}">${escapeHtml(resource.label)}</a></li>`),
+    '</ul>',
+    '</aside>',
+  ].join('\n');
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (req.method !== 'POST') {
@@ -77,15 +151,15 @@ serve(async (req) => {
 
     if (!String(keyword || '').trim()) draftBlockers.push('keyword ausente');
     if (draftBlockers.length) {
-      return new Response(JSON.stringify({
-        error: 'electoral_draft_blocked',
-        blockers: draftBlockers,
-        preset_id: preset.id,
-      }), {
+      return new Response(JSON.stringify({ error: 'electoral_draft_blocked', blockers: draftBlockers, preset_id: preset.id }), {
         status: 422,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    const portalNetwork = await loadPortalNetwork(preset.id);
+    const linkedResources = choosePortalResources(String(keyword), electoral, portalNetwork.settings, portalNetwork.resources);
+    const relatedNetworkHtml = renderPortalReferences(linkedResources);
 
     const candidate = escapeHtml(preset.ballotName || preset.candidateName);
     const topic = escapeHtml(String(keyword));
@@ -101,7 +175,7 @@ serve(async (req) => {
 
     const content = [
       `<article data-electoral-draft="true" data-campaign-preset="${escapeHtml(preset.id)}" data-editorial-target-words="${requestedTargetWords}">`,
-      `<p><strong>RASCUNHO ELEITORAL — REVISÃO HUMANA OBRIGATÓRIA</strong></p>`,
+      `<p><strong>RASCUNHO ELEITORAL - REVISÃO HUMANA OBRIGATÓRIA</strong></p>`,
       `<p><strong>ALVO EDITORIAL CONFIGURADO:</strong> ${requestedTargetWords} palavras. Este scaffold não representa conteúdo final nem garantia de indexação.</p>`,
       `<h1>${topic}</h1>`,
       `<p><strong>Candidatura:</strong> ${candidate} · ${party} · ${number} · ${role}</p>`,
@@ -121,10 +195,11 @@ serve(async (req) => {
       `<p>[VERIFICAR] Vincule a pauta a uma bandeira cadastrada e diferencie proposta parlamentar de resultado garantido.</p>`,
       `<ul>${preset.fixedIssues.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`,
       electoral.legislativeProjects ? `<p><strong>Projetos/propostas fornecidos para checagem:</strong> ${escapeHtml(electoral.legislativeProjects)}</p>` : '',
+      relatedNetworkHtml,
       `<h2>5. FAQ factual e resumo executivo</h2>`,
       `<p>[VERIFICAR] Preparar 4 a 6 perguntas com respostas baseadas nas fontes utilizadas, sem recomendação personalizada de voto.</p>`,
       `<h2>6. Fontes</h2>`,
-      `<ul><li>[FONTE PRIMÁRIA — URL — DATA — AFIRMAÇÃO SUPORTADA]</li></ul>`,
+      `<ul><li>[FONTE PRIMÁRIA - URL - DATA - AFIRMAÇÃO SUPORTADA]</li></ul>`,
       electoral.usesSyntheticMedia
         ? `<p><strong>ROTULAGEM DE IA:</strong> conteúdo sintético/multimídia deve identificar explicitamente a fabricação/manipulação e a tecnologia utilizada.</p>`
         : `<p><strong>TRILHA DE IA:</strong> assistência editorial registrada; verificar se alguma peça multimídia exige rotulagem específica.</p>`,
@@ -160,6 +235,7 @@ serve(async (req) => {
       approved_for_publication: false,
       publication_blockers: pendingPublishBlockers,
       campaign_footer: formatElectoralFooter(preset, electoral.campaignCnpj),
+      related_resources: linkedResources.map((item) => ({ label: item.label, url: item.url, category: item.category })),
       content,
       audit: {
         generated_at: new Date().toISOString(),
@@ -169,6 +245,10 @@ serve(async (req) => {
         source_verification_required: true,
         human_legal_review_required: true,
         preset_enforced_server_side: true,
+        contextual_linking: Boolean(portalNetwork.settings?.contextual_linking_enabled),
+        contextual_links_count: linkedResources.length,
+        individual_voter_profiles: false,
+        political_preference_inference: false,
         persuasive_geo_personalization: false,
         vote_recommendation: false,
       },
