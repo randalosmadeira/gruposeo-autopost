@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Props {
+  campaignPresetId: string;
   candidateName: string;
   ballotName: string;
   ballotNumber: string;
@@ -21,12 +22,14 @@ interface Props {
 }
 
 interface AnalysisResult {
+  preset_id?: string;
   matched_issue?: string;
   title?: string;
   description?: string;
   geo_context?: string;
   tags?: string[];
   schema?: Record<string, unknown>;
+  campaign_footer?: string;
   compliance?: string[];
 }
 
@@ -59,6 +62,7 @@ export function ElectoralVideoAnalyzer(props: Props) {
           videoUrl,
           context,
           campaign: {
+            campaignPresetId: props.campaignPresetId,
             candidateName: props.candidateName,
             ballotName: props.ballotName,
             ballotNumber: props.ballotNumber,
@@ -111,23 +115,17 @@ export function ElectoralVideoAnalyzer(props: Props) {
 
       {result && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Resultado semântico</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base">Resultado semântico</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
+            {result.preset_id && <div><strong>Preset backend:</strong> {result.preset_id}</div>}
             {result.matched_issue && <div><strong>Pauta relacionada:</strong> {result.matched_issue}</div>}
             {result.title && <div><strong>Título factual:</strong> {result.title}</div>}
             {result.description && <div><strong>Descrição:</strong> {result.description}</div>}
             {result.geo_context && <div><strong>Contexto GEO:</strong> {result.geo_context}</div>}
             {result.tags?.length ? <div className="flex flex-wrap gap-1.5">{result.tags.map((tag) => <Badge key={tag} variant="outline">{tag}</Badge>)}</div> : null}
-            {result.compliance?.length ? (
-              <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
-                {result.compliance.map((item) => <div key={item}>• {item}</div>)}
-              </div>
-            ) : null}
-            {result.schema && (
-              <pre className="max-h-72 overflow-auto rounded-md border bg-muted/40 p-3 text-xs">{JSON.stringify(result.schema, null, 2)}</pre>
-            )}
+            {result.campaign_footer && <div className="rounded-md border p-3 text-xs"><strong>Rodapé configurado:</strong> {result.campaign_footer}</div>}
+            {result.compliance?.length ? <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">{result.compliance.map((item) => <div key={item}>• {item}</div>)}</div> : null}
+            {result.schema && <pre className="max-h-72 overflow-auto rounded-md border bg-muted/40 p-3 text-xs">{JSON.stringify(result.schema, null, 2)}</pre>}
           </CardContent>
         </Card>
       )}
