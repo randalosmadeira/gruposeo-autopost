@@ -8,9 +8,9 @@ import {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
+const ENV_OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 const OPENAI_IMAGE_MODEL = Deno.env.get('OPENAI_IMAGE_MODEL') || 'gpt-image-2';
-const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
+const ENV_ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 const ANTHROPIC_MODEL = Deno.env.get('ANTHROPIC_MODEL') || 'claude-sonnet-5';
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
@@ -21,6 +21,24 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   status,
   headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
 });
+
+async function resolveProviderKeys() {
+  const readVault = async (provider: 'openai' | 'anthropic') => {
+    const { data, error } = await admin.rpc('get_zica_ai_provider_secret', { p_provider: provider });
+    if (error) return '';
+    return String(data || '').trim();
+  };
+  const [vaultOpenAI, vaultAnthropic] = await Promise.all([
+    ENV_OPENAI_API_KEY ? Promise.resolve('') : readVault('openai'),
+    ENV_ANTHROPIC_API_KEY ? Promise.resolve('') : readVault('anthropic'),
+  ]);
+  return {
+    openai: ENV_OPENAI_API_KEY || vaultOpenAI,
+    anthropic: ENV_ANTHROPIC_API_KEY || vaultAnthropic,
+    openaiSource: ENV_OPENAI_API_KEY ? 'edge-secret' : vaultOpenAI ? 'zica-ai-vault' : 'missing',
+    anthropicSource: ENV_ANTHROPIC_API_KEY ? 'edge-secret' : vaultAnthropic ? 'zica-ai-vault' : 'missing',
+  };
+}
 
 function bytesToBase64(bytes: Uint8Array) {
   const chunks: string[] = [];
@@ -68,8 +86,8 @@ async function downloadSources(requestId: string) {
   return loaded;
 }
 
-async function selectBestReference(sources: Array<{ mime_type: string; base64: string }>) {
-  if (!ANTHROPIC_API_KEY || sources.length <= 1) return { index: 0, qa: null };
+async function selectBestReference(sources: Array<{ mime_type: string; base64: string }>, anthropicApiKey: string) {
+  if (!anthropicApiKey || sources.length <= 1) return { index: 0, qa: null };
 
   const content: unknown[] = [{
     type: 'text',
@@ -84,7 +102,7 @@ async function selectBestReference(sources: Array<{ mime_type: string; base64: s
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
+      'x-api-key': anthropicApiKey,
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
@@ -104,8 +122,8 @@ async function selectBestReference(sources: Array<{ mime_type: string; base64: s
   };
 }
 
-async function generateWithOpenAI(source: { mime_type: string; bytes: Uint8Array }, prompt: string) {
-  if (!OPENAI_API_KEY) throw new Error('openai_not_configured');
+async function generateWithOpenAI(source: { mime_type: string; bytes: Uint8Array }, prompt: string, openaiApiKey: string) {
+  if (!openaiApiKey) throw new Error('openai_not_configured');
   const form = new FormData();
   form.set('model', OPENAI_IMAGE_MODEL);
   form.set('prompt', prompt);
@@ -116,7 +134,7 @@ async function generateWithOpenAI(source: { mime_type: string; bytes: Uint8Array
 
   const response = await fetch('https://api.openai.com/v1/images/edits', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+    headers: { Authorization: `Bearer ${openaiApiKey}` },
     body: form,
   });
   const payload = await response.json().catch(() => ({}));
@@ -131,13 +149,13 @@ async function generateWithOpenAI(source: { mime_type: string; bytes: Uint8Array
   throw new Error('openai_image_missing_output');
 }
 
-async function qaWithClaude(reference: { mime_type: string; base64: string }, candidate: { mimeType: string; bytes: Uint8Array }) {
-  if (!ANTHROPIC_API_KEY) return null;
+async function qaWithClaude(reference: { mime_type: string; base64: string }, candidate: { mimeType: string; bytes: Uint8Array }, anthropicApiKey: string) {
+  if (!anthropicApiKey) return null;
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
+      'x-api-key': anthropicApiKey,
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
@@ -193,9 +211,10 @@ serve(async (req) => {
       .maybeSingle();
     jobId = job?.id || '';
 
-    if (!OPENAI_API_KEY) {
+    const providerKeys = await resolveProviderKeys();
+    if (!providerKeys.openai) {
       await admin.from('supporter_avatar_requests').update({ status: 'provider_not_configured', updated_at: new Date().toISOString() }).eq('id', requestId);
-      if (jobId) await admin.from('supporter_avatar_jobs').update({ status: 'provider_not_configured', error_message: 'OPENAI_API_KEY ausente', completed_at: new Date().toISOString() }).eq('id', jobId);
+      if (jobId) await admin.from('supporter_avatar_jobs').update({ status: 'provider_not_configured', error_message: 'OpenAI não configurada no Zica.ai', completed_at: new Date().toISOString() }).eq('id', jobId);
       return json({ error: 'openai_not_configured' }, 503);
     }
 
@@ -205,7 +224,7 @@ serve(async (req) => {
     const sources = await downloadSources(requestId);
     if (!sources.length) throw new Error('no_source_images');
 
-    const selection = await selectBestReference(sources);
+    const selection = await selectBestReference(sources, providerKeys.anthropic);
     const primary = sources[selection.index] || sources[0];
 
     const { data: dbTemplate } = await admin
@@ -226,7 +245,7 @@ serve(async (req) => {
     });
     const prompt = `${dbTemplate?.system_prompt || ''}\n\n${runtimePrompt}\n\nRESTRIÇÕES ADICIONAIS:\n${dbTemplate?.negative_prompt || ''}`.trim();
 
-    const generated = await generateWithOpenAI(primary, prompt);
+    const generated = await generateWithOpenAI(primary, prompt, providerKeys.openai);
     const path = `${requestId}/master-${crypto.randomUUID()}.png`;
     const { error: uploadError } = await admin.storage.from('supporter-avatar-generated').upload(path, generated.bytes, {
       contentType: generated.mimeType,
@@ -235,7 +254,7 @@ serve(async (req) => {
     });
     if (uploadError) throw uploadError;
 
-    const qa = await qaWithClaude(primary, generated);
+    const qa = await qaWithClaude(primary, generated, providerKeys.anthropic);
     const qaScore = Number(qa?.facial_fidelity_score);
     const qaPass = qa ? qa.pass === true : true;
 
@@ -255,6 +274,8 @@ serve(async (req) => {
         source_index: selection.index,
         fidelity_target: Number(dbTemplate?.fidelity_target || 0.99),
         fidelity_target_is_not_biometric_guarantee: true,
+        openai_key_source: providerKeys.openaiSource,
+        anthropic_key_source: providerKeys.anthropicSource,
       },
     });
 
@@ -273,7 +294,8 @@ serve(async (req) => {
         prompt_version: SUPPORTER_AVATAR_PROMPT_VERSION,
         qa_pass: qaPass,
         qa_score: Number.isFinite(qaScore) ? qaScore : null,
-        anthropic_qa_used: Boolean(ANTHROPIC_API_KEY),
+        anthropic_qa_used: Boolean(providerKeys.anthropic),
+        provider_sources: { openai: providerKeys.openaiSource, anthropic: providerKeys.anthropicSource },
       },
       completed_at: new Date().toISOString(),
     }).eq('id', jobId);
