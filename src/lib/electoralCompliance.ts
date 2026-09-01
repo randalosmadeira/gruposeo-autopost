@@ -9,24 +9,24 @@ export interface ElectoralComplianceProfile {
   politicalParty: string;
   federationOrCoalition: string;
   candidateRole: string;
-  majoritarianRunningMateOrAlternates: string;
-  majoritarianPartyLegends: string;
+  majoritarianRunningMateOrAlternates?: string;
+  majoritarianPartyLegends?: string;
   campaignCnpj: string;
   officialWebsite: string;
   websiteRegisteredWithElectoralJustice: boolean;
-  websitePreexisting: boolean;
-  websiteListedInInitialFiling: boolean;
-  websiteCreatedAt: string;
+  websitePreexisting?: boolean;
+  websiteListedInInitialFiling?: boolean;
+  websiteCreatedAt?: string;
   websiteRegistrationDate: string;
   providerEstablishedInBrazil: boolean;
   privacyPolicyUrl: string;
   responsibleName: string;
-  dataSubjectRightsChannel: string;
-  dataProtectionOfficerName: string;
-  dataProcessingRecordMaintained: boolean;
-  securityMeasuresConfirmed: boolean;
-  processesSensitiveData: boolean;
-  sensitiveDataExplicitConsentConfirmed: boolean;
+  dataSubjectRightsChannel?: string;
+  dataProtectionOfficerName?: string;
+  dataProcessingRecordMaintained?: boolean;
+  securityMeasuresConfirmed?: boolean;
+  processesSensitiveData?: boolean;
+  sensitiveDataExplicitConsentConfirmed?: boolean;
   contentMode: ElectoralContentMode;
   usesAi: boolean;
   usesSyntheticMedia: boolean;
@@ -35,13 +35,13 @@ export interface ElectoralComplianceProfile {
   legalReviewRequired: boolean;
   legalReviewConfirmed: boolean;
   messagingConsentConfirmed: boolean;
-  senderIdentificationConfirmed: boolean;
+  senderIdentificationConfirmed?: boolean;
   unsubscribeMechanismConfirmed: boolean;
-  unsubscribeWithin48HoursConfirmed: boolean;
+  unsubscribeWithin48HoursConfirmed?: boolean;
   paidBoosting: boolean;
   paidBoostingProvider: string;
-  paidBoostingContractedByAuthorizedActor: boolean;
-  paidBoostingIdentificationConfirmed: boolean;
+  paidBoostingContractedByAuthorizedActor?: boolean;
+  paidBoostingIdentificationConfirmed?: boolean;
   monetizationMode: MonetizationMode;
   monetizationLegalReviewConfirmed: boolean;
 }
@@ -99,7 +99,7 @@ export function isLikelyHttpsUrl(value: string): boolean {
   }
 }
 
-function parseDate(value: string): Date | null {
+function parseDate(value?: string): Date | null {
   if (!value) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
@@ -143,10 +143,10 @@ export function evaluateElectoralCompliance(
   if (!profile.ballotNumber.trim()) blockers.push('Número de urna ausente.');
   if (!profile.politicalParty.trim()) blockers.push('Partido/federação responsável não informado.');
   if (!profile.candidateRole.trim()) blockers.push('Cargo em disputa não informado.');
-  if (isMajoritarianRole(profile.candidateRole) && !profile.majoritarianRunningMateOrAlternates.trim()) {
+  if (isMajoritarianRole(profile.candidateRole) && !profile.majoritarianRunningMateOrAlternates?.trim()) {
     blockers.push('Propaganda majoritária exige cadastro dos nomes de vice ou suplentes, conforme o cargo.');
   }
-  if (isMajoritarianRole(profile.candidateRole) && profile.federationOrCoalition.trim() && !profile.majoritarianPartyLegends.trim()) {
+  if (isMajoritarianRole(profile.candidateRole) && profile.federationOrCoalition.trim() && !profile.majoritarianPartyLegends?.trim()) {
     blockers.push('Informe as legendas partidárias integrantes da federação/coligação para a propaganda majoritária.');
   }
   if (!isValidCampaignCnpj(profile.campaignCnpj)) blockers.push('CNPJ da campanha deve conter 14 dígitos.');
@@ -164,7 +164,7 @@ export function evaluateElectoralCompliance(
       if (ageHours < 48) blockers.push('Endereço preexistente não informado no RRC/DRAP só pode ser usado 48 horas após seu registro na Justiça Eleitoral.');
     }
 
-    if (!profile.websitePreexisting) {
+    if (profile.websitePreexisting === false) {
       const createdAt = parseDate(profile.websiteCreatedAt);
       if (!createdAt) {
         blockers.push('Informe a data/hora de criação do endereço eletrônico criado durante a campanha.');
@@ -177,8 +177,8 @@ export function evaluateElectoralCompliance(
   }
 
   if (!isLikelyHttpsUrl(profile.privacyPolicyUrl)) blockers.push('Política de Privacidade HTTPS não cadastrada.');
-  if (!profile.dataSubjectRightsChannel.trim()) blockers.push('Canal de direitos do titular/LGPD não informado de forma clara e acessível.');
-  if (!profile.dataProtectionOfficerName.trim()) blockers.push('Encarregado pelo tratamento de dados pessoais não informado.');
+  if (!profile.dataSubjectRightsChannel?.trim()) blockers.push('Canal de direitos do titular/LGPD não informado de forma clara e acessível.');
+  if (!profile.dataProtectionOfficerName?.trim()) blockers.push('Encarregado pelo tratamento de dados pessoais não informado.');
   if (!profile.dataProcessingRecordMaintained) blockers.push('Registro das operações de tratamento de dados pessoais deve estar ativo e conservado.');
   if (!profile.securityMeasuresConfirmed) blockers.push('Medidas técnicas e administrativas de segurança para dados pessoais ainda não foram confirmadas.');
   if (profile.processesSensitiveData && !profile.sensitiveDataExplicitConsentConfirmed) {
