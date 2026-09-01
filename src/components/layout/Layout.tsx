@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { MobileDock } from './MobileDock';
 import { NeuralEnergy } from '@/components/brand/NeuralEnergy';
+import { ElectoralOperationsDock } from '@/components/electoral/ElectoralOperationsDock';
 
 export const Layout = memo(function Layout() {
   return (
@@ -14,6 +15,7 @@ export const Layout = memo(function Layout() {
       </div>
       <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header />
+        <ElectoralOperationsDock />
         <main className="flex-1 overflow-y-auto scrollbar-thin">
           <Outlet />
         </main>
