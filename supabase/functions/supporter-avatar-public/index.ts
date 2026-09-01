@@ -12,8 +12,6 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const PUBLIC_RATE_LIMIT = Number(Deno.env.get('SUPPORTER_AVATAR_DAILY_LIMIT') || '5');
 const TURNSTILE_SECRET = Deno.env.get('TURNSTILE_SECRET_KEY') || '';
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
-const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 const OPENAI_IMAGE_MODEL = Deno.env.get('OPENAI_IMAGE_MODEL') || 'gpt-image-2';
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
@@ -47,12 +45,6 @@ function normalizeText(value: unknown, max = 160) {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
-function normalizeHandle(value: unknown) {
-  const raw = normalizeText(value, 120);
-  if (!raw) return '';
-  return raw.replace(/^@+/, '@');
-}
-
 function clientFingerprint(req: Request) {
   const ip = req.headers.get('cf-connecting-ip')
     || req.headers.get('x-real-ip')
@@ -73,6 +65,14 @@ async function validateTurnstile(token: string, req: Request) {
   const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: form });
   const payload = await response.json().catch(() => ({}));
   return payload.success ? { ok: true, mode: 'turnstile' } : { ok: false, error: 'captcha_invalid' };
+}
+
+async function providerStatus() {
+  const { data } = await admin.rpc('zica_ai_provider_secret_status');
+  return {
+    openai: Boolean(data?.openai),
+    anthropic: Boolean(data?.anthropic),
+  };
 }
 
 async function authenticateRequest(requestId: string, token: string) {
@@ -102,7 +102,11 @@ async function dispatchGeneration(requestId: string) {
       'x-zica-internal': SERVICE_ROLE,
     },
     body: JSON.stringify({ requestId }),
-  }).catch(() => null);
+  }).then(async (response) => {
+    if (response.ok) return;
+    const message = await response.text().catch(() => `HTTP ${response.status}`);
+    console.error('supporter-avatar-dispatch:', requestId, response.status, message.slice(0, 500));
+  }).catch((error) => console.error('supporter-avatar-dispatch:', requestId, error instanceof Error ? error.message : 'network_error'));
 
   const runtime = (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
   if (runtime?.waitUntil) runtime.waitUntil(responsePromise);
@@ -119,27 +123,16 @@ serve(async (req) => {
     const action = normalizeText(body.action, 40);
 
     if (action === 'capabilities') {
+      const providers = await providerStatus();
       return json({
         ok: true,
         service: 'supporter-avatar-public',
-        imageProvider: {
-          provider: 'openai',
-          configured: Boolean(OPENAI_API_KEY),
-          model: OPENAI_IMAGE_MODEL,
-        },
-        qaProvider: {
-          provider: 'anthropic',
-          configured: Boolean(ANTHROPIC_API_KEY),
-          optional: true,
-        },
-        abuseProtection: {
-          turnstileConfigured: Boolean(TURNSTILE_SECRET),
-          dailyLimit: PUBLIC_RATE_LIMIT,
-        },
-        storage: {
-          sourcePrivate: true,
-          outputPrivate: true,
-        },
+        deliveryMode: 'single-final-download',
+        socialPublishing: false,
+        imageProvider: { provider: 'openai', configured: providers.openai, model: OPENAI_IMAGE_MODEL, source: providers.openai ? 'zica-ai-vault' : 'missing' },
+        qaProvider: { provider: 'anthropic', configured: providers.anthropic, optional: true },
+        abuseProtection: { turnstileConfigured: Boolean(TURNSTILE_SECRET), dailyLimit: PUBLIC_RATE_LIMIT },
+        storage: { sourcePrivate: true, outputPrivate: true },
       });
     }
 
@@ -155,12 +148,11 @@ serve(async (req) => {
       const supportText = SUPPORT_TEXTS.includes(body.supportText) ? body.supportText : SUPPORT_TEXTS[0];
       const style = SUPPORT_STYLES.includes(body.style) ? body.style : 'premium';
       const consentImageUse = body.consentImageUse === true;
-      const consentSocialLinking = body.consentSocialLinking === true;
       const consentTerms = body.consentTerms === true;
       const consentPublicGallery = body.consentPublicGallery === true;
 
       if (supporterName.length < 2) return json({ error: 'supporter_name_required' }, 422);
-      if (!consentImageUse || !consentSocialLinking || !consentTerms) return json({ error: 'required_consents_missing' }, 422);
+      if (!consentImageUse || !consentTerms) return json({ error: 'required_consents_missing' }, 422);
 
       const fingerprintHash = await sha256(clientFingerprint(req));
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -173,14 +165,6 @@ serve(async (req) => {
 
       const token = randomToken();
       const publicTokenHash = await sha256(token);
-      const socialHandles = {
-        instagram: normalizeHandle(body.socialHandles?.instagram),
-        facebook: normalizeHandle(body.socialHandles?.facebook),
-        tiktok: normalizeHandle(body.socialHandles?.tiktok),
-        youtube: normalizeHandle(body.socialHandles?.youtube),
-        x: normalizeHandle(body.socialHandles?.x),
-      };
-
       const { data, error } = await admin.from('supporter_avatar_requests').insert({
         public_token_hash: publicTokenHash,
         fingerprint_hash: fingerprintHash,
@@ -189,12 +173,12 @@ serve(async (req) => {
         state: state || 'SP',
         email: email || null,
         whatsapp: whatsapp || null,
-        social_handles: socialHandles,
+        social_handles: {},
         style,
         support_text: supportText,
         provider_preference: 'openai',
         consent_image_use: consentImageUse,
-        consent_social_linking: consentSocialLinking,
+        consent_social_linking: false,
         consent_terms: consentTerms,
         consent_public_gallery: consentPublicGallery,
         consent_at: new Date().toISOString(),
@@ -202,16 +186,7 @@ serve(async (req) => {
       }).select('id,status,expires_at,max_generations').single();
       if (error) throw error;
 
-      return json({
-        ok: true,
-        requestId: data.id,
-        token,
-        status: data.status,
-        expiresAt: data.expires_at,
-        maxSourceImages: 4,
-        maxGenerations: data.max_generations,
-        captchaMode: captcha.mode,
-      }, 201);
+      return json({ ok: true, requestId: data.id, token, status: data.status, expiresAt: data.expires_at, maxSourceImages: 4, maxGenerations: data.max_generations, captchaMode: captcha.mode }, 201);
     }
 
     const requestId = normalizeText(body.requestId, 80);
@@ -226,10 +201,7 @@ serve(async (req) => {
       if (!allowed.includes(mimeType)) return json({ error: 'unsupported_image_type' }, 422);
       if (!Number.isFinite(fileSize) || fileSize <= 0 || fileSize > 10 * 1024 * 1024) return json({ error: 'invalid_file_size' }, 422);
 
-      const { count } = await admin
-        .from('supporter_avatar_sources')
-        .select('id', { count: 'exact', head: true })
-        .eq('request_id', requestId);
+      const { count } = await admin.from('supporter_avatar_sources').select('id', { count: 'exact', head: true }).eq('request_id', requestId);
       if ((count || 0) >= 4) return json({ error: 'source_limit_reached' }, 422);
 
       const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
@@ -249,12 +221,7 @@ serve(async (req) => {
       const { data: objects } = await admin.storage.from('supporter-avatar-uploads').list(requestId, { search: filename, limit: 2 });
       if (!objects?.some((object) => object.name === filename)) return json({ error: 'uploaded_object_not_found' }, 422);
 
-      const { error } = await admin.from('supporter_avatar_sources').insert({
-        request_id: requestId,
-        storage_path: path,
-        mime_type: mimeType,
-        file_size_bytes: Number.isFinite(fileSize) ? fileSize : null,
-      });
+      const { error } = await admin.from('supporter_avatar_sources').insert({ request_id: requestId, storage_path: path, mime_type: mimeType, file_size_bytes: Number.isFinite(fileSize) ? fileSize : null });
       if (error && !String(error.message || '').includes('duplicate')) throw error;
 
       const { count } = await admin.from('supporter_avatar_sources').select('id', { count: 'exact', head: true }).eq('request_id', requestId);
@@ -267,27 +234,17 @@ serve(async (req) => {
       if ((avatarRequest.source_count || 0) < 1) return json({ error: 'upload_at_least_one_photo' }, 422);
       if ((avatarRequest.generation_count || 0) >= (avatarRequest.max_generations || 3)) return json({ error: 'generation_limit_reached' }, 429);
 
-      const { data: activeJob } = await admin
-        .from('supporter_avatar_jobs')
-        .select('id,status')
-        .eq('request_id', requestId)
-        .in('status', ['queued','running'])
-        .maybeSingle();
+      const { data: activeJob } = await admin.from('supporter_avatar_jobs').select('id,status').eq('request_id', requestId).in('status', ['queued','running']).maybeSingle();
       if (activeJob) return json({ ok: true, status: avatarRequest.status, alreadyQueued: true });
 
-      await admin.from('supporter_avatar_requests').update({
-        status: 'queued',
-        generation_count: (avatarRequest.generation_count || 0) + 1,
-        updated_at: new Date().toISOString(),
-      }).eq('id', requestId);
-
+      await admin.from('supporter_avatar_requests').update({ status: 'queued', generation_count: (avatarRequest.generation_count || 0) + 1, updated_at: new Date().toISOString() }).eq('id', requestId);
       const { data: job, error } = await admin.from('supporter_avatar_jobs').insert({
         request_id: requestId,
-        stage: 'generate-master',
+        stage: 'generate-final',
         provider: 'openai',
         model: OPENAI_IMAGE_MODEL,
         status: 'queued',
-        input_payload: { style: avatarRequest.style, support_text: avatarRequest.support_text },
+        input_payload: { style: avatarRequest.style, support_text: avatarRequest.support_text, delivery_mode: 'single-final-download' },
       }).select('id').single();
       if (error) throw error;
 
@@ -296,23 +253,9 @@ serve(async (req) => {
     }
 
     if (action === 'status') {
-      const { data: latestRequest } = await admin
-        .from('supporter_avatar_requests')
-        .select('id,status,source_count,generation_count,max_generations,updated_at,completed_at')
-        .eq('id', requestId)
-        .single();
-      const { data: job } = await admin
-        .from('supporter_avatar_jobs')
-        .select('id,stage,provider,model,status,error_message,created_at,started_at,completed_at')
-        .eq('request_id', requestId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const { data: outputs } = await admin
-        .from('supporter_avatar_outputs')
-        .select('id,platform,width,height,storage_path,mime_type,model,prompt_version,qa_score,created_at')
-        .eq('request_id', requestId)
-        .order('created_at', { ascending: false });
+      const { data: latestRequest } = await admin.from('supporter_avatar_requests').select('id,status,source_count,generation_count,max_generations,updated_at,completed_at').eq('id', requestId).single();
+      const { data: job } = await admin.from('supporter_avatar_jobs').select('id,stage,provider,model,status,error_message,created_at,started_at,completed_at').eq('request_id', requestId).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      const { data: outputs } = await admin.from('supporter_avatar_outputs').select('id,platform,width,height,storage_path,mime_type,model,prompt_version,qa_score,created_at').eq('request_id', requestId).order('created_at', { ascending: false });
 
       const signedOutputs = [];
       const seen = new Set<string>();
@@ -322,7 +265,7 @@ serve(async (req) => {
         const { data } = await admin.storage.from('supporter-avatar-generated').createSignedUrl(output.storage_path, 3600);
         if (data?.signedUrl) signedOutputs.push({ ...output, url: data.signedUrl });
       }
-      return json({ ok: true, request: latestRequest, job, outputs: signedOutputs });
+      return json({ ok: true, request: latestRequest, job, outputs: signedOutputs, deliveryMode: 'single-final-download' });
     }
 
     if (action === 'delete') {
