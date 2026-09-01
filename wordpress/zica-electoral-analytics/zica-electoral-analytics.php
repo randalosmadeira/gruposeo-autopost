@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Zica Electoral Analytics
- * Description: Telemetria editorial agregada para os portais eleitorais 1470. Nao cria perfis individuais de eleitor e nao infere preferencia politica.
- * Version: 1.0.0
+ * Description: Telemetria editorial agregada para os portais eleitorais 1470, com configuração central no Zica.ai.
+ * Version: 1.1.0
  * Author: Zica.ai
  */
 
@@ -11,8 +11,9 @@ if (!defined('ABSPATH')) {
 }
 
 final class Zica_Electoral_Analytics {
-    private const OPTION = 'zica_electoral_analytics_config';
-    private const VERSION = '1.0.0';
+    private const VERSION = '1.1.0';
+    private const CENTRAL_CONFIG_URL = 'https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1/electoral-analytics-public-config';
+    private const TRANSIENT_PREFIX = 'zica_electoral_analytics_';
 
     public static function init(): void {
         add_action('rest_api_init', [self::class, 'register_rest_routes']);
@@ -32,80 +33,119 @@ final class Zica_Electoral_Analytics {
                 'https://quemvotar.drmadeira1470.com.br/blog/',
                 'https://votardeputadofederal.drmadeira1470.com.br/blog/',
             ],
+            'geo_reporting_level' => 'city',
             'allow_google_signals' => false,
             'allow_ad_personalization_signals' => false,
             'consent_mode_default' => 'denied',
+            'central_config_reachable' => false,
         ];
     }
 
-    private static function config(): array {
-        $stored = get_option(self::OPTION, []);
-        return wp_parse_args(is_array($stored) ? $stored : [], self::defaults());
+    private static function portal_host(): string {
+        $host = (string) wp_parse_url(home_url('/'), PHP_URL_HOST);
+        $host = strtolower(preg_replace('/^www\./i', '', $host));
+        return sanitize_text_field($host);
+    }
+
+    private static function transient_key(): string {
+        return self::TRANSIENT_PREFIX . md5(self::portal_host());
+    }
+
+    private static function sanitize_remote(array $remote): array {
+        $config = self::defaults();
+        $config['enabled'] = !empty($remote['enabled']);
+        $config['portal_id'] = sanitize_key((string) ($remote['portal_id'] ?? ''));
+
+        $ga4 = (string) ($remote['ga4_measurement_id'] ?? '');
+        $gtm = (string) ($remote['gtm_web_container_id'] ?? '');
+        $config['ga4_measurement_id'] = preg_match('/^G-[A-Z0-9]+$/', $ga4) ? sanitize_text_field($ga4) : '';
+        $config['gtm_web_container_id'] = preg_match('/^GTM-[A-Z0-9]+$/', $gtm) ? sanitize_text_field($gtm) : '';
+        $config['gtm_server_container_url'] = esc_url_raw((string) ($remote['gtm_server_container_url'] ?? ''));
+        $config['disable_after'] = sanitize_text_field((string) ($remote['disable_after'] ?? $config['disable_after']));
+        $config['geo_reporting_level'] = (($remote['geo_reporting_level'] ?? 'city') === 'state') ? 'state' : 'city';
+
+        $portals = is_array($remote['primary_portals'] ?? null) ? $remote['primary_portals'] : [];
+        $config['primary_portals'] = array_values(array_filter(array_map('esc_url_raw', $portals)));
+
+        // These controls are deliberately forced off in the WordPress runtime.
+        $config['allow_google_signals'] = false;
+        $config['allow_ad_personalization_signals'] = false;
+        $config['consent_mode_default'] = 'denied';
+        $config['central_config_reachable'] = true;
+        return $config;
+    }
+
+    private static function config(bool $refresh = false): array {
+        $key = self::transient_key();
+        if ($refresh) {
+            delete_transient($key);
+        }
+
+        $cached = get_transient($key);
+        if (is_array($cached)) {
+            return wp_parse_args($cached, self::defaults());
+        }
+
+        $host = self::portal_host();
+        if ($host === '') {
+            return self::defaults();
+        }
+
+        $url = add_query_arg(['portal' => $host], self::CENTRAL_CONFIG_URL);
+        $response = wp_remote_get($url, [
+            'timeout' => 4,
+            'redirection' => 2,
+            'headers' => [
+                'Accept' => 'application/json',
+                'User-Agent' => 'Zica-Electoral-Analytics/' . self::VERSION,
+            ],
+        ]);
+
+        if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
+            $closed = self::defaults();
+            set_transient($key, $closed, MINUTE_IN_SECONDS);
+            return $closed;
+        }
+
+        $payload = json_decode((string) wp_remote_retrieve_body($response), true);
+        if (!is_array($payload) || empty($payload['ok'])) {
+            $closed = self::defaults();
+            set_transient($key, $closed, MINUTE_IN_SECONDS);
+            return $closed;
+        }
+
+        $config = self::sanitize_remote($payload);
+        set_transient($key, $config, 5 * MINUTE_IN_SECONDS);
+        return $config;
     }
 
     private static function active(array $config): bool {
-        if (empty($config['enabled'])) {
+        if (empty($config['enabled']) || empty($config['central_config_reachable'])) {
             return false;
         }
         $disable_after = isset($config['disable_after']) ? strtotime((string) $config['disable_after']) : false;
-        if ($disable_after && time() >= $disable_after) {
-            return false;
-        }
-        return true;
+        return !($disable_after && time() >= $disable_after);
     }
 
     public static function register_rest_routes(): void {
         register_rest_route('zica/v1', '/electoral-analytics/config', [
-            [
-                'methods' => 'GET',
-                'callback' => [self::class, 'rest_get_config'],
-                'permission_callback' => static function (): bool {
-                    return current_user_can('manage_options');
-                },
-            ],
-            [
-                'methods' => ['POST', 'PUT', 'PATCH'],
-                'callback' => [self::class, 'rest_save_config'],
-                'permission_callback' => static function (): bool {
-                    return current_user_can('manage_options');
-                },
-            ],
+            'methods' => 'GET',
+            'callback' => [self::class, 'rest_get_config'],
+            'permission_callback' => static function (): bool {
+                return current_user_can('manage_options');
+            },
         ]);
     }
 
-    public static function rest_get_config(): WP_REST_Response {
-        $config = self::config();
+    public static function rest_get_config(WP_REST_Request $request): WP_REST_Response {
+        $refresh = $request->get_param('refresh') === '1';
+        $config = self::config($refresh);
         return new WP_REST_Response([
             'ok' => true,
+            'source' => 'zica-ai-central-config',
+            'portal_host' => self::portal_host(),
             'config' => $config,
             'effective_enabled' => self::active($config),
-        ], 200);
-    }
-
-    public static function rest_save_config(WP_REST_Request $request): WP_REST_Response {
-        $payload = $request->get_json_params();
-        $current = self::config();
-        $next = array_merge($current, is_array($payload) ? $payload : []);
-
-        $next['enabled'] = !empty($next['enabled']);
-        $next['portal_id'] = sanitize_key((string) ($next['portal_id'] ?? ''));
-        $next['ga4_measurement_id'] = preg_match('/^G-[A-Z0-9]+$/', (string) ($next['ga4_measurement_id'] ?? '')) ? sanitize_text_field((string) $next['ga4_measurement_id']) : '';
-        $next['gtm_web_container_id'] = preg_match('/^GTM-[A-Z0-9]+$/', (string) ($next['gtm_web_container_id'] ?? '')) ? sanitize_text_field((string) $next['gtm_web_container_id']) : '';
-        $next['gtm_server_container_url'] = esc_url_raw((string) ($next['gtm_server_container_url'] ?? ''));
-        $next['disable_after'] = sanitize_text_field((string) ($next['disable_after'] ?? ''));
-        $next['allow_google_signals'] = false;
-        $next['allow_ad_personalization_signals'] = false;
-        $next['consent_mode_default'] = 'denied';
-
-        $portals = is_array($next['primary_portals'] ?? null) ? $next['primary_portals'] : [];
-        $next['primary_portals'] = array_values(array_filter(array_map('esc_url_raw', $portals)));
-
-        update_option(self::OPTION, $next, false);
-
-        return new WP_REST_Response([
-            'ok' => true,
-            'config' => $next,
-            'effective_enabled' => self::active($next),
         ], 200);
     }
 
@@ -119,7 +159,7 @@ final class Zica_Electoral_Analytics {
         $ga4 = (string) ($config['ga4_measurement_id'] ?? '');
         $server = rtrim((string) ($config['gtm_server_container_url'] ?? ''), '/');
 
-        echo "<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});</script>\n";
+        echo "<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});window.dataLayer.push({zica_google_signals:false,zica_ad_personalization:false,zica_gtm_server_url:" . wp_json_encode($server) . "});</script>\n";
 
         if ($gtm !== '') {
             printf(
@@ -164,6 +204,7 @@ final class Zica_Electoral_Analytics {
             'portalId' => sanitize_key((string) ($config['portal_id'] ?? '')),
             'disableAfter' => sanitize_text_field((string) ($config['disable_after'] ?? '')),
             'primaryPortals' => array_values((array) ($config['primary_portals'] ?? [])),
+            'geoReportingLevel' => ($config['geo_reporting_level'] ?? 'city') === 'state' ? 'state' : 'city',
             'page' => [
                 'postId' => $post_id,
                 'postType' => sanitize_key((string) $post_type),
@@ -176,6 +217,7 @@ final class Zica_Electoral_Analytics {
                 'preciseLocationCollection' => false,
                 'rawIpStorage' => false,
                 'adPersonalization' => false,
+                'googleSignals' => false,
             ],
         ]);
     }
