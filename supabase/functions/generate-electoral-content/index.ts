@@ -1,8 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import {
-  formatElectoralFooter,
-  resolveElectoralPreset,
-} from "../_shared/electoral-campaign-presets.ts";
+import { formatElectoralFooter, resolveElectoralPreset } from "../_shared/electoral-campaign-presets.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,6 +12,11 @@ type ElectoralConfig = {
   campaignPhase?: string;
   electionDate?: string;
   articleType?: 'pillar' | 'satellite' | 'territorial';
+  requestedTargetWords?: number;
+  biography?: string;
+  legislativeProjects?: string;
+  documentedActs?: string;
+  factualDifferentials?: string;
   campaignTopics?: string[];
   targetCities?: string[];
   targetDistricts?: string[];
@@ -29,6 +31,17 @@ type ElectoralConfig = {
 };
 
 const digits = (value = '') => value.replace(/\D/g, '');
+const clampTarget = (value: unknown, fallback: number) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(500, Math.min(6000, Math.round(parsed)));
+};
+
+function fallbackTarget(articleType: ElectoralConfig['articleType']) {
+  if (articleType === 'pillar') return 4000;
+  if (articleType === 'satellite') return 1400;
+  return 900;
+}
 
 function validateDraftConfig(config: ElectoralConfig) {
   const blockers: string[] = [];
@@ -40,14 +53,8 @@ function validateDraftConfig(config: ElectoralConfig) {
   return blockers;
 }
 
-function targetWords(articleType: ElectoralConfig['articleType']) {
-  if (articleType === 'pillar') return 2200;
-  if (articleType === 'satellite') return 1400;
-  return 900;
-}
-
 function escapeHtml(value = '') {
-  return value.replace(/[&<>'"]/g, (char) => ({
+  return String(value).replace(/[&<>'"]/g, (char) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
   }[char] || char));
 }
@@ -66,6 +73,7 @@ serve(async (req) => {
     const electoral = config as ElectoralConfig;
     const preset = resolveElectoralPreset(electoral.campaignPresetId);
     const draftBlockers = validateDraftConfig(electoral);
+    const requestedTargetWords = clampTarget(electoral.requestedTargetWords, fallbackTarget(electoral.articleType));
 
     if (!String(keyword || '').trim()) draftBlockers.push('keyword ausente');
     if (draftBlockers.length) {
@@ -92,27 +100,33 @@ serve(async (req) => {
     const footer = escapeHtml(formatElectoralFooter(preset, electoral.campaignCnpj));
 
     const content = [
-      `<article data-electoral-draft="true" data-campaign-preset="${escapeHtml(preset.id)}">`,
+      `<article data-electoral-draft="true" data-campaign-preset="${escapeHtml(preset.id)}" data-editorial-target-words="${requestedTargetWords}">`,
       `<p><strong>RASCUNHO ELEITORAL — REVISÃO HUMANA OBRIGATÓRIA</strong></p>`,
+      `<p><strong>ALVO EDITORIAL CONFIGURADO:</strong> ${requestedTargetWords} palavras. Este scaffold não representa conteúdo final nem garantia de indexação.</p>`,
       `<h1>${topic}</h1>`,
       `<p><strong>Candidatura:</strong> ${candidate} · ${party} · ${number} · ${role}</p>`,
       `<p><strong>Slogan cadastrado:</strong> ${slogan}</p>`,
       cities ? `<p><strong>Municípios para contexto editorial:</strong> ${cities}</p>` : '',
       districts ? `<p><strong>Distritos para contexto editorial:</strong> ${districts}</p>` : '',
       sections ? `<p><strong>Editoria(s):</strong> ${sections}</p>` : '',
-      `<h2>1. O problema público</h2>`,
-      `<p>[VERIFICAR] Descreva o problema com fonte primária, data e URL. Não inserir estatística sem comprovação.</p>`,
-      `<h2>2. Contexto e impacto</h2>`,
-      `<p>[VERIFICAR] Explique o contexto de forma factual. A localidade pode contextualizar dados públicos, mas não deve ser usada para personalização persuasiva de mensagem política.</p>`,
-      `<h2>3. Proposta cadastrada pela candidatura</h2>`,
-      `<p>[VERIFICAR] Vincule a pauta a uma das bandeiras cadastradas e diferencie proposta de resultado garantido.</p>`,
+      `<h2>1. Diagnóstico local factual</h2>`,
+      `<p>[VERIFICAR] Descreva o problema com fonte primária, data e URL. Não inserir estatística ou deficiência local sem comprovação.</p>`,
+      `<h2>2. Contexto biográfico verificável</h2>`,
+      `<p>[VERIFICAR] Use somente fatos biográficos documentados. Não fabricar vivências, testemunhos, contato com moradores ou experiências pessoais.</p>`,
+      electoral.biography ? `<p><strong>Biografia fornecida para revisão:</strong> ${escapeHtml(electoral.biography)}</p>` : '',
+      `<h2>3. Análise técnica e institucional</h2>`,
+      `<p>[VERIFICAR] Cite leis, competências federativas, orçamento e atos públicos com fontes. Diferencie União, Estado e Município.</p>`,
+      electoral.documentedActs ? `<p><strong>Atos/experiências a verificar:</strong> ${escapeHtml(electoral.documentedActs)}</p>` : '',
+      `<h2>4. Propostas e competência do cargo</h2>`,
+      `<p>[VERIFICAR] Vincule a pauta a uma bandeira cadastrada e diferencie proposta parlamentar de resultado garantido.</p>`,
       `<ul>${preset.fixedIssues.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`,
-      `<h2>4. Competência real do cargo</h2>`,
-      `<p>[VERIFICAR] Informe o que o cargo pode propor, votar ou fiscalizar, sem promessa de resultado dependente de terceiros.</p>`,
-      `<h2>5. Fontes</h2>`,
+      electoral.legislativeProjects ? `<p><strong>Projetos/propostas fornecidos para checagem:</strong> ${escapeHtml(electoral.legislativeProjects)}</p>` : '',
+      `<h2>5. FAQ factual e resumo executivo</h2>`,
+      `<p>[VERIFICAR] Preparar 4 a 6 perguntas com respostas baseadas nas fontes utilizadas, sem recomendação personalizada de voto.</p>`,
+      `<h2>6. Fontes</h2>`,
       `<ul><li>[FONTE PRIMÁRIA — URL — DATA — AFIRMAÇÃO SUPORTADA]</li></ul>`,
       electoral.usesSyntheticMedia
-        ? `<p><strong>ROTULAGEM DE IA:</strong> conteúdo sintético/multimídia deve identificar de modo explícito e destacado a fabricação/manipulação e a tecnologia utilizada.</p>`
+        ? `<p><strong>ROTULAGEM DE IA:</strong> conteúdo sintético/multimídia deve identificar explicitamente a fabricação/manipulação e a tecnologia utilizada.</p>`
         : `<p><strong>TRILHA DE IA:</strong> assistência editorial registrada; verificar se alguma peça multimídia exige rotulagem específica.</p>`,
       pendingPublishBlockers.length
         ? `<p><strong>PUBLICAÇÃO BLOQUEADA:</strong> ${pendingPublishBlockers.map((item) => escapeHtml(String(item))).join(' | ')}</p>`
@@ -123,7 +137,7 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       ok: true,
-      message: `Rascunho eleitoral preparado para ${keyword}`,
+      message: `Scaffold eleitoral preparado para ${keyword}`,
       preset_id: preset.id,
       fixed_campaign_identity: {
         candidate_name: preset.candidateName,
@@ -133,10 +147,13 @@ serve(async (req) => {
         party: preset.politicalParty,
         slogan: preset.slogan,
         state: preset.state,
+        registration_status: preset.registrationStatus,
+        tse_sequence: preset.tseSequence,
       },
       phase: electoral.campaignPhase || 'não informada',
-      target_words: targetWords(electoral.articleType),
-      template: template || 'authority-article',
+      target_words: requestedTargetWords,
+      content_is_scaffold: true,
+      template: template || 'deep-factual',
       project_id: projectId || null,
       indexnow_requested: Boolean(notifyIndexNow),
       approved_for_draft: true,
@@ -147,6 +164,8 @@ serve(async (req) => {
       audit: {
         generated_at: new Date().toISOString(),
         ai_provider: 'not-configured-in-this-endpoint',
+        requested_target_words: requestedTargetWords,
+        target_is_editorial_configuration_not_ranking_guarantee: true,
         source_verification_required: true,
         human_legal_review_required: true,
         preset_enforced_server_side: true,
