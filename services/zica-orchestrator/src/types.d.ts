@@ -1,0 +1,1 @@
+declare module 'ssh2-sftp-client' { export default class SftpClient { connect(config: Record<string, unknown>): Promise<unknown>; mkdir(path: string, recursive?: boolean): Promise<unknown>; put(input: Buffer | string, remotePath: string): Promise<unknown>; rename(oldPath: string, newPath: string): Promise<unknown>; end(): Promise<unknown>; } }

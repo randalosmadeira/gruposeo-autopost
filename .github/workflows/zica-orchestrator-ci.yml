@@ -1,0 +1,31 @@
+name: Zica Orchestrator CI
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, release/zica-posts-3.10.2]
+    paths: ['services/zica-orchestrator/**','supabase/migrations/*zica_orchestrator*','.github/workflows/zica-orchestrator-ci.yml']
+  pull_request:
+    paths: ['services/zica-orchestrator/**','supabase/migrations/*zica_orchestrator*','.github/workflows/zica-orchestrator-ci.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: services/zica-orchestrator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+      - name: Docker build
+        working-directory: .
+        run: docker build -t zica-orchestrator:ci services/zica-orchestrator
