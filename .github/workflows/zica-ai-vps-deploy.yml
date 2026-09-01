@@ -95,7 +95,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$HOME/.ssh/zica_ai_deploy" -p "$ZICA_AI_VPS_PORT")
           SCP=(scp -o BatchMode=yes -o IdentitiesOnly=yes -i "$HOME/.ssh/zica_ai_deploy" -P "$ZICA_AI_VPS_PORT")
           "${SCP[@]}" "/tmp/zica-ai-$GITHUB_SHA.tgz" "$ZICA_AI_VPS_USER@$ZICA_AI_VPS_HOST:/tmp/zica-ai-$GITHUB_SHA.tgz"
           "${SCP[@]}" /tmp/zica-ai.env.partial "$ZICA_AI_VPS_USER@$ZICA_AI_VPS_HOST:/tmp/zica-ai.env.partial"
@@ -175,21 +174,21 @@ jobs:
 
           NGINX_FILE=/etc/nginx/sites-available/zica-ai-orchestrator
           sudo tee "$NGINX_FILE" >/dev/null <<NGINX
-server {
-    listen 80;
-    server_name ${TARGET_HOST};
-    client_max_body_size 4m;
-    location / {
-        proxy_pass http://127.0.0.1:8787;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_read_timeout 90s;
-    }
-}
-NGINX
+          server {
+              listen 80;
+              server_name ${TARGET_HOST};
+              client_max_body_size 4m;
+              location / {
+                  proxy_pass http://127.0.0.1:8787;
+                  proxy_http_version 1.1;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+                  proxy_read_timeout 90s;
+              }
+          }
+          NGINX
           sudo ln -sfn "$NGINX_FILE" /etc/nginx/sites-enabled/zica-ai-orchestrator
           sudo nginx -t
           sudo systemctl reload nginx
