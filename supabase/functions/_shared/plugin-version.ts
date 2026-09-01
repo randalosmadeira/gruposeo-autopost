@@ -1,144 +1,59 @@
 /**
- * Versão centralizada do Plugin ContentFactory RDM.
- * 
- * TODAS as edge functions, agentes e prompts devem importar daqui.
- * Ao atualizar o plugin, basta alterar ESTE arquivo.
+ * Contrato central do conector WordPress Zica Posts.
+ * Todas as Edge Functions devem preferir o namespace canônico e manter aliases legados apenas durante a migração.
  */
 
-export const PLUGIN_VERSION = "3.9.0";
-export const PLUGIN_MINIMUM_VERSION = "3.0.0";
-export const PLUGIN_RELEASED = "2026-08-22";
+export const PLUGIN_SOFTWARE_ID = "zica-posts";
+export const PLUGIN_NAME = "Zica Posts";
+export const PLUGIN_VERSION = "3.10.0";
+export const PLUGIN_MINIMUM_VERSION = "3.10.0";
+export const PLUGIN_RELEASED = "2026-09-01";
+export const PLUGIN_API_NAMESPACE = "zica-posts/v1";
+export const PLUGIN_COMPAT_NAMESPACES = ["zica-ai/v1", "cfrdm/v1"] as const;
 
 export const PLUGIN_FEATURES = [
-  "auto_notifications",
-  "portal_monitoring",
-  "originality_score",
-  "ajax_table_repair",
-  "meta_auditor",
+  "authenticated_endpoints",
+  "article_publish",
+  "media_upload",
   "indexnow",
   "llms_txt",
-  "post_duplicator",
-  "sitemap_optimizer",
-  "news_sitemap",
-  "ai_og_twitter",
-  "realtime_module_integration",
-  "safe_auto_update",
-  "pre_update_checks",
-  "verniz_dna_v3",
-  "rest_indexnow_batch",
-  "rest_meta_audit",
-  "ai_traffic_detector",
-  "seo_checklist",
-  "method_validator",
-  "cron_auto_schedule",
-  "ai_source_rules",
-  "google_indexing_submitter",
-  "gmb_auto_poster",
-  "gsc_dynamic_sitemap",
-  "auto_fix_ai_crawlers",
-  "batch_faq_schema_injection",
-  "autonomous_seo_fix",
-  "scan_seo_issues",
-  "autonomous_content_edit",
-  "manage_redirect",
-  "llms_txt_force_enable",
-  "orphan_auto_backlink",
-  "sitemap_cross_domain_filter",
-  "redirect_manager",
-  "duplicate_cleanup",
-  "geo_schema_injection",
-  "ai_seo_generator",
-  "llms_txt_physical_fallback",
-  "422_auto_recovery",
-  "indexnow_rate_limit",
-  "anti_hallucination_v2",
-  "full_ai_sync",
-  "safe_action_parsing",
-  "action_block_auto_execute",
-  "site_crawler",
-  "full_site_crawl",
-  "real_broken_link_check",
-  "redirect_chain_detector",
-  "duplicate_content_scanner",
-  "site_structure_analyzer",
-  "image_audit",
-  "directive_audit",
-  "bulk_meta_update",
-  "readability_analysis_v2",
-  "ai_optimize_realtime",
-  "passive_voice_detector",
-  "transition_words_check",
-  "sentence_complexity_score",
-  "seo_plugin_compatibility",
-  "content_ai_suggestions",
-  // v3.7.0 — Instant Indexing Engine (IndexMeNow-style)
-  "instant_indexing_engine",
-  "admin_bar_quick_index",
-  "posts_list_indexing_column",
-  "bulk_index_action",
-  "indexing_quota_monitor",
-  "auto_submit_on_publish",
-  "multi_channel_indexing",
-  "indexing_dashboard_widget",
-  "indexing_coverage_stats",
-  // v3.8.0 — VPS Server Audit & Bot Accessibility
-  "vps_server_health_audit",
-  "ai_bot_accessibility_check",
-  "ttfb_monitoring",
-  "ssl_hsts_verification",
-  "llms_txt_auto_regenerate",
-  "indexnow_key_verification",
+  "llms_full_txt",
+  "ai_txt",
+  "dynamic_sitemap",
+  "schema_jsonld",
+  "automatic_related_cards",
+  "card_position_controls",
+  "daily_1500_sao_paulo",
+  "realtime_publish_sync",
+  "physical_file_atomic_write",
+  "virtual_file_fallback",
+  "ai_crawler_robots_rules",
+  "legacy_api_compatibility",
+  "meta_auditor",
+  "internal_linking",
+  "geo_semantic_discovery",
+  "structured_logs",
 ] as const;
 
-/**
- * Bloco de texto para injetar em system prompts dos agentes.
- * Sempre reflete a versão atual do plugin.
- */
-export const PLUGIN_PROMPT_BLOCK = `### 🔌 Plugin WordPress (ContentFactory RDM v${PLUGIN_VERSION})
-Módulos disponíveis no plugin instalado nos sites:
-- **AI Meta Auditor**: Audita e corrige automaticamente titles, meta descriptions, OG tags e Twitter Cards a cada 6h
-- **AI Auto-Fix**: Detecta e repara automaticamente:
-  • Links quebrados (erros 404) com redirecionamentos inteligentes 301/302
-  • FAQs duplicadas entre artigos
-  • URLs ou artigos em duplicidade
-  • Metas idênticas entre posts
-  • Bloqueios de crawlers de IA no robots.txt (GPTBot, ClaudeBot, PerplexityBot, etc.)
-  • Injeção batch de FAQ Schema (FAQPage JSON-LD) em artigos sem structured data
-- **Agente SEO Autônomo (v${PLUGIN_VERSION})**:
-  • scan-seo-issues: detecta canonical faltando, URLs HTTP, H1 ausente, títulos duplicados, meta descriptions vazias
-  • autonomous-seo-fix: aplica correções batch (canonical, title, slug, HTTPS, delete, noindex, FAQ schema)
-  • autonomous-content-edit: modifica título WP, H1, H2, hero, insere imagens e força HTTPS no conteúdo
-  • manage-redirect: cria/exclui redirects 301/302 via Rank Math ou .htaccess
-  • orphan-auto-backlink: detecta artigos órfãos e insere backlinks internos via IA
-- **Instant Indexing Engine (v${PLUGIN_VERSION})** — Inspirado no IndexMeNow:
-  • Botão de indexação rápida na barra de administração do WordPress
-  • Coluna de status de indexação na listagem de posts (✅ indexado / ⏳ pendente)
-  • Ação em massa para indexar posts selecionados via IndexNow + Google API + Ping
-  • Widget no dashboard com quota diária (500 URLs/dia) e últimas submissões
-  • Auto-submit ao publicar com delay de 30s para garantir que a página está ativa
-  • Indexação multi-canal: IndexNow + Google Indexing API + Google Ping + Bing Ping
-  • REST API: /instant-indexing/submit, /instant-indexing/batch, /instant-indexing/status
-  • Estatísticas de cobertura: total publicados vs total indexados vs nunca indexados
-- **VPS Server Health Audit (v${PLUGIN_VERSION})**:
-  • Auditoria automática de configurações do servidor VPS para SEO
-  • Verificação de acessibilidade de 12+ bots de IA (GPTBot, ClaudeBot, PerplexityBot, etc.)
-  • Monitoramento de TTFB (Time To First Byte) com alertas para >800ms
-  • Verificação de SSL/HSTS, GZIP/Brotli, Cache-Control, X-Robots-Tag
-  • Auto-regeneração de llms.txt e verificação de IndexNow key
-  • Score de saúde do VPS (0-100) com relatório detalhado
-- **Bulk Meta Update API (v${PLUGIN_VERSION})**:
-  • REST endpoint para atualização em massa de SEO title, meta description, focus keyword e canonical URL
-  • Compatível com Rank Math e Yoast SEO (detecção automática do plugin instalado)
-- **Readability Analysis v2 (v${PLUGIN_VERSION})**:
-  • Detector de voz passiva, análise de transições, score Coleman-Liau + Gunning Fog
-- **Redirect Manager (v${PLUGIN_VERSION})**:
-  • Gerenciamento completo de redirects 301/302 com batch cleanup
-- **AI SEO Generator**: Gera slugs, meta descriptions, focus keywords, tags e títulos virais via IA
-- **GEO Schema Injection**: Injeção automática de LocalBusiness/Attorney JSON-LD
-- **Internal Links Engine**: Insere links internos baseado em regras de keywords e relevância semântica
-- **IndexNow Integration**: Notifica Google, Bing e Yandex sobre alterações em tempo real
-- **Google Indexing API**: Submissão direta de URLs (200/dia) via Service Account
-- **Site Crawler**: Auditorias reais via HTTP com detecção de redirect chains e conteúdo duplicado
-- **Schema Validator**: Valida JSON-LD para Article, FAQ, HowTo, Product e Review
-- **Image Optimizer**: Converte imagens para WebP com compressão inteligente
-- **Structured Logs**: Sistema de logs para diagnóstico em tempo real`;
+export const PLUGIN_PROMPT_BLOCK = `### Plugin WordPress — Zica Posts v${PLUGIN_VERSION}
+Software ID: ${PLUGIN_SOFTWARE_ID}
+Namespace canônico: /wp-json/${PLUGIN_API_NAMESPACE}/
+Compatibilidade temporária: /wp-json/zica-ai/v1/ e /wp-json/cfrdm/v1/
+
+Capacidades:
+- Publicação e leitura de artigos por endpoints autenticados.
+- Upload de mídia para publicação pela Zica.ai.
+- Atualização de llms.txt, llms-full.txt, ai.txt, manifest JSON e sitemap próprio.
+- Escrita física atômica quando a raiz WordPress é gravável, com fallback virtual sem interromper o site.
+- IndexNow para submissão de URLs novas/alteradas aos mecanismos participantes.
+- Sitemap com lastmod real para descoberta por buscadores e Search Console.
+- Regras explícitas e auditáveis para crawlers de IA conhecidos no robots.txt.
+- JSON-LD recebido da Zica.ai e fallback básico de Article quando Rank Math/Yoast não estiverem gerando Schema.
+- Cards relacionados automáticos com posição configurável.
+- Sincronização imediata após publicação/alteração e ciclo integral diário às 15:00 America/Sao_Paulo.
+
+Regras técnicas:
+- Não prometer indexação garantida em Google ou em LLMs; registrar submissão e confirmação como estados diferentes.
+- Não usar o antigo endpoint de ping de sitemap do Google.
+- Não usar Google Indexing API para artigos comuns fora dos tipos oficialmente elegíveis.
+- Preferir /zica-posts/v1 e manter aliases legados somente para migração controlada.`;

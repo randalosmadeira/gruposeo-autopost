@@ -1,0 +1,31 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/theme.json",
+  "version": 3,
+  "settings": {
+    "appearanceTools": true,
+    "layout": {"contentSize": "860px", "wideSize": "1240px"},
+    "color": {
+      "palette": [
+        {"slug": "graphite", "name": "Dark Graphite", "color": "#0D1117"},
+        {"slug": "surface", "name": "Surface", "color": "#161B22"},
+        {"slug": "border", "name": "Border", "color": "#30363D"},
+        {"slug": "volt", "name": "Volt", "color": "#D4FF00"},
+        {"slug": "cyan", "name": "Electric Cyan", "color": "#00F0FF"},
+        {"slug": "white", "name": "White", "color": "#F6F8FA"}
+      ]
+    },
+    "typography": {"fluid": true},
+    "spacing": {"units": ["px", "rem", "em", "%", "vw", "vh"]}
+  },
+  "styles": {
+    "color": {"background": "#0D1117", "text": "#F6F8FA"},
+    "elements": {
+      "link": {"color": {"text": "#00F0FF"}},
+      "button": {
+        "color": {"background": "#D4FF00", "text": "#071014"},
+        "border": {"radius": "12px"},
+        "typography": {"fontWeight": "800"}
+      }
+    }
+  }
+}

@@ -1,10 +1,12 @@
-
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import {
+  PLUGIN_API_NAMESPACE,
+  PLUGIN_MINIMUM_VERSION,
+  PLUGIN_NAME,
+  PLUGIN_SOFTWARE_ID,
+} from "../_shared/plugin-version.ts";
 
 const FUNCTION_NAME = "test-wordpress-connection";
-import { PLUGIN_MINIMUM_VERSION } from "../_shared/plugin-version.ts";
-const MINIMUM_PLUGIN_VERSION = PLUGIN_MINIMUM_VERSION;
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
@@ -18,449 +20,160 @@ interface TestConnectionRequest {
   api_key?: string;
 }
 
-/**
- * Compare semantic versions: returns -1 if a < b, 0 if equal, 1 if a > b
- */
+type PluginContract = { namespace: string; header: string; id: string };
+const pluginContracts: PluginContract[] = [
+  { namespace: PLUGIN_API_NAMESPACE, header: "X-ZICA-POSTS-Key", id: "zica-posts" },
+  { namespace: "zica-ai/v1", header: "X-ZICA-AI-API-Key", id: "zica-ai" },
+  { namespace: "cfrdm/v1", header: "X-CFRDM-API-Key", id: "legacy-cfrdm" },
+];
+const commonWpSubpaths = ["", "/blog", "/wordpress", "/wp", "/site", "/news", "/artigos", "/noticias"];
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+  });
+}
+
 function compareVersions(a: string, b: string): number {
-  const partsA = a.split('.').map(Number);
-  const partsB = b.split('.').map(Number);
-  
-  for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
-    const numA = partsA[i] || 0;
-    const numB = partsB[i] || 0;
-    if (numA < numB) return -1;
-    if (numA > numB) return 1;
+  const pa = a.split(".").map((part) => Number(part) || 0);
+  const pb = b.split(".").map((part) => Number(part) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
   }
   return 0;
 }
 
-// Common WordPress subpaths to try when root fails
-const COMMON_WP_SUBPATHS = [
-  "/blog",
-  "/wordpress",
-  "/wp",
-  "/site",
-  "/news",
-  "/artigos",
-  "/noticias",
-];
+function normalizeAndValidateUrl(input: string): URL {
+  let value = input.trim();
+  if (!/^https?:\/\//i.test(value)) value = `https://${value}`;
+  const url = new URL(value);
+  if (!["http:", "https:"].includes(url.protocol)) throw new Error("Use uma URL HTTP/HTTPS válida.");
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const forbidden = host === "localhost" || host === "::1" || host.endsWith(".local") || host.endsWith(".internal") || /^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host) || /^169\.254\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host) || /^0\./.test(host);
+  if (forbidden) throw new Error("Endereços locais ou de rede privada não são aceitos.");
+  url.hash = "";
+  url.search = "";
+  url.pathname = url.pathname.replace(/\/wp-json(?:\/.*)?$/i, "").replace(/\/$/, "");
+  return url;
+}
 
-/**
- * Attempts to find WordPress REST API by trying common subpaths
- */
-async function discoverWordPressPath(baseUrl: string): Promise<{ found: boolean; path: string; wpJsonUrl: string }> {
-  // First try root
-  const rootWpJson = `${baseUrl}/wp-json/`;
-  console.log(`Discovering WP path: trying root ${rootWpJson}`);
-  
+async function isWordPressAt(baseUrl: string) {
   try {
-    const rootResponse = await fetch(rootWpJson, {
-      method: "GET",
-      headers: { "Accept": "application/json" },
-    });
-    const contentType = rootResponse.headers.get("content-type") || "";
-    
-    if (rootResponse.ok && contentType.includes("application/json")) {
-      console.log("WordPress found at root");
-      return { found: true, path: "", wpJsonUrl: rootWpJson };
-    }
-  } catch (e) {
-    console.log("Root check failed:", e);
-  }
+    const response = await fetch(`${baseUrl}/wp-json/`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+    return response.ok && (response.headers.get("content-type") || "").includes("application/json");
+  } catch { return false; }
+}
 
-  // Try common subpaths
-  for (const subpath of COMMON_WP_SUBPATHS) {
-    const testUrl = `${baseUrl}${subpath}/wp-json/`;
-    console.log(`Discovering WP path: trying ${testUrl}`);
-    
+async function discoverWordPress(baseUrl: string) {
+  for (const subpath of commonWpSubpaths) {
+    const candidate = `${baseUrl}${subpath}`.replace(/\/$/, "");
+    if (await isWordPressAt(candidate)) return { baseUrl: candidate, subpath, found: true };
+  }
+  return { baseUrl, subpath: "", found: false };
+}
+
+async function readJson(response: Response): Promise<Record<string, any> | null> {
+  if (!(response.headers.get("content-type") || "").includes("application/json")) return null;
+  try { return await response.json(); } catch { return null; }
+}
+
+async function tryPlugin(baseUrl: string, apiKey: string, log: ReturnType<typeof createLogger>) {
+  for (const contract of pluginContracts) {
     try {
-      const response = await fetch(testUrl, {
-        method: "GET",
-        headers: { "Accept": "application/json" },
-      });
-      const contentType = response.headers.get("content-type") || "";
-      
-      if (response.ok && contentType.includes("application/json")) {
-        console.log(`WordPress found at subpath: ${subpath}`);
-        return { found: true, path: subpath, wpJsonUrl: testUrl };
+      const versionResponse = await fetch(`${baseUrl}/wp-json/${contract.namespace}/version`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+      const versionData = await readJson(versionResponse);
+      if (!versionResponse.ok || !versionData) continue;
+      const testResponse = await fetch(`${baseUrl}/wp-json/${contract.namespace}/test`, { headers: { Accept: "application/json", [contract.header]: apiKey }, signal: AbortSignal.timeout(12000) });
+      const testData = await readJson(testResponse);
+      if (!testResponse.ok || !testData?.success) {
+        if (testResponse.status === 401 || testResponse.status === 403) return { success: false, authFailure: true, contract, versionData, testData };
+        continue;
       }
-    } catch (e) {
-      console.log(`Subpath ${subpath} check failed:`, e);
+      const version = String(versionData.version || testData.version || testData.site?.version || "0.0.0");
+      const outdated = compareVersions(version, PLUGIN_MINIMUM_VERSION) < 0;
+      log.info("plugin_connection_success", { contract: contract.id, namespace: contract.namespace, version, outdated });
+      return { success: true, contract, versionData, testData, version, outdated };
+    } catch (error) {
+      log.info("plugin_contract_failed", { contract: contract.id, error: error instanceof Error ? error.message : "unknown" });
     }
   }
-
-  return { found: false, path: "", wpJsonUrl: "" };
+  return { success: false, authFailure: false };
 }
 
 Deno.serve(async (req) => {
   const requestId = createRequestId();
   const log = createLogger(FUNCTION_NAME, requestId);
-  const startTime = Date.now();
-
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const started = Date.now();
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return json({ success: false, error: "Method not allowed" }, 405);
 
   try {
     log.requestStart(req.method);
+    const body = await req.json() as TestConnectionRequest;
+    if (!body.wordpress_url) return json({ success: false, error: "URL do WordPress não fornecida" }, 400);
 
-    const body: TestConnectionRequest = await req.json();
-    const { wordpress_url, use_plugin, api_key, wordpress_username, wordpress_app_password } = body;
+    const normalized = normalizeAndValidateUrl(body.wordpress_url);
+    const originPlusPath = `${normalized.origin}${normalized.pathname}`.replace(/\/$/, "");
+    const discovery = await discoverWordPress(originPlusPath);
+    const baseUrl = discovery.baseUrl;
 
-    if (!wordpress_url) {
-      log.warn("missing_url");
-      log.requestEnd(400, Date.now() - startTime);
-      return new Response(
-        JSON.stringify({ success: false, error: "URL do WordPress não fornecida" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    let baseUrl = wordpress_url.replace(/\/$/, "");
-    
-    // Clean up URL: remove any existing wp-json or cfrdm paths that may have been incorrectly included
-    baseUrl = baseUrl.replace(/\/wp-json(\/.*)?$/, "");
-    baseUrl = baseUrl.replace(/\/(cfrdm|wp)(\/.*)?$/, "");
-    
-    // Track if URL was modified for correctedUrl response
-    const originalUrl = wordpress_url.replace(/\/$/, "");
-    const urlWasCleaned = baseUrl !== originalUrl;
-    log.info("testing_connection", { baseUrl, originalUrl, urlWasCleaned, use_plugin: !!use_plugin });
-
-    // Plugin-based authentication
-    if (use_plugin && api_key) {
-      // First, discover the WordPress path
-      const discovery = await discoverWordPressPath(baseUrl);
-      
-      if (discovery.found && discovery.path) {
-        baseUrl = `${baseUrl}${discovery.path}`;
-        log.info("discovered_wp_path", { path: discovery.path });
-      }
-
-      // Try to get version info first (public endpoint, no auth required)
-      let versionInfo: { version?: string; is_current?: boolean; features?: Record<string, boolean> } | null = null;
-      try {
-        const versionResponse = await fetch(`${baseUrl}/wp-json/zica-ai/v1/version`, {
-          method: "GET",
-          headers: { "Accept": "application/json" },
+    if (body.use_plugin && body.api_key) {
+      const result = await tryPlugin(baseUrl, body.api_key, log);
+      if (result.success) {
+        log.requestEnd(200, Date.now() - started);
+        return json({
+          success: true,
+          message: `Conexão via ${PLUGIN_NAME} estabelecida`,
+          softwareId: result.versionData?.software_id || PLUGIN_SOFTWARE_ID,
+          pluginVersion: result.version,
+          minimumVersion: PLUGIN_MINIMUM_VERSION,
+          isOutdated: result.outdated,
+          updateRequired: result.outdated,
+          namespace: result.contract?.namespace,
+          contract: result.contract?.id,
+          site: result.testData?.site,
+          canPublish: true,
+          discoveredPath: discovery.subpath || null,
+          correctedUrl: baseUrl,
+          features: result.versionData?.features || {},
+          updateMessage: result.outdated ? `Atualize o conector para ${PLUGIN_NAME} v${PLUGIN_MINIMUM_VERSION} ou superior.` : null,
         });
-        
-        if (versionResponse.ok) {
-          const versionContentType = versionResponse.headers.get("content-type") || "";
-          if (versionContentType.includes("application/json")) {
-            versionInfo = await versionResponse.json();
-            log.info("version_endpoint_found", { version: versionInfo?.version });
-          }
-        }
-      } catch (versionError) {
-        log.info("version_endpoint_not_available", { error: "non-critical" });
       }
-
-      log.info("testing_plugin", { url: `${baseUrl}/wp-json/zica-ai/v1/test` });
-      
-      try {
-        const pluginResponse = await fetch(`${baseUrl}/wp-json/zica-ai/v1/test`, {
-          method: "GET",
-          headers: {
-            "X-ZICA-AI-API-Key": api_key,
-            "Accept": "application/json",
-          },
-        });
-
-        const contentType = pluginResponse.headers.get("content-type") || "";
-        const responseText = await pluginResponse.text();
-        
-        log.info("plugin_response", { status: pluginResponse.status, contentType });
-
-        if (!contentType.includes("application/json")) {
-          // Try health check endpoint first (doesn't require auth)
-          const healthResponse = await fetch(`${baseUrl}/wp-json/zica-ai/v1/health`, {
-            method: "GET",
-            headers: { "Accept": "application/json" },
-          });
-
-          const healthContentType = healthResponse.headers.get("content-type") || "";
-          
-          if (!healthContentType.includes("application/json")) {
-            const pathHint = !discovery.found 
-              ? " Se o WordPress está em uma subpasta (ex: /blog), inclua na URL."
-              : "";
-            
-            log.warn("plugin_not_found", { discoveredPath: discovery.path });
-            log.requestEnd(200, Date.now() - startTime);
-            return new Response(
-              JSON.stringify({ 
-                success: false, 
-                error: "Plugin ContentFactory RDM não encontrado ou não ativado.",
-                hint: `Verifique se o plugin está instalado e ativo no WordPress.${pathHint}`,
-                discoveredPath: discovery.path || null,
-              }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-
-          log.warn("invalid_api_key");
-          log.requestEnd(200, Date.now() - startTime);
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: "API Key inválida ou expirada.",
-              hint: "Verifique a API Key no WordPress em ContentFactory → Dashboard."
-            }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        const pluginData = JSON.parse(responseText);
-
-        if (pluginResponse.ok && pluginData.success) {
-          // Get version from multiple sources: /version endpoint, test response, or site info
-          const pluginVersion = versionInfo?.version || pluginData.version || pluginData.site?.version || "1.0.0";
-          const isOutdated = compareVersions(pluginVersion, MINIMUM_PLUGIN_VERSION) < 0;
-          
-          // Get feature availability from version endpoint if available
-          const features = versionInfo?.features || {
-            gsc_integration: !isOutdated,
-            ai_auto_fix: !isOutdated,
-            ubersuggest_sync: !isOutdated,
-            https_enforcer: !isOutdated,
-            content_enhancer: !isOutdated,
-          };
-          
-          log.info("plugin_connection_success", { 
-            site: pluginData.site, 
-            version: pluginVersion,
-            isOutdated,
-            versionSource: versionInfo ? "version_endpoint" : "test_response"
-          });
-          log.requestEnd(200, Date.now() - startTime);
-          return new Response(
-            JSON.stringify({ 
-              success: true, 
-              message: "Conexão via plugin estabelecida",
-              site: pluginData.site,
-              canPublish: true,
-              discoveredPath: discovery.path || null,
-              correctedUrl: (discovery.path || urlWasCleaned) ? baseUrl : null,
-              pluginVersion,
-              minimumVersion: MINIMUM_PLUGIN_VERSION,
-              isOutdated,
-              updateRequired: isOutdated,
-              features,
-              updateMessage: isOutdated 
-                ? `⚠️ Atualização obrigatória: seu plugin está na v${pluginVersion}, mas a v${MINIMUM_PLUGIN_VERSION}+ é necessária para GSC, AI Auto-Fix e novas funcionalidades.`
-                : null,
-            }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        } else {
-          log.warn("plugin_auth_failed", { message: pluginData.message });
-          log.requestEnd(200, Date.now() - startTime);
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: pluginData.message || "Falha na autenticação via plugin.",
-              hint: "Verifique se a API Key está correta."
-            }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-      } catch (pluginError) {
-        log.error("plugin_connection_error", { error: pluginError instanceof Error ? pluginError.message : "unknown" });
-        log.requestEnd(200, Date.now() - startTime);
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: "Não foi possível conectar via plugin.",
-            hint: "Verifique se o plugin ContentFactory RDM está instalado e ativo."
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      if (result.authFailure) {
+        log.requestEnd(200, Date.now() - started);
+        return json({ success: false, error: "API Key inválida para o plugin encontrado.", hint: "Copie novamente a API Key no painel Zica Posts do WordPress." });
       }
+      log.requestEnd(200, Date.now() - started);
+      return json({ success: false, error: `${PLUGIN_NAME} não encontrado ou não ativado.`, hint: `Instale o Zica Posts v${PLUGIN_MINIMUM_VERSION}. Aliases zica-ai/v1 e cfrdm/v1 continuam reconhecidos durante a migração.`, discoveredPath: discovery.subpath || null });
     }
 
-    // Standard Application Password authentication
-    if (!wordpress_username || !wordpress_app_password) {
-      log.warn("missing_credentials");
-      log.requestEnd(400, Date.now() - startTime);
-      return new Response(
-        JSON.stringify({ success: false, error: "Credenciais não fornecidas" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (!body.wordpress_username || !body.wordpress_app_password) return json({ success: false, error: "Credenciais não fornecidas" }, 400);
+
+    const auth = btoa(`${body.wordpress_username}:${body.wordpress_app_password}`);
+    const postsResponse = await fetch(`${baseUrl}/wp-json/wp/v2/posts?per_page=1&context=edit`, { headers: { Authorization: `Basic ${auth}`, Accept: "application/json" }, signal: AbortSignal.timeout(12000) });
+    const postsData = await readJson(postsResponse);
+    if (!postsResponse.ok || !postsData) {
+      const status = postsResponse.status;
+      const error = status === 401 ? "Autenticação falhou." : status === 403 ? "Usuário sem permissão de publicação." : status === 404 ? "REST API do WordPress não encontrada." : `WordPress respondeu HTTP ${status}.`;
+      log.requestEnd(200, Date.now() - started);
+      return json({ success: false, error, status, discoveredPath: discovery.subpath || null, hint: "Use uma Senha de Aplicação do WordPress ou prefira o Zica Posts 3.10.0." });
     }
 
-    // Discover WordPress path for standard auth too
-    const discovery = await discoverWordPressPath(baseUrl);
-    
-    if (discovery.found && discovery.path) {
-      baseUrl = `${baseUrl}${discovery.path}`;
-      log.info("discovered_wp_path", { path: discovery.path });
-    }
+    let user: Record<string, any> | null = null;
+    try {
+      const userResponse = await fetch(`${baseUrl}/wp-json/wp/v2/users/me?context=edit`, { headers: { Authorization: `Basic ${auth}`, Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+      user = await readJson(userResponse);
+    } catch { /* optional */ }
 
-    const apiUrl = `${baseUrl}/wp-json/wp/v2/posts?per_page=1`;
-    const auth = btoa(`${wordpress_username}:${wordpress_app_password}`);
-
-    log.info("testing_standard_api", { url: apiUrl });
-
-    const response = await fetch(apiUrl, {
-      method: "GET",
-      headers: {
-        Authorization: `Basic ${auth}`,
-        "Accept": "application/json",
-      },
-    });
-
-    const contentType = response.headers.get("content-type") || "";
-    const responseText = await response.text();
-    
-    log.info("standard_api_response", { status: response.status, contentType });
-
-    if (response.ok) {
-      if (!contentType.includes("application/json")) {
-        let detailedError = "WordPress REST API retornou HTML ao invés de JSON.";
-        
-        if (responseText.includes("login") || responseText.includes("wp-login")) {
-          detailedError = "REST API requer autenticação. Verifique se as credenciais estão corretas.";
-        } else if (responseText.includes("security") || responseText.includes("blocked") || responseText.includes("firewall")) {
-          detailedError = "Um plugin de segurança pode estar bloqueando a REST API. Tente usar a conexão via Plugin.";
-        } else if (responseText.includes("rest_disabled") || responseText.includes("disabled")) {
-          detailedError = "A REST API do WordPress está desabilitada. Tente usar a conexão via Plugin.";
-        } else {
-          detailedError = "REST API retornou HTML. Possíveis causas: plugin de segurança, cache, ou REST API desabilitada. Tente usar a conexão via Plugin.";
-        }
-        
-        const pathHint = !discovery.found 
-          ? " Se o WordPress está em uma subpasta (ex: /blog), inclua na URL."
-          : "";
-        
-        log.warn("rest_api_html_response");
-        log.requestEnd(200, Date.now() - startTime);
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: detailedError,
-            contentType,
-            hint: `Acesse ${baseUrl}/wp-json/ no navegador para verificar se a REST API está ativa.${pathHint}`,
-            discoveredPath: discovery.path || null,
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      let postsData;
-      try {
-        postsData = JSON.parse(responseText);
-      } catch {
-        log.warn("invalid_json_response");
-        log.requestEnd(200, Date.now() - startTime);
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: "WordPress retornou resposta inválida. Verifique se a REST API está funcionando." 
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      let canPublish = true;
-      let userInfo = null;
-
-      try {
-        const userApiUrl = `${baseUrl}/wp-json/wp/v2/users/me`;
-        const userResponse = await fetch(userApiUrl, {
-          method: "GET",
-          headers: {
-            Authorization: `Basic ${auth}`,
-          },
-        });
-
-        const userContentType = userResponse.headers.get("content-type") || "";
-        
-        if (userResponse.ok && userContentType.includes("application/json")) {
-          const userData = await userResponse.json();
-          userInfo = userData;
-          canPublish = userData.capabilities?.publish_posts === true || 
-                       userData.roles?.includes('administrator') ||
-                       userData.roles?.includes('editor') ||
-                       userData.roles?.includes('author');
-        }
-      } catch (userError) {
-        log.info("user_info_fetch_failed", { error: "non-critical" });
-      }
-
-      log.info("connection_success", { canPublish });
-      log.requestEnd(200, Date.now() - startTime);
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: "Connection successful",
-          canPublish,
-          user: userInfo ? { name: userInfo.name, roles: userInfo.roles } : null,
-          discoveredPath: discovery.path || null,
-          correctedUrl: (discovery.path || urlWasCleaned) ? baseUrl : null,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    } else {
-      log.warn("wordpress_api_error", { status: response.status });
-
-      let errorMessage = "Falha na conexão";
-      let hint = "";
-      
-      if (response.status === 401) {
-        errorMessage = "Autenticação falhou.";
-        hint = "Verifique se o usuário e a Senha de Aplicação estão corretos. A senha deve ser criada em Usuários → Perfil → Senhas de Aplicação.";
-      } else if (response.status === 403) {
-        errorMessage = "Acesso negado.";
-        hint = "Verifique se o usuário tem permissões de autor/editor/administrador para criar posts.";
-      } else if (response.status === 404) {
-        errorMessage = "REST API não encontrada.";
-        const pathHint = !discovery.found 
-          ? " Se o WordPress está em uma subpasta (ex: /blog), inclua na URL."
-          : "";
-        hint = `Verifique se a REST API está ativada. Acesse ${baseUrl}/wp-json/ no navegador para testar.${pathHint}`;
-      } else if (response.status === 500) {
-        errorMessage = "Erro interno do WordPress.";
-        hint = "Verifique os logs do WordPress ou desative plugins temporariamente para identificar o problema.";
-      } else {
-        errorMessage = `Erro HTTP ${response.status}.`;
-        hint = "Verifique se o site está acessível e a REST API está funcionando.";
-      }
-
-      log.requestEnd(200, Date.now() - startTime);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: errorMessage, 
-          hint, 
-          status: response.status,
-          discoveredPath: discovery.path || null, 
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const roles = Array.isArray(user?.roles) ? user.roles : [];
+    const canPublish = Boolean(user?.capabilities?.publish_posts || roles.some((role: string) => ["administrator", "editor", "author"].includes(role)));
+    log.requestEnd(200, Date.now() - started);
+    return json({ success: true, message: "Conexão WordPress via Application Password estabelecida", canPublish, user: user ? { name: user.name, roles } : null, discoveredPath: discovery.subpath || null, correctedUrl: baseUrl, mode: "application_password" });
   } catch (error) {
     log.error("connection_test_error", { error: error instanceof Error ? error.message : "unknown" });
-    
-    let errorMessage = "Não foi possível conectar ao site WordPress.";
-    let hint = "Verifique se a URL está correta e o site está acessível.";
-    
-    if (error instanceof Error) {
-      if (error.message.includes("fetch") || error.message.includes("network")) {
-        errorMessage = "Não foi possível acessar o site.";
-        hint = "Verifique se a URL está correta, incluindo https://. Confirme que o site está online.";
-      } else if (error.message.includes("certificate") || error.message.includes("SSL")) {
-        errorMessage = "Erro de certificado SSL.";
-        hint = "O site pode ter problemas com o certificado HTTPS. Verifique se o SSL está configurado corretamente.";
-      } else {
-        errorMessage = error.message;
-      }
-    }
-
-    log.requestEnd(200, Date.now() - startTime);
-    return new Response(
-      JSON.stringify({ success: false, error: errorMessage, hint }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    log.requestEnd(400, Date.now() - started);
+    return json({ success: false, error: error instanceof Error ? error.message : "Não foi possível conectar ao WordPress." }, 400);
   }
 });
