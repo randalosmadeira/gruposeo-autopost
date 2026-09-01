@@ -8,9 +8,7 @@ import {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const ENV_OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 const OPENAI_IMAGE_MODEL = Deno.env.get('OPENAI_IMAGE_MODEL') || 'gpt-image-2';
-const ENV_ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 const ANTHROPIC_MODEL = Deno.env.get('ANTHROPIC_MODEL') || 'claude-sonnet-5';
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
@@ -28,16 +26,38 @@ async function resolveProviderKeys() {
     if (error) return '';
     return String(data || '').trim();
   };
-  const [vaultOpenAI, vaultAnthropic] = await Promise.all([
-    ENV_OPENAI_API_KEY ? Promise.resolve('') : readVault('openai'),
-    ENV_ANTHROPIC_API_KEY ? Promise.resolve('') : readVault('anthropic'),
-  ]);
+  const [openai, anthropic] = await Promise.all([readVault('openai'), readVault('anthropic')]);
   return {
-    openai: ENV_OPENAI_API_KEY || vaultOpenAI,
-    anthropic: ENV_ANTHROPIC_API_KEY || vaultAnthropic,
-    openaiSource: ENV_OPENAI_API_KEY ? 'edge-secret' : vaultOpenAI ? 'zica-ai-vault' : 'missing',
-    anthropicSource: ENV_ANTHROPIC_API_KEY ? 'edge-secret' : vaultAnthropic ? 'zica-ai-vault' : 'missing',
+    openai,
+    anthropic,
+    openaiSource: openai ? 'zica-ai-vault' : 'missing',
+    anthropicSource: anthropic ? 'zica-ai-vault' : 'missing',
   };
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchWithRetry(url: string, init: RequestInit, timeoutMs: number, attempts = 3) {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const response = await fetchWithTimeout(url, init, timeoutMs);
+      if (response.ok || (response.status < 500 && response.status !== 429)) return response;
+      lastError = new Error(`provider_http_${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, 700 * 2 ** (attempt - 1)));
+  }
+  throw lastError instanceof Error ? lastError : new Error('provider_request_failed');
 }
 
 function bytesToBase64(bytes: Uint8Array) {
@@ -98,28 +118,21 @@ async function selectBestReference(sources: Array<{ mime_type: string; base64: s
     content.push({ type: 'image', source: { type: 'base64', media_type: source.mime_type, data: source.base64 } });
   });
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       'x-api-key': anthropicApiKey,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 500,
-      messages: [{ role: 'user', content }],
-    }),
-  });
+    body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 500, messages: [{ role: 'user', content }] }),
+  }, 45000, 2);
   if (!response.ok) return { index: 0, qa: { provider_error: response.status } };
   const payload = await response.json();
   const text = Array.isArray(payload.content) ? payload.content.map((item: { text?: string }) => item.text || '').join('\n') : '';
   const parsed = extractJson(text);
   const index = Number(parsed?.reference_index);
-  return {
-    index: Number.isInteger(index) && index >= 0 && index < sources.length ? index : 0,
-    qa: parsed,
-  };
+  return { index: Number.isInteger(index) && index >= 0 && index < sources.length ? index : 0, qa: parsed };
 }
 
 async function generateWithOpenAI(source: { mime_type: string; bytes: Uint8Array }, prompt: string, openaiApiKey: string) {
@@ -132,17 +145,17 @@ async function generateWithOpenAI(source: { mime_type: string; bytes: Uint8Array
   const extension = source.mime_type === 'image/png' ? 'png' : source.mime_type === 'image/webp' ? 'webp' : 'jpg';
   form.set('image', new File([source.bytes], `reference.${extension}`, { type: source.mime_type }));
 
-  const response = await fetch('https://api.openai.com/v1/images/edits', {
+  const response = await fetchWithRetry('https://api.openai.com/v1/images/edits', {
     method: 'POST',
     headers: { Authorization: `Bearer ${openaiApiKey}` },
     body: form,
-  });
+  }, 120000, 3);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`openai_image_error:${response.status}:${payload?.error?.message || 'unknown'}`);
   const first = payload?.data?.[0];
   if (first?.b64_json) return { bytes: base64ToBytes(first.b64_json), mimeType: 'image/png' };
   if (first?.url) {
-    const imageResponse = await fetch(first.url);
+    const imageResponse = await fetchWithRetry(first.url, {}, 60000, 2);
     if (!imageResponse.ok) throw new Error(`openai_image_download_error:${imageResponse.status}`);
     return { bytes: new Uint8Array(await imageResponse.arrayBuffer()), mimeType: imageResponse.headers.get('content-type') || 'image/png' };
   }
@@ -151,7 +164,7 @@ async function generateWithOpenAI(source: { mime_type: string; bytes: Uint8Array
 
 async function qaWithClaude(reference: { mime_type: string; base64: string }, candidate: { mimeType: string; bytes: Uint8Array }, anthropicApiKey: string) {
   if (!anthropicApiKey) return null;
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -173,7 +186,7 @@ async function qaWithClaude(reference: { mime_type: string; base64: string }, ca
         ],
       }],
     }),
-  });
+  }, 60000, 2);
   if (!response.ok) return { provider_error: response.status };
   const payload = await response.json();
   const text = Array.isArray(payload.content) ? payload.content.map((item: { text?: string }) => item.text || '').join('\n') : '';
@@ -214,11 +227,11 @@ serve(async (req) => {
     const providerKeys = await resolveProviderKeys();
     if (!providerKeys.openai) {
       await admin.from('supporter_avatar_requests').update({ status: 'provider_not_configured', updated_at: new Date().toISOString() }).eq('id', requestId);
-      if (jobId) await admin.from('supporter_avatar_jobs').update({ status: 'provider_not_configured', error_message: 'OpenAI não configurada no Zica.ai', completed_at: new Date().toISOString() }).eq('id', jobId);
+      if (jobId) await admin.from('supporter_avatar_jobs').update({ status: 'provider_not_configured', error_message: 'OpenAI não configurada no Vault do Zica.ai', completed_at: new Date().toISOString() }).eq('id', jobId);
       return json({ error: 'openai_not_configured' }, 503);
     }
 
-    await admin.from('supporter_avatar_requests').update({ status: 'processing', updated_at: new Date().toISOString() }).eq('id', requestId);
+    await admin.from('supporter_avatar_requests').update({ status: 'processing', supporter_approved_at: null, updated_at: new Date().toISOString() }).eq('id', requestId);
     if (jobId) await admin.from('supporter_avatar_jobs').update({ status: 'running', attempts: 1, started_at: new Date().toISOString() }).eq('id', jobId);
 
     const sources = await downloadSources(requestId);
@@ -237,12 +250,7 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    const runtimePrompt = buildSupporterAvatarPrompt({
-      supporterName: avatarRequest.supporter_name,
-      supportText: avatarRequest.support_text,
-      style: avatarRequest.style,
-      socialHandles: avatarRequest.social_handles || {},
-    });
+    const runtimePrompt = buildSupporterAvatarPrompt({ supporterName: avatarRequest.supporter_name, supportText: avatarRequest.support_text, style: avatarRequest.style, socialHandles: {} });
     const prompt = `${dbTemplate?.system_prompt || ''}\n\n${runtimePrompt}\n\nRESTRIÇÕES ADICIONAIS:\n${dbTemplate?.negative_prompt || ''}`.trim();
 
     const generated = await generateWithOpenAI(primary, prompt, providerKeys.openai);
@@ -276,15 +284,12 @@ serve(async (req) => {
         fidelity_target_is_not_biometric_guarantee: true,
         openai_key_source: providerKeys.openaiSource,
         anthropic_key_source: providerKeys.anthropicSource,
+        manual_supporter_approval_required: true,
       },
     });
 
     const finalStatus = qa && !qaPass ? 'qa' : 'completed';
-    await admin.from('supporter_avatar_requests').update({
-      status: finalStatus,
-      updated_at: new Date().toISOString(),
-      completed_at: finalStatus === 'completed' ? new Date().toISOString() : null,
-    }).eq('id', requestId);
+    await admin.from('supporter_avatar_requests').update({ status: finalStatus, updated_at: new Date().toISOString(), completed_at: finalStatus === 'completed' ? new Date().toISOString() : null }).eq('id', requestId);
 
     if (jobId) await admin.from('supporter_avatar_jobs').update({
       status: 'completed',
@@ -295,6 +300,7 @@ serve(async (req) => {
         qa_pass: qaPass,
         qa_score: Number.isFinite(qaScore) ? qaScore : null,
         anthropic_qa_used: Boolean(providerKeys.anthropic),
+        manual_supporter_approval_required: true,
         provider_sources: { openai: providerKeys.openaiSource, anthropic: providerKeys.anthropicSource },
       },
       completed_at: new Date().toISOString(),
@@ -305,7 +311,7 @@ serve(async (req) => {
     const message = error instanceof Error ? error.message : 'unknown_error';
     console.error('generate-supporter-avatar:', requestId, message);
     if (requestId) await admin.from('supporter_avatar_requests').update({ status: 'failed', updated_at: new Date().toISOString() }).eq('id', requestId);
-    if (jobId) await admin.from('supporter_avatar_jobs').update({ status: 'failed', error_message: message.slice(0, 2000), completed_at: new Date().toISOString() }).eq('id', jobId);
-    return json({ error: message }, 500);
+    if (jobId) await admin.from('supporter_avatar_jobs').update({ status: 'failed', error_message: message.slice(0, 500), completed_at: new Date().toISOString() }).eq('id', jobId);
+    return json({ error: 'generation_failed', detail: message.slice(0, 240) }, 500);
   }
 });
