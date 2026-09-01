@@ -52,11 +52,11 @@ jobs:
           mkdir -p dist-wordpress
           (
             cd public/wordpress-plugin
-            zip -rq ../../../dist-wordpress/zica-posts-3.10.0.zip zica-posts -x '*.DS_Store' '*/.git/*'
+            zip -rq ../../dist-wordpress/zica-posts-3.10.0.zip zica-posts -x '*.DS_Store' '*/.git/*'
           )
           (
             cd public/wordpress-theme
-            zip -rq ../../../dist-wordpress/zica-neural-theme-1.0.0.zip zica-neural -x '*.DS_Store' '*/.git/*'
+            zip -rq ../../dist-wordpress/zica-neural-theme-1.0.0.zip zica-neural -x '*.DS_Store' '*/.git/*'
           )
           unzip -t dist-wordpress/zica-posts-3.10.0.zip
           unzip -t dist-wordpress/zica-neural-theme-1.0.0.zip
