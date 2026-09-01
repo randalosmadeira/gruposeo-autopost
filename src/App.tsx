@@ -36,6 +36,8 @@ const Academy = lazy(() => import("./pages/Academy"));
 const InternalLinking = lazy(() => import("./pages/InternalLinking"));
 const AIChat = lazy(() => import("./pages/AIChat"));
 const ElectoralCampaign = lazy(() => import("./pages/ElectoralCampaign"));
+const SupporterAvatar1470 = lazy(() => import("./pages/SupporterAvatar1470"));
+const SupporterAvatarPromptEditor = lazy(() => import("./pages/SupporterAvatarPromptEditor"));
 const AuditoriaGBP = lazy(() => import("./pages/AuditoriaGBP"));
 const Hiperlocal = lazy(() => import("./pages/Hiperlocal"));
 
@@ -76,6 +78,8 @@ const App = () => (
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/auth" element={<Auth />} />
+              <Route path="/1470" element={<SupporterAvatar1470 />} />
+              <Route path="/apoiadores/avatar" element={<SupporterAvatar1470 />} />
               <Route
                 element={
                   <ProtectedRoute>
@@ -113,6 +117,7 @@ const App = () => (
                 <Route path="/bulk-generator" element={<BulkKeywordGenerator />} />
                 <Route path="/ai-chat" element={<AIChat />} />
                 <Route path="/electoral-campaign" element={<ElectoralCampaign />} />
+                <Route path="/electoral-campaign/supporter-avatar-prompts" element={<SupporterAvatarPromptEditor />} />
                 <Route path="/auditoria-gbp" element={<AuditoriaGBP />} />
                 <Route path="/hiperlocal" element={<Hiperlocal />} />
                 <Route path="/system-prompts" element={<SettingsPage />} />
