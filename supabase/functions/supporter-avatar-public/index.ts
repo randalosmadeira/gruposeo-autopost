@@ -12,6 +12,9 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const PUBLIC_RATE_LIMIT = Number(Deno.env.get('SUPPORTER_AVATAR_DAILY_LIMIT') || '5');
 const TURNSTILE_SECRET = Deno.env.get('TURNSTILE_SECRET_KEY') || '';
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
+const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
+const OPENAI_IMAGE_MODEL = Deno.env.get('OPENAI_IMAGE_MODEL') || 'gpt-image-2';
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -114,6 +117,31 @@ serve(async (req) => {
   try {
     const body = await req.json();
     const action = normalizeText(body.action, 40);
+
+    if (action === 'capabilities') {
+      return json({
+        ok: true,
+        service: 'supporter-avatar-public',
+        imageProvider: {
+          provider: 'openai',
+          configured: Boolean(OPENAI_API_KEY),
+          model: OPENAI_IMAGE_MODEL,
+        },
+        qaProvider: {
+          provider: 'anthropic',
+          configured: Boolean(ANTHROPIC_API_KEY),
+          optional: true,
+        },
+        abuseProtection: {
+          turnstileConfigured: Boolean(TURNSTILE_SECRET),
+          dailyLimit: PUBLIC_RATE_LIMIT,
+        },
+        storage: {
+          sourcePrivate: true,
+          outputPrivate: true,
+        },
+      });
+    }
 
     if (action === 'create') {
       const captcha = await validateTurnstile(normalizeText(body.turnstileToken, 2048), req);
@@ -257,7 +285,7 @@ serve(async (req) => {
         request_id: requestId,
         stage: 'generate-master',
         provider: 'openai',
-        model: Deno.env.get('OPENAI_IMAGE_MODEL') || 'gpt-image-2',
+        model: OPENAI_IMAGE_MODEL,
         status: 'queued',
         input_payload: { style: avatarRequest.style, support_text: avatarRequest.support_text },
       }).select('id').single();
