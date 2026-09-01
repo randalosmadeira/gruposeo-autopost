@@ -1,7 +1,9 @@
 /**
- * Versão centralizada do Plugin Zica.ai — Frontend.
- * Ao atualizar o plugin, altere APENAS este arquivo + supabase/functions/_shared/plugin-version.ts
+ * Versão centralizada do conector WordPress Zica Posts — Frontend Zica.ai.
  */
-export const PLUGIN_VERSION = '3.9.0';
-export const PLUGIN_LAST_UPDATE = '2026-08-22T22:15:00';
-export const PLUGIN_MINIMUM_VERSION = '3.0.0';
+export const PLUGIN_SOFTWARE_ID = 'zica-posts';
+export const PLUGIN_NAME = 'Zica Posts';
+export const PLUGIN_VERSION = '3.10.0';
+export const PLUGIN_LAST_UPDATE = '2026-09-01T03:00:00-03:00';
+export const PLUGIN_MINIMUM_VERSION = '3.10.0';
+export const PLUGIN_API_NAMESPACE = 'zica-posts/v1';
