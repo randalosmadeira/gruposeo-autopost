@@ -3,928 +3,194 @@ import JSZip from 'jszip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import {
-  Download,
-  Plug,
-  Settings,
-  Webhook,
-  FileText,
-  Shield,
-  Zap,
-  CheckCircle,
-  Code,
-  Loader2,
-  History,
-  Sparkles,
-  Bug,
-  Wrench,
-} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Bot,
+  Braces,
+  CheckCircle2,
+  Clock3,
+  Download,
+  FileCode2,
+  Globe2,
+  Network,
+  PlugZap,
+  Radar,
+  ShieldCheck,
+  Sparkles,
+  Workflow,
+} from 'lucide-react';
+import {
+  PLUGIN_API_NAMESPACE,
+  PLUGIN_LAST_UPDATE,
+  PLUGIN_NAME,
+  PLUGIN_SOFTWARE_ID,
+  PLUGIN_VERSION,
+} from '@/lib/plugin-version';
 
-import { PLUGIN_VERSION, PLUGIN_LAST_UPDATE } from '@/lib/plugin-version';
+type PackageFile = { path: string; url: string };
 
-const features = [
-  {
-    icon: Plug,
-    title: 'Conexão Segura',
-    description: 'API Key única com verificação automática de conexão entre WordPress e Zica.ai.',
-  },
-  {
-    icon: FileText,
-    title: 'Gestão de Artigos',
-    description: 'Crie, edite e publique artigos com suporte a schemas HowTo, Review e FAQ.',
-  },
-  {
-    icon: Shield,
-    title: 'SEO Completo + IA',
-    description: 'Geração de SEO via IA: slug, meta description, tags e títulos virais automáticos.',
-  },
-  {
-    icon: Zap,
-    title: 'Meta Auditor IA',
-    description: 'Auditoria automática a cada 6h: verifica e corrige meta descriptions, OG tags e focus keywords.',
-    badge: 'v3.1',
-  },
-  {
-    icon: Webhook,
-    title: 'IndexNow + Ping',
-    description: 'Notificação instantânea ao Google, Bing e Yandex quando artigos são publicados ou atualizados.',
-    badge: 'v3.1',
-  },
-  {
-    icon: Settings,
-    title: 'Descoberta por IA',
-    description: 'Endpoints llms.txt + headers HTTP para ChatGPT, Claude e Gemini encontrarem seus artigos.',
-    badge: 'v3.1',
-  },
-  {
-    icon: FileText,
-    title: 'Duplicador de Posts',
-    description: 'Clone posts e páginas com um clique. Exclusão em massa de múltiplos posts selecionados.',
-    badge: 'v3.1',
-  },
-  {
-    icon: Zap,
-    title: 'Sitemap Otimizado',
-    description: 'Sitemap dinâmico com prioridades automáticas, News Sitemap e robots.txt para crawlers de IA.',
-    badge: 'v3.1',
-  },
-  {
-    icon: Shield,
-    title: 'Atualização Segura',
-    description: 'Pre-update checks, rollback automático e verificação de integridade pós-atualização.',
-    badge: 'v3.1',
-  },
-  {
-    icon: Zap,
-    title: 'Google Indexing API',
-    description: 'Submissão direta de URLs ao Google (200/dia) com auto-submit ao detectar tráfego de IA.',
-    badge: 'v3.2.7',
-  },
-  {
-    icon: Settings,
-    title: 'AI Source Rules',
-    description: 'Detecção de sessões via ChatGPT, Claude, Perplexity, Gemini, Copilot, DeepSeek e Grok.',
-    badge: 'v3.2.7',
-  },
-  {
-    icon: Webhook,
-    title: 'Auto-Fix Crawlers IA',
-    description: 'Correção automática de robots.txt e injeção batch de FAQ Schema em artigos sem structured data.',
-    badge: 'v3.3',
-  },
-  {
-    icon: Zap,
-    title: 'Instant Indexing Engine',
-    description: 'Botão de indexação na Admin Bar, coluna de status nos posts, ação em massa, widget de quota e auto-submit ao publicar.',
-    badge: 'v3.7',
-    isNew: true,
-  },
+const pluginFiles: PackageFile[] = [
+  { path: 'zica-posts.php', url: '/wordpress-plugin/zica-posts/zica-posts.php' },
+  { path: 'readme.txt', url: '/wordpress-plugin/zica-posts/readme.txt' },
+  { path: 'version.json', url: '/wordpress-plugin/zica-posts/version.json' },
+  { path: 'assets/admin.css', url: '/wordpress-plugin/zica-posts/assets/admin.css' },
 ];
 
-const installSteps = [
-  { step: 1, title: 'Baixe o Plugin', description: 'Clique no botão "Baixar Plugin" acima para fazer o download do arquivo ZIP.' },
-  { step: 2, title: 'Acesse o WordPress', description: 'No painel do WordPress, vá em Plugins → Adicionar Novo → Enviar Plugin.' },
-  { step: 3, title: 'Faça Upload', description: 'Selecione o arquivo ZIP baixado e clique em "Instalar Agora".' },
-  { step: 4, title: 'Ative o Plugin', description: 'Após a instalação, clique em "Ativar Plugin".' },
-  { step: 5, title: 'Copie a API Key', description: 'Acesse Zica.ai no menu lateral e copie sua API Key.' },
-  { step: 6, title: 'Configure o Projeto', description: 'No Zica.ai, vá em Configurações do projeto e cole a API Key.' },
+const themeFiles: PackageFile[] = [
+  { path: 'style.css', url: '/wordpress-theme/zica-neural/style.css' },
+  { path: 'functions.php', url: '/wordpress-theme/zica-neural/functions.php' },
+  { path: 'header.php', url: '/wordpress-theme/zica-neural/header.php' },
+  { path: 'footer.php', url: '/wordpress-theme/zica-neural/footer.php' },
+  { path: 'index.php', url: '/wordpress-theme/zica-neural/index.php' },
+  { path: 'single.php', url: '/wordpress-theme/zica-neural/single.php' },
+  { path: 'archive.php', url: '/wordpress-theme/zica-neural/archive.php' },
+  { path: 'theme.json', url: '/wordpress-theme/zica-neural/theme.json' },
+  { path: 'readme.txt', url: '/wordpress-theme/zica-neural/readme.txt' },
+  { path: 'assets/theme.css', url: '/wordpress-theme/zica-neural/assets/theme.css' },
 ];
 
-const changelog = [
-  {
-    version: '3.9.0',
-    date: '2026-08-22',
-    type: 'major' as const,
-    changes: [
-      { type: 'feature', text: 'Módulo GEO & Semântico: Injeção automática de Entity Graph e Schema.org avançado (Person, LegalService, sameAs)' },
-      { type: 'feature', text: 'Tabelas v3.9: Gestão de AI Personas, Semantic Graph, Image Schema e URL Index centralizados no plugin' },
-      { type: 'feature', text: 'Integração Muralha: Separação física de recursos para campanhas eleitorais vs unidades comerciais' },
-      { type: 'feature', text: 'Otimização 2026: Motor de conformidade GEO/AEO para visibilidade em ChatGPT, Claude, Gemini e Search Generative Experience' },
-      { type: 'improvement', text: 'Arquitetura de Citações: Otimização de authority anchors e desambiguação de entidade via sameAs' },
-      { type: 'improvement', text: 'Performance: Lazy load de dependências críticas e redução de 40% no TTFB em servidores VPS' },
-    ],
-  },
-  {
-    version: '3.7.0',
-    date: '2026-03-07',
-    type: 'major' as const,
-    changes: [
-      { type: 'feature', text: 'Instant Indexing Engine: botão de indexação rápida na Admin Bar do WordPress com badge de quota em tempo real' },
-      { type: 'feature', text: 'Coluna de status de indexação (✅/⏳) na listagem de posts e páginas com push manual em 1 clique' },
-      { type: 'feature', text: 'Ação em massa "Indexar Agora" para posts selecionados via IndexNow + Google API + Ping simultâneo' },
-      { type: 'feature', text: 'Widget no Dashboard WordPress com barra de progresso de quota diária (500 URLs/dia) e últimas submissões' },
-      { type: 'feature', text: 'Auto-submit ao publicar com delay de 30s para garantir que a página está ativa antes da indexação' },
-      { type: 'feature', text: 'Indexação multi-canal simultânea: IndexNow + Google Indexing API + Google Ping + Bing Ping em cada submissão' },
-      { type: 'feature', text: 'REST API completa: /instant-indexing/submit, /instant-indexing/batch, /instant-indexing/status' },
-      { type: 'feature', text: 'Estatísticas de cobertura: total publicados vs total indexados vs nunca indexados com percentual' },
-      { type: 'improvement', text: 'Quota unificada de 500 URLs/dia com reset automático à meia-noite e monitoramento visual' },
-      { type: 'improvement', text: 'Todas as IAs atualizadas com Diretrizes Comportamentais v1.0 (Anti-Sycophancy, Chain of Thought, Obsessão por Objetivo)' },
-    ],
-  },
-  {
-    version: '3.4.0',
-    date: '2026-02-15',
-    type: 'major' as const,
-    changes: [
-      { type: 'feature', text: 'Agente SEO Autônomo com execução REAL: scan-seo-issues detecta canonical faltando, URLs HTTP, H1 ausente, títulos duplicados e meta descriptions vazias' },
-      { type: 'feature', text: 'Novo endpoint: autonomous-seo-fix aplica correções batch (canonical, title, slug, HTTPS, delete, noindex, FAQ schema) de forma autônoma' },
-      { type: 'feature', text: 'Novo endpoint: autonomous-content-edit modifica título WP, H1, H2, hero, insere imagens e força HTTPS no conteúdo' },
-      { type: 'feature', text: 'Novo endpoint: manage-redirect cria/exclui redirects 301/302 via Rank Math ou .htaccess automaticamente' },
-      { type: 'improvement', text: 'SEO Agent agora executa varredura + correção + re-indexação em um único ciclo autônomo verificado' },
-    ],
-  },
-  {
-    version: '3.3.0',
-    date: '2026-02-14',
-    type: 'minor' as const,
-    changes: [
-      { type: 'feature', text: 'Auto-fix: robots.txt agora remove automaticamente bloqueios de crawlers de IA (GPTBot, PerplexityBot, ClaudeBot)' },
-      { type: 'feature', text: 'Auto-fix: Injeção batch de FAQ Schema (FAQPage JSON-LD) em artigos publicados sem structured data' },
-      { type: 'feature', text: 'Novo endpoint REST: fix-ai-crawlers para correção remota via SEO Agent' },
-      { type: 'feature', text: 'Novo endpoint REST: batch-inject-faq-schema para injeção massiva de structured data' },
-      { type: 'improvement', text: 'robots.txt expandido com 12+ crawlers de IA permitidos (Applebot-Extended, CCBot, etc.)' },
-      { type: 'improvement', text: 'SEO Agent agora corrige automaticamente issues IDX-002 e GEO-001 do audit' },
-    ],
-  },
-  {
-    version: '3.2.9',
-    date: '2026-02-14',
-    type: 'patch' as const,
-    changes: [
-      { type: 'fix', text: 'Contrato do Method Validator para add_to_queue (max:3→5) previne warnings durante sincronização GSC' },
-      { type: 'fix', text: 'detect_sitemap_url() agora usa cache transient (1h) evitando HTTP calls repetidos no robots.txt' },
-      { type: 'improvement', text: 'GSC Integration com inspeção expandida (posts, pages, products) ordenada por data de modificação' },
-    ],
-  },
-  {
-    version: '3.2.8',
-    date: '2026-02-14',
-    type: 'patch' as const,
-    changes: [
-      { type: 'fix', text: 'Status "Desconectado" no dashboard agora verifica API Key (sempre gerada na ativação) em vez de cfrdm_api_url' },
-      { type: 'fix', text: 'Health check JS com fallback para endpoint /version e headers anti-cache (Cache-Control, Pragma, Expires)' },
-      { type: 'fix', text: 'Versão do plugin exibida no status de conexão' },
-      { type: 'fix', text: 'plugin-updates.json atualizado para permitir auto-update de v3.2.3+ para v3.2.8' },
-      { type: 'improvement', text: 'Guards defensivos e captura de \\Throwable em todos os blocos de inicialização do plugin' },
-    ],
-  },
-  {
-    version: '3.2.7',
-    date: '2026-02-14',
-    type: 'minor' as const,
-    changes: [
-      { type: 'feature', text: 'Tabela de regras AI Source (Fonte IA / Campo / Operador / Valor) para detecção de sessões via ChatGPT, Claude, Perplexity, Gemini, Copilot, DeepSeek, Grok e Meta AI' },
-      { type: 'feature', text: 'Google Indexing API: submissão direta de URLs (posts, páginas, produtos) com controle de quota (200/dia) e auto-submit ao detectar tráfego de IA' },
-      { type: 'feature', text: 'Google Meu Negócio Auto-Poster: publica automaticamente no perfil GMB com limpeza de markup de page builders (Divi, WPBakery, Avada)' },
-      { type: 'improvement', text: 'Endpoints REST: /ai-source-rules, /ai-source-stats, /google-indexing/submit, /google-indexing/batch, /gmb/post, /gmb/history' },
-    ],
-  },
-  {
-    version: '3.2.6',
-    date: '2026-02-14',
-    type: 'patch' as const,
-    changes: [
-      { type: 'fix', text: 'Correção de 10 cron jobs não agendados (social queue, content queue, GSC sync, AI fix, Ubersuggest, HTTPS scan, auto-update, content enhancer, logs cleanup, stuck jobs)' },
-      { type: 'fix', text: 'Bug de exibição "Confiança mínima 8000%" corrigido para 80% na página de Diagnóstico' },
-      { type: 'improvement', text: 'Módulos v3.0.0 (GSC, AI Auto-Fix, Ubersuggest, HTTPS, Auto-Update, Content Enhancer) agora inicializam no boot normal do plugin' },
-    ],
-  },
-  {
-    version: '3.2.5',
-    date: '2026-02-14',
-    type: 'patch' as const,
-    changes: [
-      { type: 'fix', text: 'Correção do erro de cookie ao regenerar API Key (restNonce wp_rest)' },
-      { type: 'fix', text: 'Correção de 7 avisos do MethodValidator: alias methods para Social Poster, Content Queue, SEO Checklist e AI Traffic Detector' },
-      { type: 'feature', text: 'Filtro por status (Publicado/Rascunho/Pendente) na página de Indexação de Artigos' },
-    ],
-  },
-  {
-    version: '3.2.4',
-    date: '2026-02-14',
-    type: 'patch' as const,
-    changes: [
-      { type: 'feature', text: 'Method Validator: validação automática de assinaturas de métodos entre classes com ReflectionMethod' },
-      { type: 'feature', text: 'Wrapper safe_call() para chamadas estáticas seguras com fallback, prevenindo WSOD' },
-      { type: 'feature', text: 'Relatório de validação de métodos integrado ao endpoint /diagnostics' },
-      { type: 'fix', text: 'Migração de chamadas críticas em Social Admin e IndexNow para safe_call()' },
-      { type: 'fix', text: 'Correção de erros fatais na interface de administração social (v3.2.3)' },
-      { type: 'improvement', text: '20+ contratos de validação cobrindo todos os módulos críticos do plugin' },
-      { type: 'improvement', text: 'Cache de resultados de validação com transient (1h, invalidado por versão)' },
-    ],
-  },
-  {
-    version: '3.2.2',
-    date: '2026-02-13',
-    type: 'patch' as const,
-    changes: [
-      { type: 'fix', text: 'Registro de 6 endpoints REST ausentes: indexnow-batch, meta-audit, update-seo-meta, refresh-sitemap, refresh-llms, set-ai-headers' },
-      { type: 'fix', text: 'Correção de erros 404 na indexação IndexNow pelo SEO Agent autônomo' },
-      { type: 'fix', text: 'SEO Agent agora recupera chave IndexNow real do plugin antes do fallback' },
-      { type: 'improvement', text: 'Verniz DNA v3.0 integrado em 100% dos agentes: SEO Agent, Análise SEO IA e Chat IA' },
-      { type: 'improvement', text: 'Matriz 6x11 nichos/gatilhos emocionais no orquestrador centralizado' },
-      { type: 'improvement', text: 'Prompts de meta-tags seguem compliance jornalístico v3.0 e Flesch ≥ 60' },
-    ],
-  },
-  {
-    version: '3.2.1',
-    date: '2026-02-11',
-    type: 'patch' as const,
-    changes: [
-      { type: 'fix', text: 'Linkagem interna agora usa fallback "Leia também" quando âncora exata não é encontrada' },
-      { type: 'fix', text: 'Regex Unicode-safe para matching de texto âncora com caracteres acentuados (à, é, ç, etc.)' },
-      { type: 'fix', text: 'Posts que já contêm link para a URL alvo retornam sucesso em vez de erro' },
-      { type: 'improvement', text: 'Pré-verificação com mb_stripos antes de regex para melhor performance' },
-    ],
-  },
-  {
-    version: '3.2.0',
-    date: '2026-02-10',
-    type: 'major' as const,
-    changes: [
-      { type: 'feature', text: 'Sistema de notificações automáticas no dashboard para artigos gerados por cron' },
-      { type: 'feature', text: 'Monitoramento de portais com scraping HTML e RSS integrado' },
-      { type: 'feature', text: 'Reescrita automática com score de originalidade (95%+)' },
-      { type: 'feature', text: 'Painel de diagnóstico com reparo de tabelas via AJAX fallback' },
-      { type: 'improvement', text: 'Integração em tempo real: portal monitoring → rewrite → publish → notify' },
-      { type: 'improvement', text: 'Notificações com badge de não-lidas e link direto ao editor' },
-      { type: 'improvement', text: 'Sincronização de WordPress Stats otimizada com upsert' },
-    ],
-  },
-  {
-    version: '3.1.0',
-    date: '2026-02-09',
-    type: 'major' as const,
-    changes: [
-      { type: 'feature', text: 'Auditor de Meta Descriptions com IA (cron automático a cada 6 horas)' },
-      { type: 'feature', text: 'IndexNow: notificação instantânea ao Google/Bing/Yandex ao publicar' },
-      { type: 'feature', text: 'llms.txt + headers AI-friendly para ChatGPT, Claude e Gemini' },
-      { type: 'feature', text: 'Duplicador de Posts/Páginas com ação individual e em lote' },
-      { type: 'feature', text: 'Exclusão em massa de posts selecionados' },
-      { type: 'feature', text: 'News Sitemap para Google News' },
-      { type: 'feature', text: 'Sitemap Optimizer com prioridades dinâmicas baseadas em data' },
-      { type: 'feature', text: 'robots.txt otimizado para crawlers de IA (GPTBot, Claude-Web, etc.)' },
-      { type: 'feature', text: 'Open Graph e Twitter Cards auto-preenchidos pela IA' },
-      { type: 'improvement', text: 'Módulos conectados em tempo real: publicação → meta audit → IndexNow → llms.txt' },
-      { type: 'improvement', text: 'Pre-update checks (PHP, WP, disco, DB) antes de atualizar' },
-      { type: 'improvement', text: 'Rollback automático em caso de falha na atualização' },
-      { type: 'improvement', text: 'Verificação de integridade pós-update com notificação à plataforma' },
-    ],
-  },
-  {
-    version: '3.0.2',
-    date: '2026-02-08',
-    type: 'patch' as const,
-    changes: [
-      { type: 'fix', text: 'CRÍTICO: Correção da ordem de registro de intervalos de cron durante ativação' },
-      { type: 'fix', text: 'Prevenção de fatal errors em módulos v3.0 durante init' },
-      { type: 'improvement', text: 'Fallback automático para intervalos nativos (every_6_hours → twicedaily)' },
-      { type: 'improvement', text: 'Try-catch em inicialização de módulos para maior resiliência' },
-    ],
-  },
-  {
-    version: '3.0.1',
-    date: '2026-02-08',
-    type: 'patch' as const,
-    changes: [
-      { type: 'fix', text: 'Correção do botão "Reparar Tabelas" que retornava erro HTML' },
-      { type: 'feature', text: 'Fallback AJAX para reparo de tabelas quando REST API falha' },
-      { type: 'improvement', text: 'Melhor tratamento de erros com mensagens detalhadas' },
-      { type: 'improvement', text: 'Feedback visual com animação de loading durante reparo' },
-      { type: 'improvement', text: 'Botão de verificação/reparo sempre visível na página de diagnóstico' },
-    ],
-  },
-  {
-    version: '3.0.0',
-    date: '2026-02-08',
-    type: 'major' as const,
-    changes: [
-      { type: 'feature', text: 'Integração nativa com Google Search Console via OAuth 2.0' },
-      { type: 'feature', text: 'Sistema de correção automática de erros 404 via IA com redirecionamentos 301' },
-      { type: 'feature', text: 'Fila de correção inteligente (cfrdm_fix_queue) com priorização' },
-      { type: 'feature', text: 'Sincronização com Ubersuggest para dados de SEO e prioridade' },
-      { type: 'feature', text: 'HTTPS Enforcer para forçar URLs seguras automaticamente' },
-      { type: 'feature', text: 'AI Content Enhancer para otimização automática de conteúdo' },
-      { type: 'feature', text: 'Página de diagnóstico avançada com status de tabelas e cron jobs' },
-      { type: 'improvement', text: 'Painel de configurações expandido com opções GSC e AI Auto-Fix' },
-      { type: 'improvement', text: 'Intervalos de cron customizados (every_6_hours, weekly)' },
-      { type: 'fix', text: 'Correção de intervalos de cron inválidos que causavam falha na ativação' },
-    ],
-  },
-  {
-    version: '2.6.2',
-    date: '2026-02-08',
-    type: 'minor' as const,
-    changes: [
-      { type: 'improvement', text: 'Paginação completa para buscar TODOS os artigos sem limite de 100' },
-      { type: 'improvement', text: 'Análise básica automática quando créditos de IA esgotarem' },
-      { type: 'fix', text: 'Sincronização agora processa sites com centenas de artigos' },
-    ],
-  },
-  {
-    version: '2.6.1',
-    date: '2026-02-08',
-    type: 'minor' as const,
-    changes: [
-      { type: 'fix', text: 'CRÍTICO: Corrigido registro de endpoints REST do Article Indexer para funcionar fora do contexto admin' },
-      { type: 'fix', text: 'Endpoints /articles-for-indexing e /export-articles-batch agora respondem corretamente via API externa' },
-      { type: 'improvement', text: 'Article Indexer é carregado nas dependências principais para suporte completo à REST API' },
-    ],
-  },
-  {
-    version: '2.6.0',
-    date: '2026-02-08',
-    type: 'major' as const,
-    changes: [
-      { type: 'feature', text: 'Verificação automática de saúde do plugin ao selecionar projeto' },
-      { type: 'feature', text: 'Barra de status de qualidade de conexão com latência em tempo real' },
-      { type: 'feature', text: 'Testes de conectividade integrados no painel de integrações' },
-      { type: 'feature', text: 'Guia visual de instalação do plugin quando não detectado' },
-      { type: 'feature', text: 'Fallback automático para REST API padrão quando plugin não instalado' },
-      { type: 'improvement', text: 'Sistema de indexação automática com crawling periódico (2x/dia)' },
-      { type: 'improvement', text: 'Endpoints REST para sincronização em batch de artigos' },
-      { type: 'fix', text: 'Erros específicos do WordPress agora exibem mensagens claras' },
-    ],
-  },
-  {
-    version: '2.5.1',
-    date: '2026-02-07',
-    type: 'minor' as const,
-    changes: [
-      { type: 'feature', text: 'Sistema de linkagem interna inteligente com IA para sincronização automática de artigos WordPress' },
-      { type: 'feature', text: 'Novo indexador de artigos com análise semântica e detecção de clusters temáticos' },
-      { type: 'feature', text: 'Regras de linkagem automática por palavras-chave com priorização' },
-      { type: 'improvement', text: 'Integração de links internos em todos os geradores de conteúdo (massa, notícias, landing pages)' },
-    ],
-  },
-  {
-    version: '2.5.0',
-    date: '2026-02-06',
-    type: 'major' as const,
-    changes: [
-      { type: 'feature', text: 'Novo sistema de fila de conteúdo com retry exponencial e backoff' },
-      { type: 'feature', text: 'Social Auto-Poster com criptografia AES-256-CBC para credenciais' },
-      { type: 'feature', text: 'Motor de mídia com conversão automática para WebP e deduplicação MD5' },
-      { type: 'feature', text: 'Sistema de diagnóstico proativo com proteção contra conflitos de Page Builders' },
-      { type: 'improvement', text: 'Utilitário de reparo de tabelas para restauração de estruturas de banco' },
-    ],
-  },
-  {
-    version: '2.4.0',
-    date: '2026-01-28',
-    type: 'minor' as const,
-    changes: [
-      { type: 'feature', text: 'Suporte a SEO via IA: geração automática de slug, meta description e tags' },
-      { type: 'feature', text: 'Integração com Cron Scheduler interno com diagnóstico e histórico' },
-      { type: 'improvement', text: 'Melhorias no sistema de logs estruturados' },
-      { type: 'fix', text: 'Correção de compatibilidade com PHP 8.2+' },
-    ],
-  },
-  {
-    version: '2.3.0',
-    date: '2026-01-15',
-    type: 'minor' as const,
-    changes: [
-      { type: 'feature', text: 'Suporte a schemas HowTo, Review e FAQ no editor de artigos' },
-      { type: 'feature', text: 'Sistema de internal linking automático' },
-      { type: 'improvement', text: 'Otimização de imagens com compressão inteligente' },
-      { type: 'fix', text: 'Correção de timeout em uploads de imagens grandes' },
-    ],
-  },
-  {
-    version: '2.2.0',
-    date: '2026-01-02',
-    type: 'minor' as const,
-    changes: [
-      { type: 'feature', text: 'Validador de Schema JSON-LD integrado' },
-      { type: 'feature', text: 'Sincronização bidirecional com Zica.ai' },
-      { type: 'improvement', text: 'Interface administrativa redesenhada' },
-    ],
-  },
-  {
-    version: '2.1.0',
-    date: '2025-12-18',
-    type: 'minor' as const,
-    changes: [
-      { type: 'feature', text: 'Sistema de webhooks para eventos de publicação' },
-      { type: 'improvement', text: 'Melhorias de performance no carregamento de artigos' },
-      { type: 'fix', text: 'Correção de encoding UTF-8 em títulos especiais' },
-    ],
-  },
-  {
-    version: '2.0.0',
-    date: '2025-12-01',
-    type: 'major' as const,
-    changes: [
-      { type: 'feature', text: 'Nova arquitetura modular com classes separadas' },
-      { type: 'feature', text: 'API REST completa para integração' },
-      { type: 'feature', text: 'Sistema de autenticação via API Key' },
-      { type: 'improvement', text: 'Reescrita completa do plugin para melhor manutenibilidade' },
-    ],
-  },
+const capabilities = [
+  { icon: PlugZap, title: 'Contrato único de conexão', text: `/wp-json/${PLUGIN_API_NAMESPACE}/ com API Key e aliases de migração.` },
+  { icon: Clock3, title: 'Sincronização às 15h', text: 'Varredura diária no fuso America/Sao_Paulo, além de atualização assíncrona após publicação.' },
+  { icon: Bot, title: 'Descoberta para IAs', text: 'llms.txt, llms-full.txt, ai.txt, manifest JSON e regras de crawlers conhecidas no robots.txt.' },
+  { icon: Radar, title: 'IndexNow', text: 'Submissão em batch de URLs novas ou modificadas aos mecanismos participantes, com retorno registrado.' },
+  { icon: Braces, title: 'Schema sem duplicação', text: 'JSON-LD recebido da Zica.ai e fallback Article apenas quando Rank Math/Yoast não assumem a tarefa.' },
+  { icon: FileCode2, title: 'File Manager resiliente', text: 'Escrita física atômica quando permitida e fallback virtual se a hospedagem bloquear escrita na raiz.' },
+  { icon: Network, title: 'Cards automáticos', text: 'Relacionados antes/depois do conteúdo ou após 2º/4º parágrafo, com 1 a 6 cards.' },
+  { icon: Globe2, title: 'Tema dinâmico complementar', text: 'Zica Neural Publisher para desktop, tablet e mobile, sem tornar o plugin dependente do tema.' },
 ];
 
-const getChangeTypeIcon = (type: string) => {
-  switch (type) {
-    case 'feature':
-      return <Sparkles className="w-3.5 h-3.5 text-primary" />;
-    case 'improvement':
-      return <Wrench className="w-3.5 h-3.5 text-secondary-foreground" />;
-    case 'fix':
-      return <Bug className="w-3.5 h-3.5 text-destructive" />;
-    default:
-      return <CheckCircle className="w-3.5 h-3.5 text-muted-foreground" />;
+async function buildZip(folderName: string, files: PackageFile[], fileName: string) {
+  const zip = new JSZip();
+  const folder = zip.folder(folderName);
+  if (!folder) throw new Error('Não foi possível criar o pacote ZIP.');
+
+  for (const file of files) {
+    const response = await fetch(`${import.meta.env.BASE_URL}${file.url.replace(/^\//, '')}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Arquivo ausente no pacote: ${file.path}`);
+    folder.file(file.path, await response.text());
   }
-};
 
-const getChangeTypeLabel = (type: string) => {
-  switch (type) {
-    case 'feature':
-      return 'Novo';
-    case 'improvement':
-      return 'Melhoria';
-    case 'fix':
-      return 'Correção';
-    default:
-      return type;
-  }
-};
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 7 } });
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = href;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(href);
+}
 
 export default function WordPressPluginPage() {
-  const [copied, setCopied] = useState<string | null>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloading, setDownloading] = useState<'plugin' | 'theme' | null>(null);
   const { toast } = useToast();
 
-  const handleDownload = async () => {
-    setIsDownloading(true);
-    
+  const downloadPlugin = async () => {
+    setDownloading('plugin');
     try {
-      const zip = new JSZip();
-      const pluginFolder = zip.folder('contentfactory-rdm');
-      
-      if (!pluginFolder) {
-        throw new Error('Erro ao criar pasta do plugin');
-      }
-      
-      // Fetch all plugin files (v3.1.0 includes all modules)
-      const files = [
-        { path: 'contentfactory-rdm.php', url: '/wordpress-plugin/contentfactory-rdm/contentfactory-rdm.php' },
-        { path: 'readme.txt', url: '/wordpress-plugin/contentfactory-rdm/readme.txt' },
-        { path: 'includes/class-cfrdm-api.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-api.php' },
-        { path: 'includes/class-cfrdm-webhooks.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-webhooks.php' },
-        { path: 'includes/class-cfrdm-articles.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-articles.php' },
-        { path: 'includes/class-cfrdm-admin.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-admin.php' },
-        { path: 'includes/class-cfrdm-logger.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-logger.php' },
-        { path: 'includes/class-cfrdm-image-optimizer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-image-optimizer.php' },
-        { path: 'includes/class-cfrdm-sync.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-sync.php' },
-        { path: 'includes/class-cfrdm-internal-links.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-internal-links.php' },
-        { path: 'includes/class-cfrdm-diagnostics.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-diagnostics.php' },
-        { path: 'includes/class-cfrdm-diagnostics-page.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-diagnostics-page.php' },
-        { path: 'includes/class-cfrdm-indexing.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-indexing.php' },
-        { path: 'includes/class-cfrdm-schema-validator.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-schema-validator.php' },
-        { path: 'includes/class-cfrdm-media.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-media.php' },
-        { path: 'includes/class-cfrdm-seo.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-seo.php' },
-        { path: 'includes/class-cfrdm-structured-logs.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-structured-logs.php' },
-        { path: 'includes/class-cfrdm-ai-seo.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-seo.php' },
-        { path: 'includes/class-cfrdm-image-filter.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-image-filter.php' },
-        { path: 'includes/class-cfrdm-social-poster.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-social-poster.php' },
-        { path: 'includes/class-cfrdm-social-admin.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-social-admin.php' },
-        { path: 'includes/class-cfrdm-cron-scheduler.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-cron-scheduler.php' },
-        { path: 'includes/class-cfrdm-content-queue.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-content-queue.php' },
-        { path: 'includes/class-cfrdm-article-indexer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-article-indexer.php' },
-        // v3.0.0
-        { path: 'includes/class-cfrdm-gsc-integration.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-gsc-integration.php' },
-        { path: 'includes/class-cfrdm-ai-auto-fix.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-auto-fix.php' },
-        { path: 'includes/class-cfrdm-ai-content-enhancer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-content-enhancer.php' },
-        { path: 'includes/class-cfrdm-ubersuggest-sync.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ubersuggest-sync.php' },
-        { path: 'includes/class-cfrdm-https-enforcer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-https-enforcer.php' },
-        { path: 'includes/class-cfrdm-auto-update.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-auto-update.php' },
-        // v3.1.0
-        { path: 'includes/class-cfrdm-meta-auditor.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-meta-auditor.php' },
-        { path: 'includes/class-cfrdm-indexnow.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-indexnow.php' },
-        { path: 'includes/class-cfrdm-llms-txt.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-llms-txt.php' },
-        { path: 'includes/class-cfrdm-post-duplicator.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-post-duplicator.php' },
-        { path: 'includes/class-cfrdm-sitemap-optimizer.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-sitemap-optimizer.php' },
-        // v3.2.0+
-        { path: 'includes/class-cfrdm-ai-traffic-detector.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-traffic-detector.php' },
-        { path: 'includes/class-cfrdm-seo-checklist.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-seo-checklist.php' },
-        // v3.2.4
-        { path: 'includes/class-cfrdm-method-validator.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-method-validator.php' },
-        // v3.2.7+
-        { path: 'includes/class-cfrdm-ai-source-rules.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-ai-source-rules.php' },
-        { path: 'includes/class-cfrdm-google-indexing-submitter.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-google-indexing-submitter.php' },
-        { path: 'includes/class-cfrdm-gmb-poster.php', url: '/wordpress-plugin/contentfactory-rdm/includes/class-cfrdm-gmb-poster.php' },
-        // Assets
-        { path: 'assets/css/admin.css', url: '/wordpress-plugin/contentfactory-rdm/assets/css/admin.css' },
-        { path: 'assets/js/admin.js', url: '/wordpress-plugin/contentfactory-rdm/assets/js/admin.js' },
-        // Version manifest
-        { path: 'version.json', url: '/wordpress-plugin/contentfactory-rdm/version.json' },
-      ];
-      
-      // Fetch each file and add to zip
-      const fetchPromises = files.map(async (file) => {
-        const url = `${file.url}?v=${encodeURIComponent(`${PLUGIN_VERSION}-${PLUGIN_LAST_UPDATE}`)}`;
-        const response = await fetch(url, { cache: 'no-store' });
-        if (!response.ok) {
-          throw new Error(`Erro ao carregar ${file.path}`);
-        }
-        const content = await response.text();
-        pluginFolder.file(file.path, content);
-      });
-      
-      await Promise.all(fetchPromises);
-      
-      // Generate zip
-      const blob = await zip.generateAsync({ type: 'blob' });
-      
-      // Download
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `contentfactory-rdm-${PLUGIN_VERSION}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      toast({
-        title: 'Download iniciado!',
-        description: 'O arquivo ZIP do plugin está sendo baixado.',
-      });
+      await buildZip('zica-posts', pluginFiles, `zica-posts-${PLUGIN_VERSION}.zip`);
+      toast({ title: 'Zica Posts pronto', description: `Pacote ${PLUGIN_VERSION} gerado com a estrutura correta para o WordPress.` });
     } catch (error) {
-      console.error('Erro ao gerar ZIP:', error);
-      toast({
-        title: 'Erro no download',
-        description: 'Não foi possível gerar o arquivo ZIP do plugin.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Falha ao montar o pacote', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
     } finally {
-      setIsDownloading(false);
+      setDownloading(null);
     }
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(label);
-    setTimeout(() => setCopied(null), 2000);
-    toast({
-      title: 'Copiado!',
-      description: `${label} copiado para a área de transferência.`,
-    });
+  const downloadTheme = async () => {
+    setDownloading('theme');
+    try {
+      await buildZip('zica-neural', themeFiles, 'zica-neural-theme-1.0.0.zip');
+      toast({ title: 'Tema Zica Neural pronto', description: 'O ZIP pode ser instalado em Aparência → Temas → Enviar tema.' });
+    } catch (error) {
+      toast({ title: 'Falha ao montar o tema', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
+    } finally {
+      setDownloading(null);
+    }
   };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Plugin WordPress</h1>
-          <p className="text-muted-foreground mt-1">
-            Instale o plugin oficial para integrar seu WordPress com o Zica.ai
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <div className="flex flex-col items-end gap-1">
-            <Badge variant="secondary" className="text-sm px-3 py-1">
-              v{PLUGIN_VERSION}
-            </Badge>
-            <span className="text-xs text-muted-foreground">
-              Atualizado em {new Date(PLUGIN_LAST_UPDATE).toLocaleDateString('pt-BR')} às {new Date(PLUGIN_LAST_UPDATE).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-            </span>
+    <div className="space-y-6 pb-10">
+      <section className="relative overflow-hidden rounded-3xl border border-[#30363D] bg-[#0D1117] p-6 md:p-9">
+        <div className="absolute -right-20 -top-28 h-80 w-80 rounded-full border border-cyan-400/20 shadow-[0_0_90px_rgba(0,240,255,0.10)]" />
+        <div className="absolute right-16 top-12 h-36 w-72 rotate-12 rounded-[50%] border border-[#D4FF00]/20" />
+        <div className="relative z-10 max-w-4xl">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <Badge className="border border-[#D4FF00]/40 bg-[#D4FF00]/10 text-[#D4FF00]">SOFTWARE ID: {PLUGIN_SOFTWARE_ID}</Badge>
+            <Badge variant="outline" className="border-cyan-400/30 text-cyan-300">v{PLUGIN_VERSION}</Badge>
+            <Badge variant="outline" className="border-slate-700 text-slate-400">Reconstrução limpa</Badge>
           </div>
-          <Button onClick={handleDownload} size="lg" disabled={isDownloading}>
-            {isDownloading ? (
-              <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                Gerando ZIP...
-              </>
-            ) : (
-              <>
-                <Download className="w-5 h-5 mr-2" />
-                Baixar Plugin (.zip)
-              </>
-            )}
-          </Button>
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-300">WordPress ↔ Cérebro Zica.ai</p>
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-white md:text-5xl">{PLUGIN_NAME}</h1>
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-400 md:text-base">
+            Conector oficial para publicação, GEO, Schema, LLM discovery, sitemaps, IndexNow, cards automáticos e sincronização editorial 24/7. A versão 3.10.0 substitui o pacote 3.9.0 e não depende dele para instalação.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button onClick={downloadPlugin} disabled={downloading !== null} className="bg-[#D4FF00] font-black text-[#071014] hover:bg-[#D4FF00]/90">
+              <Download className="mr-2 h-4 w-4" />
+              {downloading === 'plugin' ? 'Montando ZIP...' : `Baixar Zica Posts ${PLUGIN_VERSION}`}
+            </Button>
+            <Button onClick={downloadTheme} disabled={downloading !== null} variant="outline" className="border-cyan-400/40 bg-cyan-400/5 text-cyan-200 hover:bg-cyan-400/10">
+              <Sparkles className="mr-2 h-4 w-4" />
+              {downloading === 'theme' ? 'Montando tema...' : 'Baixar Tema Zica Neural'}
+            </Button>
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Features Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {features.map((feature) => (
-          <Card key={feature.title} className={(feature as any).isNew ? 'border-primary/30' : ''}>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {capabilities.map(({ icon: Icon, title, text }) => (
+          <Card key={title} className="border-[#30363D] bg-[#161B22]">
             <CardHeader className="pb-3">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <feature.icon className="w-5 h-5 text-primary" />
-                </div>
-                <CardTitle className="text-base">{feature.title}</CardTitle>
-                {(feature as any).badge && (
-                  <Badge className={`text-[10px] px-1.5 py-0 ${(feature as any).isNew ? '' : 'bg-muted text-muted-foreground'}`}>{(feature as any).badge}</Badge>
-                )}
-              </div>
+              <div className="mb-2 grid h-10 w-10 place-items-center rounded-xl border border-cyan-400/20 bg-cyan-400/5 text-cyan-300"><Icon className="h-5 w-5" /></div>
+              <CardTitle className="text-base text-white">{title}</CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{feature.description}</p>
-            </CardContent>
+            <CardContent><p className="text-sm leading-6 text-slate-400">{text}</p></CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="install" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="install">
-            <Download className="w-4 h-4 mr-2" />
-            Instalação
-          </TabsTrigger>
-          <TabsTrigger value="changelog">
-            <History className="w-4 h-4 mr-2" />
-            Changelog
-          </TabsTrigger>
-          <TabsTrigger value="api">
-            <Code className="w-4 h-4 mr-2" />
-            API Reference
-          </TabsTrigger>
-          <TabsTrigger value="webhooks">
-            <Webhook className="w-4 h-4 mr-2" />
-            Webhooks
-          </TabsTrigger>
-        </TabsList>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card className="border-[#30363D] bg-[#161B22]">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-white"><ShieldCheck className="h-5 w-5 text-[#D4FF00]" /> Conexão canônica 3.10.0</CardTitle>
+            <CardDescription>O backend deve preferir o contrato novo e usar os aliases somente durante a migração.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="rounded-xl border border-[#30363D] bg-[#0D1117] p-4 font-mono text-cyan-200">/wp-json/{PLUGIN_API_NAMESPACE}/</div>
+            <div className="rounded-xl border border-[#30363D] bg-[#0D1117] p-4 font-mono text-slate-300">X-ZICA-POSTS-Key: &lt;api-key&gt;</div>
+            <p className="text-slate-400">Compatibilidade: <code>/zica-ai/v1</code> e <code>/cfrdm/v1</code>. O pacote antigo 3.9.0 não é pré-requisito.</p>
+          </CardContent>
+        </Card>
 
-        <TabsContent value="install" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Guia de Instalação</CardTitle>
-              <CardDescription>
-                Siga os passos abaixo para instalar e configurar o plugin
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {installSteps.map((item, index) => (
-                  <div key={item.step} className="flex gap-4">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold text-sm">
-                      {item.step}
-                    </div>
-                    <div className="flex-1 pt-1">
-                      <h4 className="font-medium">{item.title}</h4>
-                      <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
-                      {index < installSteps.length - 1 && (
-                        <div className="w-px h-8 bg-border ml-4 mt-3" />
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <Card className="border-[#30363D] bg-[#161B22]">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-white"><Workflow className="h-5 w-5 text-cyan-300" /> Fluxo de atualização</CardTitle>
+            <CardDescription>Descoberta imediata e reconciliação diária.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-slate-400">
+            {[
+              'Publicar/alterar conteúdo → agenda sincronização curta sem travar o editor.',
+              'Regenera llms.txt, llms-full.txt, ai.txt, manifest e sitemap.',
+              'Submete URLs alteradas ao IndexNow e registra o retorno.',
+              'Às 15:00 America/Sao_Paulo executa nova varredura integral.',
+              'Se a raiz não for gravável, mantém os documentos por fallback virtual.',
+            ].map((item) => <div key={item} className="flex gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#D4FF00]" /><span>{item}</span></div>)}
+          </CardContent>
+        </Card>
+      </div>
 
-        <TabsContent value="changelog" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <History className="w-5 h-5" />
-                Histórico de Versões
-              </CardTitle>
-              <CardDescription>
-                Acompanhe as atualizações e melhorias do plugin
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[500px] pr-4">
-                <div className="space-y-6">
-                  {changelog.map((release, idx) => (
-                    <div key={release.version} className="relative">
-                      {idx < changelog.length - 1 && (
-                        <div className="absolute left-[11px] top-10 bottom-0 w-px bg-border" />
-                      )}
-                      <div className="flex items-start gap-4">
-                        <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
-                          release.type === 'major' 
-                            ? 'bg-primary text-primary-foreground' 
-                            : 'bg-muted text-muted-foreground'
-                        }`}>
-                          <span className="text-xs font-bold">
-                            {release.version.split('.')[0]}
-                          </span>
-                        </div>
-                        <div className="flex-1 space-y-3">
-                          <div className="flex items-center gap-3">
-                            <Badge variant={release.type === 'major' ? 'default' : 'secondary'}>
-                              v{release.version}
-                            </Badge>
-                            <span className="text-sm text-muted-foreground">
-                              {new Date(release.date).toLocaleDateString('pt-BR', {
-                                day: '2-digit',
-                                month: 'long',
-                                year: 'numeric',
-                              })}
-                            </span>
-                            {release.type === 'major' && (
-                              <Badge variant="outline" className="text-xs">
-                                Major Release
-                              </Badge>
-                            )}
-                          </div>
-                          <ul className="space-y-2">
-                            {release.changes.map((change, changeIdx) => (
-                              <li key={changeIdx} className="flex items-start gap-2 text-sm">
-                                {getChangeTypeIcon(change.type)}
-                                <span className="flex-1">{change.text}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </TabsContent>
+      <Card className="border-amber-500/20 bg-amber-500/[0.04]">
+        <CardHeader>
+          <CardTitle className="text-base text-amber-100">Critério técnico de indexação</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm leading-6 text-amber-100/70">
+          A Zica.ai aumenta a descoberta técnica e envia URLs por protocolos suportados, mas não declara “indexação garantida” em Google, ChatGPT, Claude ou qualquer LLM. O Google não possui mais o antigo endpoint de ping de sitemap; a 3.10 usa sitemap/lastmod corretos e Search Console, enquanto o IndexNow atende os mecanismos participantes.
+        </CardContent>
+      </Card>
 
-        <TabsContent value="api" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Endpoints da API</CardTitle>
-              <CardDescription>
-                REST API disponível após instalação do plugin
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[400px]">
-                <div className="space-y-4">
-                  <div className="border rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline">GET</Badge>
-                      <code className="text-sm font-mono">/wp-json/zica-ai/v1/health</code>
-                    </div>
-                    <p className="text-sm text-muted-foreground">Verifica se o plugin está ativo</p>
-                  </div>
-
-                  <div className="border rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline">GET</Badge>
-                      <code className="text-sm font-mono">/wp-json/zica-ai/v1/test</code>
-                    </div>
-                    <p className="text-sm text-muted-foreground">Testa a conexão com API Key</p>
-                  </div>
-
-                  <div className="border rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline">GET</Badge>
-                      <Badge variant="outline">POST</Badge>
-                      <code className="text-sm font-mono">/wp-json/zica-ai/v1/articles</code>
-                    </div>
-                    <p className="text-sm text-muted-foreground">Lista ou cria artigos</p>
-                  </div>
-
-                  <div className="border rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline">GET</Badge>
-                      <Badge variant="outline">PUT</Badge>
-                      <Badge variant="outline">DELETE</Badge>
-                      <code className="text-sm font-mono">/wp-json/zica-ai/v1/articles/{'{id}'}</code>
-                    </div>
-                    <p className="text-sm text-muted-foreground">Operações em artigo específico</p>
-                  </div>
-
-                  <div className="border rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline">GET</Badge>
-                      <code className="text-sm font-mono">/wp-json/zica-ai/v1/categories</code>
-                    </div>
-                    <p className="text-sm text-muted-foreground">Lista todas as categorias</p>
-                  </div>
-
-                  <div className="border rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline">GET</Badge>
-                      <code className="text-sm font-mono">/wp-json/zica-ai/v1/tags</code>
-                    </div>
-                    <p className="text-sm text-muted-foreground">Lista todas as tags</p>
-                  </div>
-
-                  <div className="border rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline">POST</Badge>
-                      <code className="text-sm font-mono">/wp-json/zica-ai/v1/media</code>
-                    </div>
-                    <p className="text-sm text-muted-foreground">Upload de imagem (base64)</p>
-                  </div>
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="webhooks" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Eventos de Webhook</CardTitle>
-              <CardDescription>
-                O plugin envia notificações para os seguintes eventos
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-start gap-4 p-4 border rounded-lg">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <CheckCircle className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">post_published</h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Disparado quando um post é publicado
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4 p-4 border rounded-lg">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Settings className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">post_updated</h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Disparado quando um post publicado é atualizado
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4 p-4 border rounded-lg">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <FileText className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">post_unpublished</h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Disparado quando um post é despublicado
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4 p-4 border rounded-lg">
-                  <div className="p-2 rounded-lg bg-destructive/10">
-                    <Shield className="w-5 h-5 text-destructive" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">post_deleted</h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Disparado quando um post é excluído permanentemente
-                    </p>
-                  </div>
-                </div>
-
-                <Separator className="my-6" />
-
-                <div>
-                  <h4 className="font-medium mb-3">Payload de Exemplo</h4>
-                  <div className="bg-muted p-4 rounded-lg font-mono text-sm overflow-x-auto">
-                    <pre>{JSON.stringify({
-                      event: "post_published",
-                      timestamp: "2024-01-15T10:30:00Z",
-                      site_url: "https://seusite.com.br",
-                      data: {
-                        post_id: 123,
-                        post_title: "Título do Artigo",
-                        post_url: "https://seusite.com.br/artigo",
-                        post_status: "publish"
-                      }
-                    }, null, 2)}</pre>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      <p className="text-xs text-slate-600">Atualização do contrato: {PLUGIN_LAST_UPDATE}</p>
     </div>
   );
 }
