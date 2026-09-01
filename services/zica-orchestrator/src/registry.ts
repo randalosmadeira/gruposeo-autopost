@@ -1,0 +1,7 @@
+import { supabase } from './config.js';
+import type { TargetRecord,WordPressEvent } from './types.js';
+export async function targetByOrigin(origin:string){const{data,error}=await supabase.from('zica_orchestrator_targets').select('*').eq('site_origin',origin).eq('active',true).maybeSingle();if(error)throw error;return data as TargetRecord|null;}
+export async function targetByKey(targetKey:string){const{data,error}=await supabase.from('zica_orchestrator_targets').select('*').eq('target_key',targetKey).eq('active',true).maybeSingle();if(error)throw error;if(!data)throw new Error(`Active target not found: ${targetKey}`);return data as TargetRecord;}
+export async function activeTargets(){const{data,error}=await supabase.from('zica_orchestrator_targets').select('*').eq('active',true);if(error)throw error;return(data||[])as TargetRecord[];}
+export async function recordInbound(targetKey:string,event:WordPressEvent){const{error}=await supabase.from('zica_orchestrator_events').upsert({event_id:event.event_id,target_key:targetKey,correlation_id:event.correlation_id,event_type:event.event_type,content_hash:event.content_hash,status:'queued',attempts:0,updated_at:new Date().toISOString()},{onConflict:'event_id',ignoreDuplicates:true});if(error)throw error;}
+export async function updateEvent(eventId:string,patch:Record<string,unknown>){const{error}=await supabase.from('zica_orchestrator_events').update({...patch,updated_at:new Date().toISOString()}).eq('event_id',eventId);if(error)throw error;}
