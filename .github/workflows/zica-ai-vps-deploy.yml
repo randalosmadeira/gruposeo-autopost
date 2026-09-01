@@ -1,0 +1,243 @@
+name: Deploy Zica.ai Orchestrator VPS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'services/zica-orchestrator/**'
+      - '.github/workflows/zica-ai-vps-deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zica-ai-orchestrator-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy isolated Zica.ai runtime
+    runs-on: ubuntu-latest
+    environment: zica-ai-production
+    timeout-minutes: 40
+    env:
+      ZICA_AI_VPS_HOST: ${{ secrets.ZICA_AI_VPS_HOST }}
+      ZICA_AI_VPS_USER: ${{ secrets.ZICA_AI_VPS_USER }}
+      ZICA_AI_VPS_PORT_RAW: ${{ secrets.ZICA_AI_VPS_PORT }}
+      ZICA_AI_VPS_SSH_PRIVATE_KEY: ${{ secrets.ZICA_AI_VPS_SSH_PRIVATE_KEY }}
+      ZICA_AI_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.ZICA_AI_SUPABASE_SERVICE_ROLE_KEY }}
+      ZICA_AI_CREDENTIALS_JSON: ${{ secrets.ZICA_AI_CREDENTIALS_JSON }}
+      TARGET_HOST: app.zica.posts.zicajuris.com.br
+      TARGET_URL: https://app.zica.posts.zicajuris.com.br
+      ZICA_AI_SUPABASE_URL: https://ubahrbgaxrkjxklytobl.supabase.co
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Validate dedicated secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ZICA_AI_VPS_HOST" || { echo "::error::ZICA_AI_VPS_HOST ausente"; exit 1; }
+          test -n "$ZICA_AI_VPS_USER" || { echo "::error::ZICA_AI_VPS_USER ausente"; exit 1; }
+          test -n "$ZICA_AI_VPS_SSH_PRIVATE_KEY" || { echo "::error::ZICA_AI_VPS_SSH_PRIVATE_KEY ausente"; exit 1; }
+          test -n "$ZICA_AI_SUPABASE_SERVICE_ROLE_KEY" || { echo "::error::ZICA_AI_SUPABASE_SERVICE_ROLE_KEY ausente"; exit 1; }
+          ZICA_AI_VPS_PORT="${ZICA_AI_VPS_PORT_RAW:-22}"
+          case "$ZICA_AI_VPS_PORT" in (*[!0-9]*|'') echo "::error::ZICA_AI_VPS_PORT inválida"; exit 1;; esac
+          echo "ZICA_AI_VPS_PORT=$ZICA_AI_VPS_PORT" >> "$GITHUB_ENV"
+
+      - name: Build orchestrator before VPS mutation
+        shell: bash
+        working-directory: services/zica-orchestrator
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          npm run build
+          test -f dist/server.js
+          test -f dist/worker.js
+
+      - name: Configure dedicated SSH identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ZICA_AI_VPS_SSH_PRIVATE_KEY" > "$HOME/.ssh/zica_ai_deploy"
+          chmod 600 "$HOME/.ssh/zica_ai_deploy"
+          ssh-keyscan -p "$ZICA_AI_VPS_PORT" -H "$ZICA_AI_VPS_HOST" >> "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Package Zica.ai source only
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C services/zica-orchestrator -czf "/tmp/zica-ai-orchestrator-$GITHUB_SHA.tgz" \
+            --exclude=node_modules --exclude=dist .
+          test -s "/tmp/zica-ai-orchestrator-$GITHUB_SHA.tgz"
+
+          umask 077
+          {
+            printf 'PORT=8787\n'
+            printf 'SUPABASE_URL=%s\n' "$ZICA_AI_SUPABASE_URL"
+            printf 'SUPABASE_SERVICE_ROLE_KEY=%s\n' "$ZICA_AI_SUPABASE_SERVICE_ROLE_KEY"
+            printf 'ZICA_CREDENTIALS_JSON=%s\n' "${ZICA_AI_CREDENTIALS_JSON:-{}}"
+            printf 'AI_PROVIDER=none\n'
+            printf 'OPENAI_API_KEY=\n'
+            printf 'OPENAI_MODEL=gpt-5-mini\n'
+            printf 'ANTHROPIC_API_KEY=\n'
+            printf 'ANTHROPIC_MODEL=claude-sonnet-4-5\n'
+          } > /tmp/zica-ai.env.partial
+          chmod 600 /tmp/zica-ai.env.partial
+
+      - name: Upload isolated release
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp -i "$HOME/.ssh/zica_ai_deploy" -P "$ZICA_AI_VPS_PORT" \
+            "/tmp/zica-ai-orchestrator-$GITHUB_SHA.tgz" \
+            "$ZICA_AI_VPS_USER@$ZICA_AI_VPS_HOST:/tmp/zica-ai-orchestrator-$GITHUB_SHA.tgz"
+          scp -i "$HOME/.ssh/zica_ai_deploy" -P "$ZICA_AI_VPS_PORT" \
+            /tmp/zica-ai.env.partial \
+            "$ZICA_AI_VPS_USER@$ZICA_AI_VPS_HOST:/tmp/zica-ai.env.partial"
+
+      - name: Activate Zica.ai namespace with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i "$HOME/.ssh/zica_ai_deploy" -p "$ZICA_AI_VPS_PORT" "$ZICA_AI_VPS_USER@$ZICA_AI_VPS_HOST" \
+            "ZICA_SHA='$GITHUB_SHA' TARGET_HOST='$TARGET_HOST' bash -s" <<'REMOTE'
+          set -euo pipefail
+          ROOT=/opt/zica-ai/orchestrator
+          RELEASE="$ROOT/releases/$ZICA_SHA"
+          SHARED="$ROOT/shared"
+          ENV_FILE="$SHARED/.env.production"
+          PASS_FILE="$SHARED/redis.password"
+          CURRENT_SHA_FILE="$SHARED/current.sha"
+          NETWORK=zica-ai-orchestrator-net
+          REDIS_CONTAINER=zica-ai-orchestrator-redis
+          API_CONTAINER=zica-ai-orchestrator-api
+          WORKER_CONTAINER=zica-ai-orchestrator-worker
+          REDIS_VOLUME=zica-ai-orchestrator-redis-data
+          IMAGE="zica-ai-orchestrator:$ZICA_SHA"
+          PREVIOUS_SHA="$(cat "$CURRENT_SHA_FILE" 2>/dev/null || true)"
+
+          sudo -n true >/dev/null 2>&1 || { echo 'sudo não-interativo indisponível' >&2; exit 1; }
+          command -v docker >/dev/null 2>&1 || { echo 'docker ausente' >&2; exit 1; }
+          command -v nginx >/dev/null 2>&1 || { echo 'nginx ausente' >&2; exit 1; }
+
+          sudo mkdir -p "$RELEASE" "$SHARED"
+          sudo chown -R "$(id -u):$(id -g)" /opt/zica-ai
+          rm -rf "$RELEASE"/*
+          tar -xzf "/tmp/zica-ai-orchestrator-$ZICA_SHA.tgz" -C "$RELEASE"
+
+          if [ ! -s "$PASS_FILE" ]; then
+            umask 077
+            openssl rand -hex 32 > "$PASS_FILE"
+          fi
+          REDIS_PASSWORD="$(cat "$PASS_FILE")"
+
+          umask 077
+          cp /tmp/zica-ai.env.partial "$ENV_FILE"
+          printf 'REDIS_URL=redis://:%s@%s:6379\n' "$REDIS_PASSWORD" "$REDIS_CONTAINER" >> "$ENV_FILE"
+          chmod 600 "$ENV_FILE" "$PASS_FILE"
+          rm -f /tmp/zica-ai.env.partial
+
+          docker network inspect "$NETWORK" >/dev/null 2>&1 || docker network create "$NETWORK" >/dev/null
+          docker volume inspect "$REDIS_VOLUME" >/dev/null 2>&1 || docker volume create "$REDIS_VOLUME" >/dev/null
+
+          cd "$RELEASE"
+          docker build --pull -t "$IMAGE" .
+
+          start_stack() {
+            local image="$1"
+            docker rm -f "$API_CONTAINER" "$WORKER_CONTAINER" >/dev/null 2>&1 || true
+            if ! docker inspect "$REDIS_CONTAINER" >/dev/null 2>&1; then
+              docker run -d --name "$REDIS_CONTAINER" --restart unless-stopped \
+                --network "$NETWORK" --memory 512m --cpus 0.50 \
+                --security-opt no-new-privileges:true \
+                -v "$REDIS_VOLUME":/data \
+                redis:7-alpine redis-server --appendonly yes --requirepass "$REDIS_PASSWORD" >/dev/null
+            else
+              docker start "$REDIS_CONTAINER" >/dev/null 2>&1 || true
+            fi
+            docker run -d --name "$API_CONTAINER" --restart unless-stopped \
+              --network "$NETWORK" --memory 768m --cpus 0.75 \
+              --security-opt no-new-privileges:true \
+              --env-file "$ENV_FILE" -p 127.0.0.1:8787:8787 "$image" >/dev/null
+            docker run -d --name "$WORKER_CONTAINER" --restart unless-stopped \
+              --network "$NETWORK" --memory 1536m --cpus 1.25 \
+              --security-opt no-new-privileges:true \
+              --env-file "$ENV_FILE" "$image" node dist/worker.js >/dev/null
+          }
+
+          healthy() {
+            for attempt in $(seq 1 36); do
+              if curl --fail --silent http://127.0.0.1:8787/health | grep -q '"service":"zica-orchestrator"'; then return 0; fi
+              sleep 5
+            done
+            return 1
+          }
+
+          start_stack "$IMAGE"
+          if ! healthy; then
+            echo 'Nova release falhou no health-check; iniciando rollback.' >&2
+            docker logs --tail 120 "$API_CONTAINER" >&2 || true
+            docker logs --tail 120 "$WORKER_CONTAINER" >&2 || true
+            if [ -n "$PREVIOUS_SHA" ] && docker image inspect "zica-ai-orchestrator:$PREVIOUS_SHA" >/dev/null 2>&1; then
+              start_stack "zica-ai-orchestrator:$PREVIOUS_SHA"
+              healthy || true
+            fi
+            exit 1
+          fi
+
+          NGINX_FILE=/etc/nginx/sites-available/zica-ai-orchestrator
+          sudo sh -c "printf '%s\n' \
+            'server {' \
+            '    listen 80;' \
+            '    server_name ${TARGET_HOST};' \
+            '    client_max_body_size 4m;' \
+            '    location / {' \
+            '        proxy_pass http://127.0.0.1:8787;' \
+            '        proxy_http_version 1.1;' \
+            '        proxy_set_header Host \$host;' \
+            '        proxy_set_header X-Real-IP \$remote_addr;' \
+            '        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;' \
+            '        proxy_set_header X-Forwarded-Proto \$scheme;' \
+            '        proxy_read_timeout 90s;' \
+            '    }' \
+            '}' > '$NGINX_FILE'"
+          sudo ln -sfn "$NGINX_FILE" /etc/nginx/sites-enabled/zica-ai-orchestrator
+          sudo nginx -t
+          sudo systemctl reload nginx
+
+          getent ahostsv4 "$TARGET_HOST" >/dev/null 2>&1 || { echo 'DNS do host alvo ainda não resolve' >&2; exit 1; }
+          command -v certbot >/dev/null 2>&1 || { echo 'certbot ausente' >&2; exit 1; }
+          sudo certbot --nginx -d "$TARGET_HOST" --non-interactive --agree-tos --register-unsafely-without-email --redirect
+
+          printf '%s\n' "$ZICA_SHA" > "$CURRENT_SHA_FILE"
+          ln -sfn "$RELEASE" "$ROOT/current"
+          rm -f "/tmp/zica-ai-orchestrator-$ZICA_SHA.tgz"
+
+          mapfile -t OLD < <(ls -1dt "$ROOT"/releases/* 2>/dev/null | tail -n +6 || true)
+          if [ "${#OLD[@]}" -gt 0 ]; then rm -rf -- "${OLD[@]}"; fi
+          REMOTE
+
+      - name: Verify public Zica.ai endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY="$(curl --fail --silent --show-error --retry 18 --retry-delay 5 "$TARGET_URL/health")"
+          echo "$BODY" | grep -q '"ok":true'
+          echo "$BODY" | grep -q '"service":"zica-orchestrator"'
+          echo "$BODY" | grep -q '"version":"3.10.2"'
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Zica.ai Orchestrator deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Environment: \`zica-ai-production\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- URL: \`$TARGET_URL\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Root: \`/opt/zica-ai/orchestrator\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Uses only ZICA_AI_* secrets from the Zica.ai repository." >> "$GITHUB_STEP_SUMMARY"

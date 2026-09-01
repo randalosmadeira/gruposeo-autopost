@@ -1,0 +1,82 @@
+name: Zica.ai VPS Preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/zica-ai-vps-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Validate isolated Zica.ai VPS
+    runs-on: ubuntu-latest
+    environment: zica-ai-production
+    timeout-minutes: 15
+    env:
+      ZICA_AI_VPS_HOST: ${{ secrets.ZICA_AI_VPS_HOST }}
+      ZICA_AI_VPS_USER: ${{ secrets.ZICA_AI_VPS_USER }}
+      ZICA_AI_VPS_PORT_RAW: ${{ secrets.ZICA_AI_VPS_PORT }}
+      ZICA_AI_VPS_SSH_PRIVATE_KEY: ${{ secrets.ZICA_AI_VPS_SSH_PRIVATE_KEY }}
+      TARGET_HOST: app.zica.posts.zicajuris.com.br
+    steps:
+      - name: Validate dedicated SSH secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ZICA_AI_VPS_HOST" || { echo "::error::ZICA_AI_VPS_HOST ausente"; exit 1; }
+          test -n "$ZICA_AI_VPS_USER" || { echo "::error::ZICA_AI_VPS_USER ausente"; exit 1; }
+          test -n "$ZICA_AI_VPS_SSH_PRIVATE_KEY" || { echo "::error::ZICA_AI_VPS_SSH_PRIVATE_KEY ausente"; exit 1; }
+          ZICA_AI_VPS_PORT="${ZICA_AI_VPS_PORT_RAW:-22}"
+          case "$ZICA_AI_VPS_PORT" in (*[!0-9]*|'') echo "::error::ZICA_AI_VPS_PORT inválida"; exit 1;; esac
+          echo "ZICA_AI_VPS_PORT=$ZICA_AI_VPS_PORT" >> "$GITHUB_ENV"
+
+      - name: Configure dedicated SSH identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ZICA_AI_VPS_SSH_PRIVATE_KEY" > "$HOME/.ssh/zica_ai_deploy"
+          chmod 600 "$HOME/.ssh/zica_ai_deploy"
+          ssh-keyscan -p "$ZICA_AI_VPS_PORT" -H "$ZICA_AI_VPS_HOST" >> "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Inspect only Zica.ai namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i "$HOME/.ssh/zica_ai_deploy" -p "$ZICA_AI_VPS_PORT" "$ZICA_AI_VPS_USER@$ZICA_AI_VPS_HOST" \
+            "TARGET_HOST='$TARGET_HOST' bash -s" <<'REMOTE'
+          set -euo pipefail
+          echo "== Capacity =="
+          free -m || true
+          df -h / /opt 2>/dev/null || df -h /
+          echo "== Docker =="
+          docker --version
+          echo "== Zica.ai containers only =="
+          docker ps --format '{{.Names}} | {{.Image}} | {{.Ports}}' | grep '^zica-ai-' || true
+          echo "== Zica.ai port =="
+          ss -ltn 2>/dev/null | grep -E ':8787\b' || true
+          echo "== Zica.ai root =="
+          test -d /opt/zica-ai/orchestrator && echo 'zica_ai_root=present' || echo 'zica_ai_root=absent'
+          test -f /opt/zica-ai/orchestrator/shared/.env.production && echo 'zica_ai_env=present' || echo 'zica_ai_env=absent'
+          echo "== Proxy capabilities =="
+          for bin in nginx certbot; do
+            if command -v "$bin" >/dev/null 2>&1; then echo "$bin=present"; else echo "$bin=absent"; fi
+          done
+          echo "== DNS =="
+          if getent ahostsv4 "$TARGET_HOST" >/dev/null 2>&1; then echo 'target_dns=resolved'; else echo 'target_dns=unresolved'; fi
+          echo "== Privilege =="
+          if sudo -n true >/dev/null 2>&1; then echo 'sudo_noninteractive=yes'; else echo 'sudo_noninteractive=no'; fi
+          REMOTE
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Zica.ai VPS isolation preflight" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Environment: \`zica-ai-production\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Root: \`/opt/zica-ai/orchestrator\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- No ZicaJuris files, secrets or containers are inspected." >> "$GITHUB_STEP_SUMMARY"
