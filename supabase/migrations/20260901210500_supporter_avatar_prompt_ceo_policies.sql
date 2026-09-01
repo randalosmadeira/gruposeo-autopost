@@ -1,0 +1,3 @@
+create policy "prompt_templates_ceo_insert_global" on public.supporter_avatar_prompt_templates for insert to authenticated with check (owner_user_id is null and public.is_ceo());
+create policy "prompt_templates_ceo_update_global" on public.supporter_avatar_prompt_templates for update to authenticated using (owner_user_id is null and public.is_ceo()) with check (owner_user_id is null and public.is_ceo());
+create policy "prompt_templates_ceo_delete_global" on public.supporter_avatar_prompt_templates for delete to authenticated using (owner_user_id is null and public.is_ceo());
