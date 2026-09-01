@@ -42,3 +42,14 @@ export const MADEIRA_1470_PRESET: ElectoralCampaignPreset = {
 export const ELECTORAL_CAMPAIGN_PRESETS: Record<string, ElectoralCampaignPreset> = {
   [MADEIRA_1470_PRESET.id]: MADEIRA_1470_PRESET,
 };
+
+export function formatCampaignFooter(
+  preset: ElectoralCampaignPreset,
+  campaignCnpj = preset.campaignCnpj,
+): string {
+  return preset.footerTemplate
+    .replace('{party}', preset.politicalParty)
+    .replace('{candidate}', preset.ballotName)
+    .replace('{number}', preset.ballotNumber)
+    .replace('{cnpj}', campaignCnpj.trim() || '[CNPJ A CONFIRMAR]');
+}
