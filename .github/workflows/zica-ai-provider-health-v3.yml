@@ -1,0 +1,32 @@
+name: Zica.ai Provider Health v3
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/zica-ai-provider-health-v3.yml
+
+permissions:
+  contents: read
+
+jobs:
+  provider-health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate safe cached provider health
+        run: |
+          set -euo pipefail
+          URL='https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1/zica-ai-provider-health'
+          curl --retry 3 --retry-delay 2 -fsS "$URL" > /tmp/health.json
+          python3 -m json.tool /tmp/health.json
+          python3 - <<'PY'
+          import json
+          p=json.load(open('/tmp/health.json', encoding='utf-8'))
+          o=p.get('openai',{})
+          assert o.get('configured') is True
+          assert o.get('reachable') is True
+          assert o.get('modelResolved') == 'gpt-image-2'
+          print('OpenAI provider validated:', o.get('modelResolved'))
+          print('Key source:', o.get('keySource'))
+          print('Claude QA configured:', p.get('anthropic',{}).get('configured'))
+          PY
