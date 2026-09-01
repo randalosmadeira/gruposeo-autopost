@@ -1,4 +1,15 @@
-// Top 100+ cities of São Paulo state by population + all regions
+export interface IbgeLocality {
+  id: number;
+  nome: string;
+}
+
+export const IBGE_SP_MUNICIPALITIES_ENDPOINT =
+  'https://servicodados.ibge.gov.br/api/v1/localidades/estados/35/municipios?orderBy=nome';
+
+export const IBGE_SP_CAPITAL_DISTRICTS_ENDPOINT =
+  'https://servicodados.ibge.gov.br/api/v1/localidades/municipios/3550308/distritos?orderBy=nome';
+
+// Atalhos editoriais. A cobertura integral dos municípios é carregada da API oficial do IBGE.
 export const SP_REGIONS = [
   { region: 'Capital', cities: ['São Paulo'] },
   { region: 'Grande São Paulo', cities: ['Guarulhos', 'São Bernardo do Campo', 'Santo André', 'Osasco', 'Mauá', 'Diadema', 'Carapicuíba', 'Mogi das Cruzes', 'Itaquaquecetuba', 'Taboão da Serra', 'Barueri', 'Cotia', 'Suzano', 'Embu das Artes', 'Ferraz de Vasconcelos', 'Francisco Morato', 'Itapecerica da Serra', 'Franco da Rocha', 'Poá', 'Arujá', 'Caieiras', 'Jandira', 'Mairiporã', 'Ribeirão Pires', 'Rio Grande da Serra', 'Santana de Parnaíba', 'Vargem Grande Paulista', 'Pirapora do Bom Jesus', 'São Lourenço da Serra', 'Juquitiba', 'Biritiba-Mirim', 'Salesópolis', 'Guararema'] },
@@ -8,88 +19,80 @@ export const SP_REGIONS = [
   { region: 'Sorocaba', cities: ['Sorocaba', 'Itu', 'Salto', 'Tatuí', 'Itapetininga', 'Piedade', 'Votorantim', 'São Roque', 'Araçoiaba da Serra', 'Boituva', 'Cerquilho', 'Tietê', 'Porto Feliz', 'Alumínio', 'Mairinque', 'Capela do Alto'] },
   { region: 'Ribeirão Preto', cities: ['Ribeirão Preto', 'Franca', 'Sertãozinho', 'Bebedouro', 'Barretos', 'Jardinópolis', 'Cravinhos', 'Batatais', 'Orlândia', 'Ituverava', 'Guará', 'São Joaquim da Barra', 'Brodowski', 'Pontal', 'Altinópolis'] },
   { region: 'São José do Rio Preto', cities: ['São José do Rio Preto', 'Catanduva', 'Votuporanga', 'Mirassol', 'Fernandópolis', 'Jales', 'Olímpia', 'José Bonifácio', 'Tanabi', 'Monte Aprazível', 'Novo Horizonte', 'Potirendaba'] },
-  { region: 'Bauru', cities: ['Bauru', 'Jaú', 'Marília', 'Lins', 'Botucatu', 'Avaré', 'Pederneiras', 'Bariri', 'Barra Bonita', 'Dois Córregos', 'Agudos', 'Lençóis Paulista', 'São Manuel'] },
+  { region: 'Bauru / Marília', cities: ['Bauru', 'Jaú', 'Marília', 'Lins', 'Botucatu', 'Avaré', 'Pederneiras', 'Bariri', 'Barra Bonita', 'Dois Córregos', 'Agudos', 'Lençóis Paulista', 'São Manuel'] },
   { region: 'Presidente Prudente', cities: ['Presidente Prudente', 'Assis', 'Presidente Epitácio', 'Adamantina', 'Dracena', 'Osvaldo Cruz', 'Presidente Venceslau', 'Regente Feijó', 'Martinópolis', 'Rancharia'] },
   { region: 'Araçatuba', cities: ['Araçatuba', 'Birigui', 'Penápolis', 'Andradina', 'Ilha Solteira', 'Guararapes', 'Valparaíso', 'Castilho'] },
   { region: 'Piracicaba', cities: ['Piracicaba', 'Limeira', 'Rio Claro', 'Araras', 'São Pedro', 'Leme', 'Santa Gertrudes', 'Cordeirópolis', 'Iracemápolis', 'Charqueada', 'Águas de São Pedro'] },
   { region: 'Jundiaí', cities: ['Jundiaí', 'Várzea Paulista', 'Campo Limpo Paulista', 'Itupeva', 'Louveira', 'Cabreúva', 'Jarinu'] },
-  { region: 'Araraquara', cities: ['Araraquara', 'São Carlos', 'Matão', 'Descalvado', 'Ibaté', 'Porto Ferreira', 'Ibitinga', 'Américo Brasiliense'] },
-];
+  { region: 'Araraquara / São Carlos', cities: ['Araraquara', 'São Carlos', 'Matão', 'Descalvado', 'Ibaté', 'Porto Ferreira', 'Ibitinga', 'Américo Brasiliense'] },
+] as const;
 
-export const ALL_SP_CITIES = SP_REGIONS.flatMap(r => r.cities).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+export const ALL_SP_CITIES = Array.from(new Set(SP_REGIONS.flatMap((region) => [...region.cities])))
+  .sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
+export async function fetchAllSpMunicipalities(signal?: AbortSignal): Promise<string[]> {
+  const response = await fetch(IBGE_SP_MUNICIPALITIES_ENDPOINT, { signal });
+  if (!response.ok) throw new Error(`IBGE municípios: HTTP ${response.status}`);
+  const data = (await response.json()) as IbgeLocality[];
+  return data.map((item) => item.nome).filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+export async function fetchSpCapitalDistricts(signal?: AbortSignal): Promise<string[]> {
+  const response = await fetch(IBGE_SP_CAPITAL_DISTRICTS_ENDPOINT, { signal });
+  if (!response.ok) throw new Error(`IBGE distritos: HTTP ${response.status}`);
+  const data = (await response.json()) as IbgeLocality[];
+  return data.map((item) => item.nome).filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+// Sugestões factuais. Não recomendar voto, ranquear ou classificar candidaturas.
 export const ELECTORAL_KEYWORD_SUGGESTIONS: Record<string, string[]> = {
   'deputado-federal': [
-    'candidato a deputado federal 2026 SP',
-    'melhores candidatos deputado federal São Paulo',
-    'em quem votar para deputado federal 2026',
-    'deputado federal eleições 2026 estado de São Paulo',
-    'ranking candidatos deputado federal SP 2026',
-    'propostas deputado federal São Paulo',
-    'deputado federal que mais trabalha SP',
-    'novo deputado federal São Paulo 2026',
-    'candidato deputado federal {city} 2026',
-    'deputado federal zona leste SP',
-    'deputado federal {city} propostas',
-    'quem são os pré-candidatos a deputado federal 2026 SP',
-    'melhor candidato para deputado federal {city}',
-    'deputado federal combate à corrupção SP 2026',
-    'deputado federal segurança pública São Paulo',
-    'deputado federal saúde educação SP 2026',
+    'atribuições de deputado federal',
+    'propostas para crédito e pequenas empresas em São Paulo',
+    'SCR Bacen e acesso a crédito',
+    'Cadastro Positivo e Score Serasa',
+    'BNDES para micro e pequenas empresas',
+    'CNH aos 16 anos proposta legislativa',
+    'IRPF saúde educação segurança pública proposta',
+    'legislação federal sobre porte de arma de fogo',
+    'Lei Rouanet inclusão cultural',
+    'impacto de políticas federais em {city}',
+    'competência do Congresso Nacional sobre crédito',
+    'competência federal sobre trânsito e CNH',
   ],
   'deputado-estadual': [
-    'candidato a deputado estadual 2026 SP',
-    'melhores candidatos deputado estadual São Paulo',
-    'em quem votar para deputado estadual 2026',
-    'deputado estadual {city} 2026',
-    'propostas deputado estadual São Paulo',
-    'pré-candidato deputado estadual {city}',
-  ],
-  'vereador': [
-    'candidato a vereador {city} 2026',
-    'melhores vereadores {city}',
-    'em quem votar para vereador {city}',
-    'vereador que mais trabalha {city}',
-  ],
-  'prefeito': [
-    'candidato a prefeito {city} 2026',
-    'eleições prefeito {city} 2026',
-    'melhor candidato prefeito {city}',
-    'propostas prefeito {city} 2026',
+    'atribuições de deputado estadual',
+    'competências da Assembleia Legislativa de São Paulo',
+    'políticas estaduais em {city}',
   ],
   'senador': [
-    'candidato a senador São Paulo 2026',
-    'melhores candidatos senador SP 2026',
-    'em quem votar para senador 2026 SP',
-    'senador São Paulo eleições 2026',
+    'atribuições de senador',
+    'competências do Senado Federal',
+    'políticas federais com impacto em São Paulo',
   ],
   'governador': [
-    'candidato a governador São Paulo 2026',
-    'eleições governador SP 2026',
-    'em quem votar para governador 2026',
-    'propostas governador São Paulo',
+    'atribuições do governador do estado',
+    'competências do governo estadual de São Paulo',
+  ],
+  'prefeito': [
+    'atribuições do prefeito de {city}',
+    'competências municipais em {city}',
+  ],
+  'vereador': [
+    'atribuições do vereador de {city}',
+    'competências da câmara municipal de {city}',
   ],
 };
 
 export const CAMPAIGN_TOPICS = [
+  'Finanças & Crédito',
+  'Economia & Tributos',
+  'Mobilidade & Juventude',
   'Segurança Pública',
-  'Saúde',
-  'Educação',
-  'Emprego e Renda',
-  'Combate à Corrupção',
-  'Infraestrutura',
-  'Transporte Público',
-  'Habitação',
-  'Meio Ambiente',
-  'Direitos da Mulher',
-  'Direitos do Trabalhador',
-  'Tecnologia e Inovação',
-  'Agricultura Familiar',
-  'Assistência Social',
-  'Cultura e Esporte',
-  'Reforma Tributária',
+  'Cultura & Sociedade',
   'Empreendedorismo',
-  'Acessibilidade',
-  'Idosos e Aposentados',
-  'Juventude',
+  'Educação',
+  'Saúde',
+  'Infraestrutura',
+  'Tecnologia e Inovação',
 ];
