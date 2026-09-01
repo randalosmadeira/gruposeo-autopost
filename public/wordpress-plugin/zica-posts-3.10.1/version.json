@@ -1,0 +1,33 @@
+{
+  "software_id": "zica-posts",
+  "name": "Zica Posts",
+  "version": "3.10.1",
+  "requires_php": "7.4",
+  "requires_wp": "5.8",
+  "tested": "6.9",
+  "released": "2026-09-01T04:15:00-03:00",
+  "api_namespace": "zica-posts/v1",
+  "features": [
+    "persistent_outbox",
+    "hmac_sha256",
+    "nonce_replay_protection",
+    "content_hash_idempotency",
+    "correlation_ids",
+    "async_hub_webhook",
+    "exponential_retry",
+    "indexnow_batch_500",
+    "llms_txt",
+    "llms_full_txt",
+    "ai_txt",
+    "dynamic_sitemap",
+    "atomic_physical_files",
+    "virtual_file_fallback",
+    "schema_jsonld",
+    "automatic_related_cards",
+    "card_position_controls",
+    "daily_1500_sao_paulo",
+    "ai_crawler_discovery_rules",
+    "legacy_api_compatibility",
+    "neural_admin_identity"
+  ]
+}
