@@ -8,17 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
-const API_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/supporter-avatar-public`;
+const EDGE_ROOT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+const API_URL = `${EDGE_ROOT}/supporter-avatar-public`;
+const APPROVE_URL = `${EDGE_ROOT}/approve-supporter-avatar-final`;
 const STORAGE_KEY = 'zica1470-supporter-avatar-v2';
 
-const supportTexts = [
-  'DR. MADEIRA 1470',
-  'EU APOIO DR. MADEIRA 1470',
-  'APOIO AO DR. MADEIRA 1470',
-  'FEDERAL 1470',
-  'MADEIRA NELES 1470',
-];
-
+const supportTexts = ['DR. MADEIRA 1470', 'EU APOIO DR. MADEIRA 1470', 'APOIO AO DR. MADEIRA 1470', 'FEDERAL 1470', 'MADEIRA NELES 1470'];
 const styleOptions = [
   { value: 'premium', label: 'Premium' },
   { value: 'clean', label: 'Clean' },
@@ -29,21 +24,20 @@ const styleOptions = [
 
 type PublicSession = { requestId: string; token: string };
 type StatusPayload = {
-  request?: { status: string; source_count: number; generation_count: number; max_generations: number; supporter_approved_at?: string | null };
+  request?: { status: string; source_count: number; generation_count: number; max_generations: number };
   job?: { status?: string; stage?: string; error_message?: string } | null;
   outputs?: Array<{ platform: string; url: string; width?: number; height?: number; qa_score?: number | null }>;
 };
 
-async function api(body: Record<string, unknown>) {
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+async function postJson(url: string, body: Record<string, unknown>) {
+  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
   return payload;
 }
+
+const api = (body: Record<string, unknown>) => postJson(API_URL, body);
+const approveFinal = (body: Record<string, unknown>) => postJson(APPROVE_URL, body);
 
 function safeFileName(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'apoiador';
@@ -54,16 +48,13 @@ async function downloadUrl(url: string, filename: string) {
   if (!response.ok) throw new Error('Falha ao carregar o arquivo final.');
   const blob = await response.blob();
   const objectUrl = URL.createObjectURL(blob);
-  try {
-    const anchor = document.createElement('a');
-    anchor.href = objectUrl;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-  } finally {
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-  }
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
 export default function SupporterAvatar1470() {
@@ -79,6 +70,7 @@ export default function SupporterAvatar1470() {
   const [consentTerms, setConsentTerms] = useState(false);
   const [consentGallery, setConsentGallery] = useState(false);
   const [approvePreview, setApprovePreview] = useState(false);
+  const [approvedAt, setApprovedAt] = useState<string | null>(null);
   const [session, setSession] = useState<PublicSession | null>(null);
   const [status, setStatus] = useState<StatusPayload | null>(null);
   const [busy, setBusy] = useState(false);
@@ -93,7 +85,7 @@ export default function SupporterAvatar1470() {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) setSession(JSON.parse(stored));
-    } catch { /* storage local indisponível */ }
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -103,7 +95,7 @@ export default function SupporterAvatar1470() {
       try {
         const payload = await api({ action: 'status', requestId: session.requestId, token: session.token });
         if (!cancelled) setStatus(payload);
-      } catch { /* sessão pode ter expirado */ }
+      } catch { /* sessão expirada */ }
     };
     void refresh();
     const timer = window.setInterval(refresh, isProcessing ? 3000 : 10000);
@@ -119,44 +111,29 @@ export default function SupporterAvatar1470() {
     if (!supporterName.trim()) return toast({ title: 'Informe seu nome.', variant: 'destructive' });
     if (!files.length) return toast({ title: 'Envie pelo menos uma foto.', variant: 'destructive' });
     if (!consentImage || !consentTerms) return toast({ title: 'Confirme os consentimentos obrigatórios.', variant: 'destructive' });
-
     setBusy(true);
     try {
-      let activeSession = session;
-      if (!activeSession) {
-        const created = await api({
-          action: 'create',
-          supporterName,
-          city,
-          state,
-          email,
-          supportText,
-          style,
-          consentImageUse: consentImage,
-          consentTerms,
-          consentPublicGallery: consentGallery,
-        });
-        activeSession = { requestId: created.requestId, token: created.token };
-        setSession(activeSession);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(activeSession));
+      let active = session;
+      if (!active) {
+        const created = await api({ action: 'create', supporterName, city, state, email, supportText, style, consentImageUse: true, consentTerms: true, consentPublicGallery: consentGallery });
+        active = { requestId: created.requestId, token: created.token };
+        setSession(active);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(active));
       }
-
       for (const file of files) {
-        const signed = await api({ action: 'upload-url', requestId: activeSession.requestId, token: activeSession.token, mimeType: file.type, fileSize: file.size });
-        const { error: uploadError } = await supabase.storage.from('supporter-avatar-uploads').uploadToSignedUrl(signed.path, signed.token, file, { contentType: file.type });
-        if (uploadError) throw uploadError;
-        await api({ action: 'register-upload', requestId: activeSession.requestId, token: activeSession.token, path: signed.path, mimeType: file.type, fileSize: file.size });
+        const signed = await api({ action: 'upload-url', requestId: active.requestId, token: active.token, mimeType: file.type, fileSize: file.size });
+        const { error } = await supabase.storage.from('supporter-avatar-uploads').uploadToSignedUrl(signed.path, signed.token, file, { contentType: file.type });
+        if (error) throw error;
+        await api({ action: 'register-upload', requestId: active.requestId, token: active.token, path: signed.path, mimeType: file.type, fileSize: file.size });
       }
-
-      await api({ action: 'submit', requestId: activeSession.requestId, token: activeSession.token });
-      setStatus(await api({ action: 'status', requestId: activeSession.requestId, token: activeSession.token }));
+      await api({ action: 'submit', requestId: active.requestId, token: active.token });
+      setStatus(await api({ action: 'status', requestId: active.requestId, token: active.token }));
       setApprovePreview(false);
+      setApprovedAt(null);
       toast({ title: 'Foto recebida.', description: 'A arte final entrou na fila de geração.' });
     } catch (error) {
       toast({ title: 'Não foi possível iniciar a geração', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
   const regenerate = async () => {
@@ -166,27 +143,23 @@ export default function SupporterAvatar1470() {
       await api({ action: 'regenerate', requestId: session.requestId, token: session.token });
       setStatus(await api({ action: 'status', requestId: session.requestId, token: session.token }));
       setApprovePreview(false);
+      setApprovedAt(null);
     } catch (error) {
       toast({ title: 'Não foi possível gerar outra versão', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
   const approveAndDownload = async () => {
     if (!session || !finalOutput?.url || !approvePreview) return;
     setDownloading(true);
     try {
-      const approved = await api({ action: 'approve-final', requestId: session.requestId, token: session.token });
-      const url = approved.url || finalOutput.url;
-      await downloadUrl(url, `${safeFileName(supporterName)}-dr-madeira-1470-final.png`);
-      setStatus(await api({ action: 'status', requestId: session.requestId, token: session.token }));
+      const approved = await approveFinal({ requestId: session.requestId, token: session.token });
+      setApprovedAt(approved.approvedAt || new Date().toISOString());
+      await downloadUrl(approved.url || finalOutput.url, `${safeFileName(supporterName)}-dr-madeira-1470-final.png`);
       toast({ title: 'Arquivo final aprovado.', description: 'O Zica.ai não publica em nenhuma rede social. O envio será feito por você.' });
     } catch (error) {
       toast({ title: 'Falha ao liberar o arquivo final', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
-    } finally {
-      setDownloading(false);
-    }
+    } finally { setDownloading(false); }
   };
 
   const deleteRequest = async () => {
@@ -195,16 +168,11 @@ export default function SupporterAvatar1470() {
     try {
       await api({ action: 'delete', requestId: session.requestId, token: session.token });
       localStorage.removeItem(STORAGE_KEY);
-      setSession(null);
-      setStatus(null);
-      setFiles([]);
-      setApprovePreview(false);
+      setSession(null); setStatus(null); setFiles([]); setApprovePreview(false); setApprovedAt(null);
       toast({ title: 'Solicitação e arquivos removidos.' });
     } catch (error) {
       toast({ title: 'Falha ao remover', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
   return (
@@ -230,19 +198,13 @@ export default function SupporterAvatar1470() {
                 <div><Label>Texto de apoio</Label><Select value={supportText} onValueChange={setSupportText}><SelectTrigger className="border-white/10 bg-black/20"><SelectValue /></SelectTrigger><SelectContent>{supportTexts.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
               </div>
 
-              <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-black/20 p-7 text-center hover:border-[#D4FF00]/50">
-                <Upload className="h-6 w-6 text-[#D4FF00]" />
-                <strong>Escolher fotografias</strong>
-                <span className="text-xs text-slate-400">{files.length ? `${files.length} arquivo(s) selecionado(s)` : '1 a 4 imagens'}</span>
-                <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} />
-              </label>
+              <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-black/20 p-7 text-center hover:border-[#D4FF00]/50"><Upload className="h-6 w-6 text-[#D4FF00]" /><strong>Escolher fotografias</strong><span className="text-xs text-slate-400">{files.length ? `${files.length} arquivo(s) selecionado(s)` : '1 a 4 imagens'}</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} /></label>
 
               <div className="space-y-3 rounded-xl border border-white/10 bg-black/15 p-4 text-sm">
                 <label className="flex items-start gap-3"><input type="checkbox" checked={consentImage} onChange={(e) => setConsentImage(e.target.checked)} className="mt-1" /><span>Autorizo o uso das fotografias enviadas exclusivamente para gerar esta arte de apoio.</span></label>
                 <label className="flex items-start gap-3"><input type="checkbox" checked={consentTerms} onChange={(e) => setConsentTerms(e.target.checked)} className="mt-1" /><span>Declaro que as fotografias são minhas ou que possuo autorização para utilizá-las e aceito os termos da geração.</span></label>
                 <label className="flex items-start gap-3"><input type="checkbox" checked={consentGallery} onChange={(e) => setConsentGallery(e.target.checked)} className="mt-1" /><span>Opcional: autorizo exibição posterior em galeria pública da campanha.</span></label>
               </div>
-
               <Button className="h-12 w-full bg-[#D4FF00] font-black text-black hover:bg-[#c6ef00]" onClick={() => void createAndUpload()} disabled={busy || isProcessing}>{busy || isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />} Gerar arte final</Button>
             </CardContent>
           </Card>
@@ -250,28 +212,13 @@ export default function SupporterAvatar1470() {
           <Card className="border-white/10 bg-[#11161d]/95 text-white">
             <CardHeader><CardTitle>2. Prévia e arquivo final</CardTitle><CardDescription className="text-slate-400">Apenas uma arte final é liberada para download. Não há publicação automática.</CardDescription></CardHeader>
             <CardContent className="space-y-4">
-              <div className="aspect-square overflow-hidden rounded-xl border border-white/10 bg-black/30">
-                {finalOutput?.url ? <img src={finalOutput.url} alt="Prévia da arte final 1470" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center px-8 text-center text-sm text-slate-500">{isProcessing ? 'A OpenAI está preparando a arte final...' : currentStatus === 'qa' ? 'A arte foi retida para revisão de qualidade.' : 'A prévia aparecerá aqui após a geração.'}</div>}
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm">
-                <div className="flex items-center justify-between"><span>Status</span><strong className="uppercase text-[#D4FF00]">{currentStatus}</strong></div>
-                {status?.job?.error_message ? <div className="mt-2 text-xs text-red-300">{status.job.error_message}</div> : null}
-                {finalOutput?.qa_score != null ? <div className="mt-2 text-xs text-slate-400">QA visual registrado: {finalOutput.qa_score}</div> : null}
-              </div>
-
-              {canApprove && (
-                <label className="flex items-start gap-3 rounded-xl border border-[#D4FF00]/30 bg-[#D4FF00]/5 p-4 text-sm">
-                  <input type="checkbox" checked={approvePreview} onChange={(e) => setApprovePreview(e.target.checked)} className="mt-1" />
-                  <span>Conferi a prévia e aprovo esta arte como arquivo final para uso manual nas minhas redes sociais.</span>
-                </label>
-              )}
-
-              <Button className="h-12 w-full" onClick={() => void approveAndDownload()} disabled={!canApprove || !approvePreview || downloading}>{downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : status?.request?.supporter_approved_at ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Download className="mr-2 h-4 w-4" />} Aprovar e baixar arquivo final</Button>
+              <div className="aspect-square overflow-hidden rounded-xl border border-white/10 bg-black/30">{finalOutput?.url ? <img src={finalOutput.url} alt="Prévia da arte final 1470" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center px-8 text-center text-sm text-slate-500">{isProcessing ? 'A OpenAI está preparando a arte final...' : currentStatus === 'qa' ? 'A arte foi retida para revisão de qualidade.' : 'A prévia aparecerá aqui após a geração.'}</div>}</div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm"><div className="flex items-center justify-between"><span>Status</span><strong className="uppercase text-[#D4FF00]">{currentStatus}</strong></div>{status?.job?.error_message ? <div className="mt-2 text-xs text-red-300">{status.job.error_message}</div> : null}{finalOutput?.qa_score != null ? <div className="mt-2 text-xs text-slate-400">QA visual registrado: {finalOutput.qa_score}</div> : null}</div>
+              {canApprove && <label className="flex items-start gap-3 rounded-xl border border-[#D4FF00]/30 bg-[#D4FF00]/5 p-4 text-sm"><input type="checkbox" checked={approvePreview} onChange={(e) => setApprovePreview(e.target.checked)} className="mt-1" /><span>Conferi a prévia e aprovo esta arte como arquivo final para uso manual nas minhas redes sociais.</span></label>}
+              <Button className="h-12 w-full" onClick={() => void approveAndDownload()} disabled={!canApprove || !approvePreview || downloading}>{downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : approvedAt ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Download className="mr-2 h-4 w-4" />} Aprovar e baixar arquivo final</Button>
               <Button variant="outline" className="w-full border-white/15 bg-transparent" onClick={() => void regenerate()} disabled={!session || busy || isProcessing}><RefreshCcw className="mr-2 h-4 w-4" /> Gerar outra versão</Button>
               <Button variant="ghost" className="w-full text-slate-400" onClick={() => void deleteRequest()} disabled={!session || busy}><Trash2 className="mr-2 h-4 w-4" /> Remover minha solicitação</Button>
-
-              <div className="rounded-xl border border-white/10 p-4 text-xs leading-5 text-slate-400"><ShieldCheck className="mb-2 h-5 w-5 text-[#D4FF00]" />O arquivo entregue é PNG fotográfico em alta qualidade. Uma fotografia não é convertida em vetor SVG puro porque isso reduziria fidelidade facial e SVG não é formato de upload aceito de forma geral pelas redes sociais. O branding pode ter elementos vetoriais na composição, mas o arquivo de uso final permanece rasterizado.</div>
+              <div className="rounded-xl border border-white/10 p-4 text-xs leading-5 text-slate-400"><ShieldCheck className="mb-2 h-5 w-5 text-[#D4FF00]" />O arquivo entregue é PNG fotográfico em alta qualidade. Uma fotografia não é convertida em SVG puro porque isso reduz a fidelidade facial e SVG não é formato de upload aceito de forma geral pelas redes sociais. O branding pode ter elementos vetoriais durante a composição, mas o arquivo final de uso permanece rasterizado.</div>
             </CardContent>
           </Card>
         </div>
