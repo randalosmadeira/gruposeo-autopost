@@ -1,0 +1,58 @@
+name: Electoral Portal Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/pages/SupporterAvatar1470.tsx'
+      - 'wordpress/zica-electoral-analytics/**'
+      - 'supabase/functions/electoral-analytics-public-config/**'
+      - '.github/workflows/electoral-portal-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate WordPress plugin syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l wordpress/zica-electoral-analytics/zica-electoral-analytics.php
+          node --check wordpress/zica-electoral-analytics/assets/zica-electoral-analytics.js
+
+      - name: Validate central analytics config for both portals
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONFIG='https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1/electoral-analytics-public-config'
+          for PORTAL in quemvotar.drmadeira1470.com.br votardeputadofederal.drmadeira1470.com.br; do
+            curl --fail --silent --show-error --retry 3 --retry-delay 2 "$CONFIG?portal=$PORTAL" > "/tmp/config-$PORTAL.json"
+            node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/config-$PORTAL.json','utf8')); if(!x.ok) process.exit(1); if(x.consent_mode_default!=='denied') process.exit(2); if(x.allow_google_signals!==false||x.allow_ad_personalization_signals!==false) process.exit(3); if(x.privacy?.individual_voter_profiles!==false||x.privacy?.political_preference_inference!==false||x.privacy?.precise_location_collection!==false||x.privacy?.raw_ip_storage!==false) process.exit(4); if(!Array.isArray(x.primary_portals)||x.primary_portals.length!==2) process.exit(5);"
+          done
+
+      - name: Validate supporter avatar public capabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 \
+            -X POST \
+            -H 'Content-Type: application/json' \
+            -d '{"action":"capabilities"}' \
+            'https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1/supporter-avatar-public' > /tmp/avatar-capabilities.json
+          node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/avatar-capabilities.json','utf8')); if(!x.ok) process.exit(1); if(x.deliveryMode!=='single-final-download') process.exit(2); if(x.socialPublishing!==false) process.exit(3); if(x.imageProvider?.provider!=='openai') process.exit(4); if(x.imageProvider?.source!=='zica-ai-vault') process.exit(5);"
+
+      - name: Validate public Zica.ai route
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 2 \
+            -o /tmp/zica-1470.html \
+            'https://app.zica.posts.zicajuris.com.br/1470'
+          test -s /tmp/zica-1470.html
