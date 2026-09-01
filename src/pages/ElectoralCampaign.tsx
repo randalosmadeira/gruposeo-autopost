@@ -17,6 +17,7 @@ import {
   Smartphone,
   Sparkles,
   Users,
+  Video,
   Vote,
   Youtube,
 } from 'lucide-react';
@@ -32,6 +33,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { AISuggestionsPanel } from '@/components/electoral/AISuggestionsPanel';
 import { CitySelector } from '@/components/electoral/CitySelector';
 import { ElectoralCompliancePanel } from '@/components/electoral/ElectoralCompliancePanel';
+import { ElectoralVideoAnalyzer } from '@/components/electoral/ElectoralVideoAnalyzer';
+import {
+  MADEIRA_1470_PRESET,
+  formatCampaignFooter,
+} from '@/config/electoralCampaignPresets';
 import { useAuth } from '@/hooks/useAuth';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
@@ -66,15 +72,16 @@ interface CampaignContentConfig {
 
 const ELECTION_DATE_2026 = '2026-10-04';
 const CAMPAIGN_START_2026 = '2026-08-16T00:00:00-03:00';
+const ACTIVE_PRESET = MADEIRA_1470_PRESET;
 
 const defaultContentConfig: CampaignContentConfig = {
   biography: '',
-  flagsAndCauses: '',
+  flagsAndCauses: ACTIVE_PRESET.fixedIssues.map((issue, index) => `${index + 1}. ${issue}`).join('\n'),
   legislativeProjects: '',
   achievements: '',
   differentials: '',
-  slogan: '',
-  state: 'SP',
+  slogan: ACTIVE_PRESET.slogan,
+  state: ACTIVE_PRESET.state,
   city: '',
   articleType: 'pillar',
   notifyIndexNow: true,
@@ -91,19 +98,28 @@ const defaultContentConfig: CampaignContentConfig = {
 
 const defaultComplianceProfile: ElectoralComplianceProfile = {
   electionYear: 2026,
-  candidateName: '',
-  ballotName: '',
-  ballotNumber: '',
-  politicalParty: '',
-  federationOrCoalition: '',
-  candidateRole: 'deputado-federal',
-  campaignCnpj: '',
+  candidateName: ACTIVE_PRESET.candidateName,
+  ballotName: ACTIVE_PRESET.ballotName,
+  ballotNumber: ACTIVE_PRESET.ballotNumber,
+  politicalParty: ACTIVE_PRESET.politicalParty,
+  federationOrCoalition: ACTIVE_PRESET.federationOrCoalition,
+  candidateRole: ACTIVE_PRESET.candidateRole,
+  campaignCnpj: ACTIVE_PRESET.campaignCnpj,
   officialWebsite: '',
   websiteRegisteredWithElectoralJustice: false,
+  websitePreexisting: true,
+  websiteListedInInitialFiling: false,
+  websiteCreatedAt: '',
   websiteRegistrationDate: '',
   providerEstablishedInBrazil: false,
   privacyPolicyUrl: '',
   responsibleName: '',
+  dataSubjectRightsChannel: '',
+  dataProtectionOfficerName: '',
+  dataProcessingRecordMaintained: false,
+  securityMeasuresConfirmed: false,
+  processesSensitiveData: false,
+  sensitiveDataExplicitConsentConfirmed: false,
   contentMode: 'editorial-factual',
   usesAi: true,
   usesSyntheticMedia: false,
@@ -112,9 +128,13 @@ const defaultComplianceProfile: ElectoralComplianceProfile = {
   legalReviewRequired: true,
   legalReviewConfirmed: false,
   messagingConsentConfirmed: false,
+  senderIdentificationConfirmed: false,
   unsubscribeMechanismConfirmed: false,
+  unsubscribeWithin48HoursConfirmed: false,
   paidBoosting: false,
   paidBoostingProvider: '',
+  paidBoostingContractedByAuthorizedActor: false,
+  paidBoostingIdentificationConfirmed: false,
   monetizationMode: 'off',
   monetizationLegalReviewConfirmed: false,
 };
@@ -126,7 +146,7 @@ const contentTemplates = [
   { id: 'community-agenda', title: 'Pauta comunitária', description: 'Problema local, dados públicos, proposta e competência do cargo.', icon: Users },
   { id: 'debate-position', title: 'Posicionamento documentado', description: 'Posição declarada pela candidatura com contexto e fontes.', icon: Megaphone },
   { id: 'track-record', title: 'Histórico documentado', description: 'Trajetória e atos comprováveis, sem prova social fabricada.', icon: Shield },
-  { id: 'city-targeted', title: 'Informação territorial', description: 'Pauta por cidade sem microsegmentação por dado sensível.', icon: MapPin },
+  { id: 'city-context', title: 'Contexto territorial', description: 'Contextualização factual por município/distrito, sem microdirecionamento persuasivo.', icon: MapPin },
 ];
 
 function deriveCampaignPhase(now: Date): 'pre-campanha' | 'campanha' | 'pos-pleito' {
@@ -173,7 +193,7 @@ async function readElectoralResponse(response: Response, onDelta: (content: stri
           onDelta(fullContent);
         }
       } catch {
-        // Partial SSE frame; next complete frame will be processed.
+        // Quadro SSE parcial; aguardar o próximo quadro completo.
       }
     }
   }
@@ -191,6 +211,7 @@ export default function ElectoralCampaign() {
   const [progress, setProgress] = useState(0);
   const [generatedContent, setGeneratedContent] = useState('');
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
+  const [selectedDistricts, setSelectedDistricts] = useState<string[]>([]);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [currentTab, setCurrentTab] = useState('candidate');
@@ -201,6 +222,7 @@ export default function ElectoralCampaign() {
   const now = new Date();
   const campaignPhase = deriveCampaignPhase(now);
   const dateLabel = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(now);
+  const campaignFooter = formatCampaignFooter(ACTIVE_PRESET, complianceProfile.campaignCnpj);
   const compliance = useMemo(
     () => evaluateElectoralCompliance(complianceProfile, { electionDate, now: new Date() }),
     [complianceProfile, electionDate],
@@ -233,7 +255,7 @@ export default function ElectoralCampaign() {
       return;
     }
     if (!compliance.canGenerateDraft) {
-      toast({ title: 'Complete a identificação básica da candidatura antes de gerar.', variant: 'destructive' });
+      toast({ title: 'Complete a identificação básica e o CNPJ oficial antes de gerar.', variant: 'destructive' });
       setCurrentTab('compliance');
       return;
     }
@@ -251,7 +273,11 @@ export default function ElectoralCampaign() {
         ...complianceProfile,
         campaignPhase,
         electionDate,
+        campaignPresetId: ACTIVE_PRESET.id,
+        fixedIssues: ACTIVE_PRESET.fixedIssues,
+        campaignFooter,
         targetCities: selectedCities,
+        targetDistricts: selectedDistricts,
         campaignTopics: selectedTopics,
         city: selectedCities.length === 1 ? selectedCities[0] : contentConfig.city,
         compliance: {
@@ -264,10 +290,12 @@ export default function ElectoralCampaign() {
           editorialMode: 'factual-assistance',
           neverRecommendVote: true,
           neverRankCandidates: true,
+          neverIndicatePoliticalPreference: true,
           neverImpersonateNewsOutlet: true,
           requirePrimarySources: true,
           requireHumanReviewBeforePublishing: true,
           prohibitSensitiveMicrotargeting: true,
+          prohibitPersuasiveGeoPersonalization: true,
           syntheticMediaDisclosureRequired: complianceProfile.usesSyntheticMedia,
         },
       };
@@ -317,6 +345,7 @@ export default function ElectoralCampaign() {
           word_count: content.trim().split(/\s+/).length,
           config: {
             electoral: true,
+            campaignPresetId: ACTIVE_PRESET.id,
             electionYear: complianceProfile.electionYear,
             template: selectedTemplate,
             candidateConfig: payloadConfig,
@@ -328,6 +357,7 @@ export default function ElectoralCampaign() {
               canPublish: compliance.canPublish,
             },
             targetCities: selectedCities,
+            targetDistricts: selectedDistricts,
             campaignTopics: selectedTopics,
             articleType: contentConfig.articleType,
           } as any,
@@ -367,10 +397,10 @@ export default function ElectoralCampaign() {
           </div>
           <div>
             <h1 className="flex flex-wrap items-center gap-2 text-2xl font-bold text-foreground">
-              Campanha Eleitoral 2026
-              <Badge className="bg-orange-500 text-white">Compliance-first</Badge>
+              {ACTIVE_PRESET.ballotName} {ACTIVE_PRESET.ballotNumber}
+              <Badge className="bg-orange-500 text-white">Preset eleitoral</Badge>
             </h1>
-            <p className="text-muted-foreground">Assistência editorial eleitoral com fontes, auditoria e gates de publicação.</p>
+            <p className="text-muted-foreground">{ACTIVE_PRESET.label} · conteúdo factual com compliance, fontes e revisão humana.</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -383,7 +413,7 @@ export default function ElectoralCampaign() {
         <CardContent className="flex gap-3 p-4 text-sm">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
           <div>
-            <strong>Regra do módulo eleitoral:</strong> a IA atua como assistente editorial factual. Não ranqueia candidaturas, não recomenda voto, não cria prova, não inventa fatos e não libera publicação sem gates humanos. O perfil de campanha é isolado dos módulos de portais gerais e jurídicos.
+            <strong>Regra do módulo eleitoral:</strong> o sistema mantém os dados da campanha em um preset próprio, sem contaminar outros tenants. A IA pode resumir, classificar e estruturar conteúdo factual, mas não recomenda voto, não ranqueia candidaturas e não personaliza persuasão política por cidade, distrito ou bairro.
           </div>
         </CardContent>
       </Card>
@@ -393,7 +423,7 @@ export default function ElectoralCampaign() {
           <TabsTrigger value="candidate"><Users className="mr-1 h-4 w-4" /> Candidatura</TabsTrigger>
           <TabsTrigger value="compliance"><Shield className="mr-1 h-4 w-4" /> Compliance</TabsTrigger>
           <TabsTrigger value="cities"><MapPin className="mr-1 h-4 w-4" /> Território</TabsTrigger>
-          <TabsTrigger value="social"><Share2 className="mr-1 h-4 w-4" /> Canais</TabsTrigger>
+          <TabsTrigger value="videos"><Video className="mr-1 h-4 w-4" /> Vídeos</TabsTrigger>
           <TabsTrigger value="suggestions"><Sparkles className="mr-1 h-4 w-4" /> Pautas</TabsTrigger>
           <TabsTrigger value="content"><FileText className="mr-1 h-4 w-4" /> Produção</TabsTrigger>
           <TabsTrigger value="review"><Flame className="mr-1 h-4 w-4" /> Revisão</TabsTrigger>
@@ -404,29 +434,18 @@ export default function ElectoralCampaign() {
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Identidade e cargo</CardTitle>
-                <CardDescription>Os campos jurídicos completos ficam no gate de Compliance.</CardDescription>
+                <CardTitle className="text-base">Preset Madeira 1470</CardTitle>
+                <CardDescription>Pré-preenchimento da campanha atual. O CNPJ permanece bloqueante até confirmação do identificador oficial.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div><Label>Nome completo</Label><Input value={complianceProfile.candidateName} onChange={(e) => updateCompliance({ candidateName: e.target.value })} /></div>
-                <div><Label>Nome de urna</Label><Input value={complianceProfile.ballotName} onChange={(e) => updateCompliance({ ballotName: e.target.value })} /></div>
+                <div><Label>Nome completo</Label><Input readOnly value={complianceProfile.candidateName} /></div>
+                <div><Label>Nome de urna</Label><Input readOnly value={complianceProfile.ballotName} /></div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Número</Label><Input value={complianceProfile.ballotNumber} onChange={(e) => updateCompliance({ ballotNumber: e.target.value })} /></div>
-                  <div><Label>Partido</Label><Input value={complianceProfile.politicalParty} onChange={(e) => updateCompliance({ politicalParty: e.target.value })} /></div>
+                  <div><Label>Número</Label><Input readOnly value={complianceProfile.ballotNumber} /></div>
+                  <div><Label>Partido</Label><Input readOnly value={complianceProfile.politicalParty} /></div>
                 </div>
-                <div>
-                  <Label>Cargo</Label>
-                  <Select value={complianceProfile.candidateRole} onValueChange={(value) => updateCompliance({ candidateRole: value })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="deputado-federal">Deputado(a) Federal</SelectItem>
-                      <SelectItem value="deputado-estadual">Deputado(a) Estadual/Distrital</SelectItem>
-                      <SelectItem value="senador">Senador(a)</SelectItem>
-                      <SelectItem value="governador">Governador(a)</SelectItem>
-                      <SelectItem value="presidente">Presidente</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <div><Label>Cargo</Label><Input readOnly value="Deputado(a) Federal" /></div>
+                <div><Label>Slogan</Label><Input readOnly value={contentConfig.slogan} /></div>
                 <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-3 text-sm">
                   {campaignPhase === 'campanha' ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <AlertTriangle className="h-4 w-4 text-amber-500" />}
                   <span>Fase calculada: <strong>{campaignPhase}</strong></span>
@@ -436,17 +455,31 @@ export default function ElectoralCampaign() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-base">Biografia, propostas e registros</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <div><Label>Biografia factual</Label><Textarea rows={3} value={contentConfig.biography} onChange={(e) => updateContentConfig({ biography: e.target.value })} /></div>
-                <div><Label>Bandeiras e pautas</Label><Textarea rows={3} value={contentConfig.flagsAndCauses} onChange={(e) => updateContentConfig({ flagsAndCauses: e.target.value })} /></div>
-                <div><Label>Projetos/atos legislativos documentados</Label><Textarea rows={2} value={contentConfig.legislativeProjects} onChange={(e) => updateContentConfig({ legislativeProjects: e.target.value })} /></div>
-                <div><Label>Diferenciais declarados pela candidatura</Label><Textarea rows={2} placeholder="Descrição factual; sem recomendação automatizada de voto." value={contentConfig.differentials} onChange={(e) => updateContentConfig({ differentials: e.target.value })} /></div>
-                <div><Label>Slogan oficial</Label><Input value={contentConfig.slogan} onChange={(e) => updateContentConfig({ slogan: e.target.value })} /></div>
+              <CardHeader>
+                <CardTitle className="text-base">Bandeiras e pautas fixas</CardTitle>
+                <CardDescription>Base temática cadastrada no preset da campanha.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {ACTIVE_PRESET.fixedIssues.map((issue, index) => (
+                  <div key={issue} className="rounded-md border bg-muted/30 p-3 text-sm"><strong>{index + 1}.</strong> {issue}</div>
+                ))}
+                <div className="pt-2"><Label>Biografia factual</Label><Textarea rows={3} value={contentConfig.biography} onChange={(event) => updateContentConfig({ biography: event.target.value })} /></div>
+                <div><Label>Projetos/atos legislativos documentados</Label><Textarea rows={2} value={contentConfig.legislativeProjects} onChange={(event) => updateContentConfig({ legislativeProjects: event.target.value })} /></div>
               </CardContent>
             </Card>
           </div>
-          <div className="flex justify-end"><Button onClick={() => setCurrentTab('compliance')}>Configurar compliance</Button></div>
+
+          <Card>
+            <CardHeader><CardTitle className="text-base">Canais oficiais</CardTitle><CardDescription>Links controlados pela campanha; não habilitam mensageria em massa sem os gates de compliance.</CardDescription></CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="flex items-center gap-2"><Instagram className="h-5 w-5" /><Input placeholder="Instagram" value={contentConfig.socialMedia.instagram} onChange={(event) => updateSocial('instagram', event.target.value)} /></div>
+              <div className="flex items-center gap-2"><Youtube className="h-5 w-5" /><Input placeholder="YouTube" value={contentConfig.socialMedia.youtube} onChange={(event) => updateSocial('youtube', event.target.value)} /></div>
+              <div className="flex items-center gap-2"><Globe className="h-5 w-5" /><Input placeholder="X/Twitter" value={contentConfig.socialMedia.twitter} onChange={(event) => updateSocial('twitter', event.target.value)} /></div>
+              <div className="flex items-center gap-2"><Globe className="h-5 w-5" /><Input placeholder="Facebook" value={contentConfig.socialMedia.facebook} onChange={(event) => updateSocial('facebook', event.target.value)} /></div>
+              <div className="flex items-center gap-2"><Smartphone className="h-5 w-5" /><Input placeholder="TikTok" value={contentConfig.socialMedia.tiktok} onChange={(event) => updateSocial('tiktok', event.target.value)} /></div>
+              <div className="flex items-center gap-2"><Smartphone className="h-5 w-5" /><Input placeholder="WhatsApp oficial" value={contentConfig.socialMedia.whatsapp} onChange={(event) => updateSocial('whatsapp', event.target.value)} /></div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="compliance">
@@ -460,9 +493,14 @@ export default function ElectoralCampaign() {
         </TabsContent>
 
         <TabsContent value="cities" className="space-y-4">
-          <CitySelector selectedCities={selectedCities} onCitiesChange={setSelectedCities} />
+          <CitySelector
+            selectedCities={selectedCities}
+            onCitiesChange={setSelectedCities}
+            selectedDistricts={selectedDistricts}
+            onDistrictsChange={setSelectedDistricts}
+          />
           <Card>
-            <CardHeader><CardTitle className="text-base">Editorias da campanha</CardTitle><CardDescription>Temas definidos pela candidatura; sem perfilamento político individual.</CardDescription></CardHeader>
+            <CardHeader><CardTitle className="text-base">Editorias da campanha</CardTitle><CardDescription>Temas públicos para organização editorial, sem perfilamento político individual.</CardDescription></CardHeader>
             <CardContent className="flex flex-wrap gap-2">
               {ELECTORAL_EDITORIAL_SECTIONS.map((section) => (
                 <Button
@@ -479,21 +517,17 @@ export default function ElectoralCampaign() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="social" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Canais oficiais</CardTitle>
-              <CardDescription>Links de propriedade/controlados pela campanha. Mensageria em massa permanece condicionada ao gate de consentimento.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <div className="flex items-center gap-2"><Instagram className="h-5 w-5" /><Input placeholder="Instagram" value={contentConfig.socialMedia.instagram} onChange={(e) => updateSocial('instagram', e.target.value)} /></div>
-              <div className="flex items-center gap-2"><Youtube className="h-5 w-5" /><Input placeholder="YouTube" value={contentConfig.socialMedia.youtube} onChange={(e) => updateSocial('youtube', e.target.value)} /></div>
-              <div className="flex items-center gap-2"><Globe className="h-5 w-5" /><Input placeholder="X/Twitter" value={contentConfig.socialMedia.twitter} onChange={(e) => updateSocial('twitter', e.target.value)} /></div>
-              <div className="flex items-center gap-2"><Globe className="h-5 w-5" /><Input placeholder="Facebook" value={contentConfig.socialMedia.facebook} onChange={(e) => updateSocial('facebook', e.target.value)} /></div>
-              <div className="flex items-center gap-2"><Smartphone className="h-5 w-5" /><Input placeholder="TikTok" value={contentConfig.socialMedia.tiktok} onChange={(e) => updateSocial('tiktok', e.target.value)} /></div>
-              <div className="flex items-center gap-2"><Smartphone className="h-5 w-5" /><Input placeholder="WhatsApp oficial" value={contentConfig.socialMedia.whatsapp} onChange={(e) => updateSocial('whatsapp', e.target.value)} /></div>
-            </CardContent>
-          </Card>
+        <TabsContent value="videos">
+          <ElectoralVideoAnalyzer
+            candidateName={complianceProfile.candidateName}
+            ballotName={complianceProfile.ballotName}
+            ballotNumber={complianceProfile.ballotNumber}
+            politicalParty={complianceProfile.politicalParty}
+            campaignCnpj={complianceProfile.campaignCnpj}
+            fixedIssues={ACTIVE_PRESET.fixedIssues}
+            selectedCities={selectedCities}
+            selectedDistricts={selectedDistricts}
+          />
         </TabsContent>
 
         <TabsContent value="suggestions">
@@ -531,14 +565,17 @@ export default function ElectoralCampaign() {
                       <SelectContent>
                         <SelectItem value="pillar">Pilar factual (1.500–2.200 palavras)</SelectItem>
                         <SelectItem value="satellite">Satélite de pauta (900–1.400 palavras)</SelectItem>
-                        <SelectItem value="territorial">Territorial (~900 palavras)</SelectItem>
+                        <SelectItem value="territorial">Territorial factual (~900 palavras)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div><Label>Pauta/palavra-chave *</Label><Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="Ex.: acesso a crédito para pequenas empresas" /></div>
+                  <div><Label>Pauta/palavra-chave *</Label><Input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="Ex.: acesso a crédito para pequenas empresas" /></div>
+                  <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
+                    Território selecionado: {[...selectedCities, ...selectedDistricts].join(', ') || 'Estado de São Paulo'}. Esse dado contextualiza o conteúdo; não altera a mensagem para persuadir perfis de eleitores específicos.
+                  </div>
                   <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
-                    <input type="checkbox" checked={contentConfig.notifyIndexNow} onChange={(e) => updateContentConfig({ notifyIndexNow: e.target.checked })} className="mt-0.5 h-4 w-4" />
-                    <span><strong>Notificar IndexNow após publicação</strong><span className="block text-xs text-muted-foreground">Bing e mecanismos compatíveis. Aceite não significa indexação garantida.</span></span>
+                    <input type="checkbox" checked={contentConfig.notifyIndexNow} onChange={(event) => updateContentConfig({ notifyIndexNow: event.target.checked })} className="mt-0.5 h-4 w-4" />
+                    <span><strong>Notificar IndexNow após publicação</strong><span className="block text-xs text-muted-foreground">Aceite não significa indexação garantida.</span></span>
                   </label>
                 </CardContent>
               </Card>
@@ -570,9 +607,9 @@ export default function ElectoralCampaign() {
                   </Button>
                 )}
                 <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
-                  <strong>Geração ≠ publicação.</strong> A peça é salva como rascunho. Bloqueios eleitorais, fontes, mídia sintética e revisão humana permanecem independentes.
+                  <strong>Geração ≠ publicação.</strong> A peça é salva como rascunho. O CNPJ oficial, fontes, rotulagem aplicável e revisão humana continuam independentes.
                 </div>
-                {!compliance.canGenerateDraft && <Button variant="outline" className="w-full" onClick={() => setCurrentTab('compliance')}>Completar identificação obrigatória</Button>}
+                {!compliance.canGenerateDraft && <Button variant="outline" className="w-full" onClick={() => setCurrentTab('compliance')}>Completar campos obrigatórios</Button>}
               </CardContent>
             </Card>
           </div>
@@ -598,6 +635,7 @@ export default function ElectoralCampaign() {
                     </div>
                   )}
                   <div className="prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: sanitizedContent }} />
+                  <div className="rounded-md border bg-muted/40 p-3 text-xs"><strong>Rodapé configurado:</strong> {campaignFooter}</div>
                 </div>
               ) : (
                 <div className="py-16 text-center text-muted-foreground"><Vote className="mx-auto mb-4 h-12 w-12 opacity-30" /><p>Nenhum rascunho gerado.</p></div>
@@ -609,23 +647,24 @@ export default function ElectoralCampaign() {
         <TabsContent value="governance" className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
-              <CardHeader><CardTitle className="text-base">Portal eleitoral / branding</CardTitle><CardDescription>Recursos exclusivos quando o domínio for oficialmente eleitoral.</CardDescription></CardHeader>
+              <CardHeader><CardTitle className="text-base">Portal eleitoral / branding</CardTitle><CardDescription>Recursos exclusivos do tenant Madeira 1470.</CardDescription></CardHeader>
               <CardContent className="space-y-2 text-sm text-muted-foreground">
-                <p>• Header configurável: nome de urna, número, partido/federação e identificação de campanha conforme revisão jurídica.</p>
-                <p>• Propostas em destaque, vídeos oficiais e compartilhamento por WhatsApp.</p>
-                <p>• Rodapé com responsável, política de privacidade e trilha legal configurada.</p>
-                <p>• Bloqueio automático de publicação de mídia sintética na janela eleitoral aplicável.</p>
-                <p>• Separação total entre conteúdo oficial, conteúdo editorial e qualquer área de publicidade.</p>
+                <p>• Identidade pré-carregada: {ACTIVE_PRESET.ballotName}, {ACTIVE_PRESET.ballotNumber}, {ACTIVE_PRESET.politicalParty}.</p>
+                <p>• Seis bandeiras fixas armazenadas no preset da campanha.</p>
+                <p>• Municípios carregados da API oficial do IBGE; distritos da capital carregados por endpoint oficial.</p>
+                <p>• Bairros só serão marcados como “oficiais/completos” após importação de fonte municipal confiável.</p>
+                <p>• Rodapé padrão do tenant: {campaignFooter}</p>
+                <p>• Mídia sintética, impulsionamento e mensageria permanecem submetidos aos gates próprios.</p>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader><CardTitle className="text-base">Portais gerais, jurídicos e outros domínios</CardTitle><CardDescription>Somente capacidades genéricas; nenhuma regra/cadastro de candidatura é herdado.</CardDescription></CardHeader>
+              <CardHeader><CardTitle className="text-base">Portais gerais, jurídicos e outros domínios</CardTitle><CardDescription>Somente capacidades reutilizáveis; nenhuma identidade eleitoral é herdada.</CardDescription></CardHeader>
               <CardContent className="space-y-2 text-sm text-muted-foreground">
                 <p>• Multi-site/multi-tenant, categorias, tags, agendamento e workflow editorial.</p>
                 <p>• Fontes, revisão, dados estruturados, RSS, sitemap e IndexNow quando tecnicamente aplicável.</p>
-                <p>• AdSense apenas em slots próprios, rotulados e afastados de controles/interações para reduzir clique acidental.</p>
+                <p>• AdSense apenas em slots próprios, rotulados e afastados de controles/interações.</p>
                 <p>• Analytics/remarketing por IDs allowlisted e consentimento; sem injeção arbitrária de scripts pelo editor.</p>
-                <p>• Campos eleitorais ficam completamente fora desses módulos.</p>
+                <p>• Nome, número, partido, CNPJ e pautas Madeira 1470 ficam fora desses módulos.</p>
               </CardContent>
             </Card>
           </div>
