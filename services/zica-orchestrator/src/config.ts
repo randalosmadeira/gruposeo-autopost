@@ -1,8 +1,7 @@
-import Redis from 'ioredis';
-import { createClient } from '@supabase/supabase-js';
-import type { CredentialRecord } from './types.js';
-function required(name:string){const value=process.env[name];if(!value)throw new Error(`Missing required environment variable: ${name}`);return value;}
-export const redis=new Redis(process.env.REDIS_URL||'redis://127.0.0.1:6379',{maxRetriesPerRequest:null,enableReadyCheck:true});
-export const supabase=createClient(required('SUPABASE_URL'),required('SUPABASE_SERVICE_ROLE_KEY'),{auth:{persistSession:false,autoRefreshToken:false}});
-let vault:Record<string,CredentialRecord>;try{vault=JSON.parse(process.env.ZICA_CREDENTIALS_JSON||'{}') as Record<string,CredentialRecord>;}catch{throw new Error('ZICA_CREDENTIALS_JSON is not valid JSON');}
-export function credential(ref:string){const value=vault[ref];if(!value)throw new Error(`Credential reference not found: ${ref}`);return value;}
+import { Redis } from 'ioredis';
+
+function need(name:string){const value=process.env[name];if(!value)throw new Error(`Missing required env ${name}`);return value;}
+
+export const config={redisUrl:need('REDIS_URL'),supabaseUrl:need('SUPABASE_URL'),supabaseServiceRole:need('SUPABASE_SERVICE_ROLE_KEY'),indexNowKey:process.env.INDEXNOW_KEY||'',aiProvider:process.env.AI_PROVIDER||'passthrough',aiModel:process.env.AI_MODEL||'',cloudflareApiToken:process.env.CLOUDFLARE_API_TOKEN||'',cloudflareZoneId:process.env.CLOUDFLARE_ZONE_ID||''};
+export const redis=new Redis(config.redisUrl,{maxRetriesPerRequest:null,enableReadyCheck:true});
+export function credential(ref:string){const key=`ZICA_CRED_${ref.replace(/[^A-Za-z0-9]/g,'_').toUpperCase()}`;const raw=process.env[key];if(!raw)throw new Error(`Credential reference not resolved: ${ref}`);try{return JSON.parse(raw) as Record<string,any>;}catch{throw new Error(`Credential reference contains invalid JSON: ${ref}`);}}
