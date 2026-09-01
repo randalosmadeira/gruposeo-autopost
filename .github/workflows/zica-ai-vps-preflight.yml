@@ -1,6 +1,5 @@
 name: Zica.ai VPS Preflight
 
-# Manual trigger marker: secrets configured on 2026-09-01.
 on:
   workflow_dispatch:
   push:
@@ -21,7 +20,7 @@ jobs:
       ZICA_AI_VPS_HOST: ${{ secrets.ZICA_AI_VPS_HOST }}
       ZICA_AI_VPS_USER: ${{ secrets.ZICA_AI_VPS_USER }}
       ZICA_AI_VPS_PORT_RAW: ${{ secrets.ZICA_AI_VPS_PORT }}
-      ZICA_AI_VPS_SSH_PRIVATE_KEY: ${{ secrets.ZICA_AI_VPS_SSH_PRIVATE_KEY }}
+      ZICA_AI_VPS_SSH_PRIVATE_KEY_B64: ${{ secrets.ZICA_AI_VPS_SSH_PRIVATE_KEY_B64 }}
       TARGET_HOST: app.zica.posts.zicajuris.com.br
     steps:
       - name: Validate dedicated SSH secrets
@@ -30,7 +29,7 @@ jobs:
           set -euo pipefail
           test -n "$ZICA_AI_VPS_HOST" || { echo "::error::ZICA_AI_VPS_HOST ausente"; exit 1; }
           test -n "$ZICA_AI_VPS_USER" || { echo "::error::ZICA_AI_VPS_USER ausente"; exit 1; }
-          test -n "$ZICA_AI_VPS_SSH_PRIVATE_KEY" || { echo "::error::ZICA_AI_VPS_SSH_PRIVATE_KEY ausente"; exit 1; }
+          test -n "$ZICA_AI_VPS_SSH_PRIVATE_KEY_B64" || { echo "::error::ZICA_AI_VPS_SSH_PRIVATE_KEY_B64 ausente"; exit 1; }
           ZICA_AI_VPS_PORT="${ZICA_AI_VPS_PORT_RAW:-22}"
           case "$ZICA_AI_VPS_PORT" in (*[!0-9]*|'') echo "::error::ZICA_AI_VPS_PORT inválida"; exit 1;; esac
           echo "ZICA_AI_VPS_PORT=$ZICA_AI_VPS_PORT" >> "$GITHUB_ENV"
@@ -40,8 +39,10 @@ jobs:
         run: |
           set -euo pipefail
           install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$ZICA_AI_VPS_SSH_PRIVATE_KEY" > "$HOME/.ssh/zica_ai_deploy"
+          printf '%s' "$ZICA_AI_VPS_SSH_PRIVATE_KEY_B64" | base64 --decode > "$HOME/.ssh/zica_ai_deploy"
           chmod 600 "$HOME/.ssh/zica_ai_deploy"
+          grep -q '^-----BEGIN OPENSSH PRIVATE KEY-----$' "$HOME/.ssh/zica_ai_deploy" || { echo "::error::Chave Zica.ai decodificada não é OpenSSH"; exit 1; }
+          ssh-keygen -y -f "$HOME/.ssh/zica_ai_deploy" >/dev/null
           ssh-keyscan -p "$ZICA_AI_VPS_PORT" -H "$ZICA_AI_VPS_HOST" >> "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
@@ -49,7 +50,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -i "$HOME/.ssh/zica_ai_deploy" -p "$ZICA_AI_VPS_PORT" "$ZICA_AI_VPS_USER@$ZICA_AI_VPS_HOST" \
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$HOME/.ssh/zica_ai_deploy" -p "$ZICA_AI_VPS_PORT" "$ZICA_AI_VPS_USER@$ZICA_AI_VPS_HOST" \
             "TARGET_HOST='$TARGET_HOST' bash -s" <<'REMOTE'
           set -euo pipefail
           echo "== Capacity =="
@@ -80,4 +81,5 @@ jobs:
           echo "### Zica.ai VPS isolation preflight" >> "$GITHUB_STEP_SUMMARY"
           echo "- Environment: \`zica-ai-production\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Root: \`/opt/zica-ai/orchestrator\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Dedicated SSH identity is decoded from ZICA_AI_VPS_SSH_PRIVATE_KEY_B64." >> "$GITHUB_STEP_SUMMARY"
           echo "- No ZicaJuris files, secrets or containers are inspected." >> "$GITHUB_STEP_SUMMARY"
