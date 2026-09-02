@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { AlertCircle, Check, CheckCircle2, Globe, Loader2, RefreshCw, Search, Tag, Upload, WifiOff, X } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, Globe, Loader2, RefreshCw, Search, Tag, Upload, WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -90,10 +90,19 @@ export function BulkPublishModal({ isOpen, onClose, selectedArticles, projects, 
   const [selectedCategories, setSelectedCategories] = useState<Record<string, number[]>>({});
   const [rows, setRows] = useState<PublicationRow[]>([]);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [autoProjects, setAutoProjects] = useState<Project[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [projectLoadError, setProjectLoadError] = useState('');
 
   const readyArticles = useMemo(() => selectedArticles.filter((article) => article.hasContent !== false), [selectedArticles]);
   const skippedArticles = useMemo(() => selectedArticles.filter((article) => article.hasContent === false), [selectedArticles]);
-  const wordpressSites = useMemo(() => projects.filter((project) => project.wordpress_url || project.domain), [projects]);
+  const resolvedProjects = useMemo(() => {
+    const merged = new Map<string, Project>();
+    for (const project of projects) merged.set(project.id, project);
+    for (const project of autoProjects) merged.set(project.id, { ...merged.get(project.id), ...project });
+    return [...merged.values()];
+  }, [projects, autoProjects]);
+  const wordpressSites = useMemo(() => resolvedProjects.filter((project) => project.wordpress_url || project.domain), [resolvedProjects]);
   const filteredSites = useMemo(() => {
     const query = siteSearch.trim().toLowerCase();
     if (!query) return wordpressSites;
@@ -118,7 +127,40 @@ export function BulkPublishModal({ isOpen, onClose, selectedArticles, projects, 
     setSelectedCategories({});
     setRows([]);
     setIsPublishing(false);
+    setProjectLoadError('');
   }, [isOpen, selectedArticles]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    setLoadingProjects(true);
+    setProjectLoadError('');
+    void supabase
+      .from('projects')
+      .select('id,name,domain,wordpress_url')
+      .order('name', { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          setProjectLoadError('Não foi possível atualizar automaticamente a lista de projetos WordPress. Foi mantida a lista já carregada na tela.');
+          return;
+        }
+        const normalized: Project[] = (data || []).map((item) => ({
+          id: String(item.id),
+          name: String(item.name || item.wordpress_url || item.domain || 'Projeto WordPress'),
+          domain: String(item.domain || item.wordpress_url || ''),
+          wordpress_url: item.wordpress_url ? String(item.wordpress_url) : null,
+        }));
+        setAutoProjects(normalized);
+      })
+      .catch(() => {
+        if (!cancelled) setProjectLoadError('Não foi possível atualizar automaticamente a lista de projetos WordPress. Foi mantida a lista já carregada na tela.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingProjects(false);
+      });
+    return () => { cancelled = true; };
+  }, [isOpen]);
 
   const checkSite = async (projectId: string) => {
     const startedAt = Date.now();
@@ -288,11 +330,14 @@ export function BulkPublishModal({ isOpen, onClose, selectedArticles, projects, 
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="font-semibold">Sites WordPress</p>
-                  <p className="text-sm text-muted-foreground">Marque todos os destinos desejados. Cada site é validado individualmente.</p>
+                  <p className="text-sm text-muted-foreground">A lista é atualizada automaticamente ao abrir esta janela. Cada destino selecionado é validado individualmente.</p>
                 </div>
                 <Badge variant="outline">{selectedSites.length} selecionado(s)</Badge>
               </div>
               <div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={siteSearch} onChange={(event) => setSiteSearch(event.target.value)} placeholder="Buscar site..." className="pl-9" /></div>
+              {loadingProjects && <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Atualizando projetos WordPress...</div>}
+              {projectLoadError && <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-sm text-amber-300">{projectLoadError}</div>}
+              {!loadingProjects && filteredSites.length === 0 && <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm text-muted-foreground">Nenhum projeto WordPress configurado foi encontrado para esta conta.</div>}
               <div className="space-y-2">
                 {filteredSites.map((site) => {
                   const checked = selectedProjectIds.includes(site.id);
