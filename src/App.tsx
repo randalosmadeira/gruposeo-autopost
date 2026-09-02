@@ -38,31 +38,19 @@ const AIChat = lazy(() => import("./pages/AIChat"));
 const ElectoralCampaign = lazy(() => import("./pages/ElectoralCampaign"));
 const ElectoralPortalNetwork = lazy(() => import("./pages/ElectoralPortalNetwork"));
 const ElectoralEditorialConsole = lazy(() => import("./pages/ElectoralEditorialConsole"));
+const ElectoralKnowledgeBase = lazy(() => import("./pages/ElectoralKnowledgeBase"));
 const SupporterAvatar1470 = lazy(() => import("./pages/SupporterAvatar1470"));
 const SupporterAvatarPromptEditor = lazy(() => import("./pages/SupporterAvatarPromptEditor"));
 const AuditoriaGBP = lazy(() => import("./pages/AuditoriaGBP"));
 const Hiperlocal = lazy(() => import("./pages/Hiperlocal"));
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60000,
-      gcTime: 300000,
-      refetchOnWindowFocus: false,
-      retry: 2,
-      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
-    },
-  },
-});
+const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 60000, gcTime: 300000, refetchOnWindowFocus: false, retry: 2, retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000) } } });
 
 const PageLoader = () => (
   <div className="neural-auth-shell flex min-h-screen items-center justify-center bg-[#0D1117]">
     <div className="neural-state flex flex-col items-center gap-4 px-8 py-7 text-center">
       <div className="neural-loader-ring" />
-      <div>
-        <p className="text-sm font-black text-white">Sincronizando o córtex Zica.ai</p>
-        <p className="mt-1 text-xs text-slate-500">Carregando sinais, ondas e agentes...</p>
-      </div>
+      <div><p className="text-sm font-black text-white">Sincronizando o córtex Zica.ai</p><p className="mt-1 text-xs text-slate-500">Carregando sinais, ondas e agentes...</p></div>
     </div>
   </div>
 );
@@ -73,8 +61,7 @@ const routerBasename = viteBaseUrl === "/" ? "/" : viteBaseUrl.replace(/\/$/, ""
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
+      <Toaster /><Sonner />
       <BrowserRouter basename={routerBasename}>
         <AuthProvider>
           <Suspense fallback={<PageLoader />}>
@@ -82,13 +69,7 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/1470" element={<SupporterAvatar1470 />} />
               <Route path="/apoiadores/avatar" element={<SupporterAvatar1470 />} />
-              <Route
-                element={
-                  <ProtectedRoute>
-                    <Layout />
-                  </ProtectedRoute>
-                }
-              >
+              <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/calendar" element={<ContentCalendar />} />
@@ -121,6 +102,7 @@ const App = () => (
                 <Route path="/electoral-campaign" element={<ElectoralCampaign />} />
                 <Route path="/electoral-campaign/portal-network" element={<ElectoralPortalNetwork />} />
                 <Route path="/electoral-campaign/editorial-console" element={<ElectoralEditorialConsole />} />
+                <Route path="/electoral-campaign/content-library" element={<ElectoralKnowledgeBase />} />
                 <Route path="/electoral-campaign/history" element={<ElectoralEditorialConsole />} />
                 <Route path="/electoral-campaign/supporter-avatar-prompts" element={<SupporterAvatarPromptEditor />} />
                 <Route path="/auditoria-gbp" element={<AuditoriaGBP />} />
