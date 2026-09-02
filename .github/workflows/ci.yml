@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      # Supabase publishable credentials are designed for browser clients; authorization is enforced by RLS.
+      # Supabase publishable credentials are browser-side identifiers; authorization is enforced by RLS.
       VITE_SUPABASE_URL: https://ubahrbgaxrkjxklytobl.supabase.co
       VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_8XzHfqXP8o3XOcGwRY35zw_P-jg1kiE
       VITE_APP_NAME: Zica.ai
@@ -27,7 +27,10 @@ jobs:
         with:
           node-version: 22
 
-      - name: Validate public runtime config
+      - name: Enforce private deployment boundaries
+        run: node scripts/verify-private-deployment-boundaries.mjs
+
+      - name: Validate runtime config
         if: github.event_name == 'push'
         shell: bash
         run: |
