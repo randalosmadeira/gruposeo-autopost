@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Download, Loader2, RefreshCcw, ShieldCheck, Sparkles, Trash2, Upload } from 'lucide-react';
+import { Camera, CheckCircle2, Download, Loader2, RefreshCcw, ShieldCheck, Sparkles, Trash2, Upload, UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,10 +11,19 @@ import { useToast } from '@/hooks/use-toast';
 const EDGE_ROOT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 const API_URL = `${EDGE_ROOT}/supporter-avatar-public`;
 const APPROVE_URL = `${EDGE_ROOT}/approve-supporter-avatar-final`;
-const STORAGE_KEY = 'zica1470-supporter-avatar-v2';
+const PRESETS_URL = `${EDGE_ROOT}/supporter-avatar-candidate-assets`;
+const STORAGE_KEY = 'zica1470-supporter-avatar-v3';
 const AI_DISCLOSURE = 'CONTEÚDO VISUAL EDITADO COM IA · OPENAI';
+const AGENT_NAME = 'NEXUS PHOTO 1470';
 
-const supportTexts = ['DR. MADEIRA 1470', 'EU APOIO DR. MADEIRA 1470', 'APOIO AO DR. MADEIRA 1470', 'FEDERAL 1470', 'MADEIRA NELES 1470'];
+const supportTexts = [
+  'Madeiraaa Nelesss! 🪵 1470',
+  'DR. MADEIRA 1470',
+  'EU APOIO DR. MADEIRA 1470',
+  'APOIO AO DR. MADEIRA 1470',
+  'FEDERAL 1470',
+];
+
 const styleOptions = [
   { value: 'premium', label: 'Premium' },
   { value: 'clean', label: 'Clean' },
@@ -23,9 +32,36 @@ const styleOptions = [
   { value: 'dark', label: 'Dark' },
 ];
 
+const outputFormats = [
+  { value: 'instagram-profile', label: 'Instagram · foto de perfil', dimensions: '320 × 320', width: 320, height: 320, circular: true },
+  { value: 'whatsapp-profile', label: 'WhatsApp · foto de perfil', dimensions: '192 × 192', width: 192, height: 192, circular: true },
+  { value: 'feed-square', label: 'Feed · quadrado', dimensions: '1080 × 1080', width: 1080, height: 1080 },
+  { value: 'feed-portrait', label: 'Feed Instagram · retrato 4:5', dimensions: '1080 × 1350', width: 1080, height: 1350 },
+  { value: 'feed-landscape', label: 'Feed · horizontal', dimensions: '1080 × 566', width: 1080, height: 566 },
+  { value: 'stories-reels-status', label: 'Stories · Reels · Status', dimensions: '1080 × 1920', width: 1080, height: 1920 },
+] as const;
+
+type CandidatePreset = {
+  slug: string;
+  label: string;
+  wardrobe: string;
+  prop: string;
+  sort_order?: number;
+  previewUrl: string;
+};
+
 type PublicSession = { requestId: string; token: string };
 type StatusPayload = {
-  request?: { status: string; source_count: number; generation_count: number; max_generations: number };
+  request?: {
+    status: string;
+    source_count: number;
+    generation_count: number;
+    max_generations: number;
+    candidate_preset_slug?: string;
+    output_format?: string;
+  };
+  candidatePreset?: { slug: string; label: string; wardrobe: string; prop: string } | null;
+  outputSpec?: { exactWidth?: number; exactHeight?: number; label?: string };
   job?: { status?: string; stage?: string; error_message?: string } | null;
   outputs?: Array<{ platform: string; url: string; width?: number; height?: number; qa_score?: number | null }>;
 };
@@ -48,38 +84,53 @@ function safeFileName(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'apoiador';
 }
 
-async function downloadLabeledPng(url: string, filename: string) {
+function drawCover(context: CanvasRenderingContext2D, bitmap: ImageBitmap, width: number, height: number) {
+  const sourceRatio = bitmap.width / bitmap.height;
+  const targetRatio = width / height;
+  let sx = 0;
+  let sy = 0;
+  let sw = bitmap.width;
+  let sh = bitmap.height;
+  if (sourceRatio > targetRatio) {
+    sw = bitmap.height * targetRatio;
+    sx = (bitmap.width - sw) / 2;
+  } else if (sourceRatio < targetRatio) {
+    sh = bitmap.width / targetRatio;
+    sy = (bitmap.height - sh) / 2;
+  }
+  context.drawImage(bitmap, sx, sy, sw, sh, 0, 0, width, height);
+}
+
+async function downloadFinalPng(url: string, filename: string, width: number, height: number) {
   const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) throw new Error('Falha ao carregar o arquivo final.');
-
   const sourceBlob = await response.blob();
   const bitmap = await createImageBitmap(sourceBlob);
   const canvas = document.createElement('canvas');
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
+  canvas.width = width;
+  canvas.height = height;
   const context = canvas.getContext('2d');
   if (!context) {
     bitmap.close();
     throw new Error('O navegador não conseguiu preparar o arquivo final.');
   }
 
-  context.drawImage(bitmap, 0, 0);
+  drawCover(context, bitmap, width, height);
   bitmap.close();
 
-  const barHeight = Math.max(48, Math.round(canvas.height * 0.06));
-  const fontSize = Math.max(16, Math.round(canvas.height * 0.022));
+  const barHeight = Math.max(14, Math.round(height * 0.045));
+  const fontSize = Math.max(7, Math.round(Math.min(width, height) * 0.015));
   context.fillStyle = 'rgba(0, 0, 0, 0.82)';
-  context.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
+  context.fillRect(0, height - barHeight, width, barHeight);
   context.fillStyle = '#ffffff';
   context.font = `700 ${fontSize}px Arial, sans-serif`;
   context.textAlign = 'center';
   context.textBaseline = 'middle';
-  context.fillText(AI_DISCLOSURE, canvas.width / 2, canvas.height - barHeight / 2, canvas.width * 0.94);
+  context.fillText(AI_DISCLOSURE, width / 2, height - barHeight / 2, width * 0.94);
 
   const outputBlob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Falha ao finalizar o PNG.')), 'image/png', 1);
   });
-
   const objectUrl = URL.createObjectURL(outputBlob);
   const anchor = document.createElement('a');
   anchor.href = objectUrl;
@@ -96,8 +147,12 @@ export default function SupporterAvatar1470() {
   const [city, setCity] = useState('');
   const [state, setState] = useState('SP');
   const [email, setEmail] = useState('');
-  const [supportText, setSupportText] = useState(supportTexts[1]);
+  const [supportText, setSupportText] = useState(supportTexts[0]);
   const [style, setStyle] = useState('premium');
+  const [outputFormat, setOutputFormat] = useState('feed-square');
+  const [presets, setPresets] = useState<CandidatePreset[]>([]);
+  const [candidatePresetSlug, setCandidatePresetSlug] = useState('');
+  const [presetsLoading, setPresetsLoading] = useState(true);
   const [files, setFiles] = useState<File[]>([]);
   const [consentImage, setConsentImage] = useState(false);
   const [consentTerms, setConsentTerms] = useState(false);
@@ -110,9 +165,33 @@ export default function SupporterAvatar1470() {
   const [downloading, setDownloading] = useState(false);
 
   const finalOutput = useMemo(() => status?.outputs?.find((output) => output.platform === 'master') || null, [status]);
+  const selectedPreset = useMemo(() => presets.find((item) => item.slug === candidatePresetSlug) || null, [presets, candidatePresetSlug]);
+  const selectedFormat = useMemo(() => outputFormats.find((item) => item.value === outputFormat) || outputFormats[2], [outputFormat]);
   const currentStatus = status?.request?.status || (session ? 'uploading' : 'draft');
   const isProcessing = ['queued', 'processing'].includes(currentStatus);
   const canApprove = currentStatus === 'completed' && Boolean(finalOutput?.url);
+  const lockedSelection = Boolean(session);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadPresets = async () => {
+      try {
+        const response = await fetch(PRESETS_URL, { cache: 'no-store' });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !Array.isArray(payload.presets)) throw new Error(payload.error || 'preset_list_unavailable');
+        if (!cancelled) {
+          setPresets(payload.presets);
+          setCandidatePresetSlug((current) => current || payload.presets[0]?.slug || '');
+        }
+      } catch {
+        if (!cancelled) toast({ title: 'Fotos oficiais indisponíveis', description: 'Tente novamente em instantes.', variant: 'destructive' });
+      } finally {
+        if (!cancelled) setPresetsLoading(false);
+      }
+    };
+    void loadPresets();
+    return () => { cancelled = true; };
+  }, [toast]);
 
   useEffect(() => {
     try {
@@ -129,9 +208,13 @@ export default function SupporterAvatar1470() {
     const refresh = async () => {
       try {
         const payload = await api({ action: 'status', requestId: session.requestId, token: session.token });
-        if (!cancelled) setStatus(payload);
+        if (!cancelled) {
+          setStatus(payload);
+          if (payload.request?.candidate_preset_slug) setCandidatePresetSlug(payload.request.candidate_preset_slug);
+          if (payload.request?.output_format) setOutputFormat(payload.request.output_format);
+        }
       } catch {
-        // A sessão pública pode ter expirado; a UI permanece sem expor detalhes internos.
+        // Sessão expirada permanece silenciosa para não expor detalhes internos.
       }
     };
     void refresh();
@@ -149,7 +232,8 @@ export default function SupporterAvatar1470() {
 
   const createAndUpload = async () => {
     if (!supporterName.trim()) return toast({ title: 'Informe seu nome.', variant: 'destructive' });
-    if (!files.length) return toast({ title: 'Envie pelo menos uma foto.', variant: 'destructive' });
+    if (!candidatePresetSlug) return toast({ title: 'Escolha uma foto oficial do Dr. Madeira.', variant: 'destructive' });
+    if (!files.length) return toast({ title: 'Envie pelo menos uma foto sua.', variant: 'destructive' });
     if (!consentImage || !consentTerms) return toast({ title: 'Confirme os consentimentos obrigatórios.', variant: 'destructive' });
 
     setBusy(true);
@@ -164,6 +248,8 @@ export default function SupporterAvatar1470() {
           email,
           supportText,
           style,
+          candidatePresetSlug,
+          outputFormat,
           consentImageUse: true,
           consentTerms: true,
           consentPublicGallery: consentGallery,
@@ -174,30 +260,17 @@ export default function SupporterAvatar1470() {
       }
 
       for (const file of files) {
-        const signed = await api({
-          action: 'upload-url',
-          requestId: active.requestId,
-          token: active.token,
-          mimeType: file.type,
-          fileSize: file.size,
-        });
+        const signed = await api({ action: 'upload-url', requestId: active.requestId, token: active.token, mimeType: file.type, fileSize: file.size });
         const { error } = await supabase.storage.from('supporter-avatar-uploads').uploadToSignedUrl(signed.path, signed.token, file, { contentType: file.type });
         if (error) throw error;
-        await api({
-          action: 'register-upload',
-          requestId: active.requestId,
-          token: active.token,
-          path: signed.path,
-          mimeType: file.type,
-          fileSize: file.size,
-        });
+        await api({ action: 'register-upload', requestId: active.requestId, token: active.token, path: signed.path, mimeType: file.type, fileSize: file.size });
       }
 
       await api({ action: 'submit', requestId: active.requestId, token: active.token });
       setStatus(await api({ action: 'status', requestId: active.requestId, token: active.token }));
       setApprovePreview(false);
       setApprovedAt(null);
-      toast({ title: 'Foto recebida.', description: 'A arte final entrou na fila de geração.' });
+      toast({ title: `${AGENT_NAME} iniciou a composição`, description: 'Sua foto e a referência oficial escolhida foram enviadas para edição.' });
     } catch (error) {
       toast({ title: 'Não foi possível iniciar a geração', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
     } finally {
@@ -226,8 +299,15 @@ export default function SupporterAvatar1470() {
     try {
       const approved = await approveFinal({ requestId: session.requestId, token: session.token });
       setApprovedAt(approved.approvedAt || new Date().toISOString());
-      await downloadLabeledPng(approved.url || finalOutput.url, `${safeFileName(supporterName)}-dr-madeira-1470-final.png`);
-      toast({ title: 'Arquivo final aprovado.', description: 'O PNG final contém a identificação de edição por IA. O Zica.ai não publica em nenhuma rede social.' });
+      const exactWidth = Number(status?.outputSpec?.exactWidth || selectedFormat.width);
+      const exactHeight = Number(status?.outputSpec?.exactHeight || selectedFormat.height);
+      await downloadFinalPng(
+        approved.url || finalOutput.url,
+        `${safeFileName(supporterName)}-madeiraaa-nelesss-1470-${outputFormat}.png`,
+        exactWidth,
+        exactHeight,
+      );
+      toast({ title: 'Arquivo final aprovado.', description: `${exactWidth} × ${exactHeight}px. O Zica.ai não publica em nenhuma rede social.` });
     } catch (error) {
       toast({ title: 'Falha ao liberar o arquivo final', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
     } finally {
@@ -257,18 +337,52 @@ export default function SupporterAvatar1470() {
   return (
     <div className="min-h-screen bg-[#070a0d] text-white">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(212,255,0,0.10),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(0,240,255,0.08),transparent_25%),linear-gradient(180deg,#070a0d,#0d1117)]" />
-      <main className="relative mx-auto max-w-5xl px-4 py-8 md:py-14">
+      <main className="relative mx-auto max-w-6xl px-4 py-8 md:py-14">
         <header className="mb-8 text-center">
-          <div className="mx-auto mb-4 inline-flex items-center gap-2 rounded-full border border-[#D4FF00]/30 bg-[#D4FF00]/10 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-[#D4FF00]"><Sparkles className="h-4 w-4" /> Avatar de apoio</div>
-          <h1 className="text-4xl font-black tracking-tight sm:text-5xl">Sua foto. Seu apoio. <span className="text-[#D4FF00]">1470.</span></h1>
-          <p className="mx-auto mt-4 max-w-3xl text-sm leading-6 text-slate-400 md:text-base">Envie sua própria fotografia, gere a arte, confira a prévia e baixe somente o arquivo final aprovado. O Zica.ai não acessa nem publica em suas redes sociais.</p>
+          <div className="mx-auto mb-4 inline-flex items-center gap-2 rounded-full border border-[#D4FF00]/30 bg-[#D4FF00]/10 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-[#D4FF00]"><Camera className="h-4 w-4" /> {AGENT_NAME}</div>
+          <h1 className="text-4xl font-black tracking-tight sm:text-5xl">Madeiraaa Nelesss! <span className="text-[#D4FF00]">🪵 1470</span></h1>
+          <p className="mx-auto mt-4 max-w-3xl text-sm leading-6 text-slate-400 md:text-base">Escolha uma foto oficial do Dr. Madeira, envie sua própria fotografia, selecione o formato e gere uma composição conjunta. Você confere a prévia e baixa somente o arquivo aprovado.</p>
+          <p className="mx-auto mt-2 max-w-3xl text-xs text-slate-500">Agente Full-Stack especializado em edição, composição e renderização fotográfica humanizada. Meta operacional de preservação visual: 99%, sem promessa de medição biométrica.</p>
         </header>
+
+        <Card className="mb-6 border-white/10 bg-[#11161d]/95 text-white">
+          <CardHeader>
+            <CardTitle>1. Escolha a foto oficial</CardTitle>
+            <CardDescription className="text-slate-400">As referências oficiais ficam fixas no sistema. Depois que a solicitação começa, a escolha é bloqueada para manter rastreabilidade.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {presetsLoading ? (
+              <div className="flex items-center justify-center py-12 text-slate-400"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Carregando fotos oficiais...</div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {presets.map((preset) => {
+                  const selected = candidatePresetSlug === preset.slug;
+                  return (
+                    <button
+                      type="button"
+                      key={preset.slug}
+                      disabled={lockedSelection}
+                      onClick={() => setCandidatePresetSlug(preset.slug)}
+                      className={`group overflow-hidden rounded-2xl border text-left transition ${selected ? 'border-[#D4FF00] ring-2 ring-[#D4FF00]/20' : 'border-white/10 hover:border-white/30'} ${lockedSelection ? 'cursor-not-allowed opacity-80' : ''}`}
+                    >
+                      <div className="aspect-[4/5] overflow-hidden bg-black/30"><img src={preset.previewUrl} alt={preset.label} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" /></div>
+                      <div className="p-3">
+                        <div className="flex items-center justify-between gap-2"><strong className="text-sm">{preset.label}</strong>{selected ? <CheckCircle2 className="h-4 w-4 text-[#D4FF00]" /> : null}</div>
+                        <div className="mt-1 text-[11px] text-slate-500">{preset.wardrobe.replace('-', ' ')} · {preset.prop.replace('-', ' ')}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <div className="grid gap-6 lg:grid-cols-[1.05fr_.95fr]">
           <Card className="border-white/10 bg-[#11161d]/95 text-white">
             <CardHeader>
-              <CardTitle>1. Dados e fotografia</CardTitle>
-              <CardDescription className="text-slate-400">Até 4 referências. JPG, PNG ou WebP, máximo de 10 MB por arquivo.</CardDescription>
+              <CardTitle>2. Sua foto e formato</CardTitle>
+              <CardDescription className="text-slate-400">Envie de 1 a 4 fotos suas. O agente escolhe a melhor referência técnica do seu rosto.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -276,71 +390,86 @@ export default function SupporterAvatar1470() {
                 <div><Label>E-mail, opcional</Label><Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@exemplo.com" className="border-white/10 bg-black/20" /></div>
                 <div><Label>Cidade</Label><Input value={city} onChange={(event) => setCity(event.target.value)} placeholder="Sua cidade" className="border-white/10 bg-black/20" /></div>
                 <div><Label>UF</Label><Input value={state} maxLength={2} onChange={(event) => setState(event.target.value.toUpperCase())} className="border-white/10 bg-black/20" /></div>
-                <div><Label>Estilo</Label><Select value={style} onValueChange={setStyle}><SelectTrigger className="border-white/10 bg-black/20"><SelectValue /></SelectTrigger><SelectContent>{styleOptions.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent></Select></div>
-                <div><Label>Texto de apoio</Label><Select value={supportText} onValueChange={setSupportText}><SelectTrigger className="border-white/10 bg-black/20"><SelectValue /></SelectTrigger><SelectContent>{supportTexts.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
+                <div><Label>Estilo</Label><Select value={style} onValueChange={setStyle} disabled={lockedSelection}><SelectTrigger className="border-white/10 bg-black/20"><SelectValue /></SelectTrigger><SelectContent>{styleOptions.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent></Select></div>
+                <div><Label>Slogan</Label><Select value={supportText} onValueChange={setSupportText} disabled={lockedSelection}><SelectTrigger className="border-white/10 bg-black/20"><SelectValue /></SelectTrigger><SelectContent>{supportTexts.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
+              </div>
+
+              <div>
+                <Label>Formato do arquivo final</Label>
+                <Select value={outputFormat} onValueChange={setOutputFormat} disabled={lockedSelection}>
+                  <SelectTrigger className="mt-1 border-white/10 bg-black/20"><SelectValue /></SelectTrigger>
+                  <SelectContent>{outputFormats.map((item) => <SelectItem key={item.value} value={item.value}>{item.label} · {item.dimensions}px</SelectItem>)}</SelectContent>
+                </Select>
+                <div className="mt-2 rounded-lg border border-[#00F0FF]/15 bg-[#00F0FF]/5 p-3 text-xs leading-5 text-slate-400">
+                  <strong className="text-[#00F0FF]">Zona segura:</strong> rosto, slogan e 1470 ficam concentrados no centro. Em Stories/Reels/Status, o agente reserva margens superiores e inferiores para a interface dos aplicativos. Em fotos de perfil, a composição considera o recorte circular.
+                </div>
               </div>
 
               <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-black/20 p-7 text-center hover:border-[#D4FF00]/50">
                 <Upload className="h-6 w-6 text-[#D4FF00]" />
-                <strong>Escolher fotografias</strong>
-                <span className="text-xs text-slate-400">{files.length ? `${files.length} arquivo(s) selecionado(s)` : '1 a 4 imagens'}</span>
+                <strong>Escolher minhas fotografias</strong>
+                <span className="text-xs text-slate-400">{files.length ? `${files.length} arquivo(s) selecionado(s)` : 'JPG, PNG ou WebP · máximo 10 MB cada'}</span>
                 <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={(event) => onFiles(event.target.files)} />
               </label>
 
+              {selectedPreset ? <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/15 p-3"><UserRound className="h-5 w-5 text-[#D4FF00]" /><div><div className="text-sm font-bold">Modelo escolhido: {selectedPreset.label}</div><div className="text-xs text-slate-500">Arquivo final: {selectedFormat.dimensions}px</div></div></div> : null}
+
               <div className="space-y-3 rounded-xl border border-white/10 bg-black/15 p-4 text-sm">
-                <label className="flex items-start gap-3"><input type="checkbox" checked={consentImage} onChange={(event) => setConsentImage(event.target.checked)} className="mt-1" /><span>Autorizo o uso das fotografias enviadas exclusivamente para gerar esta arte de apoio.</span></label>
+                <label className="flex items-start gap-3"><input type="checkbox" checked={consentImage} onChange={(event) => setConsentImage(event.target.checked)} className="mt-1" /><span>Autorizo o uso das fotografias enviadas exclusivamente para gerar esta arte.</span></label>
                 <label className="flex items-start gap-3"><input type="checkbox" checked={consentTerms} onChange={(event) => setConsentTerms(event.target.checked)} className="mt-1" /><span>Declaro que as fotografias são minhas ou que possuo autorização para utilizá-las e aceito os termos da geração.</span></label>
                 <label className="flex items-start gap-3"><input type="checkbox" checked={consentGallery} onChange={(event) => setConsentGallery(event.target.checked)} className="mt-1" /><span>Opcional: autorizo exibição posterior em galeria pública da campanha.</span></label>
-                <p className="border-t border-white/10 pt-3 text-xs leading-5 text-slate-400">A arte é editada com inteligência artificial da OpenAI. A prévia e o PNG final exibem a identificação “{AI_DISCLOSURE}”.</p>
+                <p className="border-t border-white/10 pt-3 text-xs leading-5 text-slate-400">A arte é editada com IA da OpenAI. O download recebe a identificação “{AI_DISCLOSURE}”.</p>
               </div>
 
-              <Button className="h-12 w-full bg-[#D4FF00] font-black text-black hover:bg-[#c6ef00]" onClick={() => void createAndUpload()} disabled={busy || isProcessing}>
+              <Button className="h-12 w-full bg-[#D4FF00] font-black text-black hover:bg-[#c6ef00]" onClick={() => void createAndUpload()} disabled={busy || isProcessing || presetsLoading}>
                 {busy || isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                Gerar arte final
+                Gerar com {AGENT_NAME}
               </Button>
             </CardContent>
           </Card>
 
           <Card className="border-white/10 bg-[#11161d]/95 text-white">
             <CardHeader>
-              <CardTitle>2. Prévia e arquivo final</CardTitle>
-              <CardDescription className="text-slate-400">Apenas uma arte final é liberada para download. Não há publicação automática.</CardDescription>
+              <CardTitle>3. Prévia e download</CardTitle>
+              <CardDescription className="text-slate-400">Apenas o formato escolhido é entregue. Não há publicação automática.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="relative aspect-square overflow-hidden rounded-xl border border-white/10 bg-black/30">
                 {finalOutput?.url ? (
                   <>
-                    <img src={finalOutput.url} alt="Prévia da arte final 1470 editada com IA" className="h-full w-full object-cover" />
+                    <img src={finalOutput.url} alt="Prévia da composição Madeiraaa Nelesss 1470" className="h-full w-full object-contain" />
                     <div className="absolute inset-x-0 bottom-0 bg-black/85 px-3 py-2 text-center text-[10px] font-bold tracking-wide text-white sm:text-xs">{AI_DISCLOSURE}</div>
                   </>
                 ) : (
-                  <div className="flex h-full items-center justify-center px-8 text-center text-sm text-slate-500">{isProcessing ? 'A OpenAI está preparando a arte final...' : currentStatus === 'qa' ? 'A arte foi retida para revisão de qualidade.' : 'A prévia aparecerá aqui após a geração.'}</div>
+                  <div className="flex h-full items-center justify-center px-8 text-center text-sm text-slate-500">{isProcessing ? `${AGENT_NAME} está renderizando sua composição...` : currentStatus === 'qa' ? 'A arte foi retida para revisão de qualidade.' : 'A prévia aparecerá aqui após a geração.'}</div>
                 )}
               </div>
 
               <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm">
                 <div className="flex items-center justify-between"><span>Status</span><strong className="uppercase text-[#D4FF00]">{currentStatus}</strong></div>
+                <div className="mt-2 text-xs text-slate-400">Preset: {status?.candidatePreset?.label || selectedPreset?.label || 'aguardando'}</div>
+                <div className="mt-1 text-xs text-slate-400">Saída: {status?.outputSpec?.label || selectedFormat.label} · {status?.outputSpec?.exactWidth || selectedFormat.width} × {status?.outputSpec?.exactHeight || selectedFormat.height}px</div>
                 {status?.job?.error_message ? <div className="mt-2 text-xs text-red-300">{status.job.error_message}</div> : null}
-                {finalOutput?.qa_score != null ? <div className="mt-2 text-xs text-slate-400">QA visual registrado: {finalOutput.qa_score}</div> : null}
+                {finalOutput?.qa_score != null ? <div className="mt-2 text-xs text-slate-400">QA visual do apoiador: {finalOutput.qa_score}</div> : null}
               </div>
 
               {canApprove && (
                 <label className="flex items-start gap-3 rounded-xl border border-[#D4FF00]/30 bg-[#D4FF00]/5 p-4 text-sm">
                   <input type="checkbox" checked={approvePreview} onChange={(event) => setApprovePreview(event.target.checked)} className="mt-1" />
-                  <span>Conferi a prévia, inclusive a identificação de edição por IA, e aprovo esta arte como arquivo final para uso manual nas minhas redes sociais.</span>
+                  <span>Conferi a prévia e aprovo esta composição como arquivo final para baixar e publicar manualmente nas minhas redes sociais.</span>
                 </label>
               )}
 
               <Button className="h-12 w-full" onClick={() => void approveAndDownload()} disabled={!canApprove || !approvePreview || downloading}>
                 {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : approvedAt ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Download className="mr-2 h-4 w-4" />}
-                Aprovar e baixar arquivo final
+                Aprovar e baixar {selectedFormat.dimensions}px
               </Button>
               <Button variant="outline" className="w-full border-white/15 bg-transparent" onClick={() => void regenerate()} disabled={!session || busy || isProcessing}><RefreshCcw className="mr-2 h-4 w-4" /> Gerar outra versão</Button>
               <Button variant="ghost" className="w-full text-slate-400" onClick={() => void deleteRequest()} disabled={!session || busy}><Trash2 className="mr-2 h-4 w-4" /> Remover minha solicitação</Button>
 
               <div className="rounded-xl border border-white/10 p-4 text-xs leading-5 text-slate-400">
                 <ShieldCheck className="mb-2 h-5 w-5 text-[#D4FF00]" />
-                O arquivo entregue é PNG fotográfico em alta qualidade e recebe uma faixa de identificação de edição por IA antes do download. Uma fotografia não é convertida em SVG puro porque isso reduz a fidelidade facial e SVG não é formato de upload aceito de forma geral pelas redes sociais. O branding pode ter elementos vetoriais durante a composição, mas o arquivo final permanece rasterizado.
+                O arquivo entregue é PNG fotográfico. A foto do apoiador e a foto oficial do candidato são tratadas como pessoas independentes: o agente recebe instrução explícita para não misturar rostos ou corpos. O arquivo final é rasterizado porque esse é o formato compatível com publicação nas redes sociais.
               </div>
             </CardContent>
           </Card>
