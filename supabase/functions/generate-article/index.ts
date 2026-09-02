@@ -1,287 +1,54 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
+import { getRuntimeKeys, resolveUserCaller } from "../_shared/supabase-runtime.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type","Access-Control-Allow-Methods":"POST, OPTIONS","Access-Control-Expose-Headers":"X-AI-Provider, X-AI-Model, X-AI-Reviewer, X-AI-Reviewer-Model"};
 
 interface ArticleConfig {
-  keyword: string;
-  title?: string;
-  secondaryKeywords?: string;
-  wordCount?: "short" | "medium" | "long" | "very-long";
-  tone?: string;
-  pointOfView?: string;
-  language?: string;
-  type?: "blog" | "sales" | "review" | "comparison";
-  contentType?: string;
-  segment?: string;
-  goal?: string;
-  intentType?: string;
-  companyName?: string;
-  companyPhone?: string;
-  companyAddress?: string;
-  targetAudience?: string;
-  painPoints?: string;
-  differentials?: string;
-  ctaObjective?: string;
-  additionalInfo?: string;
-  includeFaq?: boolean;
-  faqCount?: number;
-  includeTable?: boolean;
-  includeList?: boolean;
-  includeConclusion?: boolean;
-  includeMetaDescription?: boolean;
-  seoOptimization?: boolean;
-  humanizeContent?: boolean;
-  realtimeData?: boolean;
-  customInstructions?: string;
-  internalLinks?: Array<{ anchor: string; url: string }>;
-  sourcesContext?: string;
-  promptTemplateId?: string;
-  targetFunction?: string;
-  projectId?: string;
-  projectConfig?: Record<string, string | undefined>;
+  keyword:string;title?:string;secondaryKeywords?:string;wordCount?:"short"|"medium"|"long"|"very-long";tone?:string;pointOfView?:string;language?:string;type?:"blog"|"sales"|"review"|"comparison";contentType?:string;segment?:string;goal?:string;intentType?:string;companyName?:string;companyPhone?:string;companyAddress?:string;targetAudience?:string;painPoints?:string;differentials?:string;ctaObjective?:string;additionalInfo?:string;includeFaq?:boolean;faqCount?:number;includeTable?:boolean;includeList?:boolean;includeConclusion?:boolean;includeMetaDescription?:boolean;seoOptimization?:boolean;humanizeContent?:boolean;realtimeData?:boolean;customInstructions?:string;internalLinks?:Array<{anchor:string;url:string}>;sourcesContext?:string;promptTemplateId?:string;targetFunction?:string;projectId?:string;geographicReach?:string;audienceType?:string;aiAutoOptimization?:boolean;projectConfig?:Record<string,string|undefined>;
 }
 
-interface UserAISettings {
-  openai_api_key?: string | null;
-  gemini_api_key?: string | null;
-  anthropic_api_key?: string | null;
-  ai_provider?: string | null;
-  content_model?: string | null;
-  default_ai_model?: string | null;
+function json(body:unknown,status=200){return new Response(JSON.stringify(body),{status,headers:{...corsHeaders,"Content-Type":"application/json","Cache-Control":"no-store"}});}
+function targetWords(value?:ArticleConfig["wordCount"]){switch(value){case"short":return"700 a 1000 palavras";case"long":return"2200 a 2800 palavras";case"very-long":return"3500 a 4500 palavras";default:return"1200 a 1800 palavras";}}
+function clean(value:string){return value.replace(/```html/gi,"").replace(/```markdown/gi,"").replace(/```/g,"").trim();}
+function chunks(value:string,size=1800){const out:string[]=[];for(let i=0;i<value.length;i+=size)out.push(value.slice(i,i+size));return out;}
+function sse(content:string,meta:{provider:string;model:string;reviewer:string;reviewerModel:string}){const encoder=new TextEncoder();const parts=chunks(content);const stream=new ReadableStream({start(controller){for(const part of parts)controller.enqueue(encoder.encode(`data: ${JSON.stringify({choices:[{delta:{content:part}}]})}\n\n`));controller.enqueue(encoder.encode("data: [DONE]\n\n"));controller.close();}});return new Response(stream,{headers:{...corsHeaders,"Content-Type":"text/event-stream","Cache-Control":"no-cache, no-transform","X-AI-Provider":meta.provider,"X-AI-Model":meta.model,"X-AI-Reviewer":meta.reviewer,"X-AI-Reviewer-Model":meta.reviewerModel}});}
+
+function buildPrompt(config:ArticleConfig){
+  const links=(config.internalLinks||[]).slice(0,15).map(item=>`- ${item.anchor}: ${item.url}`).join("\n");
+  const projectContext=Object.entries(config.projectConfig||{}).filter(([,v])=>Boolean(v)).map(([k,v])=>`${k}: ${v}`).join("\n");
+  return `TAREFA\nProduza um artigo final publicável, original, útil e semanticamente profundo. Não explique o processo interno.\n\nASSUNTO PRINCIPAL: ${config.keyword}\nTÍTULO SUGERIDO: ${config.title||"crie um título específico, natural e fiel à intenção de busca"}\nIDIOMA: ${config.language||"pt-BR"}\nTOM: ${config.tone||"profissional e acessível"}\nPONTO DE VISTA: ${config.pointOfView||"adequado ao assunto"}\nTIPO: ${config.type||"blog"}\nFORMATO EDITORIAL: ${config.contentType||"how-to"}\nEXTENSÃO: ${targetWords(config.wordCount)}\nOBJETIVO: ${config.goal||"informar com precisão"}\nINTENÇÃO DE BUSCA: ${config.intentType||"informational"}\nSEGMENTO: ${config.segment||"general"}\nALCANCE GEOGRÁFICO INFORMADO: ${config.geographicReach||"não informado"}\nAUDIÊNCIA INFORMADA: ${config.audienceType||config.targetAudience||"não informada"}\nPALAVRAS-CHAVE SECUNDÁRIAS: ${config.secondaryKeywords||""}\n\nREGRAS DE CONTEÚDO\n- Não invente fatos, fontes, leis, decisões, números, pessoas, estatísticas ou URLs.\n- Se uma afirmação atual depender de fonte não fornecida, omita-a ou marque [VERIFICAR]; realtimeData não autoriza invenção nem significa acesso automático à web.\n- Responda diretamente ao problema do leitor no início.\n- Construa cobertura semântica por entidades, atributos, relações, dúvidas, objeções e subtópicos pertinentes, sem keyword stuffing.\n- Evite páginas doorway, texto fino e repetição feita apenas para SEO.\n- Use H1 único, H2/H3 descritivos, parágrafos curtos e estrutura mobile-first.\n- Faça o conteúdo ser compreensível também em trechos isolados por mecanismos de busca e sistemas generativos.\n- ${config.includeFaq===false?"Não inclua FAQ.":`Inclua até ${config.faqCount||5} perguntas frequentes somente se agregarem informação.`}\n- ${config.includeTable?"Use tabela quando melhorar comparação ou compreensão.":"Tabela é opcional e não deve ser forçada."}\n- ${config.includeList===false?"Listas são opcionais.":"Use listas quando facilitarem a leitura."}\n- ${config.includeConclusion===false?"Não force seção de conclusão.":"Finalize com síntese objetiva e CTA compatível com o contexto."}\n- ${config.includeMetaDescription===false?"Não inclua metadados em comentários HTML.":"Comece com comentários HTML <!-- TITLE_SEO: ... --> e <!-- META_DESCRIPTION: ... -->; título SEO natural e meta description informativa."}\n- Links internos só podem usar as URLs fornecidas abaixo.\n\nCONTEXTO DO PROJETO\n${projectContext||"Não informado."}\n\nLINKS INTERNOS AUTORIZADOS\n${links||"Nenhum informado."}\n\nFONTES / CONTEXTO VERIFICÁVEL\n${config.sourcesContext||"Nenhuma fonte adicional fornecida."}\n\nDORES / DIFERENCIAIS / CTA\nDores: ${config.painPoints||"não informadas"}\nDiferenciais: ${config.differentials||"não informados"}\nCTA: ${config.ctaObjective||"informativo e proporcional"}\n\nINSTRUÇÕES ADICIONAIS\n${config.customInstructions||config.additionalInfo||"Nenhuma."}`;
 }
 
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
+function reviewPrompt(content:string,config:ArticleConfig){return `Revise o artigo abaixo como revisor final editorial, jurídico quando pertinente, SEO/GEO/AEO e semântico. Preserve fatos e intenção. Corrija somente o necessário.\n\nCHECKLIST\n- remover qualquer afirmação factual inventada ou sem apoio;\n- preservar [VERIFICAR] quando a verificação ainda for necessária;\n- melhorar resposta direta, headings, entidades, relações semânticas e information gain;\n- eliminar keyword stuffing, repetição, doorway patterns e CTAs inadequados;\n- manter apenas links que estavam autorizados no contexto;\n- manter TITLE_SEO/META_DESCRIPTION quando solicitados;\n- não adicionar fontes ou URLs que não existam no material fornecido.\n\nRetorne SOMENTE o artigo final, sem parecer, nota ou explicação.\n\nPALAVRA-CHAVE: ${config.keyword}\nARTIGO:\n${content.slice(0,110000)}`;}
 
-function sseResponse(content: string, provider: string) {
-  const payload = `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\ndata: [DONE]\n\n`;
-  return new Response(payload, {
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "X-AI-Provider": provider,
-    },
-  });
-}
+Deno.serve(async(req:Request)=>{
+  if(req.method==="OPTIONS")return new Response(null,{headers:corsHeaders});
+  if(req.method!=="POST")return json({error:"Method not allowed"},405);
+  const requestId=crypto.randomUUID();
+  try{
+    const body=await req.json().catch(()=>({}));const config=(body?.config||body) as ArticleConfig;
+    if(!config?.keyword?.trim())return json({error:"keyword é obrigatório",request_id:requestId},400);
+    const runtime=getRuntimeKeys();if(!runtime.url||!runtime.publicKey||!runtime.secretKey)return json({error:"Backend incompleto",request_id:requestId},500);
+    const caller=await resolveUserCaller(req,runtime,null);if(caller.internal)return json({error:"user_session_required",request_id:requestId},401);
+    const orchestrator=await getOrchestratorForUser(caller.userId);
+    const generated=await orchestrator.callWithMeta("article_generation",[
+      {role:"system",content:"Produza apenas o conteúdo final solicitado. Aplique precisão factual, utilidade, semântica e descoberta sem técnicas manipulativas."},
+      {role:"user",content:buildPrompt(config)},
+    ],{preferredProvider:"openai",maxTokens:24000,temperature:0.45,prioritizeQuality:true});
+    let finalContent=clean(generated.content);
+    if(finalContent.length<300)throw new Error("IA retornou conteúdo insuficiente");
 
-function targetWords(value?: ArticleConfig["wordCount"]) {
-  switch (value) {
-    case "short": return "700 a 1000 palavras";
-    case "long": return "2200 a 2800 palavras";
-    case "very-long": return "3500 a 4500 palavras";
-    default: return "1200 a 1800 palavras";
-  }
-}
-
-function buildPrompt(config: ArticleConfig) {
-  const links = (config.internalLinks || [])
-    .slice(0, 12)
-    .map((item) => `${item.anchor}: ${item.url}`)
-    .join("\n");
-
-  const projectContext = Object.entries(config.projectConfig || {})
-    .filter(([, value]) => Boolean(value))
-    .map(([key, value]) => `${key}: ${value}`)
-    .join("\n");
-
-  return `Você é um redator editorial e SEO sênior. Produza somente o conteúdo final do artigo, sem explicar o processo interno.
-
-ASSUNTO PRINCIPAL: ${config.keyword}
-TÍTULO SUGERIDO: ${config.title || "crie um título claro e específico"}
-IDIOMA: ${config.language || "pt-BR"}
-TOM: ${config.tone || "profissional e acessível"}
-PONTO DE VISTA: ${config.pointOfView || "segunda pessoa quando natural"}
-TIPO: ${config.type || "blog"}
-EXTENSÃO: ${targetWords(config.wordCount)}
-OBJETIVO: ${config.goal || "informar com precisão"}
-INTENÇÃO: ${config.intentType || "informational"}
-SEGMENTO: ${config.segment || "general"}
-PALAVRAS-CHAVE SECUNDÁRIAS: ${config.secondaryKeywords || ""}
-
-REGRAS:
-- Não invente fatos, números, decisões, estudos, citações ou fontes.
-- Quando uma afirmação depender de dado atual e não houver fonte no contexto, use formulação prudente ou sinalize [VERIFICAR].
-- Use H1 único, H2 e H3 bem estruturados.
-- Parágrafos curtos e linguagem natural.
-- Evite repetição artificial da palavra-chave.
-- ${config.includeFaq === false ? "Não inclua FAQ." : `Inclua até ${config.faqCount || 5} perguntas frequentes úteis.`}
-- ${config.includeTable ? "Inclua tabela somente se acrescentar clareza." : "Tabela não é obrigatória."}
-- ${config.includeList === false ? "Listas são opcionais." : "Use listas quando facilitarem a leitura."}
-- ${config.includeConclusion === false ? "Não force uma seção de conclusão." : "Finalize com síntese objetiva e CTA coerente."}
-- ${config.includeMetaDescription === false ? "Não inclua meta description." : "Inclua no início comentários HTML TITLE_SEO e META_DESCRIPTION."}
-- Preserve conformidade jurídica, publicitária e editorial aplicável ao conteúdo.
-
-CONTEXTO DA ORGANIZAÇÃO:
-${projectContext || "Não informado."}
-
-LINKS INTERNOS DISPONÍVEIS:
-${links || "Nenhum informado."}
-
-FONTES/CONTEXTO FORNECIDO:
-${config.sourcesContext || "Nenhuma fonte adicional fornecida."}
-
-INSTRUÇÕES ADICIONAIS:
-${config.customInstructions || config.additionalInfo || "Nenhuma."}`;
-}
-
-async function tryOpenAI(apiKey: string, model: string, prompt: string) {
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      stream: true,
-      temperature: 0.65,
-      messages: [
-        { role: "system", content: "Responda apenas com o conteúdo final solicitado. Não revele raciocínio interno." },
-        { role: "user", content: prompt },
-      ],
-    }),
-  });
-
-  if (!response.ok || !response.body) {
-    return null;
-  }
-
-  return new Response(response.body, {
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "X-AI-Provider": "openai",
-    },
-  });
-}
-
-async function tryGemini(apiKey: string, model: string, prompt: string) {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.65, maxOutputTokens: 65536 },
-      }),
-    },
-  );
-
-  if (!response.ok) return null;
-  const data = await response.json();
-  const text = data?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || "").join("") || "";
-  return text ? sseResponse(text, "gemini") : null;
-}
-
-async function tryAnthropic(apiKey: string, model: string, prompt: string) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 16384,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-
-  if (!response.ok) return null;
-  const data = await response.json();
-  const text = data?.content?.map((item: { text?: string }) => item.text || "").join("") || "";
-  return text ? sseResponse(text, "anthropic") : null;
-}
-
-Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
-
-  const requestId = crypto.randomUUID();
-
-  try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return jsonResponse({ error: "Autorização necessária", request_id: requestId }, 401);
-    }
-
-    const token = authHeader.slice(7);
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-
-    if (!supabaseUrl || !anonKey || !serviceKey) {
-      return jsonResponse({ error: "Backend incompleto", request_id: requestId }, 500);
-    }
-
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: authData, error: authError } = await userClient.auth.getUser(token);
-    if (authError || !authData.user) {
-      return jsonResponse({ error: "Sessão inválida", request_id: requestId }, 401);
-    }
-
-    const body = await req.json();
-    const config = (body?.config || body) as ArticleConfig;
-    if (!config?.keyword?.trim()) {
-      return jsonResponse({ error: "keyword é obrigatório", request_id: requestId }, 400);
-    }
-
-    const admin = createClient(supabaseUrl, serviceKey);
-    const { data: settings } = await admin
-      .from("user_settings")
-      .select("openai_api_key, gemini_api_key, anthropic_api_key, ai_provider, content_model, default_ai_model")
-      .eq("user_id", authData.user.id)
-      .maybeSingle<UserAISettings>();
-
-    const openaiKey = settings?.openai_api_key || Deno.env.get("OPENAI_API_KEY") || "";
-    const geminiKey = settings?.gemini_api_key || Deno.env.get("GEMINI_API_KEY") || "";
-    const anthropicKey = settings?.anthropic_api_key || Deno.env.get("ANTHROPIC_API_KEY") || "";
-    const preferred = (settings?.ai_provider || "").toLowerCase();
-    const configuredModel = settings?.content_model || settings?.default_ai_model || "";
-    const prompt = buildPrompt(config);
-
-    const providers = preferred
-      ? [preferred, "openai", "gemini", "anthropic"]
-      : ["openai", "gemini", "anthropic"];
-
-    for (const provider of [...new Set(providers)]) {
-      if (provider === "openai" && openaiKey) {
-        const model = configuredModel.startsWith("gpt-") ? configuredModel : "gpt-4o-mini";
-        const response = await tryOpenAI(openaiKey, model, prompt);
-        if (response) return response;
-      }
-      if (provider === "gemini" && geminiKey) {
-        const model = configuredModel.startsWith("gemini-") ? configuredModel : "gemini-2.5-flash";
-        const response = await tryGemini(geminiKey, model, prompt);
-        if (response) return response;
-      }
-      if (provider === "anthropic" && anthropicKey) {
-        const model = configuredModel.startsWith("claude-") ? configuredModel : "claude-sonnet-4-5-20250929";
-        const response = await tryAnthropic(anthropicKey, model, prompt);
-        if (response) return response;
-      }
-    }
-
-    return jsonResponse({ error: "Nenhum provedor de IA disponível ou todos falharam", request_id: requestId }, 503);
-  } catch (error) {
-    return jsonResponse({
-      error: error instanceof Error ? error.message : "Erro interno",
-      request_id: requestId,
-    }, 500);
-  }
+    const preferredReviewer=generated.provider==="openai"?"anthropic":"openai";
+    let reviewer={provider:generated.provider,model:generated.model,content:finalContent};
+    try{
+      const reviewed=await orchestrator.callWithMeta("content_review",[
+        {role:"system",content:"Faça revisão final rigorosa e devolva somente o texto corrigido."},
+        {role:"user",content:reviewPrompt(finalContent,config)},
+      ],{preferredProvider:preferredReviewer,maxTokens:24000,temperature:0.12,prioritizeQuality:true});
+      const candidate=clean(reviewed.content);if(candidate.length>=300)reviewer={provider:reviewed.provider,model:reviewed.model,content:candidate};
+    }catch(reviewError){console.warn(JSON.stringify({level:"warn",message:"article_review_fallback",request_id:requestId,error:reviewError instanceof Error?reviewError.message:"review_failed"}));}
+    finalContent=reviewer.content;
+    return sse(finalContent,{provider:generated.provider,model:generated.model,reviewer:reviewer.provider,reviewerModel:reviewer.model});
+  }catch(error){return json({error:error instanceof Error?error.message:"Erro interno",request_id:requestId},500);}
 });
