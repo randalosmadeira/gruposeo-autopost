@@ -106,4 +106,31 @@ describe('Zica Posts stability regressions', () => {
     expect(publisher).toContain('categories?: Array<number | string>');
     expect(publisher).not.toContain('article.status === "published" && article.published_url');
   });
+
+  it('keeps all visible article editor actions connected to real handlers', () => {
+    const editor = read('src/components/articles/ArticleEditor.tsx');
+    expect(editor).toContain('onClick={handleExport}');
+    expect(editor).toContain("functions.invoke('generate-image'");
+    expect(editor).toContain("functions.invoke('regenerate-content'");
+    expect(editor).toContain("hasChanges ? 'Salvar e publicar' : 'Publicar'");
+    expect(editor).not.toContain('disabled={isPublishing || hasChanges}');
+  });
+
+  it('implements real AI regeneration instead of a placeholder endpoint', () => {
+    const regenerate = read('supabase/functions/regenerate-content/index.ts');
+    expect(regenerate).toContain('getOrchestratorForUser');
+    expect(regenerate).toContain('title_generation');
+    expect(regenerate).toContain('meta_description');
+    expect(regenerate).toContain('content_editing');
+    expect(regenerate).toContain('success: true');
+    expect(regenerate).not.toContain('Regeneração regida por instrucoes.md');
+  });
+
+  it('captures complete article version history with concurrency protection', () => {
+    const migration = read('supabase/migrations/20260902141000_fix_article_version_history.sql');
+    expect(migration).toContain('pg_advisory_xact_lock');
+    expect(migration).toContain('OLD.excerpt IS DISTINCT FROM NEW.excerpt');
+    expect(migration).toContain('OLD.featured_image_url IS DISTINCT FROM NEW.featured_image_url');
+    expect(migration).toContain('Estado inicial capturado pelo editor');
+  });
 });
