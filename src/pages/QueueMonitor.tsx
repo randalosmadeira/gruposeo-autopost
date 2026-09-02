@@ -1,675 +1,202 @@
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  RefreshCw, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  Pause,
-  RotateCcw,
-  Share2,
-  FileText,
-  Layers,
-  Activity,
-  TrendingUp
-} from "lucide-react";
-import { useProjects } from "@/hooks/useProjects";
-import { toast } from "sonner";
-import { 
-  QueueHistoryChart, 
-  useQueueNotifications, 
-  NotificationToggle,
-  QueueNotificationBanner 
-} from "@/components/queue-monitor";
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Activity, AlertTriangle, CheckCircle2, Clock, Layers, RefreshCw, RotateCcw, XCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useProjects } from '@/hooks/useProjects';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
-interface QueueItem {
-  id: number;
-  queue_type: string;
-  action: string;
+type OutboxRow = {
+  id?: number | string;
+  event_id?: string;
+  post_id?: number;
+  status?: string;
+  attempts?: number;
+  next_attempt_at?: string | null;
+  last_error?: string | null;
+  created_at?: string;
+  delivered_at?: string | null;
+  content_hash?: string | null;
+};
+
+type BrainJob = {
+  id: string;
+  job_type: string;
   status: string;
   priority: number;
   attempts: number;
   max_attempts: number;
+  article_id?: string | null;
+  last_error?: string | null;
+  next_attempt_at?: string | null;
   created_at: string;
-  started_at?: string;
-  completed_at?: string;
-  error_message?: string;
-  post_id?: number;
-  article_id?: string;
-}
-
-interface QueueStats {
-  pending: number;
-  processing: number;
-  completed: number;
-  failed: number;
-  cancelled: number;
-  paused: number;
-  total: number;
-  completed_last_hour: number;
-  avg_attempts: number;
-  history?: QueueHistoryItem[];
-}
-
-interface QueueHistoryItem {
-  timestamp: string;
-  completed: number;
-  failed: number;
-  pending: number;
-}
-
-interface SocialQueueItem {
-  id: number;
-  platform: string;
-  post_id: number;
-  status: string;
-  scheduled_at: string;
-  posted_at?: string;
-  message: string;
-  error_message?: string;
-}
-
-const statusIcons = {
-  pending: Clock,
-  processing: RefreshCw,
-  completed: CheckCircle,
-  failed: XCircle,
-  cancelled: XCircle,
-  paused: Pause,
+  updated_at: string;
 };
 
-const statusColors = {
-  pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-  processing: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-  completed: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-  failed: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-  cancelled: "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400",
-  paused: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
-};
+function rowsFrom(payload: any): OutboxRow[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.events)) return payload.events;
+  return [];
+}
 
-const platformColors: Record<string, string> = {
-  facebook: "bg-blue-600",
-  twitter: "bg-sky-500",
-  linkedin: "bg-blue-700",
-  instagram: "bg-pink-500",
-  pinterest: "bg-red-600",
-  telegram: "bg-sky-400",
-  whatsapp: "bg-green-500",
-};
+function fmt(value?: string | null) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function statusBadge(status = 'unknown') {
+  const normalized = status.toLowerCase();
+  if (['delivered', 'completed'].includes(normalized)) return <Badge className="bg-emerald-600">{status}</Badge>;
+  if (['processing'].includes(normalized)) return <Badge className="bg-blue-600">{status}</Badge>;
+  if (['pending', 'queued', 'retry'].includes(normalized)) return <Badge variant="secondary">{status}</Badge>;
+  if (['failed', 'dead_letter', 'error'].includes(normalized)) return <Badge variant="destructive">{status}</Badge>;
+  return <Badge variant="outline">{status}</Badge>;
+}
 
 export default function QueueMonitor() {
+  const { user } = useAuth();
   const { projects } = useProjects();
-  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const connectedProjects = useMemo(() => projects?.filter((p) => p.is_connected && p.wordpress_url && p.wordpress_connector_mode === 'zica_posts') || [], [projects]);
+  const [selectedProject, setSelectedProject] = useState<string>('');
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-
-  // Get connected WordPress projects
-  const connectedProjects = projects?.filter(p => p.is_connected && p.wordpress_url) || [];
+  const [retrying, setRetrying] = useState<string | number | null>(null);
 
   useEffect(() => {
-    if (connectedProjects.length > 0 && !selectedProject) {
-      setSelectedProject(connectedProjects[0].id);
-    }
+    if (!selectedProject && connectedProjects[0]?.id) setSelectedProject(connectedProjects[0].id);
+    if (selectedProject && !connectedProjects.some((p) => p.id === selectedProject)) setSelectedProject(connectedProjects[0]?.id || '');
   }, [connectedProjects, selectedProject]);
 
-  const selectedProjectData = connectedProjects.find(p => p.id === selectedProject);
+  const selected = connectedProjects.find((p) => p.id === selectedProject);
 
-  // Fetch content queue stats
-  const { data: contentQueueStats, isLoading: loadingContent, refetch: refetchContent } = useQuery({
-    queryKey: ['content-queue-stats', selectedProject],
-    queryFn: async (): Promise<QueueStats> => {
-      if (!selectedProjectData?.wordpress_url) {
-        throw new Error("Projeto não conectado");
-      }
-
-      const response = await fetch(`${selectedProjectData.wordpress_url}/wp-json/zica-ai/v1/queue/stats`, {
-        headers: {
-          'X-ZICA-AI-API-Key': selectedProjectData.wordpress_app_password || '',
-        },
+  const wordpress = useQuery({
+    queryKey: ['zica-posts-outbox', selectedProject],
+    enabled: Boolean(user && selectedProject),
+    refetchInterval: autoRefresh ? 10_000 : false,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('wordpress-operations', {
+        body: { projectId: selectedProject, action: 'status' },
       });
-
-      if (!response.ok) {
-        throw new Error("Erro ao buscar estatísticas da fila");
-      }
-
-      return response.json();
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Falha ao consultar Zica Posts');
+      return data;
     },
-    enabled: !!selectedProjectData?.wordpress_url,
-    refetchInterval: autoRefresh ? 10000 : false,
   });
 
-  // Fetch content queue items
-  const { data: contentQueueItems, isLoading: loadingItems, refetch: refetchItems } = useQuery({
-    queryKey: ['content-queue-items', selectedProject],
-    queryFn: async (): Promise<QueueItem[]> => {
-      if (!selectedProjectData?.wordpress_url) {
-        throw new Error("Projeto não conectado");
-      }
-
-      const response = await fetch(`${selectedProjectData.wordpress_url}/wp-json/zica-ai/v1/queue?limit=50`, {
-        headers: {
-          'X-ZICA-AI-API-Key': selectedProjectData.wordpress_app_password || '',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Erro ao buscar itens da fila");
-      }
-
-      const data = await response.json();
-      return data.items || [];
+  const brain = useQuery({
+    queryKey: ['zica-brain-jobs', user?.id, selectedProject],
+    enabled: Boolean(user?.id && selectedProject),
+    refetchInterval: autoRefresh ? 10_000 : false,
+    queryFn: async (): Promise<BrainJob[]> => {
+      const { data, error } = await (supabase as any)
+        .from('zica_brain_jobs')
+        .select('id,job_type,status,priority,attempts,max_attempts,article_id,last_error,next_attempt_at,created_at,updated_at')
+        .eq('user_id', user!.id)
+        .eq('project_id', selectedProject)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return data || [];
     },
-    enabled: !!selectedProjectData?.wordpress_url,
-    refetchInterval: autoRefresh ? 10000 : false,
   });
 
-  // Fetch social queue stats
-  const { data: socialQueueStats, isLoading: loadingSocial, refetch: refetchSocial } = useQuery({
-    queryKey: ['social-queue-stats', selectedProject],
-    queryFn: async (): Promise<QueueStats> => {
-      if (!selectedProjectData?.wordpress_url) {
-        throw new Error("Projeto não conectado");
-      }
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`queue-monitor-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'zica_brain_jobs', filter: `user_id=eq.${user.id}` }, () => queryClient.invalidateQueries({ queryKey: ['zica-brain-jobs'] }))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wordpress_stats', filter: `user_id=eq.${user.id}` }, () => queryClient.invalidateQueries({ queryKey: ['zica-posts-outbox'] }))
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [queryClient, user?.id]);
 
-      const response = await fetch(`${selectedProjectData.wordpress_url}/wp-json/zica-ai/v1/social/queue-stats`, {
-        headers: {
-          'X-ZICA-AI-API-Key': selectedProjectData.wordpress_app_password || '',
-        },
-      });
+  const outboxRows = useMemo(() => rowsFrom(wordpress.data?.outbox), [wordpress.data]);
+  const outboxStats = useMemo(() => ({
+    pending: outboxRows.filter((row) => ['pending', 'queued'].includes(String(row.status))).length,
+    processing: outboxRows.filter((row) => row.status === 'processing').length,
+    retry: outboxRows.filter((row) => row.status === 'retry').length,
+    delivered: outboxRows.filter((row) => row.status === 'delivered').length,
+    failed: outboxRows.filter((row) => ['failed', 'dead_letter'].includes(String(row.status))).length,
+  }), [outboxRows]);
 
-      if (!response.ok) {
-        throw new Error("Erro ao buscar estatísticas social");
-      }
+  const brainStats = useMemo(() => ({
+    queued: (brain.data || []).filter((job) => job.status === 'queued').length,
+    processing: (brain.data || []).filter((job) => job.status === 'processing').length,
+    retry: (brain.data || []).filter((job) => job.status === 'retry').length,
+    completed: (brain.data || []).filter((job) => job.status === 'completed').length,
+    dead: (brain.data || []).filter((job) => job.status === 'dead_letter').length,
+  }), [brain.data]);
 
-      return response.json();
-    },
-    enabled: !!selectedProjectData?.wordpress_url,
-    refetchInterval: autoRefresh ? 10000 : false,
-  });
+  const refreshAll = async () => {
+    await Promise.all([wordpress.refetch(), brain.refetch()]);
+    toast.success('Filas reconciliadas');
+  };
 
-  // Fetch social queue items
-  const { data: socialQueueItems, isLoading: loadingSocialItems } = useQuery({
-    queryKey: ['social-queue-items', selectedProject],
-    queryFn: async (): Promise<SocialQueueItem[]> => {
-      if (!selectedProjectData?.wordpress_url) {
-        throw new Error("Projeto não conectado");
-      }
-
-      const response = await fetch(`${selectedProjectData.wordpress_url}/wp-json/zica-ai/v1/social/queue?limit=50`, {
-        headers: {
-          'X-ZICA-AI-API-Key': selectedProjectData.wordpress_app_password || '',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Erro ao buscar fila social");
-      }
-
-      const data = await response.json();
-      return data.items || [];
-    },
-    enabled: !!selectedProjectData?.wordpress_url,
-    refetchInterval: autoRefresh ? 10000 : false,
-  });
-
-  const handleRetryItem = async (itemId: number, queueType: 'content' | 'social') => {
-    if (!selectedProjectData?.wordpress_url) return;
-
+  const retryOutbox = async (row: OutboxRow) => {
+    if (!selectedProject || !row.post_id) return;
+    const key = row.event_id || row.id || row.post_id;
+    setRetrying(key);
     try {
-      const endpoint = queueType === 'content' 
-        ? `${selectedProjectData.wordpress_url}/wp-json/zica-ai/v1/queue/${itemId}/retry`
-        : `${selectedProjectData.wordpress_url}/wp-json/zica-ai/v1/social/queue/${itemId}/retry`;
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'X-ZICA-AI-API-Key': selectedProjectData.wordpress_app_password || '',
-        },
+      const { data, error } = await supabase.functions.invoke('wordpress-operations', {
+        body: { projectId: selectedProject, action: 'sync', postIds: [row.post_id] },
       });
-
-      if (!response.ok) throw new Error("Erro ao reprocessar item");
-
-      toast.success("Item adicionado para reprocessamento");
-      refetchItems();
-      refetchContent();
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Falha ao reenfileirar');
+      toast.success(`Post ${row.post_id} enviado para reprocessamento`);
+      await wordpress.refetch();
     } catch (error) {
-      toast.error("Erro ao reprocessar item");
+      toast.error(error instanceof Error ? error.message : 'Falha ao reprocessar');
+    } finally {
+      setRetrying(null);
     }
   };
 
-  const handlePauseItem = async (itemId: number) => {
-    if (!selectedProjectData?.wordpress_url) return;
-
-    try {
-      const response = await fetch(`${selectedProjectData.wordpress_url}/wp-json/zica-ai/v1/queue/${itemId}/pause`, {
-        method: 'POST',
-        headers: {
-          'X-ZICA-AI-API-Key': selectedProjectData.wordpress_app_password || '',
-        },
-      });
-
-      if (!response.ok) throw new Error("Erro ao pausar item");
-
-      toast.success("Item pausado");
-      refetchItems();
-    } catch (error) {
-      toast.error("Erro ao pausar item");
-    }
-  };
-
-  const handleRefreshAll = () => {
-    refetchContent();
-    refetchItems();
-    refetchSocial();
-    toast.success("Dados atualizados");
-  };
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  // Queue notifications hook - monitors for new failures
-  useQueueNotifications(contentQueueItems, notificationsEnabled);
-
-  // Calculate failed count for banner
-  const failedCount = (contentQueueStats?.failed || 0) + (socialQueueStats?.failed || 0);
-
-  if (connectedProjects.length === 0) {
-    return (
-      <div className="p-6">
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Activity className="w-12 h-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Nenhum Projeto Conectado</h3>
-            <p className="text-muted-foreground text-center max-w-md">
-              Conecte um projeto WordPress para monitorar as filas de processamento em tempo real.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
+  if (!connectedProjects.length) {
+    return <div className="p-6"><Card className="border-dashed"><CardContent className="flex flex-col items-center py-12"><Activity className="mb-4 h-12 w-12 text-muted-foreground" /><h3 className="text-lg font-semibold">Nenhum Zica Posts conectado</h3><p className="mt-2 max-w-lg text-center text-sm text-muted-foreground">O monitor agora usa somente o contrato Zica Posts 3.10.2 e credenciais protegidas no backend/Vault.</p></CardContent></Card></div>;
   }
 
+  const loading = wordpress.isLoading || brain.isLoading;
+  const failures = outboxStats.failed + brainStats.dead;
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Layers className="w-6 h-6 text-primary" />
-            Monitor de Filas
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Acompanhe o processamento de conteúdo e posts sociais em tempo real
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Project Selector */}
-          {connectedProjects.length > 1 && (
-            <select
-              value={selectedProject || ''}
-              onChange={(e) => setSelectedProject(e.target.value)}
-              className="px-3 py-2 rounded-lg border bg-background text-sm"
-            >
-              {connectedProjects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          )}
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setAutoRefresh(!autoRefresh)}
-            className={autoRefresh ? "text-green-600" : ""}
-          >
-            {autoRefresh ? (
-              <>
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                Auto
-              </>
-            ) : (
-              <>
-                <Pause className="w-4 h-4 mr-2" />
-                Pausado
-              </>
-            )}
-          </Button>
-
-          <NotificationToggle 
-            enabled={notificationsEnabled} 
-            onToggle={() => setNotificationsEnabled(!notificationsEnabled)} 
-          />
-
-          <Button variant="outline" size="sm" onClick={handleRefreshAll}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Atualizar
-          </Button>
+    <div className="space-y-6 p-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div><h1 className="flex items-center gap-2 text-2xl font-bold"><Layers className="h-6 w-6 text-primary" /> Monitor de Filas</h1><p className="mt-1 text-sm text-muted-foreground">Outbox real do Zica Posts + fila persistente do Zica Brain. Nenhuma credencial WordPress é enviada ao navegador.</p></div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={selectedProject} onChange={(e) => setSelectedProject(e.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm">{connectedProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+          <Button variant="outline" onClick={() => setAutoRefresh((v) => !v)}>{autoRefresh ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Clock className="mr-2 h-4 w-4" />}{autoRefresh ? 'Tempo real' : 'Pausado'}</Button>
+          <Button variant="outline" onClick={() => void refreshAll()}><RefreshCw className="mr-2 h-4 w-4" /> Atualizar</Button>
         </div>
       </div>
 
-      {/* Failure Alert Banner */}
-      <QueueNotificationBanner failedCount={failedCount} />
+      {failures > 0 && <Card className="border-destructive/40 bg-destructive/5"><CardContent className="flex items-center gap-3 p-4"><AlertTriangle className="h-5 w-5 text-destructive" /><div><strong>{failures} falha(s) exigem atenção.</strong><div className="text-sm text-muted-foreground">Itens WordPress podem ser reenfileirados abaixo; dead letters do Brain permanecem visíveis para auditoria.</div></div></CardContent></Card>}
 
-      {/* History Chart */}
-      <QueueHistoryChart 
-        data={contentQueueStats?.history} 
-        isLoading={loadingContent} 
-      />
-
-      {/* Stats Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30">
-                <Clock className="w-5 h-5 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">
-                  {loadingContent ? <Skeleton className="w-8 h-7" /> : contentQueueStats?.pending || 0}
-                </p>
-                <p className="text-xs text-muted-foreground">Pendentes</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                <RefreshCw className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">
-                  {loadingContent ? <Skeleton className="w-8 h-7" /> : contentQueueStats?.processing || 0}
-                </p>
-                <p className="text-xs text-muted-foreground">Processando</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">
-                  {loadingContent ? <Skeleton className="w-8 h-7" /> : contentQueueStats?.completed || 0}
-                </p>
-                <p className="text-xs text-muted-foreground">Completos</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
-                <XCircle className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">
-                  {loadingContent ? <Skeleton className="w-8 h-7" /> : contentQueueStats?.failed || 0}
-                </p>
-                <p className="text-xs text-muted-foreground">Falhas</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                <TrendingUp className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">
-                  {loadingContent ? <Skeleton className="w-8 h-7" /> : contentQueueStats?.completed_last_hour || 0}
-                </p>
-                <p className="text-xs text-muted-foreground">Última Hora</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-pink-100 dark:bg-pink-900/30">
-                <Share2 className="w-5 h-5 text-pink-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">
-                  {loadingSocial ? <Skeleton className="w-8 h-7" /> : socialQueueStats?.pending || 0}
-                </p>
-                <p className="text-xs text-muted-foreground">Social Pending</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        {[['WP pendentes', outboxStats.pending, Clock], ['WP processando', outboxStats.processing, RefreshCw], ['WP retry', outboxStats.retry, RotateCcw], ['WP entregues', outboxStats.delivered, CheckCircle2], ['WP falhas', outboxStats.failed, XCircle]].map(([label, value, Icon]: any) => <Card key={label}><CardContent className="flex items-center gap-3 p-4"><Icon className="h-5 w-5 text-muted-foreground" /><div>{loading ? <Skeleton className="h-6 w-8" /> : <div className="text-2xl font-bold">{value}</div>}<div className="text-xs text-muted-foreground">{label}</div></div></CardContent></Card>)}
       </div>
 
-      {/* Tabs for Queue Types */}
-      <Tabs defaultValue="content" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="content" className="flex items-center gap-2">
-            <FileText className="w-4 h-4" />
-            Fila de Conteúdo
-            {contentQueueStats && contentQueueStats.pending > 0 && (
-              <Badge variant="secondary" className="ml-1">
-                {contentQueueStats.pending}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="social" className="flex items-center gap-2">
-            <Share2 className="w-4 h-4" />
-            Fila Social
-            {socialQueueStats && socialQueueStats.pending > 0 && (
-              <Badge variant="secondary" className="ml-1">
-                {socialQueueStats.pending}
-              </Badge>
-            )}
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Content Queue Tab */}
-        <TabsContent value="content">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center justify-between">
-                <span>Itens na Fila de Conteúdo</span>
-                {contentQueueStats && (
-                  <span className="text-sm font-normal text-muted-foreground">
-                    {contentQueueStats.total} total
-                  </span>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loadingItems ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-16 w-full" />
-                  ))}
-                </div>
-              ) : !contentQueueItems || contentQueueItems.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <CheckCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>Nenhum item na fila</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {contentQueueItems.map((item) => {
-                    const StatusIcon = statusIcons[item.status as keyof typeof statusIcons] || Clock;
-                    return (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between p-4 rounded-lg border bg-card hover:shadow-sm transition-shadow"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className={`p-2 rounded-lg ${statusColors[item.status as keyof typeof statusColors] || statusColors.pending}`}>
-                            <StatusIcon className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{item.action}</p>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <span>{item.queue_type}</span>
-                              <span>•</span>
-                              <span>Tentativa {item.attempts}/{item.max_attempts}</span>
-                              {item.post_id && (
-                                <>
-                                  <span>•</span>
-                                  <span>Post #{item.post_id}</span>
-                                </>
-                              )}
-                            </div>
-                            {item.error_message && (
-                              <p className="text-xs text-red-500 mt-1 line-clamp-1">
-                                {item.error_message}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <div className="text-right text-sm text-muted-foreground">
-                            <p>{formatDate(item.created_at)}</p>
-                            <Badge variant="outline" className="text-xs">
-                              P{item.priority}
-                            </Badge>
-                          </div>
-
-                          <div className="flex gap-1">
-                            {item.status === 'failed' && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleRetryItem(item.id, 'content')}
-                                title="Reprocessar"
-                              >
-                                <RotateCcw className="w-4 h-4" />
-                              </Button>
-                            )}
-                            {item.status === 'pending' && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handlePauseItem(item.id)}
-                                title="Pausar"
-                              >
-                                <Pause className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+      <Tabs defaultValue="wordpress">
+        <TabsList><TabsTrigger value="wordpress">Outbox WordPress</TabsTrigger><TabsTrigger value="brain">Zica Brain</TabsTrigger></TabsList>
+        <TabsContent value="wordpress">
+          <Card><CardHeader><CardTitle className="text-base">{selected?.name} · Zica Posts 3.10.2</CardTitle></CardHeader><CardContent className="space-y-2">
+            {wordpress.isError && <div className="rounded-md border border-destructive/40 p-3 text-sm text-destructive">{wordpress.error instanceof Error ? wordpress.error.message : 'Falha no outbox'}</div>}
+            {!wordpress.isLoading && !outboxRows.length && <div className="py-10 text-center text-sm text-muted-foreground">Outbox sem eventos pendentes.</div>}
+            {outboxRows.map((row, index) => { const rowKey = row.event_id || row.id || `${row.post_id}-${index}`; const canRetry = Boolean(row.post_id && ['pending','retry','failed'].includes(String(row.status))); return <div key={String(rowKey)} className="grid gap-2 rounded-lg border p-3 md:grid-cols-[1.2fr_.7fr_.6fr_1fr_auto] md:items-center"><div className="min-w-0"><div className="font-medium">Post {row.post_id ?? '—'}</div><div className="truncate text-xs text-muted-foreground">{row.event_id || row.content_hash || 'evento Zica Posts'}</div></div><div>{statusBadge(row.status)}</div><div className="text-sm">{row.attempts ?? 0} tentativa(s)</div><div className="text-xs text-muted-foreground">Próxima: {fmt(row.next_attempt_at)}{row.last_error ? <div className="mt-1 line-clamp-2 text-destructive">{row.last_error}</div> : null}</div><Button size="sm" variant="outline" disabled={!canRetry || retrying === rowKey} onClick={() => void retryOutbox(row)}><RotateCcw className="mr-1 h-3 w-3" /> Retry</Button></div>; })}
+          </CardContent></Card>
         </TabsContent>
-
-        {/* Social Queue Tab */}
-        <TabsContent value="social">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center justify-between">
-                <span>Fila de Posts Sociais</span>
-                {socialQueueStats && (
-                  <span className="text-sm font-normal text-muted-foreground">
-                    {socialQueueStats.total} total
-                  </span>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loadingSocialItems ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-16 w-full" />
-                  ))}
-                </div>
-              ) : !socialQueueItems || socialQueueItems.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Share2 className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>Nenhum post social na fila</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {socialQueueItems.map((item) => {
-                    const StatusIcon = statusIcons[item.status as keyof typeof statusIcons] || Clock;
-                    return (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between p-4 rounded-lg border bg-card hover:shadow-sm transition-shadow"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className={`p-2 rounded-lg ${platformColors[item.platform] || 'bg-gray-500'}`}>
-                            <Share2 className="w-4 h-4 text-white" />
-                          </div>
-                          <div>
-                            <p className="font-medium capitalize">{item.platform}</p>
-                            <p className="text-sm text-muted-foreground line-clamp-1 max-w-md">
-                              {item.message || `Post #${item.post_id}`}
-                            </p>
-                            {item.error_message && (
-                              <p className="text-xs text-red-500 mt-1">
-                                {item.error_message}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <Badge className={statusColors[item.status as keyof typeof statusColors] || statusColors.pending}>
-                              {item.status}
-                            </Badge>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {formatDate(item.scheduled_at)}
-                            </p>
-                          </div>
-
-                          {item.status === 'failed' && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleRetryItem(item.id, 'social')}
-                              title="Reprocessar"
-                            >
-                              <RotateCcw className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <TabsContent value="brain">
+          <Card><CardHeader><CardTitle className="text-base">Fila persistente central</CardTitle></CardHeader><CardContent className="space-y-2">
+            <div className="mb-3 flex flex-wrap gap-2"><Badge variant="outline">queued {brainStats.queued}</Badge><Badge variant="outline">processing {brainStats.processing}</Badge><Badge variant="outline">retry {brainStats.retry}</Badge><Badge variant="outline">completed {brainStats.completed}</Badge><Badge variant={brainStats.dead ? 'destructive' : 'outline'}>dead letter {brainStats.dead}</Badge></div>
+            {!brain.isLoading && !(brain.data || []).length && <div className="py-10 text-center text-sm text-muted-foreground">Nenhum job recente para este ecossistema.</div>}
+            {(brain.data || []).map((job) => <div key={job.id} className="grid gap-2 rounded-lg border p-3 md:grid-cols-[1.2fr_.8fr_.6fr_1fr]"><div><div className="font-medium">{job.job_type}</div><div className="text-xs text-muted-foreground">{job.article_id ? `Artigo ${job.article_id.slice(0, 8)}…` : job.id.slice(0, 8)}</div></div><div>{statusBadge(job.status)}</div><div className="text-sm">{job.attempts}/{job.max_attempts}</div><div className="text-xs text-muted-foreground">{fmt(job.updated_at)}{job.last_error ? <div className="mt-1 line-clamp-2 text-destructive">{job.last_error}</div> : null}</div></div>)}
+          </CardContent></Card>
         </TabsContent>
       </Tabs>
     </div>
