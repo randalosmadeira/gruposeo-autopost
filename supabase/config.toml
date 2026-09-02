@@ -1,7 +1,6 @@
 project_id = "ubahrbgaxrkjxklytobl"
 
-# Internal and authenticated application functions must validate a Supabase JWT.
-# Background jobs should call these functions with a service-role Bearer token.
+# User-facing functions validated by the Supabase gateway JWT layer.
 [functions.generate-article]
 verify_jwt = true
 
@@ -14,8 +13,20 @@ verify_jwt = true
 [functions.generate-authority-plan-stream]
 verify_jwt = true
 
+# These functions participate in server-to-server chains. They validate either
+# a real user JWT through auth.getUser() or an exact opaque service credential
+# inside the function, so gateway JWT parsing must not reject sb_secret_* keys.
 [functions.publish-to-wordpress]
-verify_jwt = true
+verify_jwt = false
+
+[functions.rewrite-news]
+verify_jwt = false
+
+[functions.generate-image]
+verify_jwt = false
+
+[functions.wordpress-operations]
+verify_jwt = false
 
 [functions.regenerate-content]
 verify_jwt = true
@@ -29,7 +40,7 @@ verify_jwt = true
 [functions.articles-api]
 verify_jwt = true
 
-# External webhooks authenticate with an application-level webhook signature/secret.
+# External webhooks authenticate with application-level signatures/secrets.
 [functions.webhooks]
 verify_jwt = false
 
@@ -37,9 +48,6 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.generate-landing-page]
-verify_jwt = true
-
-[functions.rewrite-news]
 verify_jwt = true
 
 [functions.parse-rss]
@@ -71,7 +79,6 @@ verify_jwt = true
 
 [functions.analyze-file]
 verify_jwt = true
-
 
 [auth.email.template.confirmation]
 subject = "Acesse seu Cérebro de Tráfego - Zica.ai"
