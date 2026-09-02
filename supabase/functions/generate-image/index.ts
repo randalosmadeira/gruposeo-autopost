@@ -1,314 +1,166 @@
-
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
-import { generateGeminiImage, callAI } from "../_shared/gemini.ts";
-import { createTokenLogger } from "../_shared/token-logger.ts";
-import { createEmotionalImageSystem } from "../_shared/emotional/emotional-image-system.ts";
-import type { EmotionalTrigger } from "../_shared/emotional/emotional-triggers-config.ts";
-import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
+import { fetchUserKeys } from "../_shared/byok-resolver.ts";
 
 const FUNCTION_NAME = "generate-image";
+const OPENAI_IMAGE_MODEL = "gpt-image-2";
+const CLAUDE_REVIEW_MODEL = "claude-sonnet-4-6";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-interface ImageRequest {
+type ImageRequest = {
   title: string;
   keywords?: string;
   context?: string;
-  segment?: 'legal' | 'health' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'education' | 'general';
-  style?: 'photorealistic' | 'illustration' | 'abstract';
-  aspectRatio?: '16:9' | '1:1' | '4:3';
-  quality?: 'standard' | 'high';
-  provider?: 'openai' | 'gemini' | 'auto';
-  model?: string;
-  articleId?: string;
-  // Emotional trigger support
-  emotionalTrigger?: EmotionalTrigger;
-  forceCaricature?: boolean;
   content?: string;
-  sourceName?: string;
-}
-
-// Mapping segment to visual context
-const SEGMENT_VISUAL_CONTEXT: Record<string, string> = {
-  legal: `Legal/law office environment. Professional attorneys in courtroom or office setting. Scales of justice, gavels, legal documents. Formal, trustworthy atmosphere with dark wood tones and leather.`,
-  health: `Medical/healthcare setting. Modern hospital or clinic environment. Doctors with patients, medical equipment, clean white spaces. Warm, caring, professional atmosphere with soft lighting.`,
-  fintech: `Financial technology environment. Modern office with screens showing charts and data. Digital elements, abstract representations of money flow. Blue and green color tones, professional and innovative feel.`,
-  ecommerce: `E-commerce/retail setting. Product photography style, lifestyle shots with products in use. Clean backgrounds, modern packaging, professional studio lighting.`,
-  'b2b-saas': `Business/corporate office environment. Modern workspace with technology, team collaboration, digital screens. Professional atmosphere with blue tones and clean lines.`,
-  education: `Educational setting. Classrooms, libraries, students learning. Books, laptops, whiteboards. Bright, inspiring atmosphere with warm lighting.`,
-  general: `Professional business environment. Clean, modern setting appropriate for the topic. Neutral but engaging atmosphere.`,
+  segment?: "legal" | "health" | "fintech" | "ecommerce" | "b2b-saas" | "education" | "general";
+  style?: "photorealistic" | "illustration" | "abstract";
+  aspectRatio?: "16:9" | "1:1" | "4:3" | "9:16";
+  quality?: "low" | "medium" | "high" | "standard";
+  articleId?: string;
+  userId?: string;
 };
 
-// Build image prompt from context
-function buildImagePrompt(request: ImageRequest): string {
-  const { title, keywords, context, segment = 'general', style = 'photorealistic', aspectRatio = '16:9' } = request;
-  
-  const visualContext = SEGMENT_VISUAL_CONTEXT[segment] || SEGMENT_VISUAL_CONTEXT.general;
-  const keywordList = keywords ? keywords.split(',').map(k => k.trim()).join(', ') : '';
-  
-  let prompt = `${style === 'photorealistic' ? 'Ultra-realistic, cinematic photograph shot on a Canon EOS R5 with 85mm f/1.4 lens' : style === 'illustration' ? 'Clean modern editorial illustration' : 'Abstract conceptual image'} that DIRECTLY represents the concept: "${title}".
-
-## CRITICAL: VISUAL CONNECTION TO TITLE
-The image MUST visually tell the story of "${title}". The viewer should immediately understand what the article is about just by looking at the image.
-${keywordList ? `Incorporate visual elements related to: ${keywordList}` : ''}
-${context ? `Scene context: ${context}` : ''}
-
-## SCENE & ENVIRONMENT
-${visualContext}
-
-## PHOTOGRAPHIC QUALITY
-- ${style === 'photorealistic' ? 'Shot in golden hour or soft studio lighting. Shallow depth of field with creamy bokeh. Natural skin tones. Film-grain texture. 8K resolution detail. Hyper-detailed textures on materials (fabric, wood, metal). Volumetric lighting with subtle lens flare.' : style === 'illustration' ? 'Clean vector-style illustration, modern flat design with rich color palette' : 'Abstract geometric patterns, gradient colors, modern art style'}
-- Aspect Ratio: ${aspectRatio}
-- Composition: Cinematic rule of thirds, strong leading lines, main subject clearly in sharp focus
-- Color grading: Professional cinema-grade color correction appropriate for ${segment} sector
-- Mood: Authentic, trustworthy, emotionally engaging - NOT stock photo feeling
-
-## ABSOLUTE RESTRICTIONS
-- ZERO text, watermarks, or overlays in the image
-- NO AI-looking artifacts, plastic skin, or uncanny valley effects
-- NO distorted faces, extra fingers, or incorrect anatomy
-- NO generic stock photo poses - make it feel candid and real
-- NO third-party logos or trademarks
-
-Generate ONE stunning, emotionally compelling image that creates immediate visual connection with the article title.`;
-
-  return prompt;
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" } });
 }
 
-Deno.serve(async (req) => {
+function jwtRole(token: string) {
+  try {
+    const payload = token.split(".")[1];
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    return String(JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")))?.role || "");
+  } catch { return ""; }
+}
+
+function buildPrompt(body: ImageRequest) {
+  const segment = body.segment || "general";
+  const style = body.style || "photorealistic";
+  const context = [body.context, body.content?.slice(0, 2500), body.keywords].filter(Boolean).join("\n");
+  return `Crie uma imagem editorial profissional para o conteúdo: "${body.title}".
+
+CONTEXTO:
+${context || "Imagem diretamente relacionada ao título."}
+
+REQUISITOS:
+- Segmento: ${segment}.
+- Estilo: ${style}.
+- Aparência humana e natural quando houver pessoas; anatomia correta e pele realista.
+- Composição editorial limpa, mobile-first e adequada a portal de notícias.
+- Iluminação profissional e alta nitidez no assunto principal.
+- Sem texto, sem logotipos, sem marcas d'água e sem símbolos partidários inventados.
+- Não inventar pessoas públicas, documentos, julgamentos ou cenas que aparentem ser registro factual de evento que não ocorreu.
+- Se o tema for jurídico, prefira representação conceitual ou ambiente institucional genérico, evitando simular provas ou processos reais.
+- A imagem deve comunicar o tema imediatamente sem parecer banco de imagens genérico.`;
+}
+
+async function reviewPromptWithClaude(apiKey: string, prompt: string, title: string) {
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: CLAUDE_REVIEW_MODEL,
+        max_tokens: 1200,
+        messages: [{ role: "user", content: `Revise o prompt de imagem abaixo para aumentar fidelidade editorial, naturalidade e segurança factual. Preserve o assunto "${title}". Não inclua explicações: devolva somente o prompt final.\n\n${prompt}` }],
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!response.ok) return { prompt, reviewed: false };
+    const data = await response.json();
+    const reviewed = data?.content?.map((part: { text?: string }) => part.text || "").join("").trim();
+    return { prompt: reviewed || prompt, reviewed: Boolean(reviewed) };
+  } catch {
+    return { prompt, reviewed: false };
+  }
+}
+
+function imageSize(ratio: ImageRequest["aspectRatio"]) {
+  if (ratio === "1:1") return "1024x1024";
+  if (ratio === "9:16") return "1024x1536";
+  return "1536x1024";
+}
+
+async function generateOpenAIImage(apiKey: string, prompt: string, body: ImageRequest) {
+  const quality = body.quality === "standard" ? "medium" : (body.quality || "high");
+  const response = await fetch("https://api.openai.com/v1/images/generations", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: OPENAI_IMAGE_MODEL, prompt, n: 1, size: imageSize(body.aspectRatio), quality }),
+    signal: AbortSignal.timeout(120000),
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    let code = "openai_image_error";
+    try { code = JSON.parse(text)?.error?.code || code; } catch { /* ignore */ }
+    const error = new Error(`OpenAI image HTTP ${response.status}: ${text.slice(0, 500)}`) as Error & { status?: number; code?: string };
+    error.status = response.status;
+    error.code = code;
+    throw error;
+  }
+  const data = JSON.parse(text);
+  const item = data?.data?.[0] || {};
+  if (item.b64_json) return `data:image/png;base64,${item.b64_json}`;
+  if (item.url) return String(item.url);
+  throw new Error("GPT-Image-2 não retornou imagem.");
+}
+
+Deno.serve(async (req: Request) => {
   const requestId = createRequestId();
   const log = createLogger(FUNCTION_NAME, requestId);
-  const startTime = Date.now();
-
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const started = Date.now();
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return json({ success: false, error: "Method not allowed", request_id: requestId }, 405);
 
   try {
-    log.requestStart(req.method);
+    const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) return json({ success: false, error: "Autorização necessária", request_id: requestId }, 401);
+    const token = authHeader.slice(7);
+    const role = jwtRole(token);
+    const body = await req.json() as ImageRequest;
+    if (!body.title?.trim()) return json({ success: false, error: "Título é obrigatório", request_id: requestId }, 400);
 
-    // Authentication
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      log.authFailure("missing_or_invalid_header");
-      return new Response(
-        JSON.stringify({ error: "Autorização necessária" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    if (!supabaseUrl || !anonKey || !serviceKey) return json({ success: false, error: "Backend incompleto", request_id: requestId }, 500);
+
+    let userId = "";
+    if (role === "service_role") {
+      userId = body.userId || "";
+      if (!userId) return json({ success: false, error: "userId é obrigatório em background", request_id: requestId }, 400);
+    } else {
+      const client = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+      const { data, error } = await client.auth.getUser(token);
+      if (error || !data.user) return json({ success: false, error: "Sessão inválida", request_id: requestId }, 401);
+      userId = data.user.id;
+      if (body.userId && body.userId !== userId) return json({ success: false, error: "userId incompatível", request_id: requestId }, 403);
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    const keys = await fetchUserKeys(userId);
+    if (!keys.openai) return json({ success: false, error: "OpenAI não configurada para este usuário", code: "openai_missing", request_id: requestId }, 503);
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const basePrompt = buildPrompt(body);
+    const reviewed = keys.anthropic ? await reviewPromptWithClaude(keys.anthropic, basePrompt, body.title) : { prompt: basePrompt, reviewed: false };
+    const image = await generateOpenAIImage(keys.openai, reviewed.prompt, body);
 
-    if (authError || !user) {
-      log.authFailure(authError?.message || "user_not_found");
-      return new Response(
-        JSON.stringify({ error: "Usuário não autenticado" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    log.authSuccess(user.id);
-
-    // Load user's BYOK API keys for image generation
-    await setEnvKeysForUser(user.id);
-
-    // Parse request
-    const body: ImageRequest = await req.json();
-    
-    if (!body.title) {
-      return new Response(
-        JSON.stringify({ error: "Título é obrigatório" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (body.articleId) {
+      const admin = createClient(supabaseUrl, serviceKey);
+      await admin.from("articles").update({ featured_image_url: image, updated_at: new Date().toISOString() }).eq("id", body.articleId).eq("user_id", userId);
     }
 
-    // Check if emotional trigger mode is requested
-    let imageResult: { imageData: string; mimeType: string } | null = null;
-    let imagePrompt = '';
-    let emotionalData: any = null;
-    let provider = 'auto';
-    let openaiQuality = 'hd';
-    
-    if (body.emotionalTrigger || body.forceCaricature) {
-      // Use emotional image system
-      log.info("emotional_mode", { trigger: body.emotionalTrigger, forceCaricature: body.forceCaricature });
-      
-      const emotionalSystem = createEmotionalImageSystem({
-        callAI: async (msgs) => callAI(msgs),
-        generateImage: async (prompt, opts) => generateGeminiImage(prompt, { aspectRatio: opts?.aspectRatio || "16:9" }),
-        defaultAspectRatio: body.aspectRatio || '16:9',
-        allowOriginalImageReuse: false,
-      });
-      
-      const emotionalResult = await emotionalSystem.processNewsImage({
-        title: body.title,
-        content: body.content || body.context || body.title,
-        sourceName: body.sourceName,
-        emotionalTrigger: body.emotionalTrigger,
-        forceCaricature: body.forceCaricature,
-        niche: body.segment,
-        aspectRatio: body.aspectRatio as '16:9' | '1:1' | '4:3',
-      });
-      
-      emotionalData = {
-        trigger: emotionalResult.emotionalAnalysis.primaryTrigger,
-        confidence: emotionalResult.emotionalAnalysis.confidence,
-        style: emotionalResult.decision.style,
-        decision: emotionalResult.decision.action,
-        disclaimer: emotionalResult.disclaimer || null,
-      };
-      
-      if (emotionalResult.success && emotionalResult.imageData) {
-        imageResult = { imageData: emotionalResult.imageData, mimeType: 'image/png' };
-        imagePrompt = emotionalResult.prompt || '';
-      }
-    }
-    
-    // Standard generation if emotional didn't produce result
-    let effectiveProvider = 'gemini'; // will be updated after generation
-    if (!imageResult) {
-      imagePrompt = buildImagePrompt(body);
-      
-      const requestedModel = body.model;
-      const requestedProvider = body.provider;
-      const requestedQuality = body.quality;
-
-      const derivedProvider = requestedModel?.startsWith('dall-e')
-        ? 'openai'
-        : requestedModel?.startsWith('gemini')
-          ? 'gemini'
-          : undefined;
-
-      provider = requestedProvider || derivedProvider || 'auto';
-      openaiQuality =
-        requestedModel === 'dall-e-3-standard' || requestedQuality === 'standard'
-          ? 'standard'
-          : 'hd';
-
-      log.info("generating_image", { 
-        title: body.title,
-        segment: body.segment || 'general',
-        style: body.style || 'photorealistic',
-        provider,
-        model: requestedModel,
-        openaiQuality: provider === 'openai' ? openaiQuality : undefined,
-      });
-
-      const aspectRatioMap: Record<string, "16:9" | "1:1" | "4:3" | "3:4" | "9:16"> = {
-        "16:9": "16:9",
-        "1:1": "1:1",
-        "4:3": "4:3",
-      };
-      const geminiAspectRatio = aspectRatioMap[body.aspectRatio || "16:9"] || "16:9";
-
-      const genResult = await generateGeminiImage(imagePrompt, {
-        aspectRatio: geminiAspectRatio,
-        provider,
-        openaiQuality,
-      });
-
-      if (genResult) {
-        imageResult = { imageData: genResult.imageData, mimeType: genResult.mimeType };
-        effectiveProvider = genResult.usedProvider || 'gemini';
-        log.info("image_provider_used", { provider: effectiveProvider, requested: provider });
-      }
-    }
-
-    if (!imageResult) {
-      log.error("no_image_generated", {});
-      return new Response(
-        JSON.stringify({ 
-          error: "Nenhuma imagem foi gerada. Tente novamente.",
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    log.info("image_generated", { 
-      hasImage: true,
-      mimeType: imageResult.mimeType,
-    });
-
-    // Log token usage – use effectiveProvider (reflects actual fallback used)
-    try {
-      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-      if (supabaseServiceKey) {
-        const tokenLogger = createTokenLogger(user.id, supabaseUrl, supabaseServiceKey);
-        const actualProvider = (effectiveProvider || provider) as 'openai' | 'gemini';
-        const actualModel = actualProvider === 'openai'
-          ? (openaiQuality === 'standard' ? 'dall-e-3-standard' : 'dall-e-3')
-          : 'imagen-3.0-generate-002';
-        
-        await tokenLogger.logImage(
-          actualProvider,
-          actualModel,
-          body.articleId,
-          openaiQuality,
-          { 
-            aspectRatio: body.aspectRatio || '16:9',
-            segment: body.segment || 'general',
-            style: body.style || 'photorealistic',
-            fallback: effectiveProvider !== provider && provider !== 'auto' ? true : undefined,
-          }
-        );
-      }
-    } catch (logError) {
-      // Don't fail the request if logging fails
-      console.error("Failed to log token usage:", logError);
-    }
-
-    // Generate alt text and metadata
-    const altText = emotionalData 
-      ? `${emotionalData.style === 'caricature' ? 'Caricatura editorial' : 'Imagem ilustrativa'}: ${body.title}`
-      : `Imagem ilustrativa: ${body.title}`;
-    const imageTitle = body.title.slice(0, 100);
-
-    log.requestEnd(200, Date.now() - startTime);
-    
-    return new Response(
-      JSON.stringify({
-        success: true,
-        image: imageResult.imageData,
-        alt: altText,
-        title: imageTitle,
-        prompt: imagePrompt,
-        model: effectiveProvider === 'openai' ? 'dall-e-3' : 'imagen-3.0-generate-002',
-        provider: effectiveProvider || 'gemini',
-        request_id: requestId,
-        ...(emotionalData && { emotional: emotionalData }),
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-
+    log.requestEnd(200, Date.now() - started);
+    return json({ success: true, image, alt: `Imagem ilustrativa: ${body.title}`, title: body.title.slice(0, 100), prompt: reviewed.prompt, promptReviewedByClaude: reviewed.reviewed, provider: "openai", model: OPENAI_IMAGE_MODEL, reviewer: reviewed.reviewed ? "anthropic" : null, reviewerModel: reviewed.reviewed ? CLAUDE_REVIEW_MODEL : null, request_id: requestId });
   } catch (error) {
-    log.error("generation_error", { error: error instanceof Error ? error.message : "unknown" });
-    log.requestEnd(500, Date.now() - startTime);
-    
-    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
-    
-    if (errorMessage.includes("Rate limit")) {
-      return new Response(
-        JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos.", request_id: requestId }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    
-    return new Response(
-      JSON.stringify({ 
-        error: errorMessage,
-        request_id: requestId,
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    const err = error as Error & { status?: number; code?: string };
+    log.error("generation_error", { error: err.message, code: err.code, status: err.status });
+    log.requestEnd(err.status || 500, Date.now() - started);
+    const credit = err.code === "credit_balance_exhausted" || err.message.includes("insufficient_quota");
+    return json({ success: false, error: credit ? "OpenAI sem saldo disponível para geração de imagem." : err.message, code: credit ? "openai_credit_balance_exhausted" : (err.code || "image_generation_failed"), retryable: !credit, request_id: requestId }, credit ? 402 : (err.status || 500));
   }
 });
