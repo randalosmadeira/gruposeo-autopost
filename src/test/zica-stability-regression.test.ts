@@ -67,7 +67,8 @@ describe('Zica Posts stability regressions', () => {
     const api = read('supabase/functions/supporter-avatar-public-v2/index.ts');
     expect(page).toContain('Nome e sobrenome *');
     expect(page).toContain('WhatsApp *');
-    expect(page).toContain('Prévia dos anexos');
+    expect(page).toContain('URL.createObjectURL(file)');
+    expect(page).toContain('previews.map');
     expect(page).toContain("action: 'update-contact'");
     expect(api).toContain('supporter_full_name_required');
     expect(api).toContain('supporter_email_invalid');
