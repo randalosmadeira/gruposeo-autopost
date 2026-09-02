@@ -31,6 +31,22 @@ verify_jwt = false
 [functions.execute-news-agents]
 verify_jwt = false
 
+# Public supporter ingress uses its own short-lived public token and rate limits.
+[functions.supporter-avatar-public]
+verify_jwt = false
+
+[functions.supporter-avatar-public-v2]
+verify_jwt = false
+
+# Internal supporter rendering validates the exact x-zica-internal secret in the function body.
+# Gateway JWT verification must stay disabled because modern Supabase service secrets are opaque.
+[functions.generate-supporter-avatar]
+verify_jwt = false
+
+# Administrative supporter database requires an authenticated user JWT and CEO role.
+[functions.supporter-avatar-admin]
+verify_jwt = true
+
 [functions.regenerate-content]
 verify_jwt = true
 
