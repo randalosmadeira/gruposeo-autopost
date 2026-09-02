@@ -40,6 +40,7 @@ const ElectoralPortalNetwork = lazy(() => import("./pages/ElectoralPortalNetwork
 const ElectoralEditorialConsole = lazy(() => import("./pages/ElectoralEditorialConsole"));
 const SupporterAvatar1470 = lazy(() => import("./pages/SupporterAvatar1470"));
 const SupporterAvatarPromptEditor = lazy(() => import("./pages/SupporterAvatarPromptEditor"));
+const SupportersAdminPage = lazy(() => import("./pages/SupportersAdminPage"));
 const AuditoriaGBP = lazy(() => import("./pages/AuditoriaGBP"));
 const Hiperlocal = lazy(() => import("./pages/Hiperlocal"));
 
@@ -123,6 +124,7 @@ const App = () => (
                 <Route path="/electoral-campaign/editorial-console" element={<ElectoralEditorialConsole />} />
                 <Route path="/electoral-campaign/history" element={<ElectoralEditorialConsole />} />
                 <Route path="/electoral-campaign/supporter-avatar-prompts" element={<SupporterAvatarPromptEditor />} />
+                <Route path="/electoral-campaign/supporters" element={<SupportersAdminPage />} />
                 <Route path="/auditoria-gbp" element={<AuditoriaGBP />} />
                 <Route path="/hiperlocal" element={<Hiperlocal />} />
                 <Route path="/system-prompts" element={<SettingsPage />} />
