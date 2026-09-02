@@ -22,12 +22,19 @@ export const LEGAL_NEWS_DIRECTIVES = `DIRETRIZES JURÍDICO-EDITORIAIS
 - O fechamento institucional deve ser sóbrio, informativo e sem promessa de êxito.
 `.trim();
 
-export const GEO_AEO_2026_RULES = `DIRETRIZES DE DESCOBERTA
-- Resposta direta e útil no primeiro parágrafo.
-- H1 único; H2/H3 descritivos e semanticamente relacionados.
-- Use entidades e geografia apenas quando pertinentes ao tema.
-- Sugira links internos contextuais; não invente URLs.
-- Estruture FAQ somente quando houver perguntas realmente respondidas pelo conteúdo.
+export const GEO_AEO_2026_RULES = `DIRETRIZES AVANÇADAS DE SEO, GEO, AEO E SEMÂNTICA
+- Entregue resposta direta e útil no primeiro parágrafo e aprofunde em seguida.
+- Use H1 único; H2/H3 descritivos, semanticamente relacionados e coerentes com intenção de busca.
+- Cubra entidades, atributos, relações, dúvidas, objeções e subtemas realmente ligados ao assunto; evite repetição mecânica da palavra-chave.
+- Acrescente informação nova e contexto útil em vez de apenas reescrever o que já foi dito.
+- Estruture trechos que possam ser compreendidos isoladamente por buscadores e LLMs: definições claras, listas, passos, comparações e respostas curtas quando pertinentes.
+- Use geografia somente quando factual e relevante. Cidade, bairro, região ou órgão local não podem ser inventados nem usados como stuffing.
+- Links internos devem ser contextuais e somente usar URLs fornecidas ou já conhecidas pelo sistema; nunca invente URL.
+- Links externos/fontes devem apontar apenas para fontes fornecidas ou efetivamente verificadas pelo pipeline.
+- FAQ somente quando houver perguntas realmente respondidas pelo conteúdo. Não criar perguntas redundantes apenas para volume.
+- Reforce E-E-A-T com autoria/contexto institucional, metodologia, limitações, fontes e atualização quando esses elementos forem verdadeiros.
+- Otimize para descoberta por mecanismos generativos sem alegar que determinado LLM cita ou recomenda a página se isso não tiver sido medido.
+- Evite páginas doorway, conteúdo fino, canibalização de intenção e clusters artificiais.
 `.trim();
 
 /**
@@ -44,8 +51,11 @@ export const MAD1470_ELECTORAL_DIRECTIVES = `UNIDADE ELEITORAL MAD1470
 `.trim();
 
 export function getDirectivesForTask(taskType: string): string {
-  const legalTasks = new Set(['legal_review', 'news_rewrite', 'content_review', 'content_editing', 'article_generation']);
+  const legalTasks = new Set(['legal_review', 'news_rewrite', 'content_review', 'content_editing']);
   const discoveryTasks = new Set(['seo_analysis', 'geo_optimization', 'aeo_analysis', 'eeat_review', 'title_generation', 'meta_description', 'share_of_model']);
+  if (taskType === 'article_generation') {
+    return `${BEHAVIORAL_DIRECTIVES}\n\n${LEGAL_NEWS_DIRECTIVES}\n\n${GEO_AEO_2026_RULES}`;
+  }
   if (legalTasks.has(taskType)) return `${BEHAVIORAL_DIRECTIVES}\n\n${LEGAL_NEWS_DIRECTIVES}`;
   if (discoveryTasks.has(taskType)) return `${BEHAVIORAL_DIRECTIVES}\n\n${GEO_AEO_2026_RULES}`;
   return BEHAVIORAL_DIRECTIVES;
