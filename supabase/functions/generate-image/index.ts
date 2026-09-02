@@ -1,16 +1,106 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
-const OPENAI_IMAGE_MODEL="gpt-image-2";const CLAUDE_REVIEW_MODEL="claude-sonnet-4-6";const TEMPLATE_NAME="visual_content_master_v1";
-const corsHeaders={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type","Access-Control-Allow-Methods":"POST, OPTIONS"};
-type Segment="legal"|"criminal"|"consumer"|"health"|"business"|"labor"|"electoral"|"news"|"fintech"|"education"|"general";
-type ImageRequest={title:string;keywords?:string;context?:string;content?:string;segment?:Segment;style?:"photorealistic"|"illustration"|"abstract";aspectRatio?:"16:9"|"1:1"|"4:3"|"9:16"|"4:5";quality?:"low"|"medium"|"high"|"standard";articleId?:string;userId?:string};
-const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...corsHeaders,"Content-Type":"application/json","Cache-Control":"no-store"}});
-function jwtRole(token:string){try{const p=token.split('.')[1];const n=p.replace(/-/g,'+').replace(/_/g,'/');return String(JSON.parse(atob(n.padEnd(Math.ceil(n.length/4)*4,'=')))?.role||'');}catch{return''}}
-const SEGMENT_RULES:Record<Segment,string>={legal:"Ambiente jurídico realista e genérico. Não falsificar processo, sentença, prova, selo, brasão ou documento oficial.",criminal:"Atmosfera séria e informativa. Não glamourizar violência nem simular prisão, operação policial ou cena criminal real específica.",consumer:"Situação cotidiana de consumo, fraude, crédito, contrato ou atendimento, sem dados pessoais ou bancários reais.",health:"Ambiente clínico genérico e realista. Não simular prontuário, diagnóstico ou resultado médico atribuído a pessoa real.",business:"Ambiente empresarial, contratos, operação e tecnologia com aparência editorial profissional.",labor:"Ambiente de trabalho coerente com o tema, sem estereótipos humilhantes e sem documento trabalhista falsificado.",electoral:"Usar somente ativos e identidade autorizados do módulo eleitoral. Não inventar apoio de terceiros, multidões, eventos ou endossos.",news:"Imagem editorial conceitual. Não se passar por fotografia documental de fato que não ocorreu.",fintech:"Ambiente financeiro/tecnológico sem números, contas, cartões ou extratos reais.",education:"Ambiente educacional realista e genérico, sem identificar menores reais ou instituições específicas sem autorização.",general:"Imagem editorial profissional coerente com o assunto, sem simular fatos não documentados."};
-function size(ratio:ImageRequest['aspectRatio']){if(ratio==='1:1')return'1024x1024';if(ratio==='9:16'||ratio==='4:5')return'1024x1536';return'1536x1024';}
-async function loadTemplate(admin:any,userId:string){const{data}=await admin.from('prompt_templates').select('prompt,agent_name').eq('user_id',userId).eq('name',TEMPLATE_NAME).maybeSingle();return{prompt:String(data?.prompt||''),agentName:String(data?.agent_name||'NEXUS VISUAL STUDIO')};}
-async function loadKeys(admin:any,userId:string){const{data}=await admin.from('user_settings').select('openai_api_key,anthropic_api_key').eq('user_id',userId).maybeSingle();return{openai:String(data?.openai_api_key||''),anthropic:String(data?.anthropic_api_key||'')};}
-function buildPrompt(body:ImageRequest,template:string){const seg=body.segment||'general';const style=body.style||'photorealistic';const context=[body.context,body.content?.slice(0,3000),body.keywords].filter(Boolean).join('\n');return`${template}\n\nTAREFA VISUAL ESPECÍFICA\nTítulo: ${body.title}\nSegmento: ${seg}\nFormato: ${body.aspectRatio||'16:9'}\nEstilo: ${style}\nRegra do segmento: ${SEGMENT_RULES[seg]}\nContexto:\n${context||'Representar diretamente o tema sem inventar fatos.'}\n\nREQUISITOS OPERACIONAIS\n- Aparência humana natural quando houver pessoas; anatomia correta e pele realista.\n- Composição limpa, mobile-first e com assunto principal legível em miniatura.\n- Não inserir texto, logotipos, marcas d'água ou documentos oficiais falsos, salvo branding explicitamente autorizado no contexto.\n- Não criar pessoas públicas ou terceiros identificáveis que não estejam autorizados.\n- Não representar como fotografia factual um evento que não aconteceu.\n- Entregar uma única imagem final editorial.`;}
-async function reviewClaude(key:string,prompt:string,title:string){try{const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':key,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model:CLAUDE_REVIEW_MODEL,max_tokens:1800,messages:[{role:'user',content:`Revise o prompt visual abaixo. Preserve o assunto "${title}" e todas as restrições factuais. Aumente naturalidade, coerência e composição. Retorne somente o prompt final.\n\n${prompt}` }]}),signal:AbortSignal.timeout(30000)});if(!r.ok)return{prompt,reviewed:false};const d=await r.json();const t=d?.content?.map((x:any)=>x?.text||'').join('').trim();return{prompt:t||prompt,reviewed:Boolean(t)};}catch{return{prompt,reviewed:false}}}
-async function generate(key:string,prompt:string,body:ImageRequest){const quality=body.quality==='standard'?'medium':(body.quality||'high');const r=await fetch('https://api.openai.com/v1/images/generations',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({model:OPENAI_IMAGE_MODEL,prompt,n:1,size:size(body.aspectRatio),quality}),signal:AbortSignal.timeout(120000)});const txt=await r.text();if(!r.ok){let code='openai_image_error';try{code=JSON.parse(txt)?.error?.code||code}catch{}const e=new Error(`OpenAI image HTTP ${r.status}: ${txt.slice(0,400)}`) as Error&{status?:number;code?:string};e.status=r.status;e.code=code;throw e;}const d=JSON.parse(txt);const item=d?.data?.[0]||{};if(item.b64_json)return`data:image/png;base64,${item.b64_json}`;if(item.url)return String(item.url);throw new Error('GPT-Image-2 não retornou imagem.');}
-Deno.serve(async(req:Request)=>{if(req.method==='OPTIONS')return new Response(null,{headers:corsHeaders});if(req.method!=='POST')return json({success:false,error:'Method not allowed'},405);const requestId=crypto.randomUUID();try{const auth=req.headers.get('Authorization')||'';if(!auth.startsWith('Bearer '))return json({success:false,error:'Autorização necessária',request_id:requestId},401);const token=auth.slice(7),role=jwtRole(token);const body=await req.json() as ImageRequest;if(!body.title?.trim())return json({success:false,error:'Título é obrigatório',request_id:requestId},400);const url=Deno.env.get('SUPABASE_URL')||'',anon=Deno.env.get('SUPABASE_ANON_KEY')||'',service=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||'';if(!url||!anon||!service)return json({success:false,error:'Backend incompleto',request_id:requestId},500);const admin=createClient(url,service);let userId='';if(role==='service_role'){userId=body.userId||'';if(!userId)return json({success:false,error:'userId é obrigatório em background',request_id:requestId},400);}else{const client=createClient(url,anon,{global:{headers:{Authorization:auth}}});const{data,error}=await client.auth.getUser(token);if(error||!data.user)return json({success:false,error:'Sessão inválida',request_id:requestId},401);userId=data.user.id;if(body.userId&&body.userId!==userId)return json({success:false,error:'userId incompatível',request_id:requestId},403);}const template=await loadTemplate(admin,userId);if(!template.prompt)return json({success:false,error:'visual_prompt_not_installed',request_id:requestId},500);const keys=await loadKeys(admin,userId);if(!keys.openai)return json({success:false,error:'OpenAI não configurada',code:'openai_missing',request_id:requestId},503);const base=buildPrompt(body,template.prompt);const reviewed=keys.anthropic?await reviewClaude(keys.anthropic,base,body.title):{prompt:base,reviewed:false};const image=await generate(keys.openai,reviewed.prompt,body);if(body.articleId)await admin.from('articles').update({featured_image_url:image,updated_at:new Date().toISOString()}).eq('id',body.articleId).eq('user_id',userId);return json({success:true,image,alt:`Imagem ilustrativa: ${body.title}`,title:body.title.slice(0,100),agent:template.agentName,prompt_template:TEMPLATE_NAME,prompt:reviewed.prompt,promptReviewedByClaude:reviewed.reviewed,provider:'openai',model:OPENAI_IMAGE_MODEL,reviewer:reviewed.reviewed?'anthropic':null,reviewerModel:reviewed.reviewed?CLAUDE_REVIEW_MODEL:null,segment:body.segment||'general',aspectRatio:body.aspectRatio||'16:9',request_id:requestId});}catch(error){const e=error as Error&{status?:number;code?:string};const credit=e.code==='credit_balance_exhausted'||e.message.includes('insufficient_quota');return json({success:false,error:credit?'OpenAI sem saldo disponível para geração de imagem.':e.message,code:credit?'openai_credit_balance_exhausted':(e.code||'image_generation_failed'),image_pending:true,retryable:!credit,request_id:requestId},credit?402:(e.status||500));}});
+import { fetchEffectiveAIKeys } from "../_shared/byok-resolver.ts";
+import { adminClient, errorStatus, getRuntimeKeys, resolveUserCaller } from "../_shared/supabase-runtime.ts";
+
+const OPENAI_IMAGE_MODEL = "gpt-image-2";
+const CLAUDE_REVIEW_MODEL = "claude-sonnet-4-6";
+const TEMPLATE_NAME = "visual_content_master_v1";
+const corsHeaders = {"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type","Access-Control-Allow-Methods":"POST, OPTIONS"};
+
+type Segment = "legal"|"criminal"|"consumer"|"health"|"business"|"labor"|"electoral"|"news"|"fintech"|"education"|"general";
+type ImageRequest = {
+  title: string; keywords?: string; context?: string; content?: string; segment?: Segment;
+  style?: "photorealistic"|"illustration"|"abstract"; aspectRatio?: "16:9"|"1:1"|"4:3"|"9:16"|"4:5";
+  quality?: "low"|"medium"|"high"|"standard"; articleId?: string; userId?: string;
+};
+
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {status,headers:{...corsHeaders,"Content-Type":"application/json","Cache-Control":"no-store"}});
+
+const SEGMENT_RULES: Record<Segment,string> = {
+  legal:"Ambiente jurídico realista e genérico. Não falsificar processo, sentença, prova, selo, brasão ou documento oficial.",
+  criminal:"Atmosfera séria e informativa. Não glamourizar violência nem simular prisão, operação policial ou cena criminal real específica.",
+  consumer:"Situação cotidiana de consumo, fraude, crédito, contrato ou atendimento, sem dados pessoais ou bancários reais.",
+  health:"Ambiente clínico genérico e realista. Não simular prontuário, diagnóstico ou resultado médico atribuído a pessoa real.",
+  business:"Ambiente empresarial, contratos, operação e tecnologia com aparência editorial profissional.",
+  labor:"Ambiente de trabalho coerente com o tema, sem estereótipos humilhantes e sem documento trabalhista falsificado.",
+  electoral:"Usar somente ativos e identidade autorizados do módulo eleitoral. Não inventar apoio de terceiros, multidões, eventos ou endossos.",
+  news:"Imagem editorial conceitual. Não se passar por fotografia documental de fato que não ocorreu.",
+  fintech:"Ambiente financeiro/tecnológico sem números, contas, cartões ou extratos reais.",
+  education:"Ambiente educacional realista e genérico, sem identificar menores reais ou instituições específicas sem autorização.",
+  general:"Imagem editorial profissional coerente com o assunto, sem simular fatos não documentados."
+};
+
+function size(ratio: ImageRequest['aspectRatio']) {
+  if (ratio === '1:1') return '1024x1024';
+  if (ratio === '9:16' || ratio === '4:5') return '1024x1536';
+  return '1536x1024';
+}
+
+async function loadTemplate(admin: any, userId: string) {
+  const { data } = await admin.from('prompt_templates').select('prompt,agent_name').eq('user_id',userId).eq('name',TEMPLATE_NAME).maybeSingle();
+  return { prompt:String(data?.prompt||''), agentName:String(data?.agent_name||'NEXUS VISUAL STUDIO') };
+}
+
+function buildPrompt(body: ImageRequest, template: string) {
+  const seg = body.segment || 'general';
+  const style = body.style || 'photorealistic';
+  const context = [body.context,body.content?.slice(0,3000),body.keywords].filter(Boolean).join('\n');
+  return `${template}\n\nTAREFA VISUAL ESPECÍFICA\nTítulo: ${body.title}\nSegmento: ${seg}\nFormato: ${body.aspectRatio||'16:9'}\nEstilo: ${style}\nRegra do segmento: ${SEGMENT_RULES[seg]}\nContexto:\n${context||'Representar diretamente o tema sem inventar fatos.'}\n\nREQUISITOS OPERACIONAIS\n- Aparência humana natural quando houver pessoas; anatomia correta e pele realista.\n- Composição limpa, mobile-first e com assunto principal legível em miniatura.\n- Não inserir texto, logotipos, marcas d'água ou documentos oficiais falsos, salvo branding explicitamente autorizado no contexto.\n- Não criar pessoas públicas ou terceiros identificáveis que não estejam autorizados.\n- Não representar como fotografia factual um evento que não aconteceu.\n- Entregar uma única imagem final editorial.`;
+}
+
+async function reviewClaude(key: string, prompt: string, title: string) {
+  if (!key) return { prompt, reviewed:false };
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':key,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model:CLAUDE_REVIEW_MODEL,max_tokens:1800,messages:[{role:'user',content:`Revise o prompt visual abaixo. Preserve o assunto "${title}" e todas as restrições factuais. Aumente naturalidade, coerência e composição. Retorne somente o prompt final.\n\n${prompt}`}]}),signal:AbortSignal.timeout(30000)});
+    if (!r.ok) return { prompt, reviewed:false };
+    const d = await r.json();
+    const t = d?.content?.map((x:any)=>x?.text||'').join('').trim();
+    return { prompt:t||prompt, reviewed:Boolean(t) };
+  } catch { return { prompt, reviewed:false }; }
+}
+
+async function generate(key: string, prompt: string, body: ImageRequest) {
+  const quality = body.quality === 'standard' ? 'medium' : (body.quality || 'high');
+  const r = await fetch('https://api.openai.com/v1/images/generations',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({model:OPENAI_IMAGE_MODEL,prompt,n:1,size:size(body.aspectRatio),quality}),signal:AbortSignal.timeout(120000)});
+  const txt = await r.text();
+  if (!r.ok) {
+    let code = 'openai_image_error';
+    try { code = JSON.parse(txt)?.error?.code || code; } catch {}
+    const e = new Error(`OpenAI image HTTP ${r.status}: ${txt.slice(0,400)}`) as Error & {status?:number;code?:string};
+    e.status = r.status; e.code = code; throw e;
+  }
+  const d = JSON.parse(txt); const item = d?.data?.[0] || {};
+  if (item.b64_json) return `data:image/png;base64,${item.b64_json}`;
+  if (item.url) return String(item.url);
+  throw new Error('GPT-Image-2 não retornou imagem.');
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response(null,{headers:corsHeaders});
+  if (req.method !== 'POST') return json({success:false,error:'Method not allowed'},405);
+  const requestId = crypto.randomUUID();
+  try {
+    const body = await req.json() as ImageRequest;
+    if (!body.title?.trim()) return json({success:false,error:'Título é obrigatório',request_id:requestId},400);
+    const runtime = getRuntimeKeys();
+    if (!runtime.url || !runtime.publicKey || !runtime.secretKey) return json({success:false,error:'Backend incompleto',request_id:requestId},500);
+    const caller = await resolveUserCaller(req,runtime,body.userId);
+    const userId = caller.userId;
+    const admin = adminClient(runtime);
+    const [template,keys] = await Promise.all([loadTemplate(admin,userId),fetchEffectiveAIKeys(userId)]);
+    if (!template.prompt) return json({success:false,error:'visual_prompt_not_installed',request_id:requestId},500);
+    if (!keys.openai) return json({success:false,error:'OpenAI não configurada',code:'openai_missing',request_id:requestId},503);
+
+    const base = buildPrompt(body,template.prompt);
+    const reviewed = keys.anthropic ? await reviewClaude(keys.anthropic,base,body.title) : {prompt:base,reviewed:false};
+    const image = await generate(keys.openai,reviewed.prompt,body);
+    if (body.articleId) {
+      await admin.from('articles').update({featured_image_url:image,error_message:null,updated_at:new Date().toISOString()}).eq('id',body.articleId).eq('user_id',userId);
+    }
+    return json({success:true,image,alt:`Imagem ilustrativa: ${body.title}`,title:body.title.slice(0,100),agent:template.agentName,prompt_template:TEMPLATE_NAME,promptReviewedByClaude:reviewed.reviewed,provider:'openai',model:OPENAI_IMAGE_MODEL,reviewer:reviewed.reviewed?'anthropic':null,reviewerModel:reviewed.reviewed?CLAUDE_REVIEW_MODEL:null,segment:body.segment||'general',aspectRatio:body.aspectRatio||'16:9',keySource:keys.sources.openai,internal:caller.internal,request_id:requestId});
+  } catch (error) {
+    const e = error as Error & {status?:number;code?:string};
+    const credit = e.code === 'credit_balance_exhausted' || e.message.includes('insufficient_quota') || /no credits|credit balance|quota/i.test(e.message);
+    return json({success:false,error:credit?'OpenAI sem saldo disponível para geração de imagem.':e.message,code:credit?'openai_credit_balance_exhausted':(e.code||'image_generation_failed'),image_pending:true,retryable:!credit,request_id:requestId},credit?402:errorStatus(error,e.status||500));
+  }
+});
