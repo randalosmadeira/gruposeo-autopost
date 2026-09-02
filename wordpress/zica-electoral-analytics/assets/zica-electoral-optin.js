@@ -71,6 +71,13 @@
         <p class="zica-optin-error" role="alert" aria-live="polite"></p>
         <button type="submit" class="zica-optin-submit"></button>
       </form>
+      <div class="zica-optin-instagram-wrap" hidden>
+        <span class="zica-optin-instagram-eyebrow">Acompanhe também</span>
+        <a class="zica-optin-instagram" target="_blank" rel="noopener noreferrer">
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" focusable="false"><path fill="currentColor" d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5Zm0 2a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H7Zm10.5 1.5a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5ZM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>
+          <span></span>
+        </a>
+      </div>
       <div class="zica-optin-success" hidden>
         <strong>Cadastro concluído.</strong>
         <p>As preferências de contato informadas foram registradas.</p>
@@ -91,6 +98,17 @@
     link.rel = 'noopener noreferrer';
     link.textContent = ' Política de privacidade.';
     privacyNote.appendChild(link);
+  }
+
+  const instagramWrap = root.querySelector('.zica-optin-instagram-wrap');
+  const instagramLink = root.querySelector('.zica-optin-instagram');
+  if (config.instagramEnabled && config.instagramUrl) {
+    instagramWrap.hidden = false;
+    instagramLink.href = config.instagramUrl;
+    instagramLink.querySelector('span').textContent = config.instagramLabel || 'Seguir @rdmadvogados no Instagram';
+    instagramLink.addEventListener('click', () => {
+      push('zica_optin_instagram_click', { zica_trigger: currentReason || 'direct' });
+    });
   }
 
   const form = root.querySelector('.zica-optin-form');
