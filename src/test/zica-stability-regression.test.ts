@@ -82,4 +82,28 @@ describe('Zica Posts stability regressions', () => {
     expect(admin).not.toContain('public_token_hash');
     expect(admin).not.toContain('fingerprint_hash');
   });
+
+  it('supports selecting multiple WordPress destinations in bulk publishing', () => {
+    const modal = read('src/components/articles/BulkPublishModal.tsx');
+    expect(modal).toContain('selectedProjectIds');
+    expect(modal).toContain('selectedSites.length');
+    expect(modal).toContain('allowCrossProject: true');
+    expect(modal).toContain("functions.invoke('test-wordpress-connection'");
+    expect(modal).not.toContain("const [selectedProject, setSelectedProject]");
+  });
+
+  it('loads public WordPress categories without requiring an application password', () => {
+    const api = read('supabase/functions/wordpress-api/index.ts');
+    expect(api).toContain('/wp-json/wp/v2/categories');
+    expect(api).toContain('hide_empty=false');
+    expect(api).not.toContain('Credenciais do WordPress não configuradas');
+  });
+
+  it('tracks WordPress publications by destination instead of globally blocking republish', () => {
+    const publisher = read('supabase/functions/publish-to-wordpress/index.ts');
+    expect(publisher).toContain('allowCrossProject');
+    expect(publisher).toContain('wordpress_publications');
+    expect(publisher).toContain('categories?: Array<number | string>');
+    expect(publisher).not.toContain('article.status === "published" && article.published_url');
+  });
 });
