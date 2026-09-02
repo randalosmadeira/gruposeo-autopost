@@ -26,6 +26,7 @@ jobs:
           set -euo pipefail
           php -l wordpress/zica-electoral-analytics/zica-electoral-analytics.php
           node --check wordpress/zica-electoral-analytics/assets/zica-electoral-analytics.js
+          node --check wordpress/zica-electoral-analytics/assets/zica-electoral-optin.js
 
       - name: Validate central analytics config for both portals
         shell: bash
@@ -34,7 +35,7 @@ jobs:
           CONFIG='https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1/electoral-analytics-public-config'
           for PORTAL in quemvotar.drmadeira1470.com.br votardeputadofederal.drmadeira1470.com.br; do
             curl --fail --silent --show-error --retry 3 --retry-delay 2 "$CONFIG?portal=$PORTAL" > "/tmp/config-$PORTAL.json"
-            node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/config-$PORTAL.json','utf8')); if(!x.ok) process.exit(1); if(x.consent_mode_default!=='denied') process.exit(2); if(x.allow_google_signals!==false||x.allow_ad_personalization_signals!==false) process.exit(3); if(x.privacy?.individual_voter_profiles!==false||x.privacy?.political_preference_inference!==false||x.privacy?.precise_location_collection!==false||x.privacy?.raw_ip_storage!==false) process.exit(4); if(!Array.isArray(x.primary_portals)||x.primary_portals.length!==2) process.exit(5);"
+            node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/config-$PORTAL.json','utf8')); if(!x.ok) process.exit(1); if(x.consent_mode_default!=='denied') process.exit(2); if(x.allow_google_signals!==false||x.allow_ad_personalization_signals!==false) process.exit(3); if(x.privacy?.individual_voter_profiles!==false||x.privacy?.political_preference_inference!==false||x.privacy?.precise_location_collection!==false||x.privacy?.raw_ip_storage!==false) process.exit(4); if(!Array.isArray(x.primary_portals)||x.primary_portals.length!==2) process.exit(5); if(x.optin?.instagram_enabled!==true) process.exit(6); if(x.optin?.instagram_url!=='https://www.instagram.com/rdmadvogados/') process.exit(7); if(x.optin?.instagram_label!=='Seguir @rdmadvogados no Instagram') process.exit(8);"
           done
 
       - name: Validate supporter avatar public capabilities
