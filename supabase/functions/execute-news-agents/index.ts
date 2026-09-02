@@ -10,17 +10,33 @@ const corsHeaders = {
 };
 
 type Agent = {
-  id: string; user_id: string; project_id: string | null; name: string; topics: string[]; rss_feeds: string[] | null;
-  language: string; country: string; prompt_template: string; auto_publish: boolean; publish_status: string;
-  news_per_day: number; active_days: string[] | null; execution_times: string[] | null; image_generation: string;
-  articles_generated: number | null; is_active: boolean;
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  name: string;
+  topics: string[];
+  rss_feeds: string[] | null;
+  language: string;
+  country: string;
+  prompt_template: string;
+  auto_publish: boolean;
+  publish_status: string;
+  news_per_day: number;
+  active_days: string[] | null;
+  execution_times: string[] | null;
+  image_generation: string;
+  articles_generated: number | null;
+  is_active: boolean;
 };
 
 type NewsItem = { title: string; link: string; snippet: string; source: string; date?: string };
 type Body = { force?: boolean; agentIds?: string[]; dryRun?: boolean; limitPerAgent?: number };
 
 function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+  });
 }
 
 async function sha256(value: string) {
@@ -30,7 +46,13 @@ async function sha256(value: string) {
 }
 
 function nowSaoPaulo() {
-  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date());
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
   const weekday = String(parts.find((p) => p.type === "weekday")?.value || "").toLowerCase();
   const hour = String(parts.find((p) => p.type === "hour")?.value || "00").padStart(2, "0");
   const minute = String(parts.find((p) => p.type === "minute")?.value || "00").padStart(2, "0");
@@ -50,7 +72,10 @@ function eligible(agent: Agent, force: boolean) {
 
 async function fetchRSS(url: string, limit = 5): Promise<NewsItem[]> {
   try {
-    const response = await fetch(url, { headers: { "User-Agent": "ZicaNewsBot/3.10.2", Accept: "application/rss+xml, application/xml, text/xml" }, signal: AbortSignal.timeout(15000) });
+    const response = await fetch(url, {
+      headers: { "User-Agent": "ZicaNewsBot/3.10.2", Accept: "application/rss+xml, application/xml, text/xml" },
+      signal: AbortSignal.timeout(15000),
+    });
     if (!response.ok) return [];
     const xml = await response.text();
     const rows: NewsItem[] = [];
@@ -66,7 +91,9 @@ async function fetchRSS(url: string, limit = 5): Promise<NewsItem[]> {
       if (title && link) rows.push({ title, link, snippet, source, date });
     }
     return rows;
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
 async function searchGoogleNews(topic: string, language = "pt-BR", country = "BR") {
@@ -76,7 +103,11 @@ async function searchGoogleNews(topic: string, language = "pt-BR", country = "BR
 
 async function fetchSourceContent(url: string) {
   try {
-    const response = await fetch(url, { redirect: "follow", headers: { "User-Agent": "Mozilla/5.0 Zica.ai editorial verifier" }, signal: AbortSignal.timeout(20000) });
+    const response = await fetch(url, {
+      redirect: "follow",
+      headers: { "User-Agent": "Mozilla/5.0 Zica.ai editorial verifier" },
+      signal: AbortSignal.timeout(20000),
+    });
     if (!response.ok) return { content: "", finalUrl: url };
     const type = response.headers.get("content-type") || "";
     const text = await response.text();
@@ -87,10 +118,17 @@ async function fetchSourceContent(url: string) {
       .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
       .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
       .replace(/<[^>]+>/g, " ")
-      .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;/gi, "'")
-      .replace(/\s+/g, " ").trim().slice(0, 60000);
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 60000);
     return { content, finalUrl: response.url || url };
-  } catch { return { content: "", finalUrl: url }; }
+  } catch {
+    return { content: "", finalUrl: url };
+  }
 }
 
 async function edgeCall(baseUrl: string, serviceKey: string, slug: string, body: Record<string, unknown>, attempts = 3) {
@@ -133,11 +171,11 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ success: false, error: "Method not allowed", request_id: requestId }, 405);
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const supabaseUrl = String(Deno.env.get("SUPABASE_URL") || "");
+    const anonKey = String(Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "");
+    const serviceKey = String(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || "");
     if (!supabaseUrl || !anonKey || !serviceKey) return json({ success: false, error: "Backend incompleto", request_id: requestId }, 500);
-    const admin = createClient(supabaseUrl, serviceKey);
+    const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const body = await req.json().catch(() => ({})) as Body;
 
     let automated = false;
@@ -171,7 +209,9 @@ Deno.serve(async (req: Request) => {
             if (candidates.length >= Math.max(3, agent.news_per_day || 1)) break;
           }
         }
-        const unique = candidates.filter((item, index, all) => index === all.findIndex((other) => other.title === item.title)).slice(0, body.limitPerAgent || agent.news_per_day || 1);
+        const unique = candidates
+          .filter((item, index, all) => index === all.findIndex((other) => other.title === item.title))
+          .slice(0, body.limitPerAgent || agent.news_per_day || 1);
         result.discovered = unique.length;
 
         for (const item of unique) {
@@ -186,23 +226,27 @@ Deno.serve(async (req: Request) => {
             userId: agent.user_id,
             language: agent.language || "pt-BR",
             promptTemplate: agent.prompt_template,
+            articleLength: "medium",
           });
           if (!rewrite.ok || !rewrite.data?.article) {
             result.errors.push(`rewrite: ${String(rewrite.data?.error || rewrite.status).slice(0, 160)}`);
             continue;
           }
+
           const article = rewrite.data.article;
           result.generated++;
-
           let imageOk = Boolean(article.featured_image_url);
           if (!body.dryRun && agent.image_generation !== "none" && article.status === "ready") {
             const image = await edgeCall(supabaseUrl, serviceKey, "generate-image", {
               userId: agent.user_id,
               articleId: article.id,
+              projectId: agent.project_id,
+              moduleKey: "news",
+              allowAiGeneration: false,
               title: article.title,
               context: article.excerpt,
               content: article.content,
-              segment: "legal",
+              segment: "news",
               aspectRatio: "16:9",
               quality: "high",
             }, 2);
@@ -219,17 +263,19 @@ Deno.serve(async (req: Request) => {
             if (targetStatus === "publish" && (article.status !== "ready" || !imageOk)) {
               result.errors.push(`publish gate: artigo ${article.id} aguardando revisão/imagem`);
             } else {
-              const publish = await edgeCall(supabaseUrl, serviceKey, "publish-to-wordpress", {
+              const publish = await edgeCall(supabaseUrl, serviceKey, "wordpress-operations", {
+                action: "publish",
                 articleId: article.id,
                 projectId: agent.project_id,
                 userId: agent.user_id,
                 publishStatus: targetStatus,
-                requireFeaturedImage: targetStatus === "publish",
               });
               if (publish.ok) {
                 if (targetStatus === "publish") result.published++;
                 else result.wordpressDrafts++;
-              } else result.errors.push(`wordpress: ${String(publish.data?.error || publish.status).slice(0, 160)}`);
+              } else {
+                result.errors.push(`wordpress: ${String(publish.data?.error || publish.status).slice(0, 160)}`);
+              }
             }
           }
 
@@ -260,9 +306,17 @@ Deno.serve(async (req: Request) => {
     }
 
     log.requestEnd(200, Date.now() - started);
-    return json({ success: true, automated, force: Boolean(body.force), dryRun: Boolean(body.dryRun), selectedAgents: selected.length, results, request_id: requestId });
+    return json({
+      success: true,
+      automated,
+      force: Boolean(body.force),
+      dryRun: Boolean(body.dryRun),
+      selectedAgents: selected.length,
+      results,
+      request_id: requestId,
+    });
   } catch (error) {
-    log.error("execution_error", { error: error instanceof Error ? error.message : "unknown" });
+    log.error(error instanceof Error ? error.message : "internal_error");
     log.requestEnd(500, Date.now() - started);
     return json({ success: false, error: error instanceof Error ? error.message : "Erro interno", request_id: requestId }, 500);
   }
