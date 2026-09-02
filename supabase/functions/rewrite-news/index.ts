@@ -175,10 +175,11 @@ Deno.serve(async (req: Request) => {
     const count = wordCount(content);
     const hasVerifyMarker = /\[VERIFICAR\]/i.test(content);
     const needsPrimary = Boolean(review.needs_primary_source || draft.needs_primary_source || hasVerifyMarker);
-    const enoughDepth = count >= Math.min(300, band.min);
+    const enoughDepth = count >= band.min;
     const reviewPass = Boolean(review.pass && !needsPrimary && enoughDepth);
     const status = reviewPass ? "ready" : "draft";
 
+    const reviewIssues = [...(review.issues || []), ...(enoughDepth ? [] : [`Conteúdo abaixo do piso GEO do módulo: ${count}/${band.min} palavras.`])];
     const payload = {
       user_id: userId,
       project_id: input.projectId || null,
@@ -206,7 +207,7 @@ Deno.serve(async (req: Request) => {
         review_model: reviewCall.model,
         review_pass: reviewPass,
         needs_primary_source: needsPrimary,
-        review_issues: review.issues || [],
+        review_issues: reviewIssues,
         review_notes: review.notes || [],
         primary_sources: draft.primary_sources || [],
         secondary_sources: draft.secondary_sources || [],
@@ -220,7 +221,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: article, error } = await admin.from("articles").insert(payload).select().single();
     if (error || !article) return json({ success: false, error: error?.message || "Falha ao salvar artigo", request_id: requestId }, 500);
-    return json({ success: true, duplicate: false, article, review: { pass: reviewPass, needs_primary_source: needsPrimary, issues: review.issues || [] }, generation: { provider: generation.provider, model: generation.model }, reviewer: { provider: reviewCall.provider, model: reviewCall.model }, request_id: requestId });
+    return json({ success: true, duplicate: false, article, review: { pass: reviewPass, needs_primary_source: needsPrimary, issues: reviewIssues }, generation: { provider: generation.provider, model: generation.model }, reviewer: { provider: reviewCall.provider, model: reviewCall.model }, request_id: requestId });
   } catch (error) {
     if (error instanceof RequestAuthError) return json({ success: false, error: error.message, code: error.code, request_id: requestId }, error.status);
     return json({ success: false, error: error instanceof Error ? error.message : "Erro interno", request_id: requestId }, 500);
