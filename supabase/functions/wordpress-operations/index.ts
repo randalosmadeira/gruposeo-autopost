@@ -1,0 +1,291 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+type Action = "status" | "outbox" | "sync" | "articles" | "reconcile";
+type RequestBody = { projectId: string; userId?: string; action?: Action; postIds?: number[] };
+
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+  status,
+  headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+});
+
+function sameSecret(a: string, b: string) {
+  if (!a || !b || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function splitPath(path: string) {
+  const [route, query = ""] = path.replace(/^\/+/, "").split("?", 2);
+  return { route, query };
+}
+
+function endpointCandidates(baseUrl: string, path: string) {
+  const base = baseUrl.replace(/\/$/, "");
+  const { route, query } = splitPath(path);
+  return [
+    `${base}/wp-json/zica-posts/v1/${route}${query ? `?${query}` : ""}`,
+    `${base}/?rest_route=/zica-posts/v1/${route}${query ? `&${query}` : ""}`,
+  ];
+}
+
+async function pluginRequest(baseUrl: string, apiKey: string, path: string, init: RequestInit = {}) {
+  let lastStatus = 0;
+  let lastError = "Zica Posts indisponível";
+  for (const endpoint of endpointCandidates(baseUrl, path)) {
+    try {
+      const response = await fetch(endpoint, {
+        ...init,
+        headers: { ...(init.headers || {}), "X-ZICA-POSTS-Key": apiKey, Accept: "application/json" },
+        signal: init.signal || AbortSignal.timeout(30000),
+      });
+      lastStatus = response.status;
+      const text = await response.text();
+      let data: any = null;
+      try { data = JSON.parse(text); } catch { data = null; }
+      if (response.ok && data) {
+        return { data, endpointMode: endpoint.includes("rest_route=") ? "rest_route" : "wp_json", httpStatus: response.status };
+      }
+      lastError = String(data?.message || data?.error || `HTTP ${response.status}`);
+      if (response.status === 401 || response.status === 403) throw new Error(`plugin_auth_${response.status}`);
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : lastError;
+      if (lastError.startsWith("plugin_auth_")) break;
+    }
+  }
+  throw new Error(`${lastError} (HTTP ${lastStatus || "network"})`);
+}
+
+function rowsFrom(payload: any) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.articles)) return payload.articles;
+  return [];
+}
+
+function textValue(value: any) {
+  if (typeof value === "string") return value;
+  if (typeof value?.rendered === "string") return value.rendered;
+  return "";
+}
+
+function stripHtml(value: string) {
+  return value.replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function countLinks(html: string, siteHost: string) {
+  const re = /href=["']([^"']+)["']/gi;
+  let internal = 0, external = 0, match: RegExpExecArray | null;
+  while ((match = re.exec(html))) {
+    try {
+      const url = new URL(match[1], `https://${siteHost}`);
+      if (url.hostname === siteHost) internal++; else external++;
+    } catch { /* ignore invalid anchors */ }
+  }
+  return { internal, external };
+}
+
+async function sha256(value: string) {
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return json({ success: false, error: "method_not_allowed" }, 405);
+
+  const requestId = crypto.randomUUID();
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    if (!supabaseUrl || !anonKey || !serviceKey) return json({ success: false, error: "backend_not_configured", request_id: requestId }, 500);
+
+    const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) return json({ success: false, error: "unauthorized", request_id: requestId }, 401);
+    const token = authHeader.slice(7);
+    const body = await req.json() as RequestBody;
+    if (!body.projectId) return json({ success: false, error: "projectId_required", request_id: requestId }, 422);
+
+    const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    let userId = "";
+    if (sameSecret(token, serviceKey)) {
+      userId = String(body.userId || "");
+      if (!userId) return json({ success: false, error: "userId_required_internal", request_id: requestId }, 422);
+    } else {
+      const client = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+      const { data, error } = await client.auth.getUser(token);
+      if (error || !data.user) return json({ success: false, error: "session_invalid", request_id: requestId }, 401);
+      userId = data.user.id;
+      if (body.userId && body.userId !== userId) return json({ success: false, error: "user_mismatch", request_id: requestId }, 403);
+    }
+
+    const { data: project, error: projectError } = await admin.from("projects")
+      .select("id,user_id,name,domain,wordpress_url,wordpress_credential_ref,wordpress_connector_mode,wordpress_plugin_version")
+      .eq("id", body.projectId).eq("user_id", userId).maybeSingle();
+    if (projectError) throw projectError;
+    if (!project?.wordpress_url) return json({ success: false, error: "wordpress_project_not_found", request_id: requestId }, 404);
+    if (String(project.wordpress_connector_mode) !== "zica_posts") return json({ success: false, error: "project_not_zica_posts", request_id: requestId }, 409);
+
+    const ref = String(project.wordpress_credential_ref || "").trim();
+    if (!ref) return json({ success: false, error: "wordpress_credential_ref_missing", request_id: requestId }, 503);
+    const { data: secret, error: secretError } = await admin.rpc("get_zica_wordpress_credential", { p_ref: ref });
+    if (secretError || !secret) return json({ success: false, error: "wordpress_credential_unavailable", request_id: requestId }, 503);
+    const apiKey = String(secret);
+    const baseUrl = String(project.wordpress_url).replace(/\/$/, "");
+    const action: Action = body.action || "status";
+
+    if (action === "status") {
+      const [status, outbox] = await Promise.all([
+        pluginRequest(baseUrl, apiKey, "status"),
+        pluginRequest(baseUrl, apiKey, "outbox?limit=100"),
+      ]);
+      return json({ success: true, projectId: project.id, projectName: project.name, status: status.data, outbox: outbox.data, endpointMode: status.endpointMode, request_id: requestId });
+    }
+
+    if (action === "outbox") {
+      const outbox = await pluginRequest(baseUrl, apiKey, "outbox?limit=100");
+      return json({ success: true, projectId: project.id, outbox: outbox.data, endpointMode: outbox.endpointMode, request_id: requestId });
+    }
+
+    if (action === "articles") {
+      const articles = await pluginRequest(baseUrl, apiKey, "articles?per_page=100");
+      return json({ success: true, projectId: project.id, articles: articles.data, endpointMode: articles.endpointMode, request_id: requestId });
+    }
+
+    if (action === "sync") {
+      const payload: Record<string, unknown> = {};
+      if (Array.isArray(body.postIds) && body.postIds.length) payload.post_ids = body.postIds.slice(0, 100);
+      const sync = await pluginRequest(baseUrl, apiKey, "sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(90000),
+      });
+      return json({ success: true, projectId: project.id, result: sync.data, endpointMode: sync.endpointMode, request_id: requestId });
+    }
+
+    const [statusResponse, outboxResponse, articlesResponse] = await Promise.all([
+      pluginRequest(baseUrl, apiKey, "status"),
+      pluginRequest(baseUrl, apiKey, "outbox?limit=100"),
+      pluginRequest(baseUrl, apiKey, "articles?per_page=100"),
+    ]);
+
+    const articleRows = rowsFrom(articlesResponse.data);
+    const outboxRows = rowsFrom(outboxResponse.data);
+    const siteHost = new URL(baseUrl).hostname;
+    const now = new Date().toISOString();
+
+    let published = 0, drafts = 0, pending = 0, totalInternalLinks = 0, missingImages = 0;
+    for (const row of articleRows) {
+      const id = Number(row?.id);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      const status = String(row?.status || row?.post_status || "publish");
+      if (status === "publish") published++; else if (status === "draft") drafts++; else pending++;
+      const title = textValue(row?.title) || String(row?.post_title || `Post ${id}`);
+      const html = textValue(row?.content) || String(row?.content_html || "");
+      const excerpt = textValue(row?.excerpt) || stripHtml(html).slice(0, 500);
+      const links = countLinks(html, siteHost);
+      totalInternalLinks += links.internal;
+      const featured = row?.featured_media || row?.featured_image || row?.featured_image_url;
+      if (!featured) missingImages++;
+      const url = String(row?.link || row?.url || row?.permalink || `${baseUrl}/?p=${id}`);
+      const slug = String(row?.slug || row?.post_name || "");
+      const contentHash = String(row?.content_hash || await sha256(`${title}\n${html}`));
+      const wordCount = stripHtml(html).split(/\s+/).filter(Boolean).length;
+      const upsert = {
+        user_id: userId,
+        project_id: project.id,
+        wp_post_id: id,
+        wp_post_url: url,
+        wp_post_slug: slug || null,
+        wp_post_title: title,
+        wp_post_type: String(row?.type || row?.post_type || "post"),
+        wp_post_status: status,
+        wp_categories: Array.isArray(row?.categories) ? row.categories.map(String) : [],
+        wp_tags: Array.isArray(row?.tags) ? row.tags.map(String) : [],
+        primary_keyword: String(row?.focus_keyword || row?.primary_keyword || "") || null,
+        semantic_summary: excerpt || null,
+        content_hash: contentHash,
+        word_count: wordCount,
+        internal_links_count: links.internal,
+        external_links_count: links.external,
+        last_wp_modified_at: row?.modified_gmt || row?.modified || null,
+        sync_status: "synced",
+        sync_error: null,
+        updated_at: now,
+      };
+      const { error: upsertError } = await admin.from("wordpress_article_index").upsert(upsert, { onConflict: "project_id,wp_post_id" });
+      if (upsertError) throw upsertError;
+    }
+
+    const pendingOutbox = outboxRows.filter((row: any) => ["pending", "processing", "retry"].includes(String(row?.status))).length;
+    const failedOutbox = outboxRows.filter((row: any) => ["failed", "dead_letter"].includes(String(row?.status))).length;
+    const rawData = {
+      plugin_status: statusResponse.data,
+      outbox_summary: { total: outboxRows.length, pending: pendingOutbox, failed: failedOutbox },
+      endpoint_mode: statusResponse.endpointMode,
+      reconciled_at: now,
+    };
+
+    const statsPatch = {
+      project_id: project.id,
+      user_id: userId,
+      total_articles: articleRows.length,
+      published_articles: published,
+      draft_articles: drafts,
+      pending_articles: pending,
+      synced_articles: articleRows.length,
+      sync_errors: failedOutbox,
+      missing_featured_images: missingImages,
+      total_internal_links: totalInternalLinks,
+      articles_without_links: articleRows.filter((row: any) => {
+        const html = textValue(row?.content) || String(row?.content_html || "");
+        return countLinks(html, siteHost).internal === 0;
+      }).length,
+      raw_data: rawData,
+      last_sync_at: now,
+      updated_at: now,
+    };
+
+    const { data: existing } = await admin.from("wordpress_stats").select("id").eq("project_id", project.id).maybeSingle();
+    if (existing?.id) {
+      const { error } = await admin.from("wordpress_stats").update(statsPatch).eq("id", existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await admin.from("wordpress_stats").insert(statsPatch);
+      if (error) throw error;
+    }
+
+    await admin.from("projects").update({
+      is_connected: true,
+      wordpress_last_verified_at: now,
+      updated_at: now,
+    }).eq("id", project.id).eq("user_id", userId);
+
+    return json({
+      success: true,
+      projectId: project.id,
+      projectName: project.name,
+      reconciled: { articles: articleRows.length, published, drafts, pending, outboxPending: pendingOutbox, outboxFailed: failedOutbox },
+      endpointMode: statusResponse.endpointMode,
+      request_id: requestId,
+    });
+  } catch (error) {
+    return json({ success: false, error: error instanceof Error ? error.message : "wordpress_operation_failed", request_id: requestId }, 502);
+  }
+});
