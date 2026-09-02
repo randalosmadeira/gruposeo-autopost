@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
 import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
+import { adminClient, errorStatus, getRuntimeKeys, resolveUserCaller } from "../_shared/supabase-runtime.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -53,14 +53,6 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" } });
 }
 
-function jwtRole(token: string) {
-  try {
-    const payload = token.split(".")[1];
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    return String(JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")))?.role || "");
-  } catch { return ""; }
-}
-
 function parseJson<T>(text: string): T | null {
   const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
   const first = cleaned.indexOf("{");
@@ -102,11 +94,11 @@ async function resolveTemplate(admin: any, userId: string, projectId?: string | 
 
 function generationPrompt(input: RewriteRequest, template: string, projectName: string) {
   const source = (input.sourceContent || "").slice(0, 60000);
-  return `${template}\n\n---\n\nTAREFA OPERACIONAL\nProduza uma matéria original para o projeto: ${projectName}.\nIdioma: ${input.language || "pt-BR"}.\nExtensão: ${targetLength(input.articleLength)}.\nFonte informada: ${input.sourceName || "não informada"}.\nURL: ${input.sourceUrl}.\nNicho: ${input.niche || "jurídico"}.\nÂngulo: ${input.analysisAngle || "informativo, preventivo e tecnicamente preciso"}.\n\nREGRAS DE FONTE\n1. Não invente leis, súmulas, julgados, processos, datas, estatísticas, pessoas ou fatos.\n2. Diferencie notícia, alegação, tese jurídica, orientação geral e opinião.\n3. Quando uma conclusão depender de decisão/lei não presente na fonte, marque needs_primary_source=true.\n4. Use [VERIFICAR] no corpo somente quando a lacuna for indispensável e não puder ser omitida.\n5. Não prometa resultado jurídico.\n6. Não use linguagem mercantilista ou captação apelativa.\n7. Para Direito News, mantenha voz jornalística independente. Para RDM, fechamento institucional sóbrio e informativo.\n8. Gere sugestão de imagem editorial sem simular prova, documento ou fato inexistente.\n\nRetorne SOMENTE JSON válido:\n{\"title\":\"...\",\"meta_description\":\"...\",\"slug\":\"...\",\"excerpt\":\"...\",\"keyword\":\"...\",\"content_html\":\"...\",\"primary_sources\":[],\"secondary_sources\":[],\"legal_authorities\":[],\"verification_flags\":[],\"needs_primary_source\":false,\"internal_link_suggestions\":[],\"image_prompt\":\"...\"}\n\nCONTEÚDO-FONTE:\n${source || "Nenhum corpo de fonte foi fornecido; seja conservador e sinalize necessidade de fonte primária."}`;
+  return `${template}\n\n---\nTAREFA OPERACIONAL\nProduza uma matéria original para o projeto: ${projectName}.\nIdioma: ${input.language || "pt-BR"}.\nExtensão: ${targetLength(input.articleLength)}.\nFonte informada: ${input.sourceName || "não informada"}.\nURL: ${input.sourceUrl}.\nNicho: ${input.niche || "jurídico"}.\nÂngulo: ${input.analysisAngle || "informativo, preventivo e tecnicamente preciso"}.\n\nREGRAS DE FONTE\n1. Não invente leis, súmulas, julgados, processos, datas, estatísticas, pessoas ou fatos.\n2. Diferencie notícia, alegação, tese jurídica, orientação geral e opinião.\n3. Quando uma conclusão depender de decisão/lei não presente na fonte, marque needs_primary_source=true.\n4. Use [VERIFICAR] apenas quando a lacuna for indispensável.\n5. Não prometa resultado jurídico.\n6. Para Direito News, voz jornalística independente. Para RDM, fechamento institucional sóbrio e informativo.\n7. Estruture semanticamente para SEO/GEO/AEO sem keyword stuffing.\n8. Gere sugestão de imagem editorial sem simular prova, documento ou fato inexistente.\n\nRetorne SOMENTE JSON válido:\n{\"title\":\"...\",\"meta_description\":\"...\",\"slug\":\"...\",\"excerpt\":\"...\",\"keyword\":\"...\",\"content_html\":\"...\",\"primary_sources\":[],\"secondary_sources\":[],\"legal_authorities\":[],\"verification_flags\":[],\"needs_primary_source\":false,\"internal_link_suggestions\":[],\"image_prompt\":\"...\"}\n\nCONTEÚDO-FONTE:\n${source || "Nenhum corpo de fonte foi fornecido; seja conservador e sinalize necessidade de fonte primária."}`;
 }
 
 function reviewPrompt(article: ArticleDraft, source: string, sourceUrl: string) {
-  return `Você é o revisor jurídico-editorial final. Revise a matéria abaixo contra a fonte fornecida.\n\nOBJETIVO\n- detectar invenções, exageros, conclusões jurídicas absolutas, jurisprudência não comprovada, publicidade incompatível com caráter informativo e afirmações sem suporte;\n- corrigir linguagem e estrutura sem alterar fatos;\n- exigir fonte primária para lei/julgado/ato público central que não esteja sustentado.\n\nRetorne SOMENTE JSON válido:\n{\"pass\":true,\"needs_primary_source\":false,\"issues\":[],\"corrected_title\":\"\",\"corrected_excerpt\":\"\",\"corrected_content\":\"\",\"corrected_keyword\":\"\",\"notes\":[]}\n\nFONTE URL: ${sourceUrl}\nFONTE:\n${source.slice(0, 50000)}\n\nMATÉRIA:\n${JSON.stringify(article).slice(0, 70000)}`;
+  return `Você é o revisor jurídico-editorial final. Revise a matéria contra a fonte fornecida. Detecte invenções, exageros, conclusões jurídicas absolutas, publicidade incompatível e afirmações sem suporte. Exija fonte primária quando necessário. Retorne SOMENTE JSON válido:\n{\"pass\":true,\"needs_primary_source\":false,\"issues\":[],\"corrected_title\":\"\",\"corrected_excerpt\":\"\",\"corrected_content\":\"\",\"corrected_keyword\":\"\",\"notes\":[]}\n\nFONTE URL: ${sourceUrl}\nFONTE:\n${source.slice(0, 50000)}\n\nMATÉRIA:\n${JSON.stringify(article).slice(0, 70000)}`;
 }
 
 Deno.serve(async (req: Request) => {
@@ -115,30 +107,14 @@ Deno.serve(async (req: Request) => {
   const requestId = crypto.randomUUID();
 
   try {
-    const authHeader = req.headers.get("Authorization") || "";
-    if (!authHeader.startsWith("Bearer ")) return json({ success: false, error: "Autorização necessária", request_id: requestId }, 401);
-    const token = authHeader.slice(7);
-    const role = jwtRole(token);
     const input = await req.json() as RewriteRequest;
     if (!input.sourceUrl?.trim()) return json({ success: false, error: "sourceUrl é obrigatório", request_id: requestId }, 400);
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    if (!supabaseUrl || !anonKey || !serviceKey) return json({ success: false, error: "Backend incompleto", request_id: requestId }, 500);
-    const admin = createClient(supabaseUrl, serviceKey);
-
-    let userId = "";
-    if (role === "service_role") {
-      userId = input.userId || "";
-      if (!userId) return json({ success: false, error: "userId é obrigatório em background", request_id: requestId }, 400);
-    } else {
-      const client = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-      const { data, error } = await client.auth.getUser(token);
-      if (error || !data.user) return json({ success: false, error: "Sessão inválida", request_id: requestId }, 401);
-      userId = data.user.id;
-      if (input.userId && input.userId !== userId) return json({ success: false, error: "userId incompatível", request_id: requestId }, 403);
-    }
+    const runtime = getRuntimeKeys();
+    if (!runtime.url || !runtime.secretKey || !runtime.publicKey) return json({ success: false, error: "Backend incompleto", request_id: requestId }, 500);
+    const caller = await resolveUserCaller(req, runtime, input.userId);
+    const userId = caller.userId;
+    const admin = adminClient(runtime);
 
     let projectName = "Conteúdo jurídico";
     if (input.projectId) {
@@ -147,12 +123,13 @@ Deno.serve(async (req: Request) => {
       projectName = String(project.name || projectName);
     }
 
-    const { data: existing } = await admin.from("articles").select("*").eq("user_id", userId).eq("project_id", input.projectId || null).contains("config", { source_url: input.sourceUrl }).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    let duplicate = admin.from("articles").select("*").eq("user_id", userId).contains("config", { source_url: input.sourceUrl }).order("created_at", { ascending: false }).limit(1);
+    duplicate = input.projectId ? duplicate.eq("project_id", input.projectId) : duplicate.is("project_id", null);
+    const { data: existing } = await duplicate.maybeSingle();
     if (existing) return json({ success: true, duplicate: true, article: existing, request_id: requestId });
 
     const template = await resolveTemplate(admin, userId, input.projectId, input.promptTemplate);
     const orchestrator = await getOrchestratorForUser(userId);
-
     const generation = await orchestrator.callWithMeta("news_rewrite", [
       { role: "system", content: `Você é ${template.agentName}. Entregue somente o JSON solicitado.` },
       { role: "user", content: generationPrompt(input, template.prompt, projectName) },
@@ -169,7 +146,7 @@ Deno.serve(async (req: Request) => {
 
     if (!review.pass && !review.needs_primary_source && review.issues?.length) {
       const correction = await orchestrator.callWithMeta("content_editing", [
-        { role: "system", content: "Corrija a matéria apenas nos pontos indicados pelo revisor. Não invente fatos. Retorne o mesmo JSON estrutural da matéria." },
+        { role: "system", content: "Corrija somente os problemas indicados. Não invente fatos. Retorne o mesmo JSON estrutural da matéria." },
         { role: "user", content: `MATÉRIA:\n${JSON.stringify(draft)}\n\nPROBLEMAS:\n${review.issues.join("\n- ")}` },
       ], { preferredProvider: generation.provider, maxTokens: 18000, temperature: 0.2 });
       const corrected = parseJson<ArticleDraft>(correction.content);
@@ -190,6 +167,7 @@ Deno.serve(async (req: Request) => {
     const reviewPass = Boolean(review.pass && !needsPrimary && content.length >= 200);
     const status = reviewPass ? "ready" : "draft";
     const score = originalityScore(input.sourceContent || "", content);
+    const now = new Date().toISOString();
 
     const payload = {
       user_id: userId,
@@ -204,6 +182,7 @@ Deno.serve(async (req: Request) => {
       word_count: content.replace(/<[^>]+>/g, " ").trim().split(/\s+/).filter(Boolean).length,
       originality_score: score,
       image_prompt: draft.image_prompt || null,
+      traffic_wave_status: status === "ready" ? "draft" : "draft",
       config: {
         source_url: input.sourceUrl,
         source_name: input.sourceName || null,
@@ -225,14 +204,23 @@ Deno.serve(async (req: Request) => {
         verification_flags: draft.verification_flags || [],
         internal_link_suggestions: draft.internal_link_suggestions || [],
         auto_generated: true,
-        generated_at: new Date().toISOString(),
+        generated_at: now,
+        internal_call: caller.internal,
       },
     };
 
     const { data: article, error } = await admin.from("articles").insert(payload).select().single();
     if (error || !article) return json({ success: false, error: error?.message || "Falha ao salvar artigo", request_id: requestId }, 500);
-    return json({ success: true, duplicate: false, article, review: { pass: reviewPass, needs_primary_source: needsPrimary, issues: review.issues || [] }, generation: { provider: generation.provider, model: generation.model }, reviewer: { provider: reviewCall.provider, model: reviewCall.model }, request_id: requestId });
+    return json({
+      success: true,
+      duplicate: false,
+      article,
+      review: { pass: reviewPass, needs_primary_source: needsPrimary, issues: review.issues || [] },
+      generation: { provider: generation.provider, model: generation.model },
+      reviewer: { provider: reviewCall.provider, model: reviewCall.model },
+      request_id: requestId,
+    });
   } catch (error) {
-    return json({ success: false, error: error instanceof Error ? error.message : "Erro interno", request_id: requestId }, 500);
+    return json({ success: false, error: error instanceof Error ? error.message : "Erro interno", request_id: requestId }, errorStatus(error, 500));
   }
 });
