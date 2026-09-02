@@ -1,418 +1,157 @@
-
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { createLogger, createRequestId } from "../_shared/logger.ts";
-
-const FUNCTION_NAME = "wordpress-api";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+const subpaths = ["", "/blog", "/wordpress", "/wp", "/site", "/news", "/artigos", "/noticias"];
+
+type Input = {
+  action?: "get-categories" | "categories" | "test" | "publish";
+  projectId?: string;
+  articleId?: string;
+  perPage?: number;
+  categories?: Array<number | string>;
+  allowCrossProject?: boolean;
+  publishStatus?: "draft" | "publish";
 };
 
-interface WordPressCredentials {
-  wordpress_url: string;
-  wordpress_username: string;
-  wordpress_app_password: string;
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+  });
 }
 
-// Normalize WordPress URL - extract base URL from plugin endpoint URL if needed
-function normalizeWordPressUrl(url: string): string {
-  if (!url) return '';
-  
-  let normalized = url.replace(/\/+$/, '');
-  
-  // If URL contains /wp-json/cfrdm/v1, strip it to get the base WordPress URL
-  // e.g., https://example.com/blog/wp-json/cfrdm/v1 -> https://example.com/blog
-  const cfrdmMatch = normalized.match(/^(.+?)\/wp-json\/cfrdm\/v1/);
-  if (cfrdmMatch) {
-    normalized = cfrdmMatch[1];
-    console.log(`Normalized plugin URL: ${url} -> ${normalized}`);
-  }
-  
-  // Also handle if someone put /wp-json/ at the end
-  const wpJsonMatch = normalized.match(/^(.+?)\/wp-json\/?$/);
-  if (wpJsonMatch) {
-    normalized = wpJsonMatch[1];
-  }
-  
-  return normalized.replace(/\/+$/, '');
+function normalizeBase(input: string) {
+  let value = String(input || "").trim();
+  if (!/^https?:\/\//i.test(value)) value = `https://${value}`;
+  const url = new URL(value);
+  url.hash = "";
+  url.search = "";
+  url.pathname = url.pathname.replace(/\/wp-json(?:\/.*)?$/i, "").replace(/\/$/, "");
+  return `${url.origin}${url.pathname}`.replace(/\/$/, "");
 }
 
-async function wpFetch(
-  credentials: WordPressCredentials,
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<{ data?: unknown; error?: string; status: number }> {
-  const { wordpress_url, wordpress_username, wordpress_app_password } = credentials;
-  const baseUrl = normalizeWordPressUrl(wordpress_url);
-  const apiUrl = `${baseUrl}/wp-json/wp/v2${endpoint}`;
-  const auth = btoa(`${wordpress_username}:${wordpress_app_password}`);
+async function readBody(response: Response) {
+  const text = await response.text();
+  try { return { text, data: JSON.parse(text) as any }; } catch { return { text, data: null as any }; }
+}
 
-  try {
-    const response = await fetch(apiUrl, {
-      ...options,
-      headers: {
-        Authorization: `Basic ${auth}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        ...options.headers,
-      },
-    });
-
-    const contentType = response.headers.get("content-type") || "";
-    const rawText = await response.text();
-
-    if (!contentType.includes("application/json")) {
-      console.error(`WP non-JSON response [${response.status}] ${apiUrl}:`, rawText.slice(0, 500));
-      return {
-        error: `WordPress REST API retornou resposta não-JSON (HTTP ${response.status}). Verifique permalinks e se o endpoint ${endpoint} está habilitado. Body: ${rawText.slice(0, 200)}`,
-        status: response.status,
-      };
+async function discoverBase(input: string) {
+  const normalized = normalizeBase(input);
+  const parsed = new URL(normalized);
+  const root = parsed.origin;
+  const explicitPath = parsed.pathname.replace(/\/$/, "");
+  const candidates = explicitPath && explicitPath !== "/"
+    ? [normalized, ...subpaths.filter((path) => path !== explicitPath).map((path) => `${root}${path}`)]
+    : subpaths.map((path) => `${root}${path}`);
+  for (const candidate of Array.from(new Set(candidates))) {
+    for (const endpoint of [`${candidate}/wp-json/`, `${candidate}/?rest_route=/`]) {
+      try {
+        const response = await fetch(endpoint, { headers: { Accept: "application/json", "User-Agent": "Zica.ai/3.10.2" }, signal: AbortSignal.timeout(8000) });
+        if (response.ok && (response.headers.get("content-type") || "").includes("application/json")) return candidate.replace(/\/$/, "");
+      } catch {
+        // Try the next candidate.
+      }
     }
+  }
+  return normalized;
+}
 
-    let data: any = null;
+async function fetchCategories(baseUrl: string, perPage: number) {
+  const limit = Math.max(1, Math.min(100, Number(perPage || 100)));
+  const candidates = [
+    `${baseUrl}/wp-json/wp/v2/categories?per_page=${limit}&hide_empty=false&orderby=name&order=asc`,
+    `${baseUrl}/?rest_route=/wp/v2/categories&per_page=${limit}&hide_empty=false&orderby=name&order=asc`,
+  ];
+  let lastError = "Categorias do WordPress indisponíveis";
+  let lastStatus = 502;
+  for (const endpoint of candidates) {
     try {
-      data = rawText ? JSON.parse(rawText) : null;
-    } catch (parseErr) {
-      console.error(`WP JSON parse error [${response.status}] ${apiUrl}:`, rawText.slice(0, 500));
-      return {
-        error: `Falha ao decodificar JSON do WordPress (HTTP ${response.status}). Body: ${rawText.slice(0, 200)}`,
-        status: response.status,
-      };
+      const response = await fetch(endpoint, {
+        headers: { Accept: "application/json", "User-Agent": "Zica.ai/3.10.2" },
+        signal: AbortSignal.timeout(12000),
+      });
+      lastStatus = response.status;
+      const { text, data } = await readBody(response);
+      if (response.ok && Array.isArray(data)) {
+        return data.map((item: any) => ({ id: Number(item.id), name: String(item.name || ""), slug: String(item.slug || ""), count: Number(item.count || 0) }))
+          .filter((item: any) => Number.isFinite(item.id) && item.id > 0 && item.name);
+      }
+      if (data && typeof data === "object") lastError = String(data.message || data.error || `WordPress HTTP ${response.status}`);
+      else if (text.trim().startsWith("<")) lastError = `O WordPress respondeu HTML em vez da API REST (HTTP ${response.status})`;
+      else lastError = `WordPress HTTP ${response.status}`;
+    } catch (error) {
+      lastError = error instanceof Error && error.name === "TimeoutError" ? "Timeout ao consultar categorias do WordPress" : error instanceof Error ? error.message : lastError;
     }
-
-    if (!response.ok) {
-      const wpMessage = data?.message || data?.data?.message || data?.code || rawText.slice(0, 200);
-      console.error(`WP error [${response.status}] ${apiUrl}:`, wpMessage);
-      return {
-        error: wpMessage ? `WordPress ${response.status}: ${wpMessage}` : `Erro ${response.status}`,
-        status: response.status,
-      };
-    }
-
-    return { data, status: response.status };
-  } catch (error) {
-    console.error("WordPress API error:", error);
-    return { 
-      error: error instanceof Error ? error.message : "Erro de conexão", 
-      status: 500 
-    };
   }
+  throw Object.assign(new Error(lastError), { status: lastStatus });
 }
 
-Deno.serve(async (req) => {
-  const requestId = createRequestId();
-  const log = createLogger(FUNCTION_NAME, requestId);
-  const startTime = Date.now();
-
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return json({ success: false, error: "Method not allowed" }, 405);
+  const requestId = crypto.randomUUID();
 
   try {
-    const url = new URL(req.url);
-    // Support action from query params OR body
-    let action = url.searchParams.get("action");
-    log.requestStart(req.method, action || undefined);
+    const input = await req.json().catch(() => ({})) as Input;
+    if (!input.action) return json({ success: false, error: "action é obrigatório", request_id: requestId }, 400);
+    if (!input.projectId) return json({ success: false, error: "projectId é obrigatório", request_id: requestId }, 400);
 
-    // Health check doesn't need authentication
-    if (action === "health") {
-      log.requestEnd(200, Date.now() - startTime);
-      return new Response(
-        JSON.stringify({ success: true, message: "WordPress API Proxy online", timestamp: new Date().toISOString() }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // ========== AUTHENTICATION ==========
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      log.authFailure("missing_or_invalid_header");
-      return new Response(
-        JSON.stringify({ success: false, error: "Autorização necessária" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-      log.authFailure(authError?.message || "user_not_found");
-      return new Response(
-        JSON.stringify({ success: false, error: "Usuário não autenticado" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    log.authSuccess(user.id);
-    // ========== END AUTHENTICATION ==========
-
-    // Use service role for database operations
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-
-    const body = req.method !== "GET" ? await req.json() : {};
-    const { projectId, action: bodyAction, ...params } = body;
-    
-    // If action was not in query params, use body action
-    if (!action && bodyAction) {
-      action = bodyAction;
-    }
-
-    if (!projectId) {
-      return new Response(
-        JSON.stringify({ success: false, error: "projectId é obrigatório" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Get WordPress credentials and verify ownership
-    const { data: project, error } = await supabaseAdmin
+    const actor = await resolveRequestActor(req);
+    const supabaseUrl = String(Deno.env.get("SUPABASE_URL") || "");
+    const serviceKey = String(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || "");
+    if (!supabaseUrl || !serviceKey) return json({ success: false, error: "Backend incompleto", request_id: requestId }, 500);
+    const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: project, error: projectError } = await admin
       .from("projects")
-      .select("wordpress_url, wordpress_username, wordpress_app_password")
-      .eq("id", projectId)
-      .eq("user_id", user.id) // IMPORTANT: Validate user owns the project
-      .single();
+      .select("id,user_id,name,domain,wordpress_url,is_connected,wordpress_connector_mode")
+      .eq("id", input.projectId)
+      .eq("user_id", actor.userId)
+      .maybeSingle();
+    if (projectError) throw projectError;
+    if (!project?.wordpress_url) return json({ success: false, error: "Projeto WordPress não encontrado ou sem URL configurada", request_id: requestId }, 404);
+    const baseUrl = await discoverBase(String(project.wordpress_url));
 
-    if (error || !project?.wordpress_url) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Credenciais WordPress não encontradas ou acesso negado" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (input.action === "get-categories" || input.action === "categories") {
+      const categories = await fetchCategories(baseUrl, Number(input.perPage || 100));
+      if (baseUrl !== String(project.wordpress_url).replace(/\/$/, "")) {
+        await admin.from("projects").update({ wordpress_url: baseUrl, updated_at: new Date().toISOString() }).eq("id", project.id).eq("user_id", actor.userId);
+      }
+      return json({ success: true, data: categories, projectId: project.id, projectName: project.name, correctedUrl: baseUrl, connectorMode: project.wordpress_connector_mode || null, request_id: requestId });
     }
 
-    const credentials = project as WordPressCredentials;
-    let result;
-
-    switch (action) {
-      case "get-posts":
-        result = await wpFetch(credentials, `/posts?per_page=${params.perPage || 10}&page=${params.page || 1}`);
-        break;
-
-      case "get-post":
-        if (!params.postId) {
-          return new Response(
-            JSON.stringify({ success: false, error: "postId é obrigatório" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        result = await wpFetch(credentials, `/posts/${params.postId}`);
-        break;
-
-      case "create-post":
-        result = await wpFetch(credentials, "/posts", {
-          method: "POST",
-          body: JSON.stringify({
-            title: params.title,
-            content: params.content,
-            excerpt: params.excerpt,
-            slug: params.slug,
-            status: params.status || "draft",
-            categories: params.categories,
-            tags: params.tags,
-            featured_media: params.featuredMedia,
-          }),
-        });
-        break;
-
-      case "update-post":
-        if (!params.postId) {
-          return new Response(
-            JSON.stringify({ success: false, error: "postId é obrigatório" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        result = await wpFetch(credentials, `/posts/${params.postId}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            title: params.title,
-            content: params.content,
-            excerpt: params.excerpt,
-            slug: params.slug,
-            status: params.status,
-            categories: params.categories,
-            tags: params.tags,
-            featured_media: params.featuredMedia,
-          }),
-        });
-        break;
-
-      case "delete-post":
-        if (!params.postId) {
-          return new Response(
-            JSON.stringify({ success: false, error: "postId é obrigatório" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        result = await wpFetch(credentials, `/posts/${params.postId}?force=${params.force || false}`, {
-          method: "DELETE",
-        });
-        break;
-
-      case "get-categories":
-        result = await wpFetch(credentials, `/categories?per_page=${params.perPage || 100}`);
-        break;
-
-      case "create-category":
-        result = await wpFetch(credentials, "/categories", {
-          method: "POST",
-          body: JSON.stringify({
-            name: params.name,
-            slug: params.slug,
-            description: params.description,
-            parent: params.parent,
-          }),
-        });
-        break;
-
-      case "get-tags":
-        result = await wpFetch(credentials, `/tags?per_page=${params.perPage || 100}`);
-        break;
-
-      case "create-tag":
-        result = await wpFetch(credentials, "/tags", {
-          method: "POST",
-          body: JSON.stringify({
-            name: params.name,
-            slug: params.slug,
-            description: params.description,
-          }),
-        });
-        break;
-
-      case "get-media":
-        result = await wpFetch(credentials, `/media?per_page=${params.perPage || 20}`);
-        break;
-
-      case "upload-media":
-        if (!params.imageData) {
-          return new Response(
-            JSON.stringify({ success: false, error: "imageData (base64) é obrigatório" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        const { wordpress_url, wordpress_username, wordpress_app_password } = credentials;
-        const baseUrl = wordpress_url.replace(/\/$/, "");
-        const mediaApiUrl = `${baseUrl}/wp-json/wp/v2/media`;
-        const auth = btoa(`${wordpress_username}:${wordpress_app_password}`);
-
-        const base64Data = params.imageData.replace(/^data:image\/\w+;base64,/, "");
-        const binaryString = atob(base64Data);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-
-        const mediaResponse = await fetch(mediaApiUrl, {
-          method: "POST",
-          headers: {
-            Authorization: `Basic ${auth}`,
-            "Content-Type": params.mimeType || "image/png",
-            "Content-Disposition": `attachment; filename="${params.filename || "image.png"}"`,
-          },
-          body: bytes,
-        });
-
-        if (mediaResponse.ok) {
-          result = { data: await mediaResponse.json(), status: 201 };
-        } else {
-          result = { error: "Falha ao fazer upload", status: mediaResponse.status };
-        }
-        break;
-
-      case "get-users":
-        result = await wpFetch(credentials, `/users?per_page=${params.perPage || 100}`);
-        break;
-
-      case "get-current-user":
-        result = await wpFetch(credentials, "/users/me");
-        break;
-
-      case "update-yoast-meta":
-        if (!params.postId) {
-          return new Response(
-            JSON.stringify({ success: false, error: "postId é obrigatório" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        result = await wpFetch(credentials, `/posts/${params.postId}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            yoast_head_json: {
-              title: params.seoTitle,
-              description: params.seoDescription,
-            },
-            meta: {
-              _yoast_wpseo_title: params.seoTitle,
-              _yoast_wpseo_metadesc: params.seoDescription,
-              _yoast_wpseo_focuskw: params.focusKeyword,
-            },
-          }),
-        });
-        break;
-
-      case "update-rankmath-meta":
-        if (!params.postId) {
-          return new Response(
-            JSON.stringify({ success: false, error: "postId é obrigatório" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        result = await wpFetch(credentials, `/posts/${params.postId}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            meta: {
-              rank_math_title: params.seoTitle,
-              rank_math_description: params.seoDescription,
-              rank_math_focus_keyword: params.focusKeyword,
-            },
-          }),
-        });
-        break;
-
-      default:
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: "Ação não reconhecida",
-            availableActions: [
-              "health", "get-posts", "get-post", "create-post", "update-post", "delete-post",
-              "get-categories", "create-category", "get-tags", "create-tag",
-              "get-media", "upload-media", "get-users", "get-current-user",
-              "update-yoast-meta", "update-rankmath-meta"
-            ]
-          }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+    if (input.action === "test") {
+      const response = await fetch(`${supabaseUrl}/functions/v1/test-wordpress-connection`, {
+        method: "POST",
+        headers: { Authorization: req.headers.get("Authorization") || "", apikey: req.headers.get("apikey") || "", "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: project.id }),
+        signal: AbortSignal.timeout(20000),
+      });
+      const { data } = await readBody(response);
+      return json(data || { success: false, error: `Teste WordPress HTTP ${response.status}` }, response.status);
     }
 
-    if (result.error) {
-      log.warn("wp_action_error", { action, error: result.error, status: result.status });
-      return new Response(
-        JSON.stringify({ success: false, error: result.error }),
-        { status: result.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (input.action === "publish") {
+      if (!input.articleId) return json({ success: false, error: "articleId é obrigatório para publicação", request_id: requestId }, 400);
+      const response = await fetch(`${supabaseUrl}/functions/v1/publish-to-wordpress`, {
+        method: "POST",
+        headers: { Authorization: req.headers.get("Authorization") || "", apikey: req.headers.get("apikey") || "", "Content-Type": "application/json" },
+        body: JSON.stringify({ articleId: input.articleId, projectId: project.id, publishStatus: input.publishStatus || "publish", allowCrossProject: input.allowCrossProject === true, categories: input.categories || [] }),
+        signal: AbortSignal.timeout(90000),
+      });
+      const { data } = await readBody(response);
+      return json(data || { success: false, error: `Publicação WordPress HTTP ${response.status}` }, response.status);
     }
 
-    log.requestEnd(200, Date.now() - startTime);
-    return new Response(
-      JSON.stringify({ success: true, data: result.data }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-
+    return json({ success: false, error: "Ação não suportada", request_id: requestId }, 400);
   } catch (error) {
-    log.error("api_error", { error: error instanceof Error ? error.message : "unknown" });
-    log.requestEnd(500, Date.now() - startTime);
-    return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Erro interno" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    if (error instanceof RequestAuthError) return json({ success: false, error: error.message, code: error.code, request_id: requestId }, error.status);
+    const status = Number((error as any)?.status || 502);
+    return json({ success: false, error: error instanceof Error ? error.message : "Falha na API WordPress", request_id: requestId }, status >= 400 && status < 600 ? status : 502);
   }
 });
