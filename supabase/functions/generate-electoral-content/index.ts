@@ -51,6 +51,13 @@ type PortalSettings = {
   contextual_linking_enabled?: boolean;
 };
 
+type RankedResource = {
+  resource: PortalResource;
+  score: number;
+  matches: number;
+  isPrimary: boolean;
+};
+
 const digits = (value = '') => value.replace(/\D/g, '');
 const clampTarget = (value: unknown, fallback: number) => {
   const parsed = Number(value);
@@ -90,6 +97,10 @@ function normalizeTokens(value: string) {
     .filter((token) => token.length >= 3);
 }
 
+function hasAnyToken(tokens: Set<string>, expected: string[]) {
+  return expected.some((token) => tokens.has(token));
+}
+
 async function loadPortalNetwork(presetId: string) {
   if (!admin) return { settings: null as PortalSettings | null, resources: [] as PortalResource[] };
   const [{ data: settings }, { data: resources }] = await Promise.all([
@@ -101,36 +112,122 @@ async function loadPortalNetwork(presetId: string) {
 
 function choosePortalResources(keyword: string, electoral: ElectoralConfig, settings: PortalSettings | null, resources: PortalResource[]) {
   if (!settings?.contextual_linking_enabled || !resources.length) return [] as PortalResource[];
-  const context = [keyword, ...(electoral.campaignTopics || []), ...(electoral.targetCities || []), ...(electoral.targetDistricts || [])].join(' ');
+
+  const context = [
+    keyword,
+    ...(electoral.campaignTopics || []),
+    ...(electoral.targetCities || []),
+    ...(electoral.targetDistricts || []),
+  ].join(' ');
   const contextTokens = new Set(normalizeTokens(context));
   const min = Math.max(0, Math.min(12, Number(settings.min_links_per_post ?? 2)));
   const max = Math.max(min, Math.min(12, Number(settings.max_links_per_post ?? 5)));
   const desired = electoral.articleType === 'pillar' ? max : electoral.articleType === 'satellite' ? Math.min(max, min + 1) : min;
   const primary = new Set((settings.primary_portals || []).map((url) => String(url).replace(/\/$/, '')));
 
-  return resources
-    .map((resource) => {
-      const searchable = normalizeTokens([resource.label, resource.category, ...(resource.tags || [])].join(' '));
-      const matches = searchable.reduce((sum, token) => sum + (contextTokens.has(token) ? 1 : 0), 0);
-      const isPrimary = primary.has(String(resource.url).replace(/\/$/, ''));
-      return { resource, score: Number(resource.priority || 0) + matches * 25 + (isPrimary ? 1000 : 0) };
-    })
-    .sort((a, b) => b.score - a.score || a.resource.label.localeCompare(b.resource.label))
-    .slice(0, desired)
-    .map((item) => item.resource);
+  const coverageIntent = hasAnyToken(contextTokens, [
+    'madeira', '1470', 'candidato', 'candidatos', 'candidatura', 'registro', 'perfil', 'lista', 'eleicoes', 'eleicao', 'deputado', 'missao',
+  ]);
+  const partyDirectoryIntent = hasAnyToken(contextTokens, [
+    'missao', 'partido', 'candidato', 'candidatos', 'lista', 'chapa', 'nomes',
+  ]);
+
+  const ranked: RankedResource[] = resources.map((resource) => {
+    const searchable = normalizeTokens([resource.label, resource.category, ...(resource.tags || [])].join(' '));
+    const matches = searchable.reduce((sum, token) => sum + (contextTokens.has(token) ? 1 : 0), 0);
+    const isPrimary = primary.has(String(resource.url).replace(/\/$/, ''));
+    return {
+      resource,
+      matches,
+      isPrimary,
+      score: Number(resource.priority || 0) + matches * 25 + (isPrimary ? 1000 : 0),
+    };
+  }).sort((a, b) => b.score - a.score || a.resource.label.localeCompare(b.resource.label));
+
+  const selected: PortalResource[] = [];
+  const selectedUrls = new Set<string>();
+  const add = (item?: RankedResource) => {
+    if (!item || selected.length >= desired) return;
+    const key = String(item.resource.url).replace(/\/$/, '');
+    if (selectedUrls.has(key)) return;
+    selected.push(item.resource);
+    selectedUrls.add(key);
+  };
+
+  // Os dois portais eleitorais internos são a espinha dorsal da rede.
+  ranked.filter((item) => item.isPrimary).forEach(add);
+
+  // Fonte externa destacada somente quando o assunto realmente tratar da candidatura,
+  // do registro, do perfil ou de listas eleitorais. Evita repetir o mesmo link em todo artigo.
+  if (coverageIntent && selected.length < desired) {
+    add(ranked.find((item) => item.resource.category === 'external-coverage-primary' && item.matches > 0));
+    if (electoral.articleType === 'pillar' && selected.length < desired) {
+      add(ranked.find((item) => item.resource.category === 'external-coverage-primary' && item.matches > 0 && !selectedUrls.has(String(item.resource.url).replace(/\/$/, ''))));
+    }
+  }
+
+  // Perfis de outros candidatos do mesmo partido aparecem apenas em contexto editorial pertinente.
+  // O bloco é informativo e não contém recomendação de voto.
+  if (partyDirectoryIntent && selected.length < desired) {
+    let partyCount = 0;
+    for (const item of ranked) {
+      if (selected.length >= desired || partyCount >= 2) break;
+      if (item.resource.category !== 'party-candidate-profile' || item.matches <= 0) continue;
+      add(item);
+      partyCount += 1;
+    }
+  }
+
+  // Coberturas externas comuns exigem ao menos uma correspondência contextual.
+  for (const item of ranked) {
+    if (selected.length >= desired) break;
+    if (item.isPrimary) continue;
+    if (item.resource.category === 'external-coverage-primary') continue;
+    if (item.resource.category === 'party-candidate-profile') continue;
+    if (item.resource.category === 'external-coverage' && item.matches <= 0) continue;
+    add(item);
+  }
+
+  // Se ainda faltar quantidade mínima, usa recursos institucionais/editoriais gerais,
+  // mas nunca injeta perfis partidários ou cobertura externa sem contexto.
+  if (selected.length < min) {
+    for (const item of ranked) {
+      if (selected.length >= min) break;
+      if (item.resource.category === 'party-candidate-profile') continue;
+      if (item.resource.category.startsWith('external-coverage')) continue;
+      add(item);
+    }
+  }
+
+  return selected.slice(0, desired);
+}
+
+function renderList(resources: PortalResource[]) {
+  return resources.map((resource) => `<li><strong>${escapeHtml(resource.editorial_hook || 'Veja também')}:</strong> <a href="${escapeHtml(resource.url)}">${escapeHtml(resource.label)}</a></li>`).join('\n');
 }
 
 function renderPortalReferences(resources: PortalResource[]) {
   if (!resources.length) return '';
+
+  const featuredCoverage = resources.filter((resource) => resource.category === 'external-coverage-primary');
+  const partyProfiles = resources.filter((resource) => resource.category === 'party-candidate-profile');
+  const general = resources.filter((resource) => !['external-coverage-primary', 'party-candidate-profile'].includes(resource.category));
+
   return [
     '<aside class="zica-related-network" data-editorial-links="contextual">',
     '<h2>Você também pode conhecer</h2>',
     '<p>Referências e canais relacionados selecionados pelo contexto editorial desta publicação. A presença de um link não implica apoio, endosso ou vínculo político da página referenciada.</p>',
-    '<ul>',
-    ...resources.map((resource) => `<li><strong>${escapeHtml(resource.editorial_hook || 'Veja também')}:</strong> <a href="${escapeHtml(resource.url)}">${escapeHtml(resource.label)}</a></li>`),
-    '</ul>',
+    featuredCoverage.length ? '<section class="zica-featured-coverage"><h3>Cobertura externa em destaque</h3><ul>' : '',
+    featuredCoverage.length ? renderList(featuredCoverage) : '',
+    featuredCoverage.length ? '</ul></section>' : '',
+    partyProfiles.length ? '<section class="zica-party-directory"><h3>Outros perfis públicos do partido MISSÃO</h3><p>Diretório informativo para consulta. Estes links não constituem recomendação de voto.</p><ul>' : '',
+    partyProfiles.length ? renderList(partyProfiles) : '',
+    partyProfiles.length ? '</ul></section>' : '',
+    general.length ? '<section class="zica-related-links"><h3>Veja também</h3><ul>' : '',
+    general.length ? renderList(general) : '',
+    general.length ? '</ul></section>' : '',
     '</aside>',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 serve(async (req) => {
@@ -247,6 +344,8 @@ serve(async (req) => {
         preset_enforced_server_side: true,
         contextual_linking: Boolean(portalNetwork.settings?.contextual_linking_enabled),
         contextual_links_count: linkedResources.length,
+        external_coverage_context_gated: true,
+        party_candidate_directory_is_informational: true,
         individual_voter_profiles: false,
         political_preference_inference: false,
         persuasive_geo_personalization: false,
