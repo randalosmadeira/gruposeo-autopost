@@ -8,8 +8,9 @@ const corsHeaders = {
 };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
-const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SECRET_KEY') || '';
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false, autoRefreshToken: false } });
+const PLATFORMS = ['square', 'portrait', 'landscape'];
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
@@ -27,14 +28,13 @@ serve(async (req) => {
   if (!SUPABASE_URL || !SERVICE_ROLE) return json({ error: 'service_not_configured' }, 503);
 
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const requestId = String(body.requestId || '').trim();
     const token = String(body.token || '').trim();
     if (!requestId || !token) return json({ error: 'request_and_token_required' }, 422);
 
     const tokenHash = await sha256(token);
-    const { data: request, error: requestError } = await admin
-      .from('supporter_avatar_requests')
+    const { data: request, error: requestError } = await admin.from('supporter_avatar_requests')
       .select('id,status,expires_at')
       .eq('id', requestId)
       .eq('public_token_hash', tokenHash)
@@ -43,37 +43,39 @@ serve(async (req) => {
     if (new Date(request.expires_at).getTime() < Date.now()) return json({ error: 'request_not_found_or_expired' }, 404);
     if (request.status !== 'completed') return json({ error: 'final_not_ready_for_approval', status: request.status }, 409);
 
-    const { data: output, error: outputError } = await admin
-      .from('supporter_avatar_outputs')
-      .select('id,storage_path,mime_type,width,height,qa_score,created_at')
+    const { data: rows, error: outputError } = await admin.from('supporter_avatar_outputs')
+      .select('platform,storage_path,mime_type,width,height,qa_score,created_at')
       .eq('request_id', requestId)
-      .eq('platform', 'master')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (outputError || !output) return json({ error: 'final_output_not_found' }, 404);
+      .in('platform', PLATFORMS)
+      .order('created_at', { ascending: false });
+    if (outputError) throw outputError;
+
+    const latest = new Map<string, any>();
+    for (const row of rows || []) if (!latest.has(row.platform)) latest.set(row.platform, row);
+    if (PLATFORMS.some((platform) => !latest.has(platform))) return json({ error: 'social_pack_incomplete' }, 409);
 
     const approvedAt = new Date().toISOString();
-    const { error: updateError } = await admin
-      .from('supporter_avatar_requests')
-      .update({ supporter_approved_at: approvedAt, delivery_mode: 'single-final-download', updated_at: approvedAt })
+    const { error: updateError } = await admin.from('supporter_avatar_requests')
+      .update({ supporter_approved_at: approvedAt, delivery_mode: 'social-pack-3', updated_at: approvedAt })
       .eq('id', requestId);
     if (updateError) throw updateError;
 
-    const { data: signed, error: signedError } = await admin.storage.from('supporter-avatar-generated').createSignedUrl(output.storage_path, 900);
-    if (signedError || !signed?.signedUrl) throw signedError || new Error('signed_download_failed');
+    const outputs: Array<Record<string, unknown>> = [];
+    for (const platform of PLATFORMS) {
+      const output = latest.get(platform);
+      const { data: signed, error: signedError } = await admin.storage.from('supporter-avatar-generated').createSignedUrl(output.storage_path, 900);
+      if (signedError || !signed?.signedUrl) throw signedError || new Error('signed_download_failed');
+      outputs.push({ platform, url: signed.signedUrl, mimeType: output.mime_type, width: output.width, height: output.height, qaScore: output.qa_score });
+    }
 
     return json({
       ok: true,
       requestId,
       approvedAt,
-      url: signed.signedUrl,
-      mimeType: output.mime_type,
-      width: output.width,
-      height: output.height,
-      qaScore: output.qa_score,
+      outputs,
       socialPublishing: false,
-      deliveryMode: 'single-final-download',
+      deliveryMode: 'social-pack-3',
+      disclosure: 'Imagem gerada por IA - Campanha Oficial',
     });
   } catch (error) {
     console.error('approve-supporter-avatar-final:', error instanceof Error ? error.message : 'unknown_error');
