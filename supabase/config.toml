@@ -14,8 +14,8 @@ verify_jwt = true
 verify_jwt = true
 
 # These functions participate in server-to-server chains. They validate either
-# a real user JWT through auth.getUser() or an exact opaque service credential
-# inside the function, so gateway JWT parsing must not reject sb_secret_* keys.
+# a real user JWT through auth.getUser(), an exact opaque service credential,
+# or a dedicated automation secret inside the function body.
 [functions.publish-to-wordpress]
 verify_jwt = false
 
@@ -26,6 +26,9 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.wordpress-operations]
+verify_jwt = false
+
+[functions.execute-news-agents]
 verify_jwt = false
 
 [functions.regenerate-content]
@@ -51,9 +54,6 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.parse-rss]
-verify_jwt = true
-
-[functions.execute-news-agents]
 verify_jwt = true
 
 [functions.generate-secondary-keywords]
