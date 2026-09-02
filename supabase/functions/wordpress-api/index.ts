@@ -7,6 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+const subpaths = ["", "/blog", "/wordpress", "/wp", "/site", "/news", "/artigos", "/noticias"];
 
 type Input = {
   action?: "get-categories" | "categories" | "test" | "publish";
@@ -40,6 +41,27 @@ async function readBody(response: Response) {
   try { return { text, data: JSON.parse(text) as any }; } catch { return { text, data: null as any }; }
 }
 
+async function discoverBase(input: string) {
+  const normalized = normalizeBase(input);
+  const parsed = new URL(normalized);
+  const root = parsed.origin;
+  const explicitPath = parsed.pathname.replace(/\/$/, "");
+  const candidates = explicitPath && explicitPath !== "/"
+    ? [normalized, ...subpaths.filter((path) => path !== explicitPath).map((path) => `${root}${path}`)]
+    : subpaths.map((path) => `${root}${path}`);
+  for (const candidate of Array.from(new Set(candidates))) {
+    for (const endpoint of [`${candidate}/wp-json/`, `${candidate}/?rest_route=/`]) {
+      try {
+        const response = await fetch(endpoint, { headers: { Accept: "application/json", "User-Agent": "Zica.ai/3.10.2" }, signal: AbortSignal.timeout(8000) });
+        if (response.ok && (response.headers.get("content-type") || "").includes("application/json")) return candidate.replace(/\/$/, "");
+      } catch {
+        // Try the next candidate.
+      }
+    }
+  }
+  return normalized;
+}
+
 async function fetchCategories(baseUrl: string, perPage: number) {
   const limit = Math.max(1, Math.min(100, Number(perPage || 100)));
   const candidates = [
@@ -57,12 +79,8 @@ async function fetchCategories(baseUrl: string, perPage: number) {
       lastStatus = response.status;
       const { text, data } = await readBody(response);
       if (response.ok && Array.isArray(data)) {
-        return data.map((item: any) => ({
-          id: Number(item.id),
-          name: String(item.name || ""),
-          slug: String(item.slug || ""),
-          count: Number(item.count || 0),
-        })).filter((item: any) => Number.isFinite(item.id) && item.id > 0 && item.name);
+        return data.map((item: any) => ({ id: Number(item.id), name: String(item.name || ""), slug: String(item.slug || ""), count: Number(item.count || 0) }))
+          .filter((item: any) => Number.isFinite(item.id) && item.id > 0 && item.name);
       }
       if (data && typeof data === "object") lastError = String(data.message || data.error || `WordPress HTTP ${response.status}`);
       else if (text.trim().startsWith("<")) lastError = `O WordPress respondeu HTML em vez da API REST (HTTP ${response.status})`;
@@ -97,21 +115,20 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (projectError) throw projectError;
     if (!project?.wordpress_url) return json({ success: false, error: "Projeto WordPress não encontrado ou sem URL configurada", request_id: requestId }, 404);
-    const baseUrl = normalizeBase(String(project.wordpress_url));
+    const baseUrl = await discoverBase(String(project.wordpress_url));
 
     if (input.action === "get-categories" || input.action === "categories") {
       const categories = await fetchCategories(baseUrl, Number(input.perPage || 100));
-      return json({ success: true, data: categories, projectId: project.id, projectName: project.name, connectorMode: project.wordpress_connector_mode || null, request_id: requestId });
+      if (baseUrl !== String(project.wordpress_url).replace(/\/$/, "")) {
+        await admin.from("projects").update({ wordpress_url: baseUrl, updated_at: new Date().toISOString() }).eq("id", project.id).eq("user_id", actor.userId);
+      }
+      return json({ success: true, data: categories, projectId: project.id, projectName: project.name, correctedUrl: baseUrl, connectorMode: project.wordpress_connector_mode || null, request_id: requestId });
     }
 
     if (input.action === "test") {
       const response = await fetch(`${supabaseUrl}/functions/v1/test-wordpress-connection`, {
         method: "POST",
-        headers: {
-          Authorization: req.headers.get("Authorization") || "",
-          apikey: req.headers.get("apikey") || "",
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: req.headers.get("Authorization") || "", apikey: req.headers.get("apikey") || "", "Content-Type": "application/json" },
         body: JSON.stringify({ project_id: project.id }),
         signal: AbortSignal.timeout(20000),
       });
@@ -123,18 +140,8 @@ Deno.serve(async (req: Request) => {
       if (!input.articleId) return json({ success: false, error: "articleId é obrigatório para publicação", request_id: requestId }, 400);
       const response = await fetch(`${supabaseUrl}/functions/v1/publish-to-wordpress`, {
         method: "POST",
-        headers: {
-          Authorization: req.headers.get("Authorization") || "",
-          apikey: req.headers.get("apikey") || "",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          articleId: input.articleId,
-          projectId: project.id,
-          publishStatus: input.publishStatus || "publish",
-          allowCrossProject: input.allowCrossProject === true,
-          categories: input.categories || [],
-        }),
+        headers: { Authorization: req.headers.get("Authorization") || "", apikey: req.headers.get("apikey") || "", "Content-Type": "application/json" },
+        body: JSON.stringify({ articleId: input.articleId, projectId: project.id, publishStatus: input.publishStatus || "publish", allowCrossProject: input.allowCrossProject === true, categories: input.categories || [] }),
         signal: AbortSignal.timeout(90000),
       });
       const { data } = await readBody(response);
