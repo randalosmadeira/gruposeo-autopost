@@ -104,11 +104,3 @@ export async function getOrchestratorForUser(userId: string): Promise<AIOrchestr
   }));
   return orchestrator;
 }
-
-export async function setEnvKeysForUser(userId: string): Promise<void> {
-  const { setRuntimeKey } = await import("./gemini.ts");
-  const effective = await fetchEffectiveAIKeys(userId);
-  if (effective.gemini) setRuntimeKey("GEMINI_API_KEY", effective.gemini);
-  if (effective.openai) setRuntimeKey("OPENAI_API_KEY", effective.openai);
-  if (effective.anthropic) setRuntimeKey("ANTHROPIC_API_KEY", effective.anthropic);
-}
