@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ArticleEditor } from '@/components/articles/ArticleEditor';
-import { ArticleBreadcrumbs } from '@/components/articles/ArticleBreadcrumbs';
 import { useWordPressPublish } from '@/hooks/useWordPressPublish';
+import { ArticleLoadError, ArticleLoadErrorCode, getArticleById, isValidUuid } from '@/services/articles';
+import { cancelWordPressSchedule, scheduleWordPressArticle } from '@/services/wordpressOperations';
 
 interface Article {
   id: string;
@@ -19,7 +20,17 @@ interface Article {
   status: string;
   word_count: number | null;
   project_id: string | null;
+  scheduled_at?: Date | null;
   config: Record<string, unknown> | null;
+  wordpress_categories?: number[];
+}
+
+type ErrorState = { code: ArticleLoadErrorCode; message: string } | null;
+
+function scheduleIso(value?: Date | null) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 export default function ArticleEditPage() {
@@ -28,59 +39,95 @@ export default function ArticleEditPage() {
   const { toast } = useToast();
   const [article, setArticle] = useState<Article | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ErrorState>(null);
   const { publishArticle, isPublishing } = useWordPressPublish();
 
+  const loadArticle = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    if (!isValidUuid(id)) {
+      setError({ code: 'INVALID_ID', message: 'O endereço contém um identificador de artigo inválido.' });
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const data = await getArticleById<Record<string, any>>(id);
+      const config = data.config && typeof data.config === 'object' ? data.config as Record<string, unknown> : null;
+      const wordpressCategories = (config?.wordpress_categories as number[]) || [];
+      setArticle({
+        id: String(data.id),
+        title: data.title ?? null,
+        keyword: String(data.keyword || ''),
+        content: data.content ?? null,
+        excerpt: data.excerpt ?? null,
+        slug: data.slug ?? null,
+        featured_image_url: data.featured_image_url ?? null,
+        status: String(data.status || 'draft'),
+        word_count: data.word_count ?? null,
+        project_id: data.project_id ?? null,
+        scheduled_at: data.scheduled_at ? new Date(data.scheduled_at) : null,
+        config,
+        wordpress_categories: wordpressCategories,
+      });
+    } catch (loadError) {
+      if (loadError instanceof ArticleLoadError) setError({ code: loadError.code, message: loadError.message });
+      else setError({ code: 'TECHNICAL', message: 'Falha técnica inesperada ao carregar o artigo.' });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
-    const fetchArticle = async () => {
-      if (!id) {
-        setError('ID do artigo não fornecido');
-        setIsLoading(false);
+    void loadArticle();
+  }, [loadArticle]);
+
+  const handleSave = useCallback(async (updatedArticle: Article) => {
+    const previousScheduled = scheduleIso(article?.scheduled_at);
+    const nextScheduled = scheduleIso(updatedArticle.scheduled_at);
+    setArticle(updatedArticle);
+
+    if (previousScheduled === nextScheduled) return;
+
+    try {
+      if (!updatedArticle.project_id) {
+        const { error: dbError } = await supabase
+          .from('articles')
+          .update({ scheduled_at: nextScheduled })
+          .eq('id', updatedArticle.id);
+        if (dbError) throw dbError;
+        if (nextScheduled) {
+          toast({
+            title: 'Data salva, projeto pendente',
+            description: 'Vincule o artigo a um projeto WordPress para ativar a publicação automática.',
+          });
+        }
         return;
       }
 
-      try {
-        const { data, error: fetchError } = await supabase
-          .from('articles')
-          .select('*')
-          .eq('id', id)
-          .maybeSingle();
-
-        if (fetchError) {
-          console.error('Error fetching article:', fetchError);
-          setError('Erro ao carregar artigo');
-          return;
-        }
-
-        if (!data) {
-          setError('Artigo não encontrado');
-          return;
-        }
-
-        // Extract wordpress_categories from config if available
-        const config = data.config as Record<string, unknown> | null;
-        const wordpressCategories = (config?.wordpress_categories as number[]) || [];
-
-        setArticle({
-          ...data,
-          wordpress_categories: wordpressCategories,
-        } as Article & { wordpress_categories: number[] });
-      } catch (err) {
-        console.error('Unexpected error:', err);
-        setError('Erro inesperado ao carregar artigo');
-      } finally {
-        setIsLoading(false);
+      if (nextScheduled && Date.parse(nextScheduled) > Date.now()) {
+        await scheduleWordPressArticle({
+          articleId: updatedArticle.id,
+          projectId: updatedArticle.project_id,
+          scheduledAt: nextScheduled,
+          publishStatus: 'publish',
+        });
+        toast({ title: 'Publicação agendada', description: `Agendamento salvo em scheduled_at e enviado ao brain do WordPress.` });
+      } else {
+        await cancelWordPressSchedule(updatedArticle.id);
       }
-    };
+    } catch (scheduleError) {
+      console.error('[ArticleEditPage] schedule sync failed:', scheduleError);
+      toast({
+        title: 'Falha ao sincronizar agendamento',
+        description: scheduleError instanceof Error ? scheduleError.message : 'O agendamento não foi sincronizado com a fila.',
+        variant: 'destructive',
+      });
+    }
+  }, [article?.scheduled_at, toast]);
 
-    fetchArticle();
-  }, [id]);
-
-  const handleSave = (updatedArticle: Article) => {
-    setArticle(updatedArticle);
-  };
-
-  const handlePublish = async (articleToPublish: Article & { wordpress_categories?: number[] }) => {
+  const handlePublish = async (articleToPublish: Article) => {
     if (!articleToPublish.project_id) {
       toast({
         title: 'Projeto não definido',
@@ -94,43 +141,42 @@ export default function ArticleEditPage() {
       id: articleToPublish.id,
       title: articleToPublish.title,
       project_id: articleToPublish.project_id,
+      scheduled_at: scheduleIso(articleToPublish.scheduled_at),
     });
-    
-    if (result.success) {
-      // Refresh article data
-      const { data } = await supabase
-        .from('articles')
-        .select('*')
-        .eq('id', articleToPublish.id)
-        .single();
-      
-      if (data) {
-        const config = data.config as Record<string, unknown> | null;
-        const wordpressCategories = (config?.wordpress_categories as number[]) || [];
-        setArticle({
-          ...data,
-          wordpress_categories: wordpressCategories,
-        } as Article & { wordpress_categories: number[] });
-      }
-    }
+
+    if (result.success && !result.scheduled) await loadArticle();
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3" role="status" aria-live="polite">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Carregando editor...</p>
       </div>
     );
   }
 
   if (error || !article) {
+    const state = error || { code: 'NOT_FOUND' as const, message: 'Artigo não encontrado.' };
+    const retryable = state.code === 'TIMEOUT' || state.code === 'TECHNICAL';
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <p className="text-lg text-muted-foreground">{error || 'Artigo não encontrado'}</p>
-        <Button variant="outline" onClick={() => navigate('/articles')}>
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Voltar para lista
-        </Button>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-6 text-center">
+        <div className="space-y-1">
+          <h1 className="text-xl font-semibold">{state.code === 'NOT_FOUND' ? 'Artigo não encontrado' : state.code === 'INVALID_ID' ? 'Endereço inválido' : state.code === 'TIMEOUT' ? 'Tempo de resposta excedido' : 'Falha técnica'}</h1>
+          <p className="text-muted-foreground">{state.message}</p>
+        </div>
+        <div className="flex gap-2">
+          {retryable && (
+            <Button onClick={() => void loadArticle()}>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Tentar novamente
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => navigate('/articles')}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Voltar para lista
+          </Button>
+        </div>
       </div>
     );
   }
