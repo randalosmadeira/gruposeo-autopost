@@ -47,6 +47,16 @@ jobs:
       - name: Build Zica.ai
         run: npm run build:zica
 
+      - name: Build Zica Orchestrator
+        working-directory: services/zica-orchestrator
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          npm run build
+          test -f dist/server.js
+          test -f dist/worker.js
+
       - name: Upload Zica.ai production build
         if: success()
         uses: actions/upload-artifact@v4
