@@ -4,12 +4,16 @@ import {
   buildSupporterAvatarPrompt,
   SUPPORTER_AVATAR_PROMPT_VERSION,
   SUPPORTER_AVATAR_QA_PROMPT,
+  SUPPORTER_OUTPUT_FORMATS,
+  SUPPORTER_PHOTO_AGENT_NAME,
+  type SupportOutputFormat,
 } from '../_shared/supporter-avatar-prompt.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const OPENAI_IMAGE_MODEL = Deno.env.get('OPENAI_IMAGE_MODEL') || 'gpt-image-2';
 const ANTHROPIC_MODEL = Deno.env.get('ANTHROPIC_MODEL') || 'claude-sonnet-5';
+const FIXED_DRIVE_FOLDER = '1NB_yQBM_2bGA5UC6JyCEgC54sjCHSyO6';
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -87,6 +91,17 @@ function extractJson(text: string) {
   return null;
 }
 
+function mimeFromName(name: string) {
+  const lower = name.toLowerCase();
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  return 'image/jpeg';
+}
+
+function extensionForMime(mime: string) {
+  return mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+}
+
 async function downloadSources(requestId: string) {
   const { data: sources, error } = await admin
     .from('supporter_avatar_sources')
@@ -96,7 +111,7 @@ async function downloadSources(requestId: string) {
     .limit(4);
   if (error) throw error;
 
-  const loaded = [];
+  const loaded: Array<any> = [];
   for (const source of sources || []) {
     const { data, error: downloadError } = await admin.storage.from('supporter-avatar-uploads').download(source.storage_path);
     if (downloadError || !data) continue;
@@ -106,25 +121,20 @@ async function downloadSources(requestId: string) {
   return loaded;
 }
 
-async function selectBestReference(sources: Array<{ mime_type: string; base64: string }>, anthropicApiKey: string) {
+async function selectBestSupporterReference(sources: Array<{ mime_type: string; base64: string }>, anthropicApiKey: string) {
   if (!anthropicApiKey || sources.length <= 1) return { index: 0, qa: null };
-
   const content: unknown[] = [{
     type: 'text',
-    text: 'Escolha somente a melhor fotografia técnica para servir como referência principal de edição facial. Considere nitidez do rosto, iluminação, ausência de oclusão e proporção facial. As imagens estão numeradas na ordem enviada. Não identifique a pessoa e não infira atributos sensíveis. Retorne apenas JSON: {"reference_index":0,"technical_source_score":0,"reason":"..."}.',
+    text: 'Escolha apenas a melhor foto técnica do APOIADOR para uma composição fotográfica conjunta. Considere nitidez facial, iluminação, ausência de oclusão e proporção. Não identifique a pessoa nem infira atributos sensíveis. Retorne apenas JSON: {"reference_index":0,"technical_source_score":0,"reason":"..."}.',
   }];
   sources.forEach((source, index) => {
-    content.push({ type: 'text', text: `REFERÊNCIA ${index}` });
+    content.push({ type: 'text', text: `FOTO DO APOIADOR ${index}` });
     content.push({ type: 'image', source: { type: 'base64', media_type: source.mime_type, data: source.base64 } });
   });
 
   const response = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': anthropicApiKey,
-      'anthropic-version': '2023-06-01',
-    },
+    headers: { 'content-type': 'application/json', 'x-api-key': anthropicApiKey, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 500, messages: [{ role: 'user', content }] }),
   }, 45000, 2);
   if (!response.ok) return { index: 0, qa: { provider_error: response.status } };
@@ -135,54 +145,82 @@ async function selectBestReference(sources: Array<{ mime_type: string; base64: s
   return { index: Number.isInteger(index) && index >= 0 && index < sources.length ? index : 0, qa: parsed };
 }
 
-async function generateWithOpenAI(source: { mime_type: string; bytes: Uint8Array }, prompt: string, openaiApiKey: string) {
+async function loadCandidatePreset(slug: string) {
+  const { data, error } = await admin
+    .from('supporter_avatar_candidate_presets')
+    .select('slug,label,wardrobe,prop,drive_folder_id,drive_file_id,drive_file_name,drive_download_url,prompt_hint,is_active')
+    .eq('slug', slug)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (error || !data || data.drive_folder_id !== FIXED_DRIVE_FOLDER) throw new Error('candidate_preset_not_found');
+
+  const response = await fetchWithRetry(data.drive_download_url, {
+    headers: { 'User-Agent': `${SUPPORTER_PHOTO_AGENT_NAME}/1.0` },
+    redirect: 'follow',
+  }, 30000, 2);
+  if (!response.ok) throw new Error(`candidate_asset_http_${response.status}`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (!bytes.length || bytes.length > 15 * 1024 * 1024) throw new Error('candidate_asset_size_invalid');
+  return { ...data, mime_type: mimeFromName(data.drive_file_name), bytes, base64: bytesToBase64(bytes) };
+}
+
+async function generateWithOpenAI(
+  supporter: { mime_type: string; bytes: Uint8Array },
+  candidate: { mime_type: string; bytes: Uint8Array },
+  prompt: string,
+  modelSize: string,
+  openaiApiKey: string,
+) {
   if (!openaiApiKey) throw new Error('openai_not_configured');
   const form = new FormData();
   form.set('model', OPENAI_IMAGE_MODEL);
   form.set('prompt', prompt);
-  form.set('size', '1024x1024');
+  form.set('size', modelSize);
   form.set('quality', 'high');
-  const extension = source.mime_type === 'image/png' ? 'png' : source.mime_type === 'image/webp' ? 'webp' : 'jpg';
-  form.set('image', new File([source.bytes], `reference.${extension}`, { type: source.mime_type }));
+  form.append('image[]', new File([supporter.bytes], `01-supporter.${extensionForMime(supporter.mime_type)}`, { type: supporter.mime_type }));
+  form.append('image[]', new File([candidate.bytes], `02-candidate.${extensionForMime(candidate.mime_type)}`, { type: candidate.mime_type }));
 
   const response = await fetchWithRetry('https://api.openai.com/v1/images/edits', {
     method: 'POST',
     headers: { Authorization: `Bearer ${openaiApiKey}` },
     body: form,
-  }, 120000, 3);
+  }, 150000, 3);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`openai_image_error:${response.status}:${payload?.error?.message || 'unknown'}`);
   const first = payload?.data?.[0];
-  if (first?.b64_json) return { bytes: base64ToBytes(first.b64_json), mimeType: 'image/png' };
+  if (first?.b64_json) return { bytes: base64ToBytes(first.b64_json), mimeType: 'image/png', usage: payload?.usage || null };
   if (first?.url) {
     const imageResponse = await fetchWithRetry(first.url, {}, 60000, 2);
     if (!imageResponse.ok) throw new Error(`openai_image_download_error:${imageResponse.status}`);
-    return { bytes: new Uint8Array(await imageResponse.arrayBuffer()), mimeType: imageResponse.headers.get('content-type') || 'image/png' };
+    return { bytes: new Uint8Array(await imageResponse.arrayBuffer()), mimeType: imageResponse.headers.get('content-type') || 'image/png', usage: payload?.usage || null };
   }
   throw new Error('openai_image_missing_output');
 }
 
-async function qaWithClaude(reference: { mime_type: string; base64: string }, candidate: { mimeType: string; bytes: Uint8Array }, anthropicApiKey: string) {
+async function qaWithClaude(
+  supporter: { mime_type: string; base64: string },
+  candidateReference: { mime_type: string; base64: string },
+  generated: { mimeType: string; bytes: Uint8Array },
+  anthropicApiKey: string,
+) {
   if (!anthropicApiKey) return null;
   const response = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': anthropicApiKey,
-      'anthropic-version': '2023-06-01',
-    },
+    headers: { 'content-type': 'application/json', 'x-api-key': anthropicApiKey, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
-      max_tokens: 900,
+      max_tokens: 1000,
       system: SUPPORTER_AVATAR_QA_PROMPT,
       messages: [{
         role: 'user',
         content: [
-          { type: 'text', text: 'IMAGEM DE REFERÊNCIA' },
-          { type: 'image', source: { type: 'base64', media_type: reference.mime_type, data: reference.base64 } },
-          { type: 'text', text: 'IMAGEM CANDIDATA' },
-          { type: 'image', source: { type: 'base64', media_type: candidate.mimeType, data: bytesToBase64(candidate.bytes) } },
-          { type: 'text', text: 'Avalie conforme o sistema e retorne somente JSON válido.' },
+          { type: 'text', text: 'REFERÊNCIA 1 — APOIADOR' },
+          { type: 'image', source: { type: 'base64', media_type: supporter.mime_type, data: supporter.base64 } },
+          { type: 'text', text: 'REFERÊNCIA 2 — MODELO OFICIAL DO CANDIDATO' },
+          { type: 'image', source: { type: 'base64', media_type: candidateReference.mime_type, data: candidateReference.base64 } },
+          { type: 'text', text: 'COMPOSIÇÃO FINAL' },
+          { type: 'image', source: { type: 'base64', media_type: generated.mimeType, data: bytesToBase64(generated.bytes) } },
+          { type: 'text', text: 'Avalie a preservação independente das duas pessoas, naturalidade, anatomia, roupa/objeto, zona segura e branding. Retorne somente JSON.' },
         ],
       }],
     }),
@@ -206,22 +244,15 @@ serve(async (req) => {
     requestId = String(body.requestId || '').trim();
     if (!requestId) return json({ error: 'request_id_required' }, 422);
 
-    const { data: avatarRequest, error: requestError } = await admin
-      .from('supporter_avatar_requests')
-      .select('*')
-      .eq('id', requestId)
-      .single();
+    const { data: avatarRequest, error: requestError } = await admin.from('supporter_avatar_requests').select('*').eq('id', requestId).single();
     if (requestError || !avatarRequest) return json({ error: 'request_not_found' }, 404);
     if (!avatarRequest.consent_image_use || !avatarRequest.consent_terms) return json({ error: 'required_consent_missing' }, 422);
+    if (!avatarRequest.candidate_preset_slug) return json({ error: 'candidate_preset_required' }, 422);
 
-    const { data: job } = await admin
-      .from('supporter_avatar_jobs')
-      .select('id')
-      .eq('request_id', requestId)
-      .in('status', ['queued','running'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const outputFormat = String(avatarRequest.output_format || 'feed-square') as SupportOutputFormat;
+    const format = SUPPORT_OUTPUT_FORMATS[outputFormat] || SUPPORT_OUTPUT_FORMATS['feed-square'];
+
+    const { data: job } = await admin.from('supporter_avatar_jobs').select('id').eq('request_id', requestId).in('status', ['queued','running']).order('created_at', { ascending: false }).limit(1).maybeSingle();
     jobId = job?.id || '';
 
     const providerKeys = await resolveProviderKeys();
@@ -234,14 +265,16 @@ serve(async (req) => {
     await admin.from('supporter_avatar_requests').update({ status: 'processing', supporter_approved_at: null, updated_at: new Date().toISOString() }).eq('id', requestId);
     if (jobId) await admin.from('supporter_avatar_jobs').update({ status: 'running', attempts: 1, started_at: new Date().toISOString() }).eq('id', jobId);
 
-    const sources = await downloadSources(requestId);
+    const [sources, candidatePreset] = await Promise.all([
+      downloadSources(requestId),
+      loadCandidatePreset(String(avatarRequest.candidate_preset_slug)),
+    ]);
     if (!sources.length) throw new Error('no_source_images');
 
-    const selection = await selectBestReference(sources, providerKeys.anthropic);
-    const primary = sources[selection.index] || sources[0];
+    const selection = await selectBestSupporterReference(sources, providerKeys.anthropic);
+    const supporterPrimary = sources[selection.index] || sources[0];
 
-    const { data: dbTemplate } = await admin
-      .from('supporter_avatar_prompt_templates')
+    const { data: dbTemplate } = await admin.from('supporter_avatar_prompt_templates')
       .select('system_prompt,negative_prompt,fidelity_target,version')
       .is('owner_user_id', null)
       .eq('slug', avatarRequest.prompt_template_slug || 'supporter-avatar-human-v1')
@@ -250,11 +283,19 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    const runtimePrompt = buildSupporterAvatarPrompt({ supporterName: avatarRequest.supporter_name, supportText: avatarRequest.support_text, style: avatarRequest.style, socialHandles: {} });
+    const runtimePrompt = buildSupporterAvatarPrompt({
+      supporterName: avatarRequest.supporter_name,
+      supportText: avatarRequest.support_text,
+      style: avatarRequest.style,
+      candidatePresetLabel: candidatePreset.label,
+      candidatePresetHint: candidatePreset.prompt_hint,
+      outputFormat,
+      socialHandles: {},
+    });
     const prompt = `${dbTemplate?.system_prompt || ''}\n\n${runtimePrompt}\n\nRESTRIÇÕES ADICIONAIS:\n${dbTemplate?.negative_prompt || ''}`.trim();
 
-    const generated = await generateWithOpenAI(primary, prompt, providerKeys.openai);
-    const path = `${requestId}/master-${crypto.randomUUID()}.png`;
+    const generated = await generateWithOpenAI(supporterPrimary, candidatePreset, prompt, format.modelSize, providerKeys.openai);
+    const path = `${requestId}/master-${outputFormat}-${crypto.randomUUID()}.png`;
     const { error: uploadError } = await admin.storage.from('supporter-avatar-generated').upload(path, generated.bytes, {
       contentType: generated.mimeType,
       upsert: false,
@@ -262,15 +303,16 @@ serve(async (req) => {
     });
     if (uploadError) throw uploadError;
 
-    const qa = await qaWithClaude(primary, generated, providerKeys.anthropic);
-    const qaScore = Number(qa?.facial_fidelity_score);
+    const qa = await qaWithClaude(supporterPrimary, candidatePreset, generated, providerKeys.anthropic);
+    const qaScore = Number(qa?.supporter_fidelity_score);
     const qaPass = qa ? qa.pass === true : true;
+    const [modelWidth, modelHeight] = format.modelSize.split('x').map(Number);
 
     await admin.from('supporter_avatar_outputs').insert({
       request_id: requestId,
       platform: 'master',
-      width: 1024,
-      height: 1024,
+      width: modelWidth,
+      height: modelHeight,
       storage_path: path,
       mime_type: generated.mimeType,
       model: OPENAI_IMAGE_MODEL,
@@ -278,35 +320,48 @@ serve(async (req) => {
       qa_score: Number.isFinite(qaScore) ? qaScore : null,
       qa_payload: {
         ...(qa || {}),
+        agent: SUPPORTER_PHOTO_AGENT_NAME,
         source_selection: selection.qa,
-        source_index: selection.index,
+        supporter_source_index: selection.index,
+        candidate_preset_slug: candidatePreset.slug,
+        candidate_reference_file: candidatePreset.drive_file_name,
+        candidate_reference_folder: FIXED_DRIVE_FOLDER,
+        output_format: outputFormat,
+        exact_output: `${format.exactWidth}x${format.exactHeight}`,
+        model_master_size: format.modelSize,
         fidelity_target: Number(dbTemplate?.fidelity_target || 0.99),
         fidelity_target_is_not_biometric_guarantee: true,
         openai_key_source: providerKeys.openaiSource,
         anthropic_key_source: providerKeys.anthropicSource,
+        openai_usage: generated.usage,
         manual_supporter_approval_required: true,
       },
     });
 
     const finalStatus = qa && !qaPass ? 'qa' : 'completed';
-    await admin.from('supporter_avatar_requests').update({ status: finalStatus, updated_at: new Date().toISOString(), completed_at: finalStatus === 'completed' ? new Date().toISOString() : null }).eq('id', requestId);
+    const completedAt = finalStatus === 'completed' ? new Date().toISOString() : null;
+    await admin.from('supporter_avatar_requests').update({ status: finalStatus, updated_at: new Date().toISOString(), completed_at: completedAt }).eq('id', requestId);
 
     if (jobId) await admin.from('supporter_avatar_jobs').update({
       status: 'completed',
       model: OPENAI_IMAGE_MODEL,
       output_payload: {
         output_path: path,
+        agent: SUPPORTER_PHOTO_AGENT_NAME,
         prompt_version: SUPPORTER_AVATAR_PROMPT_VERSION,
         qa_pass: qaPass,
         qa_score: Number.isFinite(qaScore) ? qaScore : null,
         anthropic_qa_used: Boolean(providerKeys.anthropic),
-        manual_supporter_approval_required: true,
+        candidate_preset_slug: candidatePreset.slug,
+        output_format: outputFormat,
+        exact_output: `${format.exactWidth}x${format.exactHeight}`,
         provider_sources: { openai: providerKeys.openaiSource, anthropic: providerKeys.anthropicSource },
+        manual_supporter_approval_required: true,
       },
       completed_at: new Date().toISOString(),
     }).eq('id', jobId);
 
-    return json({ ok: true, requestId, status: finalStatus, model: OPENAI_IMAGE_MODEL, qa });
+    return json({ ok: true, requestId, status: finalStatus, model: OPENAI_IMAGE_MODEL, agent: SUPPORTER_PHOTO_AGENT_NAME, candidatePreset: candidatePreset.slug, outputFormat, qa });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown_error';
     console.error('generate-supporter-avatar:', requestId, message);
