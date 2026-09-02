@@ -29,10 +29,10 @@ function contact(body: Record<string, unknown>) {
   const whatsapp = normalizeWhatsapp(body.whatsapp);
   const city = clean(body.city, 100);
   const state = clean(body.state || "SP", 2).toUpperCase();
-  if (!fullNameOk(supporterName)) return { error: "supporter_full_name_required" };
-  if (!emailOk(email)) return { error: "supporter_email_invalid" };
-  if (!whatsapp) return { error: "supporter_whatsapp_invalid" };
-  return { supporterName, email, whatsapp, city, state };
+  if (!fullNameOk(supporterName)) return { error: "supporter_full_name_required" } as const;
+  if (!emailOk(email)) return { error: "supporter_email_invalid" } as const;
+  if (!whatsapp) return { error: "supporter_whatsapp_invalid" } as const;
+  return { supporterName, email, whatsapp, city, state } as const;
 }
 function fingerprint(req: Request) { const ip = req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"; return `${ip}|${req.headers.get("user-agent") || "unknown"}|${SUPABASE_URL}`; }
 
@@ -59,30 +59,29 @@ async function preset(slug: string) {
   return data?.drive_folder_id === FIXED_DRIVE_FOLDER ? data : null;
 }
 
-async function dispatch(requestId: string, jobId: string) {
-  try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-supporter-avatar`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-zica-internal": SERVICE_ROLE },
-      body: JSON.stringify({ requestId }),
-      signal: AbortSignal.timeout(10000),
-    });
-    if (response.ok) return true;
+function dispatch(requestId: string, jobId: string) {
+  const task = fetch(`${SUPABASE_URL}/functions/v1/generate-supporter-avatar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-zica-internal": SERVICE_ROLE },
+    body: JSON.stringify({ requestId }),
+  }).then(async (response) => {
+    if (response.ok) return;
     const text = await response.text().catch(() => "");
     const message = `dispatch_http_${response.status}:${text.slice(0, 180)}`;
     await Promise.all([
       admin.from("supporter_avatar_requests").update({ status: "failed", updated_at: new Date().toISOString() }).eq("id", requestId),
-      admin.from("supporter_avatar_jobs").update({ status: "failed", error_message: message, completed_at: new Date().toISOString() }).eq("id", jobId),
+      admin.from("supporter_avatar_jobs").update({ status: "failed", error_message: message.slice(0, 500), completed_at: new Date().toISOString() }).eq("id", jobId),
     ]);
-    return false;
-  } catch (error) {
+  }).catch(async (error) => {
     const message = `dispatch_network:${error instanceof Error ? error.message : "unknown"}`;
     await Promise.all([
       admin.from("supporter_avatar_requests").update({ status: "failed", updated_at: new Date().toISOString() }).eq("id", requestId),
       admin.from("supporter_avatar_jobs").update({ status: "failed", error_message: message.slice(0, 500), completed_at: new Date().toISOString() }).eq("id", jobId),
     ]);
-    return false;
-  }
+  });
+  const runtime = (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+  if (runtime?.waitUntil) runtime.waitUntil(task);
+  else void task;
 }
 
 Deno.serve(async (req: Request) => {
@@ -140,6 +139,8 @@ Deno.serve(async (req: Request) => {
     if (action === "register-upload") {
       const path = clean(body.path, 300); const mimeType = clean(body.mimeType, 80).toLowerCase(); const fileSize = Number(body.fileSize || 0);
       if (!path.startsWith(`${requestId}/`)) return json({ error: "invalid_storage_path" }, 422);
+      if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType)) return json({ error: "unsupported_image_type" }, 422);
+      if (!Number.isFinite(fileSize) || fileSize <= 0 || fileSize > 10 * 1024 * 1024) return json({ error: "invalid_file_size" }, 422);
       const name = path.split("/").pop() || ""; const { data: objects } = await admin.storage.from("supporter-avatar-uploads").list(requestId, { search: name, limit: 2 });
       if (!objects?.some((item) => item.name === name)) return json({ error: "uploaded_object_not_found" }, 422);
       const { error } = await admin.from("supporter_avatar_sources").insert({ request_id: requestId, storage_path: path, mime_type: mimeType, file_size_bytes: fileSize });
@@ -162,7 +163,7 @@ Deno.serve(async (req: Request) => {
       await admin.from("supporter_avatar_requests").update({ status: "queued", generation_count: (request.generation_count || 0) + 1, supporter_approved_at: null, updated_at: new Date().toISOString() }).eq("id", requestId);
       const { data: job, error } = await admin.from("supporter_avatar_jobs").insert({ request_id: requestId, stage: "generate-final", provider: "openai", model: IMAGE_MODEL, status: "queued", input_payload: { agent: SUPPORTER_PHOTO_AGENT_NAME, style: request.style, support_text: request.support_text, candidate_preset_slug: request.candidate_preset_slug, output_format: request.output_format } }).select("id").single();
       if (error) throw error;
-      const started = await dispatch(requestId, job.id); if (!started) return json({ error: "generation_dispatch_failed" }, 502);
+      dispatch(requestId, job.id);
       return json({ ok: true, status: "queued", jobId: job.id }, 202);
     }
 
@@ -171,7 +172,7 @@ Deno.serve(async (req: Request) => {
       const { data: p } = latest?.candidate_preset_slug ? await admin.from("supporter_avatar_candidate_presets").select("slug,label,wardrobe,prop").eq("slug", latest.candidate_preset_slug).maybeSingle() : { data: null };
       const { data: job } = await admin.from("supporter_avatar_jobs").select("id,stage,provider,model,status,error_message,created_at,started_at,completed_at").eq("request_id", requestId).order("created_at", { ascending: false }).limit(1).maybeSingle();
       const { data: outputs } = await admin.from("supporter_avatar_outputs").select("id,platform,storage_path,qa_score").eq("request_id", requestId).order("created_at", { ascending: false });
-      const signed = []; const seen = new Set<string>(); for (const output of outputs || []) { if (seen.has(output.platform)) continue; seen.add(output.platform); const { data } = await admin.storage.from("supporter-avatar-generated").createSignedUrl(output.storage_path, 3600); if (data?.signedUrl) signed.push({ ...output, url: data.signedUrl }); }
+      const signed: Array<Record<string, unknown>> = []; const seen = new Set<string>(); for (const output of outputs || []) { if (seen.has(output.platform)) continue; seen.add(output.platform); const { data } = await admin.storage.from("supporter-avatar-generated").createSignedUrl(output.storage_path, 3600); if (data?.signedUrl) signed.push({ ...output, url: data.signedUrl }); }
       const spec = latest?.output_format && latest.output_format in SUPPORT_OUTPUT_FORMATS ? SUPPORT_OUTPUT_FORMATS[latest.output_format as SupportOutputFormat] : SUPPORT_OUTPUT_FORMATS["feed-square"];
       return json({ ok: true, request: latest, candidatePreset: p, outputSpec: spec, job, outputs: signed });
     }
