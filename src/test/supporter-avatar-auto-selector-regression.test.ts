@@ -90,21 +90,21 @@ describe('Supporter Avatar 1470 auto-selector v2 regressions', () => {
   });
 
   it('12. produces the requested horizontal 1200x630 social output', () => {
+    expect(prompts).toContain('landscape: {');
     expect(prompts).toContain('exactWidth: 1200');
     expect(prompts).toContain('exactHeight: 630');
-    expect(generator).toContain("'landscape'");
   });
 
   it('13. produces the requested vertical 1080x1350 social output', () => {
+    expect(prompts).toContain('portrait: {');
     expect(prompts).toContain('exactWidth: 1080');
     expect(prompts).toContain('exactHeight: 1350');
-    expect(generator).toContain("'portrait'");
   });
 
   it('14. produces the requested square 1080x1080 social output', () => {
+    expect(prompts).toContain('square: {');
     expect(prompts).toContain('exactWidth: 1080');
     expect(prompts).toContain('exactHeight: 1080');
-    expect(generator).toContain("'square'");
   });
 
   it('15. active runtime contains no legacy-dispatch call and legacy public endpoint proxies to v2', () => {
