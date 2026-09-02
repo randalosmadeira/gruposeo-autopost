@@ -1,11 +1,8 @@
 /**
- * BYOK Key Resolver - Fetches user's personal API keys for background automation
- * 
- * Used by cron jobs and background edge functions that run WITHOUT user session.
- * Fetches keys from user_settings using SERVICE_ROLE_KEY (bypasses RLS).
- * Falls back to platform-level env secrets if user has no BYOK keys.
+ * Zica.ai provider resolver.
+ * User BYOK credentials take priority. Platform OpenAI/Claude credentials are
+ * resolved from Supabase Vault through service-role-only RPCs.
  */
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { AIOrchestrator } from "./ai-orchestrator.ts";
 
@@ -16,89 +13,79 @@ export interface UserAIKeys {
   serper: string;
 }
 
+function env(name: string) {
+  return String(Deno.env.get(name) || "").trim();
+}
+
+async function vaultProviderKey(admin: any, provider: "openai" | "anthropic") {
+  try {
+    const { data, error } = await admin.rpc("get_zica_ai_provider_secret", { p_provider: provider });
+    if (error || !data) return "";
+    return String(data).trim();
+  } catch {
+    return "";
+  }
+}
+
 /**
- * Fetch user's BYOK API keys from user_settings table.
- * Uses SERVICE_ROLE_KEY to bypass RLS (since SELECT is blocked for users).
+ * Fetch credentials for a user and merge them with platform credentials.
+ * This function never logs secret values.
  */
 export async function fetchUserKeys(userId: string): Promise<UserAIKeys> {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
-  
-  const { data, error } = await supabase
+  const supabaseUrl = env("SUPABASE_URL");
+  const serviceRoleKey = env("SUPABASE_SERVICE_ROLE_KEY") || env("SUPABASE_SECRET_KEY");
+  if (!supabaseUrl || !serviceRoleKey) throw new Error("Backend de credenciais incompleto");
+
+  const admin = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data, error } = await admin
     .from("user_settings")
     .select("gemini_api_key, openai_api_key, anthropic_api_key, serper_api_key")
     .eq("user_id", userId)
     .maybeSingle();
-  
-  if (error) {
-    console.warn(`[BYOK] Failed to fetch keys for user ${userId}: ${error.message}`);
-  }
-  
+
+  if (error) console.warn(`[BYOK] Configuração do usuário indisponível: ${error.message}`);
+
+  const userOpenAI = String(data?.openai_api_key || "").trim();
+  const userAnthropic = String(data?.anthropic_api_key || "").trim();
+  const [vaultOpenAI, vaultAnthropic] = await Promise.all([
+    userOpenAI ? Promise.resolve("") : vaultProviderKey(admin, "openai"),
+    userAnthropic ? Promise.resolve("") : vaultProviderKey(admin, "anthropic"),
+  ]);
+
   return {
-    gemini: data?.gemini_api_key || "",
-    openai: data?.openai_api_key || "",
-    anthropic: data?.anthropic_api_key || "",
-    serper: data?.serper_api_key || "",
+    gemini: String(data?.gemini_api_key || env("GEMINI_API_KEY")).trim(),
+    openai: userOpenAI || vaultOpenAI || env("OPENAI_API_KEY"),
+    anthropic: userAnthropic || vaultAnthropic || env("ANTHROPIC_API_KEY"),
+    serper: String(data?.serper_api_key || env("SERPER_API_KEY")).trim(),
   };
 }
 
-/**
- * Create an AIOrchestrator pre-configured with the user's BYOK keys.
- * Falls back to platform-level env secrets automatically (AIOrchestrator constructor reads Deno.env).
- * User keys OVERRIDE platform keys when available.
- */
 export async function getOrchestratorForUser(userId: string): Promise<AIOrchestrator> {
   const orchestrator = new AIOrchestrator();
-  
-  try {
-    const userKeys = await fetchUserKeys(userId);
-    
-    // Override with user keys (only if non-empty)
-    const keysToSet: { gemini?: string; openai?: string; anthropic?: string } = {};
-    if (userKeys.gemini) keysToSet.gemini = userKeys.gemini;
-    if (userKeys.openai) keysToSet.openai = userKeys.openai;
-    if (userKeys.anthropic) keysToSet.anthropic = userKeys.anthropic;
-    
-    if (Object.keys(keysToSet).length > 0) {
-      orchestrator.setKeys(keysToSet);
-      console.log(`[BYOK] User ${userId.slice(0, 8)}... keys loaded: ${Object.keys(keysToSet).join(", ")}`);
-    } else {
-      console.log(`[BYOK] User ${userId.slice(0, 8)}... no BYOK keys, using platform defaults`);
-    }
-  } catch (err) {
-    console.warn(`[BYOK] Error loading user keys, using platform defaults:`, err);
-  }
-  
+  const userKeys = await fetchUserKeys(userId);
+  const keys: { gemini?: string; openai?: string; anthropic?: string } = {};
+  if (userKeys.gemini) keys.gemini = userKeys.gemini;
+  if (userKeys.openai) keys.openai = userKeys.openai;
+  if (userKeys.anthropic) keys.anthropic = userKeys.anthropic;
+  orchestrator.setKeys(keys);
+
   const available = orchestrator.getAvailableProviders();
-  if (available.length === 0) {
-    throw new Error(`Nenhuma chave de IA disponível para o usuário ${userId.slice(0, 8)}. Configure GEMINI_API_KEY ou OPENAI_API_KEY.`);
+  if (!available.includes("openai") && !available.includes("anthropic")) {
+    throw new Error("Nenhum provedor OpenAI/Claude disponível. Configure a credencial no painel CEO ou no Vault do Zica.ai.");
   }
-  
-  console.log(`[BYOK] Providers available: ${available.join(", ")}`);
+  console.log(`[BYOK] Providers disponíveis: ${available.join(", ")}`);
   return orchestrator;
 }
 
 /**
- * Set API keys in the runtime registry for functions that use gemini.ts directly.
- * Uses setRuntimeKey() instead of Deno.env.set() (which is blocked in edge functions).
+ * Legacy bridge for functions still using the runtime key registry.
  */
 export async function setEnvKeysForUser(userId: string): Promise<void> {
   const { setRuntimeKey } = await import("./gemini.ts");
-  const userKeys = await fetchUserKeys(userId);
-  
-  // Override via runtime key registry (safe in edge functions)
-  if (userKeys.gemini) {
-    setRuntimeKey("GEMINI_API_KEY", userKeys.gemini);
-    console.log(`[BYOK] GEMINI_API_KEY set from user ${userId.slice(0, 8)}...`);
-  }
-  if (userKeys.openai) {
-    setRuntimeKey("OPENAI_API_KEY", userKeys.openai);
-    console.log(`[BYOK] OPENAI_API_KEY set from user ${userId.slice(0, 8)}...`);
-  }
-  if (userKeys.anthropic) {
-    setRuntimeKey("ANTHROPIC_API_KEY", userKeys.anthropic);
-    console.log(`[BYOK] ANTHROPIC_API_KEY set from user ${userId.slice(0, 8)}...`);
-  }
+  const keys = await fetchUserKeys(userId);
+  if (keys.gemini) setRuntimeKey("GEMINI_API_KEY", keys.gemini);
+  if (keys.openai) setRuntimeKey("OPENAI_API_KEY", keys.openai);
+  if (keys.anthropic) setRuntimeKey("ANTHROPIC_API_KEY", keys.anthropic);
 }
