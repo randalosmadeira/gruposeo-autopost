@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import { adminClient, getRuntimeKeys } from "../_shared/supabase-runtime.ts";
 
 const FUNCTION_NAME = "execute-news-agents";
 const corsHeaders = {
@@ -15,7 +16,6 @@ type Agent = {
   news_per_day: number; active_days: string[] | null; execution_times: string[] | null; image_generation: string;
   articles_generated: number | null; is_active: boolean;
 };
-
 type NewsItem = { title: string; link: string; snippet: string; source: string; date?: string };
 type Body = { force?: boolean; agentIds?: string[]; dryRun?: boolean; limitPerAgent?: number };
 
@@ -24,8 +24,7 @@ function json(body: unknown, status = 200) {
 }
 
 async function sha256(value: string) {
-  const bytes = new TextEncoder().encode(value);
-  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
@@ -93,13 +92,13 @@ async function fetchSourceContent(url: string) {
   } catch { return { content: "", finalUrl: url }; }
 }
 
-async function edgeCall(baseUrl: string, serviceKey: string, slug: string, body: Record<string, unknown>, attempts = 3) {
+async function edgeCall(baseUrl: string, secretKey: string, slug: string, body: Record<string, unknown>, attempts = 3) {
   let last: { ok: boolean; status: number; data: any } = { ok: false, status: 500, data: null };
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       const response = await fetch(`${baseUrl}/functions/v1/${slug}`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey, "Content-Type": "application/json" },
+        headers: { apikey: secretKey, "Content-Type": "application/json" },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(slug === "generate-image" ? 150000 : 120000),
       });
@@ -117,10 +116,10 @@ async function edgeCall(baseUrl: string, serviceKey: string, slug: string, body:
   return last;
 }
 
-async function authenticatedUser(req: Request, anonKey: string, supabaseUrl: string) {
+async function authenticatedUser(req: Request, publicKey: string, supabaseUrl: string) {
   const header = req.headers.get("Authorization") || "";
-  if (!header.startsWith("Bearer ")) return null;
-  const client = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: header } } });
+  if (!header.startsWith("Bearer ") || !publicKey) return null;
+  const client = createClient(supabaseUrl, publicKey, { global: { headers: { Authorization: header } } });
   const { data } = await client.auth.getUser(header.slice(7));
   return data.user || null;
 }
@@ -133,11 +132,9 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ success: false, error: "Method not allowed", request_id: requestId }, 405);
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    if (!supabaseUrl || !anonKey || !serviceKey) return json({ success: false, error: "Backend incompleto", request_id: requestId }, 500);
-    const admin = createClient(supabaseUrl, serviceKey);
+    const runtime = getRuntimeKeys();
+    if (!runtime.url || !runtime.publicKey || !runtime.secretKey) return json({ success: false, error: "Backend incompleto", request_id: requestId }, 500);
+    const admin = adminClient(runtime);
     const body = await req.json().catch(() => ({})) as Body;
 
     let automated = false;
@@ -148,7 +145,7 @@ Deno.serve(async (req: Request) => {
       if (!automated) return json({ success: false, error: "Chave de automação inválida", request_id: requestId }, 401);
     }
 
-    const user = automated ? null : await authenticatedUser(req, anonKey, supabaseUrl);
+    const user = automated ? null : await authenticatedUser(req, runtime.publicKey, runtime.url);
     if (!automated && !user) return json({ success: false, error: "Autorização necessária", request_id: requestId }, 401);
 
     let query = admin.from("news_agents").select("*").eq("is_active", true);
@@ -156,8 +153,7 @@ Deno.serve(async (req: Request) => {
     if (body.agentIds?.length) query = query.in("id", body.agentIds);
     const { data: agentRows, error } = await query;
     if (error) throw error;
-    const agents = (agentRows || []) as Agent[];
-    const selected = agents.filter((agent) => eligible(agent, Boolean(body.force)));
+    const selected = ((agentRows || []) as Agent[]).filter((agent) => eligible(agent, Boolean(body.force)));
     const results: any[] = [];
 
     for (const agent of selected) {
@@ -176,7 +172,7 @@ Deno.serve(async (req: Request) => {
 
         for (const item of unique) {
           const source = await fetchSourceContent(item.link);
-          const rewrite = await edgeCall(supabaseUrl, serviceKey, "rewrite-news", {
+          const rewrite = await edgeCall(runtime.url, runtime.secretKey, "rewrite-news", {
             sourceUrl: source.finalUrl || item.link,
             sourceContent: source.content || item.snippet,
             sourceName: item.source,
@@ -196,7 +192,7 @@ Deno.serve(async (req: Request) => {
 
           let imageOk = Boolean(article.featured_image_url);
           if (!body.dryRun && agent.image_generation !== "none" && article.status === "ready") {
-            const image = await edgeCall(supabaseUrl, serviceKey, "generate-image", {
+            const image = await edgeCall(runtime.url, runtime.secretKey, "generate-image", {
               userId: agent.user_id,
               articleId: article.id,
               title: article.title,
@@ -219,7 +215,7 @@ Deno.serve(async (req: Request) => {
             if (targetStatus === "publish" && (article.status !== "ready" || !imageOk)) {
               result.errors.push(`publish gate: artigo ${article.id} aguardando revisão/imagem`);
             } else {
-              const publish = await edgeCall(supabaseUrl, serviceKey, "publish-to-wordpress", {
+              const publish = await edgeCall(runtime.url, runtime.secretKey, "publish-to-wordpress", {
                 articleId: article.id,
                 projectId: agent.project_id,
                 userId: agent.user_id,
@@ -246,16 +242,17 @@ Deno.serve(async (req: Request) => {
             generated_at: new Date().toISOString(),
           }, { onConflict: "article_id" });
         }
-
-        await admin.from("news_agents").update({
-          last_run_at: new Date().toISOString(),
-          articles_generated: (agent.articles_generated || 0) + result.generated,
-          last_error: result.errors.length ? result.errors.join("; ").slice(0, 2000) : null,
-          updated_at: new Date().toISOString(),
-        }).eq("id", agent.id);
       } catch (agentError) {
         result.errors.push(agentError instanceof Error ? agentError.message : "agent_error");
       }
+
+      const now = new Date().toISOString();
+      await admin.from("news_agents").update({
+        last_run_at: now,
+        articles_generated: (agent.articles_generated || 0) + result.generated,
+        last_error: result.errors.length ? result.errors.join("; ").slice(0, 2000) : null,
+        updated_at: now,
+      }).eq("id", agent.id);
       results.push(result);
     }
 
