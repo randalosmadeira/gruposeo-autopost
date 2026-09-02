@@ -39,7 +39,7 @@ serve(async (req) => {
 
     const { data: settings, error } = await admin
       .from('electoral_portal_settings')
-      .select('primary_portals,aggregate_analytics_enabled,analytics_disable_after,geo_reporting_level,ga4_measurement_id,gtm_web_container_id,gtm_server_container_url,optin_popup_enabled,optin_scroll_trigger_percent,optin_exit_intent_enabled,optin_dismiss_hours,optin_success_suppress_days,optin_privacy_url')
+      .select('primary_portals,aggregate_analytics_enabled,analytics_disable_after,geo_reporting_level,ga4_measurement_id,gtm_web_container_id,gtm_server_container_url,optin_popup_enabled,optin_scroll_trigger_percent,optin_exit_intent_enabled,optin_dismiss_hours,optin_success_suppress_days,optin_privacy_url,optin_instagram_enabled,optin_instagram_url,optin_instagram_label')
       .eq('campaign_preset_id', PRESET)
       .single();
     if (error || !settings) throw error || new Error('settings_not_found');
@@ -74,6 +74,9 @@ serve(async (req) => {
         title: 'Quero ajudar na campanha',
         subtitle: 'Deixe seu contato e diga como quer ajudar.',
         button_label: '🪵 MADEIRAAA NELESS',
+        instagram_enabled: Boolean(settings.optin_instagram_enabled),
+        instagram_url: settings.optin_instagram_url || '',
+        instagram_label: settings.optin_instagram_label || 'Seguir @rdmadvogados no Instagram',
       },
       privacy: {
         individual_voter_profiles: false,
