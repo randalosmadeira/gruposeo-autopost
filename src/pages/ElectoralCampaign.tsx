@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import DOMPurify from 'dompurify';
 import {
-  AlertTriangle, BookOpen, CheckCircle2, FileText, Flame, Globe, Image, Instagram,
+  AlertTriangle, BookOpen, CheckCircle2, ExternalLink, FileText, Flame, Globe, Image, Instagram,
   MapPin, Scale, Send, Share2, Shield, Smartphone, Sparkles, Users, Video, Vote, Youtube,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -44,13 +44,21 @@ interface CampaignContentConfig {
 }
 
 const defaultContentConfig: CampaignContentConfig = {
-  biography: '',
-  legislativeProjects: '',
-  documentedActs: '',
-  factualDifferentials: '',
+  biography: ACTIVE_PRESET.biographyDefault,
+  legislativeProjects: ACTIVE_PRESET.legislativeProjectsDefault,
+  documentedActs: ACTIVE_PRESET.documentedActsDefault,
+  factualDifferentials: ACTIVE_PRESET.factualDifferentialsDefault,
   articleMode: 'longform',
   notifyIndexNow: true,
-  socialMedia: { instagram: '', youtube: '', twitter: '', facebook: '', tiktok: '', website: ACTIVE_PRESET.officialWebsite, whatsapp: '' },
+  socialMedia: {
+    instagram: 'https://www.instagram.com/drrandalosmadeira/',
+    youtube: 'https://www.youtube.com/@dr.madeira',
+    twitter: '',
+    facebook: '',
+    tiktok: 'https://www.tiktok.com/@drmadeirarandalos',
+    website: ACTIVE_PRESET.officialWebsite,
+    whatsapp: '',
+  },
 };
 
 const defaultComplianceProfile: ElectoralComplianceProfile = {
@@ -253,6 +261,13 @@ export default function ElectoralCampaign() {
         <div className="flex gap-2"><Badge variant="outline">{campaignPhase}</Badge><Badge variant={compliance.canPublish ? 'default' : 'destructive'}>{compliance.score}% compliance</Badge></div>
       </div>
 
+      <Card className="border-emerald-500/30 bg-emerald-500/5">
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
+          <div><strong>Registro eleitoral:</strong> {ACTIVE_PRESET.registrationStatus}<div className="text-xs text-muted-foreground">RCand {ACTIVE_PRESET.registrationProcess} · fonte primária cadastrada no corpus eleitoral.</div></div>
+          <Button size="sm" variant="outline" asChild><a href={ACTIVE_PRESET.registrationDecisionSource} target="_blank" rel="noreferrer">TRE-SP <ExternalLink className="ml-2 h-3 w-3" /></a></Button>
+        </CardContent>
+      </Card>
+
       <Card className="border-amber-500/30 bg-amber-500/5">
         <CardContent className="flex gap-3 p-4 text-sm"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" /><div><strong>Regra estrutural:</strong> território serve para contextualização com dados públicos e metadados, não para inferir preferência política ou personalizar persuasão. Imagem gerada e conteúdo eleitoral permanecem sujeitos a revisão humana.</div></CardContent>
       </Card>
@@ -274,12 +289,12 @@ export default function ElectoralCampaign() {
         <TabsContent value="candidate" className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-2">
             <Card><CardHeader><CardTitle className="text-base">Identidade fixa do preset</CardTitle><CardDescription>Valores reforçados também no backend.</CardDescription></CardHeader><CardContent className="space-y-2 text-sm">
-              <div><strong>Nome legal:</strong> {ACTIVE_PRESET.legalName}</div><div><strong>Nome de urna:</strong> {ACTIVE_PRESET.ballotName}</div><div><strong>Número:</strong> {ACTIVE_PRESET.ballotNumber}</div><div><strong>Cargo:</strong> Deputado Federal — SP</div><div><strong>Partido:</strong> {ACTIVE_PRESET.politicalParty}</div><div><strong>Sequencial TSE:</strong> {ACTIVE_PRESET.tseSequence}</div><div><strong>Situação cadastrada:</strong> {ACTIVE_PRESET.registrationStatus}</div><div><strong>CNPJ:</strong> {ACTIVE_PRESET.campaignCnpj} <Badge variant="outline">declarado pela campanha</Badge></div>
+              <div><strong>Nome legal:</strong> {ACTIVE_PRESET.legalName}</div><div><strong>Nome de urna:</strong> {ACTIVE_PRESET.ballotName}</div><div><strong>Número:</strong> {ACTIVE_PRESET.ballotNumber}</div><div><strong>Cargo:</strong> Deputado Federal — SP</div><div><strong>Partido:</strong> {ACTIVE_PRESET.politicalParty}</div><div><strong>Sequencial TSE:</strong> {ACTIVE_PRESET.tseSequence}</div><div><strong>Processo:</strong> {ACTIVE_PRESET.registrationProcess}</div><div><strong>Situação:</strong> <Badge className="ml-1 bg-emerald-600">DEFERIDO</Badge></div><div className="text-xs text-muted-foreground">31/08/2026 · votação unânime · TRE-SP</div><div><strong>CNPJ:</strong> {ACTIVE_PRESET.campaignCnpj} <Badge variant="outline">declarado pela campanha</Badge></div>
             </CardContent></Card>
-            <Card><CardHeader><CardTitle className="text-base">Biografia e atos verificáveis</CardTitle></CardHeader><CardContent className="space-y-3">
-              <div><Label>Biografia factual</Label><Textarea rows={4} value={contentConfig.biography} onChange={(e) => updateContent({ biography: e.target.value })} /></div>
-              <div><Label>Projetos/propostas documentados</Label><Textarea rows={3} value={contentConfig.legislativeProjects} onChange={(e) => updateContent({ legislativeProjects: e.target.value })} /></div>
-              <div><Label>Atos e experiências verificáveis</Label><Textarea rows={3} value={contentConfig.documentedActs} onChange={(e) => updateContent({ documentedActs: e.target.value })} /></div>
+            <Card><CardHeader><CardTitle className="text-base">Biografia e atos verificáveis</CardTitle><CardDescription>Pré-preenchido com site oficial, corpus controlado e fonte primária do TRE-SP. Você continua podendo editar.</CardDescription></CardHeader><CardContent className="space-y-3">
+              <div><Label>Biografia factual</Label><Textarea rows={7} value={contentConfig.biography} onChange={(e) => updateContent({ biography: e.target.value })} /></div>
+              <div><Label>Projetos/propostas documentados</Label><Textarea rows={10} value={contentConfig.legislativeProjects} onChange={(e) => updateContent({ legislativeProjects: e.target.value })} /></div>
+              <div><Label>Atos e experiências verificáveis</Label><Textarea rows={7} value={contentConfig.documentedActs} onChange={(e) => updateContent({ documentedActs: e.target.value })} /></div>
             </CardContent></Card>
           </div>
           <Card><CardHeader><CardTitle className="text-base">Bandeiras cadastradas</CardTitle></CardHeader><CardContent className="grid gap-2 md:grid-cols-2">{ACTIVE_PRESET.fixedIssues.map((issue) => <div key={issue} className="rounded-md border p-3 text-sm">{issue}</div>)}</CardContent></Card>
@@ -300,9 +315,7 @@ export default function ElectoralCampaign() {
         </CardContent></Card></TabsContent>
 
         <TabsContent value="topics"><AISuggestionsPanel candidateRole={ACTIVE_PRESET.candidateRole} candidateName={ACTIVE_PRESET.candidateName} city={selectedCities[0] || 'São Paulo'} onSelectKeyword={setKeyword} onSelectTopics={setSelectedTopics} selectedTopics={selectedTopics} /></TabsContent>
-
         <TabsContent value="videos"><ElectoralVideoAnalyzer campaignPresetId={ACTIVE_PRESET.id} candidateName={ACTIVE_PRESET.candidateName} ballotName={ACTIVE_PRESET.ballotName} ballotNumber={ACTIVE_PRESET.ballotNumber} politicalParty={ACTIVE_PRESET.politicalParty} campaignCnpj={ACTIVE_PRESET.campaignCnpj} fixedIssues={ACTIVE_PRESET.fixedIssues} selectedCities={selectedCities} selectedDistricts={selectedDistricts} /></TabsContent>
-
         <TabsContent value="visual"><ElectoralVisualIdentity campaignPresetId={ACTIVE_PRESET.id} projectId={selectedProjectId || null} ballotName={ACTIVE_PRESET.ballotName} ballotNumber={ACTIVE_PRESET.ballotNumber} politicalParty={ACTIVE_PRESET.politicalParty} /></TabsContent>
 
         <TabsContent value="production" className="space-y-4">
@@ -311,7 +324,7 @@ export default function ElectoralCampaign() {
               {projects.length > 0 && <div><Label>Projeto/domínio de destino</Label><Select value={selectedProjectId} onValueChange={setSelectedProjectId}><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger><SelectContent>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}</SelectContent></Select></div>}
               <div><Label>Modo</Label><Select value={contentConfig.articleMode} onValueChange={(value) => updateContent({ articleMode: value as ArticleMode })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="longform">Deep-SEO factual — alvo 4.000 palavras</SelectItem><SelectItem value="satellite">Satélite — ~1.400 palavras</SelectItem><SelectItem value="territorial">Territorial factual — ~900 palavras</SelectItem></SelectContent></Select></div>
               <div><Label>Pauta *</Label><Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="Ex.: acesso a crédito para pequenas empresas" /></div>
-              <div><Label>Contexto/diferenciais factuais</Label><Textarea rows={3} value={contentConfig.factualDifferentials} onChange={(e) => updateContent({ factualDifferentials: e.target.value })} /></div>
+              <div><Label>Contexto/diferenciais factuais</Label><Textarea rows={5} value={contentConfig.factualDifferentials} onChange={(e) => updateContent({ factualDifferentials: e.target.value })} /></div>
             </CardContent></Card>
             <div className="grid gap-3 md:grid-cols-2">{contentTemplates.map((template) => <Card key={template.id} onClick={() => setSelectedTemplate(template.id)} className={`cursor-pointer border-2 ${selectedTemplate === template.id ? 'border-primary bg-primary/5' : 'hover:border-primary/40'}`}><CardContent className="flex gap-3 p-4"><template.icon className="h-5 w-5 text-primary" /><div><strong className="text-sm">{template.title}</strong><div className="text-xs text-muted-foreground">{template.description}</div></div></CardContent></Card>)}</div>
           </div><Card className="h-fit"><CardHeader><CardTitle className="text-base">Geração controlada</CardTitle></CardHeader><CardContent className="space-y-4">{isGenerating ? <><Progress value={progress} /><div className="text-xs text-muted-foreground">Preparando rascunho...</div></> : <Button className="h-12 w-full" onClick={() => void handleGenerate()} disabled={!keyword || !compliance.canGenerateDraft}>GERAR RASCUNHO <Send className="ml-2 h-4 w-4" /></Button>}<div className="rounded-md border bg-muted/40 p-3 text-xs">Alvo atual: <strong>{targetWords(contentConfig.articleMode)} palavras</strong>. Geração ≠ publicação.</div></CardContent></Card></div>
@@ -323,7 +336,7 @@ export default function ElectoralCampaign() {
         </TabsContent>
 
         <TabsContent value="portal" className="space-y-4">
-          <div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle className="text-base">Identificação e arrecadação</CardTitle><CardDescription>Dados de arrecadação ficam informativos e dependem de revisão financeira antes de exposição automática.</CardDescription></CardHeader><CardContent className="space-y-2 text-sm"><div>{campaignFooter}</div>{ACTIVE_PRESET.donationChannels.map((channel) => <div key={`${channel.type}-${channel.label}`} className="rounded-md border p-2"><strong>{channel.label}:</strong> {channel.value}<Badge variant="outline" className="ml-2">{channel.verificationStatus}</Badge></div>)}<div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs">CTA de doação automática: <strong>DESATIVADA</strong> até revisão financeira/eleitoral. A regra geral de pessoa física é tratada no compliance, não como promessa ou pressão para contribuição.</div></CardContent></Card>
+          <div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle className="text-base">Identificação e arrecadação</CardTitle><CardDescription>Dados de arrecadação ficam informativos e dependem de revisão financeira antes de exposição automática.</CardDescription></CardHeader><CardContent className="space-y-2 text-sm"><div>{campaignFooter}</div>{ACTIVE_PRESET.donationChannels.map((channel) => <div key={`${channel.type}-${channel.label}`} className="rounded-md border p-2"><strong>{channel.label}:</strong> {channel.value}<Badge variant="outline" className="ml-2">{channel.verificationStatus}</Badge></div>)}<div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs">CTA de doação automática: <strong>DESATIVADA</strong> até revisão financeira/eleitoral.</div></CardContent></Card>
           <Card><CardHeader><CardTitle className="text-base">Governança do portal</CardTitle></CardHeader><CardContent className="space-y-2 text-sm text-muted-foreground"><p>• Conteúdo eleitoral identificado e separado de notícia independente.</p><p>• Mídia sintética passa pelo gate específico de rotulagem e janela temporal.</p><p>• GEO serve a dados públicos, schema e contexto editorial.</p><p>• Imagens aprovadas podem ser vinculadas ao artigo somente após revisão visual.</p><p>• IndexNow é notificação técnica; não significa indexação garantida.</p></CardContent></Card></div>
         </TabsContent>
       </Tabs>
