@@ -208,7 +208,7 @@ Deno.serve(async (req: Request) => {
     const words = Number(article.word_count || countWords(String(article.content || "")));
     const configuredMin = Number(config?.geo_word_band?.min || 0);
     const minimum = configuredMin > 0 ? configuredMin : 300;
-    if (status === "publish" && words < Math.min(minimum, 300)) return json({ success: false, error: `Conteúdo insuficiente para publicação: ${words} palavras`, code: "content_gate", retryable: false, request_id: requestId }, 409);
+    if (status === "publish" && words < minimum) return json({ success: false, error: `Conteúdo insuficiente para publicação: ${words} palavras, mínimo configurado ${minimum}`, code: "content_gate", retryable: false, request_id: requestId }, 409);
     if (status === "publish" && article.status === "published" && article.published_url) return json({ success: true, duplicate: true, postUrl: article.published_url, articleId: article.id, request_id: requestId });
 
     const pluginMode = String(project.wordpress_connector_mode) === "zica_posts" || String(project.wordpress_username) === "__ZICA_POSTS_PLUGIN__";
