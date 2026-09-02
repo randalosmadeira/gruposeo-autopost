@@ -1,6 +1,6 @@
-export const SUPPORTER_AVATAR_PROMPT_VERSION = 'supporter-avatar-human-v1.2.0';
+export const SUPPORTER_AVATAR_PROMPT_VERSION = 'supporter-avatar-auto-select-v2.0.0';
 export const SUPPORTER_PHOTO_AGENT_NAME = 'NEXUS PHOTO 1470';
-export const SUPPORTER_PHOTO_AGENT_ROLE = 'Agente Full-Stack especializado em edição fotográfica, composição, recriação e renderização humanizada';
+export const SUPPORTER_PHOTO_AGENT_ROLE = 'Orquestrador privado de composição fotográfica eleitoral com preservação de identidade';
 
 export const SUPPORT_TEXTS = [
   'DR. MADEIRA 1470',
@@ -12,143 +12,174 @@ export const SUPPORT_TEXTS = [
 
 export const SUPPORT_STYLES = ['premium', 'clean', 'institucional', 'brasil', 'dark'] as const;
 
-export const SUPPORT_OUTPUT_FORMATS = {
-  'instagram-profile': {
-    label: 'Foto de perfil · Instagram',
-    exactWidth: 320,
-    exactHeight: 320,
-    modelSize: '1024x1024',
-    safeZone: 'Composição 1:1 preparada para recorte circular. Mantenha rostos e 1470 dentro dos 72% centrais e não encoste texto nas bordas.',
-  },
-  'whatsapp-profile': {
-    label: 'Foto de perfil · WhatsApp',
-    exactWidth: 192,
-    exactHeight: 192,
-    modelSize: '1024x1024',
-    safeZone: 'Composição 1:1 preparada para recorte circular. Mantenha rostos, olhos e 1470 dentro dos 72% centrais.',
-  },
-  'feed-square': {
-    label: 'Feed · quadrado',
+export const SUPPORT_SOCIAL_PACK = {
+  square: {
+    label: 'Instagram · WhatsApp · Facebook',
     exactWidth: 1080,
     exactHeight: 1080,
     modelSize: '1024x1024',
-    safeZone: 'Composição quadrada. Preserve ao menos 8% de margem interna em todos os lados para texto, rosto e número 1470.',
+    safeZone: 'mantenha os dois rostos, o número 1470 e o aviso de IA dentro dos 82% centrais',
   },
-  'feed-portrait': {
-    label: 'Feed · retrato 4:5',
+  portrait: {
+    label: 'Feed vertical 4:5',
     exactWidth: 1080,
     exactHeight: 1350,
     modelSize: '1024x1536',
-    safeZone: 'Composição vertical 4:5. Concentre rostos, slogan e 1470 nos 80% centrais; reserve margem lateral de 8% e superior/inferior de 10%.',
+    safeZone: 'mantenha rostos e elementos essenciais no miolo 4:5, afastados pelo menos 12% do topo e da base',
   },
-  'feed-landscape': {
-    label: 'Feed · horizontal',
-    exactWidth: 1080,
-    exactHeight: 566,
+  landscape: {
+    label: 'Facebook · LinkedIn horizontal',
+    exactWidth: 1200,
+    exactHeight: 630,
     modelSize: '1536x1024',
-    safeZone: 'Composição horizontal. Mantenha os dois rostos e 1470 afastados das laterais; preserve 10% de margem lateral e 8% vertical.',
-  },
-  'stories-reels-status': {
-    label: 'Stories · Reels · Status',
-    exactWidth: 1080,
-    exactHeight: 1920,
-    modelSize: '1024x1536',
-    safeZone: 'Composição vertical 9:16. O master será adaptado para 1080x1920: mantenha rostos, slogan e 1470 no miolo central; reserve aproximadamente 15% no topo, 18% na base e 8% nas laterais para interfaces das plataformas.',
+    safeZone: 'mantenha os dois rostos e o número 1470 na faixa horizontal central, com 10% de margem lateral',
   },
 } as const;
 
+export type SupportSocialPackKey = keyof typeof SUPPORT_SOCIAL_PACK;
+
+// Mantido apenas para compatibilidade com telas administrativas antigas.
+export const SUPPORT_OUTPUT_FORMATS = {
+  'instagram-profile': { label: 'Foto de perfil · Instagram', exactWidth: 1080, exactHeight: 1080, modelSize: '1024x1024', safeZone: SUPPORT_SOCIAL_PACK.square.safeZone },
+  'whatsapp-profile': { label: 'Foto de perfil · WhatsApp', exactWidth: 1080, exactHeight: 1080, modelSize: '1024x1024', safeZone: SUPPORT_SOCIAL_PACK.square.safeZone },
+  'feed-square': { label: SUPPORT_SOCIAL_PACK.square.label, exactWidth: 1080, exactHeight: 1080, modelSize: '1024x1024', safeZone: SUPPORT_SOCIAL_PACK.square.safeZone },
+  'feed-portrait': { label: SUPPORT_SOCIAL_PACK.portrait.label, exactWidth: 1080, exactHeight: 1350, modelSize: '1024x1536', safeZone: SUPPORT_SOCIAL_PACK.portrait.safeZone },
+  'feed-landscape': { label: SUPPORT_SOCIAL_PACK.landscape.label, exactWidth: 1200, exactHeight: 630, modelSize: '1536x1024', safeZone: SUPPORT_SOCIAL_PACK.landscape.safeZone },
+  'stories-reels-status': { label: 'Stories · Reels · Status', exactWidth: 1080, exactHeight: 1920, modelSize: '1024x1536', safeZone: 'mantenha rostos e identidade visual no miolo central' },
+} as const;
 export type SupportOutputFormat = keyof typeof SUPPORT_OUTPUT_FORMATS;
 
-const styleDirections: Record<string, string> = {
-  premium: 'fundo escuro premium, verde profundo, amarelo-lima e azul/ciano, iluminação editorial sofisticada, poucos elementos',
-  clean: 'fundo limpo e minimalista, contraste alto, branding discreto, sem poluição visual',
-  institucional: 'composição institucional, sóbria e profissional, geometria elegante e iluminação de estúdio',
-  brasil: 'verde, amarelo e azul em pinceladas e luzes abstratas discretas, sem reproduzir documento oficial ou brasão',
-  dark: 'fundo preto e grafite com detalhes verdes e ciano, acabamento fotográfico cinematográfico moderado',
+export const PHOTO_INTAKE_AGENT_PROMPT = `
+AGENTE: PHOTO INTAKE AGENT.
+Analise somente características fotográficas e de composição das fotos do apoiador.
+É proibido identificar a pessoa ou inferir raça, etnia, religião, saúde, deficiência, ideologia política, orientação sexual, condição econômica ou qualquer outro atributo pessoal sensível.
+Retorne JSON puro com:
+reference_index, face_count, primary_subject_detected, face_visibility, face_size_ratio,
+yaw_direction (left|frontal|right), yaw_estimate_degrees, subject_position (left|center|right),
+crop_type (headshot|upper_body|half_body|full_body), lighting_direction (frontal|left|right|mixed),
+lighting_quality (soft|hard|mixed), sharpness_score (0-100), face_quality_score (0-100),
+occlusions, glasses, hair_occlusion, framing_score (0-100), usable_for_identity_preservation,
+recommended_candidate_composition, technical_notes.
+Escolha reference_index pela qualidade técnica, não por aparência pessoal.
+`;
+
+export const CANDIDATE_SELECTOR_AGENT_PROMPT = `
+AGENTE: CANDIDATE SELECTOR AGENT.
+A galeria do candidato é privada. Escolha internamente a fotografia do candidato com maior compatibilidade técnica com a foto do apoiador e com o pacote social quadrado, vertical e horizontal.
+Nunca devolva URL, caminho de storage, Drive ID, nome de arquivo ou qualquer identificador de infraestrutura.
+Avalie de 0 a 100: ângulo facial, ângulo corporal, espaço lateral, perspectiva, crop, luz, roupa/cenário, identidade visual, adequação aos três aspect ratios e risco de o taco ou braços obstruírem o apoiador.
+Retorne JSON puro com selected_index, runner_up_index, selected_score, runner_up_score, score_breakdown, selection_reason e composition_plan.
+`;
+
+export const CAMPAIGN_SCENE_AGENT_PROMPT = `
+AGENTE: CAMPAIGN SCENE AGENT.
+Escolha exatamente um cenário: gente-da-nossa-terra, palanque-convencao-generica, construindo-o-futuro ou institucional-oficial.
+A escolha deve considerar a fotografia do apoiador, roupa do candidato e coerência de iluminação.
+Palanque/convenção deve ser um ambiente eleitoral genérico e claramente publicitário: não invente local real identificável, evento específico, endosso individual ou multidão que pareça prova documental de comparecimento.
+Retorne JSON puro com scene, rationale e lighting_plan.
+`;
+
+export const IDENTITY_GUARDIAN_DIRECTIVE = `
+IDENTITY GUARDIAN AGENT - prioridade máxima.
+Preserve a identidade visual reconhecível das duas pessoas reais das referências autorizadas.
+Preserve proporções faciais, estrutura óssea, distância e formato dos olhos, sobrancelhas, nariz, boca, mandíbula, linha do cabelo, orelhas quando visíveis, tom de pele, textura natural, idade aparente e assimetrias observáveis.
+Não embeleze, não aplique beauty filter, não faça face swap, não reconstrua o rosto, não altere etnia, idade, tom de pele, formato dos olhos, nariz ou mandíbula.
+Se o cenário conflitar com a preservação da identidade, simplifique o cenário.
+A meta interna de fidelidade é 97%, apenas como objetivo editorial de QA, nunca como garantia ou medição biométrica.
+`;
+
+export const COMPOSITION_DIRECTOR_DIRECTIVE = `
+COMPOSITION DIRECTOR AGENT.
+Crie uma fotografia conjunta plausível, com escala corporal, altura de câmera, distância interpessoal e perspectiva coerentes.
+Não produza sobreposição impossível, membros extras, mãos deformadas, braços atravessando corpos ou anatomia quebrada.
+Se a referência autorizada do candidato contiver o taco preto de beisebol, preserve sua geometria e presença, sem duplicar, entortar, trocar por outro objeto ou fazê-lo atravessar o rosto/corpo do apoiador.
+Preserve o vestuário autorizado observado na referência.
+`;
+
+export const LIGHTING_HARMONIZER_DIRECTIVE = `
+LIGHTING HARMONIZER AGENT.
+Harmonize balanço de branco, exposição, direção de luz, densidade de sombras, temperatura de cor e profundidade de campo sem alterar identidade.
+Priorize luz frontal, suave, difusa e equilibrada. Não use sombras laterais dramáticas, glow facial, HDR, pele superexposta ou gradação que altere o tom de pele.
+`;
+
+export const SOCIAL_CROP_AGENT_DIRECTIVE = `
+SOCIAL CROP AGENT.
+A composição deve sobreviver aos recortes exatos 1080x1080, 1080x1350 e 1200x630.
+Mantenha rostos, taco quando houver, número 1470 e a indicação de IA dentro das zonas seguras de cada formato.
+`;
+
+export const NEGATIVE_PROMPT = `
+generic face, lookalike, identity drift, face replacement, altered bone structure, changed jawline,
+changed nose, changed eye shape, deformed eyes, incorrect pupils, beauty filter, airbrushed skin,
+plastic skin, wax skin, unnaturally smooth skin, excessive makeup, age modification, altered skin tone,
+facial reconstruction, cartoon, anime, illustration, painting, 3D render, CGI appearance, blur,
+oversaturated skin, harsh overhead lighting, dramatic side lighting, crushed shadows, extreme contrast,
+HDR halo, duplicate person, duplicate face, merged bodies, extra limbs, extra fingers, missing fingers,
+deformed hands, broken anatomy, intersecting arms, impossible embrace, duplicated baseball bat,
+warped baseball bat, floating object, malformed clothing, distorted campaign typography, artificial smile,
+uncanny expression.
+`;
+
+export const QUALITY_AUDITOR_AGENT_PROMPT = `
+AGENTE: QUALITY AUDITOR AGENT.
+Compare a referência do apoiador, a referência privada selecionada do candidato e a composição final.
+Não identifique pessoas e não infira atributos sensíveis.
+Retorne JSON puro com supporter_fidelity_score, candidate_reference_fidelity_score, human_texture_score,
+anatomy_score, crop_safe_score, lighting_consistency_score, disclosure_legibility_score, prop_integrity_score,
+artifacts, remediation e pass.
+pass=true somente se supporter>=92, candidate>=90, texture>=92, anatomy>=92, crop>=90,
+lighting>=90, disclosure>=90 e, quando houver taco, prop_integrity>=90.
+A meta editorial de 97% não é medição biométrica.
+`;
+
+const sceneDirections: Record<string, string> = {
+  'gente-da-nossa-terra': 'rua ou praça brasileira genérica, presença comunitária, fundo desfocado, luz natural suave, sem localização real identificável',
+  'palanque-convencao-generica': 'ambiente eleitoral genérico de estúdio/evento, painéis e bandeiras abstratas desfocadas, sem simular documentação de evento real ou multidão identificável',
+  'construindo-o-futuro': 'ambiente urbano e de planejamento contemporâneo, infraestrutura genérica, tons limpos e luz de trabalho, sem afirmar obra pública específica',
+  'institucional-oficial': 'estúdio de campanha minimalista, grafismos discretos da identidade 1470, fundo profissional e não documental',
 };
 
 export function buildSupporterAvatarPrompt(input: {
-  supporterName?: string;
-  supportText: string;
-  style: string;
+  supportText?: string;
+  style?: string;
   candidatePresetLabel?: string;
   candidatePresetHint?: string;
-  outputFormat?: SupportOutputFormat;
-  socialHandles?: Record<string, string>;
+  candidateHasBat?: boolean;
+  scene?: string;
+  compositionPlan?: string;
+  socialPackKey: SupportSocialPackKey;
+  qaFeedback?: string;
 }) {
-  const style = styleDirections[input.style] || styleDirections.premium;
-  const supportText = SUPPORT_TEXTS.includes(input.supportText as typeof SUPPORT_TEXTS[number])
-    ? input.supportText
-    : SUPPORT_TEXTS[0];
-  const outputFormat = input.outputFormat && SUPPORT_OUTPUT_FORMATS[input.outputFormat]
-    ? input.outputFormat
-    : 'feed-square';
-  const format = SUPPORT_OUTPUT_FORMATS[outputFormat];
+  const supportText = SUPPORT_TEXTS.includes(input.supportText as typeof SUPPORT_TEXTS[number]) ? input.supportText! : 'EU APOIO DR. MADEIRA 1470';
+  const spec = SUPPORT_SOCIAL_PACK[input.socialPackKey];
+  const scene = sceneDirections[input.scene || 'institucional-oficial'] || sceneDirections['institucional-oficial'];
+  const batRule = input.candidateHasBat
+    ? 'A referência do candidato contém seu taco preto de beisebol. Preserve-o fielmente e mantenha-o sem obstruir os rostos.'
+    : 'Não invente taco se ele não existir na referência selecionada.';
+  const feedback = input.qaFeedback ? `CORREÇÃO DA TENTATIVA ANTERIOR: ${input.qaFeedback}` : '';
 
   return `
-AGENTE RESPONSÁVEL: ${SUPPORTER_PHOTO_AGENT_NAME}
-FUNÇÃO: ${SUPPORTER_PHOTO_AGENT_ROLE}.
-META OPERACIONAL: máxima fidelidade visual e aparência humana natural, com alvo interno de 99% de preservação perceptual dos traços observáveis. Isso é um objetivo editorial/técnico, NÃO uma medição biométrica e NÃO uma garantia matemática de identidade.
+${SUPPORTER_PHOTO_AGENT_NAME} - ${SUPPORTER_PHOTO_AGENT_ROLE}.
+Crie UMA fotografia de campanha de alta fidelidade contendo exatamente duas pessoas reais das referências fornecidas: apoiador e candidato.
 
-TAREFA:
-Criar uma única composição fotográfica final com DUAS pessoas reais a partir das referências fornecidas:
-- REFERÊNCIA 1 = APOIADOR. É a pessoa que enviou a própria fotografia e deve permanecer reconhecível por seus traços visuais naturais.
-- REFERÊNCIA 2 = DR. MADEIRA / MODELO OFICIAL DA CAMPANHA. Use somente essa fotografia fixa para roupa, pose, presença e objeto indicados no preset “${input.candidatePresetLabel || 'modelo oficial'}”.
-- REGRA CRÍTICA: não misture, funda ou troque os rostos das duas pessoas. Não transforme o apoiador no candidato nem o candidato no apoiador. Cada pessoa deve conservar identidade visual, pele, cabelo, idade aparente e anatomia próprias.
-- REFERÊNCIA OFICIAL: ${input.candidatePresetHint || 'preserve roupa, pose e elementos existentes da foto oficial selecionada'}.
+${IDENTITY_GUARDIAN_DIRECTIVE}
+${COMPOSITION_DIRECTOR_DIRECTIVE}
+${LIGHTING_HARMONIZER_DIRECTIVE}
+${SOCIAL_CROP_AGENT_DIRECTIVE}
 
-PRIORIDADE ABSOLUTA — HUMANIZAÇÃO E FIDELIDADE:
-1. Preserve formato e proporção de cada rosto, testa, sobrancelhas, distância/formato dos olhos, pálpebras, nariz, lábios, boca, mandíbula, queixo, orelhas, linha capilar, cabelo, barba/bigode, idade aparente e tom de pele.
-2. Preserve assimetrias naturais, microtextura, poros, pequenas linhas de expressão e detalhes humanos visíveis. Não produza rosto genérico, plástico, ceroso, CGI ou excessivamente retocado.
-3. Não afine/alargue rosto, não aumente olhos, não redesenhe nariz ou boca, não invente sorriso/dentes, não altere cor dos olhos, não rejuvenesça nem envelheça e não altere características corporais sem necessidade técnica.
-4. Respeite cabelo, barba, óculos, roupas e acessórios existentes. Na referência oficial, preserve também o taco quando o preset escolhido tiver taco; quando o preset for sem taco, não invente taco.
-5. Não crie membros extras, mãos deformadas, dedos duplicados, olhos desalinhados ou sobreposição impossível entre as pessoas.
-6. O apoiador pode ser reposicionado apenas o suficiente para formar uma foto conjunta natural; a referência oficial deve orientar a pose do candidato sem substituir o rosto do apoiador.
+REFERÊNCIA PRIVADA DO CANDIDATO: ${input.candidatePresetLabel || 'referência oficial autorizada'}.
+DIRETRIZ DA REFERÊNCIA: ${input.candidatePresetHint || 'preserve roupa, pose e acessórios observados'}.
+${batRule}
+PLANO DE COMPOSIÇÃO: ${input.compositionPlan || 'duas pessoas lado a lado, natural e proporcional'}.
+CENÁRIO: ${scene}.
+ESTILO: fotografia profissional DSLR, textura de pele natural, olhos nítidos, perspectiva óptica realista, luz frontal suave e difusa.
+BRANDING: inserir de forma legível e discreta “${supportText}”. Não inventar logotipos ou slogans adicionais.
+TRANSPARÊNCIA: inserir exatamente “Imagem gerada por IA - Campanha Oficial” em pequeno selo discreto, legível, no quadrante inferior direito porém dentro da zona segura do recorte.
+FORMATO DE GERAÇÃO: ${spec.modelSize}. DESTINO EXATO: ${spec.exactWidth}x${spec.exactHeight}. ${spec.safeZone}.
+CENÁRIOS SINTÉTICOS NÃO PODEM SER APRESENTADOS COMO PROVA DOCUMENTAL DE EVENTO, MULTIDÃO, ENDOSSO OU LOCAL REAL QUE NÃO TENHA OCORRIDO.
+${feedback}
 
-COMPOSIÇÃO:
-- Direção visual: ${style}.
-- Criar aparência de fotografia conjunta real, coerente em luz, perspectiva, escala e temperatura de cor.
-- Recorte limpo de cabelo, ombros, roupa e, quando existir, taco.
-- Não colocar uma pessoa atrás da outra a ponto de ocultar o rosto.
-- Manter contraste de pele natural e textura de tecido.
-- ${format.safeZone}
-
-BRANDING:
-- Texto principal exato quando selecionado: “${supportText}”.
-- Dar alto destaque ao número “1470”, sem cobrir olhos, boca ou elementos importantes.
-- Para o slogan “Madeiraaa Nelesss! 🪵 1470”, manter exatamente três letras “a” adicionais em “Madeiraaa”, três letras “s” em “Nelesss”, o símbolo 🪵 e o número 1470; não corrigir ou simplificar a grafia.
-- Branding de aparência geométrica/vetorial; pessoas sempre fotográficas.
-- Não inventar brasões, números, logos, nomes de partido ou slogans além dos elementos fornecidos.
-
-FORMATO ESCOLHIDO:
-- ${format.label}.
-- Master do modelo: ${format.modelSize}.
-- Arquivo final após aprovação: ${format.exactWidth}x${format.exactHeight}px.
-- A adaptação final de pixels será feita pela aplicação, portanto preserve a zona segura descrita acima.
-
-ACABAMENTO:
-- Fotorealismo alto, iluminação plausível, nitidez natural e contraste controlado.
-- Sem HDR exagerado, glow excessivo, filtros de beleza fortes, watermark, assinatura de IA ou mockup de aparelho.
-- Não inserir texto microscópico nas bordas.
-
-SAÍDA:
-- Entregar somente UMA imagem final no formato master solicitado.
-- Sem ZIP e sem variações extras.
-- A aplicação somente libera o download depois da aprovação visual explícita do apoiador.
+NEGATIVE DIRECTIVES:
+${NEGATIVE_PROMPT}
 `;
 }
-
-export const SUPPORTER_AVATAR_QA_PROMPT = `
-Você é o revisor técnico do ${SUPPORTER_PHOTO_AGENT_NAME}. Compare as referências e a composição final sem tentar identificar pessoas pelo nome e sem inferir atributos sensíveis.
-Avalie apenas fidelidade visual, naturalidade, anatomia, preservação de roupas/objeto, legibilidade e segurança de recorte.
-Retorne JSON válido com:
-- supporter_fidelity_score: 0-100;
-- candidate_reference_fidelity_score: 0-100;
-- human_texture_score: 0-100;
-- anatomy_score: 0-100;
-- crop_safe_score: 0-100;
-- branding_legibility_score: 0-100;
-- artifacts: lista objetiva de defeitos;
-- pass: true somente se supporter_fidelity_score >= 92, candidate_reference_fidelity_score >= 90, human_texture_score >= 92, anatomy_score >= 90 e crop_safe_score >= 90.
-A meta de 99% é operacional/editorial e não deve ser apresentada como score biométrico garantido.
-`;
