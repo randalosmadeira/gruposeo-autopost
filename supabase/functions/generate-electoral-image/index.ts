@@ -33,14 +33,6 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function b64(bytes: Uint8Array) {
-  const parts: string[] = [];
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    parts.push(String.fromCharCode(...bytes.subarray(i, Math.min(i + 0x8000, bytes.length))));
-  }
-  return btoa(parts.join(""));
-}
-
 function unb64(value: string) {
   const raw = atob(value);
   const out = new Uint8Array(raw.length);
