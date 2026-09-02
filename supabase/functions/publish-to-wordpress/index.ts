@@ -54,26 +54,51 @@ function basicSchemas(article: Record<string, unknown>, siteUrl: string) {
   ];
 }
 
+function pluginEndpointCandidates(baseUrl: string, namespace: string, path: string) {
+  const base = baseUrl.replace(/\/$/, "");
+  const normalizedPath = String(path || "").replace(/^\/+/, "");
+  return [
+    `${base}/wp-json/${namespace}/${normalizedPath}`,
+    `${base}/?rest_route=/${namespace}/${normalizedPath}`,
+  ];
+}
+
 async function pluginRequest(baseUrl: string, apiKey: string, path: string, init: RequestInit) {
   let lastError = "Plugin WordPress indisponível";
   for (const contract of pluginContracts) {
-    try {
-      const res = await fetch(`${baseUrl}/wp-json/${contract.namespace}/${path}`, {
-        ...init,
-        headers: { ...(init.headers || {}), [contract.header]: apiKey, Accept: "application/json" },
-      });
-      const text = await res.text();
-      let data: Record<string, any> | null = null;
-      try { data = JSON.parse(text); } catch { /* non-json means wrong route/proxy */ }
-      if (res.ok && data) return { res, data, contract };
-      if (res.status === 401 || res.status === 403) throw new Error(`API Key recusada por ${contract.id}`);
-      lastError = String(data?.message || data?.error || `HTTP ${res.status} em ${contract.namespace}`);
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : lastError;
-      if (lastError.includes("API Key recusada")) throw new Error(lastError);
+    for (const endpoint of pluginEndpointCandidates(baseUrl, contract.namespace, path)) {
+      try {
+        const res = await fetch(endpoint, {
+          ...init,
+          headers: { ...(init.headers || {}), [contract.header]: apiKey, Accept: "application/json" },
+        });
+        const text = await res.text();
+        let data: Record<string, any> | null = null;
+        try { data = JSON.parse(text); } catch { /* route fallback */ }
+        if (res.ok && data) return { res, data, contract, endpointMode: endpoint.includes("rest_route=") ? "rest_route" : "wp_json" };
+        if ((res.status === 401 || res.status === 403) && data) throw new Error(`API Key recusada por ${contract.id}`);
+        lastError = String(data?.message || data?.error || `HTTP ${res.status} em ${contract.namespace}`);
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : lastError;
+        if (lastError.includes("API Key recusada")) throw new Error(lastError);
+      }
     }
   }
   throw new Error(lastError);
+}
+
+async function resolvePluginCredential(admin: any, project: Record<string, unknown>) {
+  const ref = String(project.wordpress_credential_ref || "").trim();
+  if (ref) {
+    const { data, error } = await admin.rpc("get_zica_wordpress_credential", { p_ref: ref });
+    if (error) throw new Error("Credencial WordPress do Vault indisponível");
+    const secret = String(data || "").trim();
+    if (!secret) throw new Error("Credencial WordPress não encontrada no Vault");
+    return { apiKey: secret, keySource: "vault" };
+  }
+  const legacy = String(project.wordpress_app_password || "").trim();
+  if (!legacy) throw new Error("Credencial WordPress não configurada");
+  return { apiKey: legacy, keySource: "legacy-project-field" };
 }
 
 async function uploadPluginImage(baseUrl: string, apiKey: string, dataUrl: string, slug: string, alt: string) {
@@ -88,9 +113,8 @@ async function uploadPluginImage(baseUrl: string, apiKey: string, dataUrl: strin
   } catch { return undefined; }
 }
 
-async function publishPlugin(project: Record<string, unknown>, article: Record<string, unknown>) {
+async function publishPlugin(project: Record<string, unknown>, article: Record<string, unknown>, apiKey: string) {
   const baseUrl = String(project.wordpress_url).replace(/\/$/, "");
-  const apiKey = String(project.wordpress_app_password);
   let featuredImageId: number | undefined;
   const featured = article.featured_image_url ? String(article.featured_image_url) : "";
   if (featured.startsWith("data:image")) featuredImageId = await uploadPluginImage(baseUrl, apiKey, featured, String(article.slug || "featured"), String(article.title || ""));
@@ -106,12 +130,12 @@ async function publishPlugin(project: Record<string, unknown>, article: Record<s
   if (Array.isArray(config.wordpress_categories)) payload.categories = config.wordpress_categories;
   if (Array.isArray(config.wordpress_tags)) payload.tags = config.wordpress_tags;
 
-  const { data, contract } = await pluginRequest(baseUrl, apiKey, "articles", {
+  const { data, contract, endpointMode } = await pluginRequest(baseUrl, apiKey, "articles", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(45000),
   });
   if (!data.success) throw new Error(String(data.message || data.error || "Publicação recusada pelo plugin"));
   const result = (data.data && typeof data.data === "object") ? data.data as Record<string, unknown> : {};
-  return { postId: result.id, postUrl: result.link, pluginContract: contract.id, pluginNamespace: contract.namespace };
+  return { postId: result.id, postUrl: result.link, pluginContract: contract.id, pluginNamespace: contract.namespace, endpointMode };
 }
 
 async function uploadStandardImage(baseUrl: string, auth: string, dataUrl: string, slug: string) {
@@ -134,7 +158,7 @@ async function publishStandard(project: Record<string, unknown>, article: Record
   if (featuredMedia) payload.featured_media = featuredMedia;
   const res = await fetch(`${baseUrl}/wp-json/wp/v2/posts`, { method: "POST", headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(45000) });
   if (!res.ok) throw new Error(`WordPress REST HTTP ${res.status}`);
-  const post = await res.json(); return { postId: post.id, postUrl: post.link, pluginContract: null, pluginNamespace: null };
+  const post = await res.json(); return { postId: post.id, postUrl: post.link, pluginContract: null, pluginNamespace: null, endpointMode: "wp_json" };
 }
 
 Deno.serve(async (req: Request) => {
@@ -161,20 +185,34 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(supabaseUrl, serviceKey);
     const [{ data: article, error: articleError }, { data: project, error: projectError }] = await Promise.all([
       admin.from("articles").select("*").eq("id", body.articleId).eq("user_id", userId).maybeSingle(),
-      admin.from("projects").select("id,user_id,wordpress_url,wordpress_username,wordpress_app_password").eq("id", body.projectId).eq("user_id", userId).maybeSingle(),
+      admin.from("projects").select("id,user_id,wordpress_url,wordpress_username,wordpress_app_password,wordpress_connector_mode,wordpress_credential_ref,wordpress_plugin_namespace,wordpress_plugin_version").eq("id", body.projectId).eq("user_id", userId).maybeSingle(),
     ]);
     if (articleError || !article) return json({ success: false, error: "Artigo não encontrado ou acesso negado" }, 404);
     if (projectError || !project) return json({ success: false, error: "Projeto não encontrado ou acesso negado" }, 404);
-    if (!project.wordpress_url || !project.wordpress_app_password) return json({ success: false, error: "Credenciais WordPress não configuradas" }, 400);
+    if (!project.wordpress_url) return json({ success: false, error: "URL WordPress não configurada" }, 400);
     if (article.project_id && article.project_id !== body.projectId) return json({ success: false, error: "Artigo não pertence ao projeto informado" }, 409);
     const content = cleanContent(String(article.content || ""));
     if (content.length < 50) return json({ success: false, error: "Artigo sem conteúdo suficiente para publicação" }, 409);
     if (article.status === "published" && article.published_url) return json({ success: true, duplicate: true, postUrl: article.published_url, articleId: article.id });
 
-    const pluginMode = ["__ZICA_POSTS_PLUGIN__", "__ZICA_AI_PLUGIN__", "__CFRDM_PLUGIN__"].includes(String(project.wordpress_username));
-    const result = pluginMode ? await publishPlugin(project, article) : await publishStandard(project, article);
-    await admin.from("articles").update({ status: "published", published_at: new Date().toISOString(), published_url: result.postUrl || null, error_message: null, updated_at: new Date().toISOString() }).eq("id", article.id).eq("user_id", userId);
-    return json({ success: true, articleId: article.id, postId: result.postId, postUrl: result.postUrl, pluginContract: result.pluginContract, pluginNamespace: result.pluginNamespace });
+    const pluginMode = String(project.wordpress_connector_mode) === "zica_posts" || ["__ZICA_POSTS_PLUGIN__", "__ZICA_AI_PLUGIN__", "__CFRDM_PLUGIN__"].includes(String(project.wordpress_username));
+    let result: any;
+    let keySource: string | null = null;
+    if (pluginMode) {
+      const credential = await resolvePluginCredential(admin, project);
+      keySource = credential.keySource;
+      result = await publishPlugin(project, article, credential.apiKey);
+    } else {
+      if (!project.wordpress_username || !project.wordpress_app_password) return json({ success: false, error: "Credenciais WordPress não configuradas" }, 400);
+      result = await publishStandard(project, article);
+    }
+
+    const now = new Date().toISOString();
+    await Promise.all([
+      admin.from("articles").update({ status: "published", published_at: now, published_url: result.postUrl || null, error_message: null, updated_at: now }).eq("id", article.id).eq("user_id", userId),
+      admin.from("projects").update({ is_connected: true, wordpress_last_verified_at: now, updated_at: now }).eq("id", project.id).eq("user_id", userId),
+    ]);
+    return json({ success: true, articleId: article.id, postId: result.postId, postUrl: result.postUrl, pluginContract: result.pluginContract, pluginNamespace: result.pluginNamespace, endpointMode: result.endpointMode, credentialSource: keySource });
   } catch (error) {
     return json({ success: false, error: error instanceof Error ? error.message : "Falha ao publicar no WordPress" }, 502);
   }
