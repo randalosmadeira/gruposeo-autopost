@@ -38,7 +38,7 @@ const AIChat = lazy(() => import("./pages/AIChat"));
 const ElectoralCampaign = lazy(() => import("./pages/ElectoralCampaign"));
 const ElectoralPortalNetwork = lazy(() => import("./pages/ElectoralPortalNetwork"));
 const ElectoralEditorialConsole = lazy(() => import("./pages/ElectoralEditorialConsole"));
-const SupporterAvatar1470 = lazy(() => import("./pages/SupporterAvatar1470"));
+const SupporterAvatar1470 = lazy(() => import("./pages/SupporterAvatar1470V2"));
 const SupporterAvatarPromptEditor = lazy(() => import("./pages/SupporterAvatarPromptEditor"));
 const SupportersAdminPage = lazy(() => import("./pages/SupportersAdminPage"));
 const AuditoriaGBP = lazy(() => import("./pages/AuditoriaGBP"));
@@ -83,13 +83,7 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/1470" element={<SupporterAvatar1470 />} />
               <Route path="/apoiadores/avatar" element={<SupporterAvatar1470 />} />
-              <Route
-                element={
-                  <ProtectedRoute>
-                    <Layout />
-                  </ProtectedRoute>
-                }
-              >
+              <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/calendar" element={<ContentCalendar />} />
