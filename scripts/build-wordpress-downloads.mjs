@@ -9,7 +9,9 @@ const OUT = path.join(ROOT, 'public', 'downloads');
 const packages = [
   {
     name: 'zica-posts',
+    folderName: 'zica-posts',
     version: '3.10.2',
+    outputName: 'zica-posts-3.10.2.zip',
     source: path.join(ROOT, 'public', 'wordpress-plugin', 'zica-posts-3.10.2'),
     entry: 'zica-posts.php',
     expected: ['Version: 3.10.2', "ZICA_POSTS_VERSION', '3.10.2"],
@@ -22,7 +24,9 @@ const packages = [
   },
   {
     name: 'zica-electoral-analytics',
+    folderName: 'zica-electoral-analytics',
     version: '1.2.1',
+    outputName: 'zica-electoral-analytics-1.2.1.zip',
     source: path.join(ROOT, 'public', 'wordpress-electoral', 'zica-electoral-analytics'),
     entry: 'zica-electoral-analytics.php',
     expected: ['Version: 1.2.1', "VERSION = '1.2.1'"],
@@ -31,6 +35,16 @@ const packages = [
       'assets/zica-electoral-analytics.js', 'assets/zica-electoral-optin.js',
       'assets/zica-electoral-optin.css',
     ],
+  },
+  {
+    name: 'zica-neural-theme',
+    folderName: 'zica-neural',
+    version: '1.0.0',
+    outputName: 'zica-neural-theme-1.0.0.zip',
+    source: path.join(ROOT, 'public', 'wordpress-theme', 'zica-neural'),
+    entry: 'style.css',
+    expected: [],
+    required: ['style.css', 'functions.php', 'header.php', 'footer.php', 'index.php'],
   },
 ];
 
@@ -45,6 +59,7 @@ async function walk(dir, base = dir) {
   return files;
 }
 
+await fs.rm(OUT, { recursive: true, force: true });
 await fs.mkdir(OUT, { recursive: true });
 const manifest = { generatedAt: new Date().toISOString(), packages: [] };
 
@@ -61,17 +76,16 @@ for (const pkg of packages) {
   }
 
   const zip = new JSZip();
-  const folder = zip.folder(pkg.name);
+  const folder = zip.folder(pkg.folderName);
   if (!folder) throw new Error(`${pkg.name}: falha ao criar pasta raiz`);
   for (const file of files) folder.file(file.rel, await fs.readFile(file.abs));
 
   const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 9 } });
-  const filename = `${pkg.name}-${pkg.version}.zip`;
-  const target = path.join(OUT, filename);
+  const target = path.join(OUT, pkg.outputName);
   await fs.writeFile(target, buffer);
   const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
-  manifest.packages.push({ name: pkg.name, version: pkg.version, filename, sha256, files: files.length, required: pkg.required });
-  console.log(`${filename}: ${files.length} arquivos, sha256=${sha256}`);
+  manifest.packages.push({ name: pkg.name, version: pkg.version, filename: pkg.outputName, sha256, files: files.length, required: pkg.required });
+  console.log(`${pkg.outputName}: ${files.length} arquivos, sha256=${sha256}`);
 }
 
 await fs.writeFile(path.join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
