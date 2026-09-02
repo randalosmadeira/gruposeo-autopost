@@ -3,7 +3,16 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 import { normalizeEditorialHtml } from "../_shared/editorial-html.ts";
 const corsHeaders={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type","Access-Control-Allow-Methods":"POST, OPTIONS"};
-type PublishRequest={articleId:string;projectId:string;userId?:string;publishStatus?:"draft"|"publish";requireFeaturedImage?:boolean;allowCrossProject?:boolean;categories?:Array<number|string>;tags?:Array<number|string>};
+type PublishRequest = {
+  articleId: string;
+  projectId: string;
+  userId?: string;
+  publishStatus?: "draft" | "publish";
+  requireFeaturedImage?: boolean;
+  allowCrossProject?: boolean;
+  categories?: Array<number | string>;
+  tags?: Array<number | string>;
+};
 function json(body:unknown,status=200){return new Response(JSON.stringify(body),{status,headers:{...corsHeaders,"Content-Type":"application/json","Cache-Control":"no-store"}})}
 function endpointCandidates(baseUrl:string,path:string,namespace="zica-posts/v1"){const base=baseUrl.replace(/\/$/,"");const clean=path.replace(/^\/+/,"");return[`${base}/wp-json/${namespace}/${clean}`,`${base}/?rest_route=/${namespace}/${clean}`]}
 async function pluginRequest(baseUrl:string,apiKey:string,path:string,init:RequestInit,namespace="zica-posts/v1"){let lastError="Zica Posts WordPress indisponível";for(const endpoint of endpointCandidates(baseUrl,path,namespace)){try{const response=await fetch(endpoint,{...init,headers:{...(init.headers||{}),"X-ZICA-POSTS-Key":apiKey,Accept:"application/json"}});const text=await response.text();let data:Record<string,any>|null=null;try{data=JSON.parse(text)}catch{}if(response.ok&&data)return{data,endpointMode:endpoint.includes("rest_route=")?"rest_route":"wp_json"};if(response.status===401||response.status===403)throw new Error("API Key Zica Posts recusada");lastError=String(data?.message||data?.error||(text.trim().startsWith("<")?`WordPress retornou HTML (HTTP ${response.status})`:`HTTP ${response.status}`))}catch(error){lastError=error instanceof Error?error.message:lastError;if(lastError.includes("API Key"))throw error}}throw new Error(lastError)}
