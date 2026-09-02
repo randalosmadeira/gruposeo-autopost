@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 const EDGE_ROOT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
@@ -176,7 +175,7 @@ export default function SupporterAvatar1470() {
     let cancelled = false;
     const loadPresets = async () => {
       try {
-        const response = await fetch(PRESETS_URL, { cache: 'no-store' });
+        const response = await fetch(PRESETS_URL);
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !Array.isArray(payload.presets)) throw new Error(payload.error || 'preset_list_unavailable');
         if (!cancelled) {
@@ -206,6 +205,7 @@ export default function SupporterAvatar1470() {
     if (!session) return;
     let cancelled = false;
     const refresh = async () => {
+      if (document.hidden) return;
       try {
         const payload = await api({ action: 'status', requestId: session.requestId, token: session.token });
         if (!cancelled) {
@@ -218,7 +218,8 @@ export default function SupporterAvatar1470() {
       }
     };
     void refresh();
-    const timer = window.setInterval(refresh, isProcessing ? 3000 : 10000);
+    if (!isProcessing) return () => { cancelled = true; };
+    const timer = window.setInterval(refresh, 3000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -228,6 +229,7 @@ export default function SupporterAvatar1470() {
   const onFiles = (incoming: FileList | null) => {
     const next = Array.from(incoming || []).filter((file) => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type) && file.size <= 10 * 1024 * 1024);
     setFiles(next.slice(0, 4));
+    if (next.length) void import('@/integrations/supabase/client');
   };
 
   const createAndUpload = async () => {
@@ -259,6 +261,7 @@ export default function SupporterAvatar1470() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(active));
       }
 
+      const { supabase } = await import('@/integrations/supabase/client');
       for (const file of files) {
         const signed = await api({ action: 'upload-url', requestId: active.requestId, token: active.token, mimeType: file.type, fileSize: file.size });
         const { error } = await supabase.storage.from('supporter-avatar-uploads').uploadToSignedUrl(signed.path, signed.token, file, { contentType: file.type });
@@ -335,27 +338,26 @@ export default function SupporterAvatar1470() {
   };
 
   return (
-    <div className="min-h-screen bg-[#070a0d] text-white">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(212,255,0,0.10),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(0,240,255,0.08),transparent_25%),linear-gradient(180deg,#070a0d,#0d1117)]" />
-      <main className="relative mx-auto max-w-6xl px-4 py-8 md:py-14">
-        <header className="mb-8 text-center">
-          <div className="mx-auto mb-4 inline-flex items-center gap-2 rounded-full border border-[#D4FF00]/30 bg-[#D4FF00]/10 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-[#D4FF00]"><Camera className="h-4 w-4" /> {AGENT_NAME}</div>
-          <h1 className="text-4xl font-black tracking-tight sm:text-5xl">Madeiraaa Nelesss! <span className="text-[#D4FF00]">🪵 1470</span></h1>
-          <p className="mx-auto mt-4 max-w-3xl text-sm leading-6 text-slate-400 md:text-base">Escolha uma foto oficial do Dr. Madeira, envie sua própria fotografia, selecione o formato e gere uma composição conjunta. Você confere a prévia e baixa somente o arquivo aprovado.</p>
-          <p className="mx-auto mt-2 max-w-3xl text-xs text-slate-500">Agente Full-Stack especializado em edição, composição e renderização fotográfica humanizada. Meta operacional de preservação visual: 99%, sem promessa de medição biométrica.</p>
+    <div className="relative min-h-screen overflow-x-hidden bg-[#070a0d] text-white">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(circle_at_15%_10%,rgba(212,255,0,0.10),transparent_30%),radial-gradient(circle_at_85%_20%,rgba(0,240,255,0.07),transparent_28%)]" />
+      <main className="relative mx-auto max-w-6xl px-4 py-6 md:py-14">
+        <header className="mb-6 text-center md:mb-8">
+          <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border border-[#D4FF00]/30 bg-[#D4FF00]/10 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-[#D4FF00] sm:px-4 sm:text-xs"><Camera className="h-4 w-4" /> {AGENT_NAME}</div>
+          <h1 className="text-3xl font-black tracking-tight sm:text-5xl">Madeiraaa Nelesss! <span className="text-[#D4FF00]">🪵 1470</span></h1>
+          <p className="mx-auto mt-3 max-w-3xl text-sm leading-6 text-slate-400 md:mt-4 md:text-base">Escolha uma foto oficial do Dr. Madeira, envie sua própria fotografia, selecione o formato e gere uma composição conjunta. Você confere a prévia e baixa somente o arquivo aprovado.</p>
         </header>
 
-        <Card className="mb-6 border-white/10 bg-[#11161d]/95 text-white">
-          <CardHeader>
+        <Card className="mb-5 border-white/10 bg-[#11161d]/95 text-white md:mb-6">
+          <CardHeader className="pb-4">
             <CardTitle>1. Escolha a foto oficial</CardTitle>
             <CardDescription className="text-slate-400">As referências oficiais ficam fixas no sistema. Depois que a solicitação começa, a escolha é bloqueada para manter rastreabilidade.</CardDescription>
           </CardHeader>
           <CardContent>
             {presetsLoading ? (
-              <div className="flex items-center justify-center py-12 text-slate-400"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Carregando fotos oficiais...</div>
+              <div className="flex items-center justify-center py-8 text-slate-400"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Carregando fotos oficiais...</div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {presets.map((preset) => {
+                {presets.map((preset, index) => {
                   const selected = candidatePresetSlug === preset.slug;
                   return (
                     <button
@@ -363,9 +365,19 @@ export default function SupporterAvatar1470() {
                       key={preset.slug}
                       disabled={lockedSelection}
                       onClick={() => setCandidatePresetSlug(preset.slug)}
-                      className={`group overflow-hidden rounded-2xl border text-left transition ${selected ? 'border-[#D4FF00] ring-2 ring-[#D4FF00]/20' : 'border-white/10 hover:border-white/30'} ${lockedSelection ? 'cursor-not-allowed opacity-80' : ''}`}
+                      className={`group overflow-hidden rounded-2xl border text-left ${selected ? 'border-[#D4FF00] ring-2 ring-[#D4FF00]/20' : 'border-white/10 hover:border-white/30'} ${lockedSelection ? 'cursor-not-allowed opacity-80' : ''}`}
                     >
-                      <div className="aspect-[4/5] overflow-hidden bg-black/30"><img src={preset.previewUrl} alt={preset.label} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" /></div>
+                      <div className="aspect-[4/5] overflow-hidden bg-black/30">
+                        <img
+                          src={preset.previewUrl}
+                          alt={preset.label}
+                          loading={index === 0 ? 'eager' : 'lazy'}
+                          decoding="async"
+                          fetchPriority={index === 0 ? 'high' : 'low'}
+                          sizes="(max-width: 639px) 92vw, (max-width: 1023px) 46vw, 272px"
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
                       <div className="p-3">
                         <div className="flex items-center justify-between gap-2"><strong className="text-sm">{preset.label}</strong>{selected ? <CheckCircle2 className="h-4 w-4 text-[#D4FF00]" /> : null}</div>
                         <div className="mt-1 text-[11px] text-slate-500">{preset.wardrobe.replace('-', ' ')} · {preset.prop.replace('-', ' ')}</div>
@@ -378,8 +390,8 @@ export default function SupporterAvatar1470() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-6 lg:grid-cols-[1.05fr_.95fr]">
-          <Card className="border-white/10 bg-[#11161d]/95 text-white">
+        <div className="grid gap-5 lg:grid-cols-[1.05fr_.95fr] lg:gap-6">
+          <Card className="border-white/10 bg-[#11161d]/95 text-white" style={{ contentVisibility: 'auto', containIntrinsicSize: '900px' }}>
             <CardHeader>
               <CardTitle>2. Sua foto e formato</CardTitle>
               <CardDescription className="text-slate-400">Envie de 1 a 4 fotos suas. O agente escolhe a melhor referência técnica do seu rosto.</CardDescription>
@@ -405,7 +417,7 @@ export default function SupporterAvatar1470() {
                 </div>
               </div>
 
-              <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-black/20 p-7 text-center hover:border-[#D4FF00]/50">
+              <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-black/20 p-6 text-center hover:border-[#D4FF00]/50 sm:p-7">
                 <Upload className="h-6 w-6 text-[#D4FF00]" />
                 <strong>Escolher minhas fotografias</strong>
                 <span className="text-xs text-slate-400">{files.length ? `${files.length} arquivo(s) selecionado(s)` : 'JPG, PNG ou WebP · máximo 10 MB cada'}</span>
@@ -428,7 +440,7 @@ export default function SupporterAvatar1470() {
             </CardContent>
           </Card>
 
-          <Card className="border-white/10 bg-[#11161d]/95 text-white">
+          <Card className="border-white/10 bg-[#11161d]/95 text-white" style={{ contentVisibility: 'auto', containIntrinsicSize: '720px' }}>
             <CardHeader>
               <CardTitle>3. Prévia e download</CardTitle>
               <CardDescription className="text-slate-400">Apenas o formato escolhido é entregue. Não há publicação automática.</CardDescription>
@@ -437,7 +449,7 @@ export default function SupporterAvatar1470() {
               <div className="relative aspect-square overflow-hidden rounded-xl border border-white/10 bg-black/30">
                 {finalOutput?.url ? (
                   <>
-                    <img src={finalOutput.url} alt="Prévia da composição Madeiraaa Nelesss 1470" className="h-full w-full object-contain" />
+                    <img src={finalOutput.url} alt="Prévia da composição Madeiraaa Nelesss 1470" loading="lazy" decoding="async" className="h-full w-full object-contain" />
                     <div className="absolute inset-x-0 bottom-0 bg-black/85 px-3 py-2 text-center text-[10px] font-bold tracking-wide text-white sm:text-xs">{AI_DISCLOSURE}</div>
                   </>
                 ) : (
