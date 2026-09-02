@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,9 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-type Provider = "openai" | "gemini" | "anthropic";
-
-interface RewriteRequest {
+type RewriteRequest = {
   sourceUrl: string;
   sourceContent?: string;
   sourceName?: string;
@@ -19,347 +18,221 @@ interface RewriteRequest {
   projectId?: string | null;
   userId?: string;
   language?: string;
-}
+  promptTemplate?: string;
+};
 
-interface UserAISettings {
-  openai_api_key?: string | null;
-  gemini_api_key?: string | null;
-  anthropic_api_key?: string | null;
-  ai_provider?: string | null;
-  content_model?: string | null;
-  default_ai_model?: string | null;
-}
-
-interface GeneratedArticle {
+type ArticleDraft = {
   title: string;
-  content: string;
+  meta_description?: string;
+  slug?: string;
   excerpt?: string;
   keyword?: string;
+  content_html?: string;
+  content?: string;
+  primary_sources?: string[];
+  secondary_sources?: string[];
+  legal_authorities?: string[];
+  verification_flags?: string[];
+  needs_primary_source?: boolean;
+  internal_link_suggestions?: string[];
+  image_prompt?: string;
+};
+
+type Review = {
+  pass: boolean;
+  needs_primary_source: boolean;
+  issues: string[];
+  corrected_title?: string;
+  corrected_excerpt?: string;
+  corrected_content?: string;
+  corrected_keyword?: string;
+  notes?: string[];
+};
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" } });
 }
 
-function response(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
-
-function decodeJwtRole(token: string): string {
+function jwtRole(token: string) {
   try {
     const payload = token.split(".")[1];
-    if (!payload) return "";
     const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const decoded = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")));
-    return typeof decoded?.role === "string" ? decoded.role : "";
-  } catch {
-    return "";
-  }
+    return String(JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")))?.role || "");
+  } catch { return ""; }
+}
+
+function parseJson<T>(text: string): T | null {
+  const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+  const first = cleaned.indexOf("{");
+  const last = cleaned.lastIndexOf("}");
+  if (first < 0 || last <= first) return null;
+  try { return JSON.parse(cleaned.slice(first, last + 1)) as T; } catch { return null; }
 }
 
 function slugify(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 180);
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 180);
 }
 
 function targetLength(value?: string) {
-  switch (value) {
-    case "short": return "700 a 1000 palavras";
-    case "long": return "2200 a 2800 palavras";
-    case "very-long": return "3500 a 4500 palavras";
-    default: return "1200 a 1800 palavras";
-  }
-}
-
-function buildPrompt(input: RewriteRequest) {
-  const source = (input.sourceContent || "").slice(0, 50000);
-  return `Reescreva a notícia abaixo como um artigo editorial original em ${input.language || "pt-BR"}.
-
-FONTE: ${input.sourceName || "não informada"}
-URL DA FONTE: ${input.sourceUrl}
-NICHO: ${input.niche || "geral"}
-ÂNGULO EDITORIAL: ${input.analysisAngle || "contextualização útil e objetiva"}
-EXTENSÃO: ${targetLength(input.articleLength)}
-
-REGRAS OBRIGATÓRIAS:
-- Preserve somente fatos sustentados pelo conteúdo fornecido.
-- Não invente números, pessoas, decisões, datas, pesquisas, citações ou consequências.
-- Não copie frases extensas da fonte. Reestruture completamente título, sequência, linguagem e explicações.
-- Atribua a informação à fonte quando necessário.
-- Se o texto-fonte for insuficiente para sustentar uma afirmação, omita-a ou marque [VERIFICAR].
-- Não apresente conteúdo copiado como apuração própria.
-- Use H1 único, H2/H3 claros, parágrafos curtos e conclusão objetiva.
-- O título deve ser informativo, sem clickbait enganoso.
-- Gere uma palavra-chave principal curta e coerente.
-
-Retorne SOMENTE JSON válido, sem markdown, nesta estrutura:
-{"title":"...","excerpt":"...","keyword":"...","content":"..."}
-
-CONTEÚDO-FONTE:
-${source || "Nenhum corpo de texto foi fornecido. Trabalhe apenas com os dados explicitamente disponíveis e sinalize [VERIFICAR] quando necessário."}`;
-}
-
-function extractJson(text: string): GeneratedArticle | null {
-  const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
-  try {
-    const value = JSON.parse(cleaned.slice(start, end + 1));
-    if (!value?.title || !value?.content) return null;
-    return {
-      title: String(value.title).trim(),
-      content: String(value.content).trim(),
-      excerpt: value.excerpt ? String(value.excerpt).trim() : undefined,
-      keyword: value.keyword ? String(value.keyword).trim() : undefined,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function normalizeTokens(text: string) {
-  return text
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((token) => token.length >= 4);
+  if (value === "short") return "700 a 1000 palavras";
+  if (value === "long") return "2200 a 2800 palavras";
+  if (value === "very-long") return "3500 a 4500 palavras";
+  return "1200 a 1800 palavras";
 }
 
 function originalityScore(source: string, generated: string) {
   if (!source.trim() || !generated.trim()) return 80;
-  const sourceSet = new Set(normalizeTokens(source));
-  const output = normalizeTokens(generated);
+  const normalize = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((token) => token.length >= 4);
+  const sourceSet = new Set(normalize(source));
+  const output = normalize(generated);
   if (!output.length) return 0;
   const overlaps = output.filter((token) => sourceSet.has(token)).length;
-  const lexicalOverlap = overlaps / output.length;
-  return Math.max(0, Math.min(100, Math.round((1 - lexicalOverlap) * 100)));
+  return Math.max(0, Math.min(100, Math.round((1 - overlaps / output.length) * 100)));
 }
 
-async function callOpenAI(apiKey: string, model: string, prompt: string) {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      temperature: 0.55,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: "Produza JSON válido e não revele raciocínio interno." },
-        { role: "user", content: prompt },
-      ],
-    }),
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  return extractJson(data?.choices?.[0]?.message?.content || "");
+async function resolveTemplate(admin: any, userId: string, projectId?: string | null, explicit?: string) {
+  let templateName = explicit || "legal_news_rdm_v1";
+  if (!explicit && projectId) {
+    const { data: agent } = await admin.from("news_agents").select("prompt_template").eq("project_id", projectId).eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (agent?.prompt_template) templateName = String(agent.prompt_template);
+  }
+  const { data: template } = await admin.from("prompt_templates").select("name,prompt,agent_name").eq("user_id", userId).eq("name", templateName).maybeSingle();
+  return { templateName, prompt: String(template?.prompt || ""), agentName: String(template?.agent_name || "LEX RDM NEWS") };
 }
 
-async function callGemini(apiKey: string, model: string, prompt: string) {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.55,
-          maxOutputTokens: 32768,
-          responseMimeType: "application/json",
-        },
-      }),
-    },
-  );
-  if (!res.ok) return null;
-  const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || "").join("") || "";
-  return extractJson(text);
+function generationPrompt(input: RewriteRequest, template: string, projectName: string) {
+  const source = (input.sourceContent || "").slice(0, 60000);
+  return `${template}\n\n---\n\nTAREFA OPERACIONAL\nProduza uma matéria original para o projeto: ${projectName}.\nIdioma: ${input.language || "pt-BR"}.\nExtensão: ${targetLength(input.articleLength)}.\nFonte informada: ${input.sourceName || "não informada"}.\nURL: ${input.sourceUrl}.\nNicho: ${input.niche || "jurídico"}.\nÂngulo: ${input.analysisAngle || "informativo, preventivo e tecnicamente preciso"}.\n\nREGRAS DE FONTE\n1. Não invente leis, súmulas, julgados, processos, datas, estatísticas, pessoas ou fatos.\n2. Diferencie notícia, alegação, tese jurídica, orientação geral e opinião.\n3. Quando uma conclusão depender de decisão/lei não presente na fonte, marque needs_primary_source=true.\n4. Use [VERIFICAR] no corpo somente quando a lacuna for indispensável e não puder ser omitida.\n5. Não prometa resultado jurídico.\n6. Não use linguagem mercantilista ou captação apelativa.\n7. Para Direito News, mantenha voz jornalística independente. Para RDM, fechamento institucional sóbrio e informativo.\n8. Gere sugestão de imagem editorial sem simular prova, documento ou fato inexistente.\n\nRetorne SOMENTE JSON válido:\n{\"title\":\"...\",\"meta_description\":\"...\",\"slug\":\"...\",\"excerpt\":\"...\",\"keyword\":\"...\",\"content_html\":\"...\",\"primary_sources\":[],\"secondary_sources\":[],\"legal_authorities\":[],\"verification_flags\":[],\"needs_primary_source\":false,\"internal_link_suggestions\":[],\"image_prompt\":\"...\"}\n\nCONTEÚDO-FONTE:\n${source || "Nenhum corpo de fonte foi fornecido; seja conservador e sinalize necessidade de fonte primária."}`;
 }
 
-async function callAnthropic(apiKey: string, model: string, prompt: string) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 16384,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  const text = data?.content?.map((p: { text?: string }) => p.text || "").join("") || "";
-  return extractJson(text);
+function reviewPrompt(article: ArticleDraft, source: string, sourceUrl: string) {
+  return `Você é o revisor jurídico-editorial final. Revise a matéria abaixo contra a fonte fornecida.\n\nOBJETIVO\n- detectar invenções, exageros, conclusões jurídicas absolutas, jurisprudência não comprovada, publicidade incompatível com caráter informativo e afirmações sem suporte;\n- corrigir linguagem e estrutura sem alterar fatos;\n- exigir fonte primária para lei/julgado/ato público central que não esteja sustentado.\n\nRetorne SOMENTE JSON válido:\n{\"pass\":true,\"needs_primary_source\":false,\"issues\":[],\"corrected_title\":\"\",\"corrected_excerpt\":\"\",\"corrected_content\":\"\",\"corrected_keyword\":\"\",\"notes\":[]}\n\nFONTE URL: ${sourceUrl}\nFONTE:\n${source.slice(0, 50000)}\n\nMATÉRIA:\n${JSON.stringify(article).slice(0, 70000)}`;
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (req.method !== "POST") return response({ error: "Method not allowed" }, 405);
-
+  if (req.method !== "POST") return json({ success: false, error: "Method not allowed" }, 405);
   const requestId = crypto.randomUUID();
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return response({ success: false, error: "Autorização necessária", request_id: requestId }, 401);
-    }
-
+    const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) return json({ success: false, error: "Autorização necessária", request_id: requestId }, 401);
     const token = authHeader.slice(7);
-    const role = decodeJwtRole(token);
+    const role = jwtRole(token);
+    const input = await req.json() as RewriteRequest;
+    if (!input.sourceUrl?.trim()) return json({ success: false, error: "sourceUrl é obrigatório", request_id: requestId }, 400);
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    if (!supabaseUrl || !anonKey || !serviceKey) {
-      return response({ success: false, error: "Backend incompleto", request_id: requestId }, 500);
-    }
-
-    const input = (await req.json()) as RewriteRequest;
-    if (!input.sourceUrl?.trim()) {
-      return response({ success: false, error: "sourceUrl é obrigatório", request_id: requestId }, 400);
-    }
-
+    if (!supabaseUrl || !anonKey || !serviceKey) return json({ success: false, error: "Backend incompleto", request_id: requestId }, 500);
     const admin = createClient(supabaseUrl, serviceKey);
-    let userId = "";
 
+    let userId = "";
     if (role === "service_role") {
       userId = input.userId || "";
-      if (!userId) {
-        return response({ success: false, error: "userId é obrigatório para execução em background", request_id: requestId }, 400);
-      }
+      if (!userId) return json({ success: false, error: "userId é obrigatório em background", request_id: requestId }, 400);
     } else {
-      const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-      const { data, error } = await userClient.auth.getUser(token);
-      if (error || !data.user) {
-        return response({ success: false, error: "Sessão inválida", request_id: requestId }, 401);
-      }
+      const client = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+      const { data, error } = await client.auth.getUser(token);
+      if (error || !data.user) return json({ success: false, error: "Sessão inválida", request_id: requestId }, 401);
       userId = data.user.id;
-      if (input.userId && input.userId !== userId) {
-        return response({ success: false, error: "userId incompatível com a sessão", request_id: requestId }, 403);
-      }
+      if (input.userId && input.userId !== userId) return json({ success: false, error: "userId incompatível", request_id: requestId }, 403);
     }
 
+    let projectName = "Conteúdo jurídico";
     if (input.projectId) {
-      const { data: project } = await admin
-        .from("projects")
-        .select("id")
-        .eq("id", input.projectId)
-        .eq("user_id", userId)
-        .maybeSingle();
-      if (!project) {
-        return response({ success: false, error: "Projeto não encontrado ou acesso negado", request_id: requestId }, 403);
-      }
+      const { data: project } = await admin.from("projects").select("id,name").eq("id", input.projectId).eq("user_id", userId).maybeSingle();
+      if (!project) return json({ success: false, error: "Projeto não encontrado ou acesso negado", request_id: requestId }, 403);
+      projectName = String(project.name || projectName);
     }
 
-    const { data: existing } = await admin
-      .from("articles")
-      .select("*")
-      .eq("user_id", userId)
-      .contains("config", { source_url: input.sourceUrl })
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const { data: existing } = await admin.from("articles").select("*").eq("user_id", userId).eq("project_id", input.projectId || null).contains("config", { source_url: input.sourceUrl }).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (existing) return json({ success: true, duplicate: true, article: existing, request_id: requestId });
 
-    if (existing) {
-      return response({ success: true, duplicate: true, article: existing, request_id: requestId });
+    const template = await resolveTemplate(admin, userId, input.projectId, input.promptTemplate);
+    const orchestrator = await getOrchestratorForUser(userId);
+
+    const generation = await orchestrator.callWithMeta("news_rewrite", [
+      { role: "system", content: `Você é ${template.agentName}. Entregue somente o JSON solicitado.` },
+      { role: "user", content: generationPrompt(input, template.prompt, projectName) },
+    ], { preferredProvider: "openai", maxTokens: 20000, temperature: 0.35 });
+
+    let draft = parseJson<ArticleDraft>(generation.content);
+    if (!draft?.title || !(draft.content_html || draft.content)) return json({ success: false, error: "IA não retornou matéria estruturada válida", generation_provider: generation.provider, request_id: requestId }, 502);
+
+    let reviewCall = await orchestrator.callWithMeta("legal_review", [
+      { role: "system", content: "Faça revisão jurídica-editorial rigorosa e devolva somente JSON." },
+      { role: "user", content: reviewPrompt(draft, input.sourceContent || "", input.sourceUrl) },
+    ], { preferredProvider: generation.provider === "openai" ? "anthropic" : "openai", maxTokens: 10000, temperature: 0.1 });
+    let review = parseJson<Review>(reviewCall.content) || { pass: false, needs_primary_source: true, issues: ["Resposta de revisão inválida"] };
+
+    if (!review.pass && !review.needs_primary_source && review.issues?.length) {
+      const correction = await orchestrator.callWithMeta("content_editing", [
+        { role: "system", content: "Corrija a matéria apenas nos pontos indicados pelo revisor. Não invente fatos. Retorne o mesmo JSON estrutural da matéria." },
+        { role: "user", content: `MATÉRIA:\n${JSON.stringify(draft)}\n\nPROBLEMAS:\n${review.issues.join("\n- ")}` },
+      ], { preferredProvider: generation.provider, maxTokens: 18000, temperature: 0.2 });
+      const corrected = parseJson<ArticleDraft>(correction.content);
+      if (corrected?.title && (corrected.content_html || corrected.content)) draft = corrected;
+      reviewCall = await orchestrator.callWithMeta("legal_review", [
+        { role: "system", content: "Revisão final. Retorne somente JSON." },
+        { role: "user", content: reviewPrompt(draft, input.sourceContent || "", input.sourceUrl) },
+      ], { preferredProvider: reviewCall.provider, maxTokens: 8000, temperature: 0.1 });
+      review = parseJson<Review>(reviewCall.content) || review;
     }
 
-    const { data: settings } = await admin
-      .from("user_settings")
-      .select("openai_api_key, gemini_api_key, anthropic_api_key, ai_provider, content_model, default_ai_model")
-      .eq("user_id", userId)
-      .maybeSingle<UserAISettings>();
+    const content = String(review.corrected_content || draft.content_html || draft.content || "").trim();
+    const title = String(review.corrected_title || draft.title).trim().slice(0, 240);
+    const excerpt = String(review.corrected_excerpt || draft.excerpt || draft.meta_description || content.replace(/<[^>]+>/g, " ").slice(0, 260)).trim();
+    const keyword = String(review.corrected_keyword || draft.keyword || input.niche || title).trim();
+    const hasVerifyMarker = /\[VERIFICAR\]/i.test(content);
+    const needsPrimary = Boolean(review.needs_primary_source || draft.needs_primary_source || hasVerifyMarker);
+    const reviewPass = Boolean(review.pass && !needsPrimary && content.length >= 200);
+    const status = reviewPass ? "ready" : "draft";
+    const score = originalityScore(input.sourceContent || "", content);
 
-    const keys = {
-      openai: settings?.openai_api_key || Deno.env.get("OPENAI_API_KEY") || "",
-      gemini: settings?.gemini_api_key || Deno.env.get("GEMINI_API_KEY") || "",
-      anthropic: settings?.anthropic_api_key || Deno.env.get("ANTHROPIC_API_KEY") || "",
-    };
-    const configuredModel = settings?.content_model || settings?.default_ai_model || "";
-    const preferred = (settings?.ai_provider || "").toLowerCase() as Provider | "";
-    const order: Provider[] = preferred && ["openai", "gemini", "anthropic"].includes(preferred)
-      ? [preferred, ...(["openai", "gemini", "anthropic"] as Provider[]).filter((p) => p !== preferred)]
-      : ["openai", "gemini", "anthropic"];
-
-    const prompt = buildPrompt(input);
-    let generated: GeneratedArticle | null = null;
-    let providerUsed: Provider | null = null;
-
-    for (const provider of order) {
-      if (provider === "openai" && keys.openai) {
-        generated = await callOpenAI(keys.openai, configuredModel.startsWith("gpt-") ? configuredModel : "gpt-4o-mini", prompt);
-      } else if (provider === "gemini" && keys.gemini) {
-        generated = await callGemini(keys.gemini, configuredModel.startsWith("gemini-") ? configuredModel : "gemini-2.5-flash", prompt);
-      } else if (provider === "anthropic" && keys.anthropic) {
-        generated = await callAnthropic(keys.anthropic, configuredModel.startsWith("claude-") ? configuredModel : "claude-sonnet-4-5-20250929", prompt);
-      }
-      if (generated) {
-        providerUsed = provider;
-        break;
-      }
-    }
-
-    if (!generated) {
-      return response({ success: false, error: "Nenhum provedor de IA disponível ou todos falharam", request_id: requestId }, 503);
-    }
-
-    const score = originalityScore(input.sourceContent || "", generated.content);
-    const wordCount = generated.content.trim().split(/\s+/).filter(Boolean).length;
-    const title = generated.title.slice(0, 240);
-    const slug = slugify(title || generated.keyword || "artigo");
-    const excerpt = generated.excerpt || generated.content.replace(/[#*_>`]/g, "").slice(0, 240).trim();
-    const keyword = generated.keyword || input.niche || title;
-
-    const articlePayload = {
+    const payload = {
       user_id: userId,
       project_id: input.projectId || null,
       title,
-      content: generated.content,
+      content,
       excerpt,
-      slug,
+      slug: slugify(String(draft.slug || title)),
       keyword,
       type: "blog",
-      status: "ready",
-      word_count: wordCount,
+      status,
+      word_count: content.replace(/<[^>]+>/g, " ").trim().split(/\s+/).filter(Boolean).length,
       originality_score: score,
+      image_prompt: draft.image_prompt || null,
       config: {
         source_url: input.sourceUrl,
         source_name: input.sourceName || null,
         analysis_angle: input.analysisAngle || null,
         niche: input.niche || null,
         language: input.language || "pt-BR",
-        ai_provider: providerUsed,
+        prompt_template: template.templateName,
+        generation_provider: generation.provider,
+        generation_model: generation.model,
+        review_provider: reviewCall.provider,
+        review_model: reviewCall.model,
+        review_pass: reviewPass,
+        needs_primary_source: needsPrimary,
+        review_issues: review.issues || [],
+        review_notes: review.notes || [],
+        primary_sources: draft.primary_sources || [],
+        secondary_sources: draft.secondary_sources || [],
+        legal_authorities: draft.legal_authorities || [],
+        verification_flags: draft.verification_flags || [],
+        internal_link_suggestions: draft.internal_link_suggestions || [],
         auto_generated: true,
         generated_at: new Date().toISOString(),
       },
     };
 
-    const { data: article, error: insertError } = await admin
-      .from("articles")
-      .insert(articlePayload)
-      .select()
-      .single();
-
-    if (insertError || !article) {
-      return response({ success: false, error: insertError?.message || "Falha ao salvar artigo", request_id: requestId }, 500);
-    }
-
-    return response({ success: true, duplicate: false, article, request_id: requestId });
+    const { data: article, error } = await admin.from("articles").insert(payload).select().single();
+    if (error || !article) return json({ success: false, error: error?.message || "Falha ao salvar artigo", request_id: requestId }, 500);
+    return json({ success: true, duplicate: false, article, review: { pass: reviewPass, needs_primary_source: needsPrimary, issues: review.issues || [] }, generation: { provider: generation.provider, model: generation.model }, reviewer: { provider: reviewCall.provider, model: reviewCall.model }, request_id: requestId });
   } catch (error) {
-    return response({
-      success: false,
-      error: error instanceof Error ? error.message : "Erro interno",
-      request_id: requestId,
-    }, 500);
+    return json({ success: false, error: error instanceof Error ? error.message : "Erro interno", request_id: requestId }, 500);
   }
 });
