@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Zica Electoral Analytics
  * Description: Telemetria editorial agregada e cadastro voluntario consentido para os portais eleitorais 1470, com configuracao central no Zica.ai.
- * Version: 1.2.0
+ * Version: 1.2.1
  * Author: Zica.ai
  */
 
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Zica_Electoral_Analytics {
-    private const VERSION = '1.2.0';
+    private const VERSION = '1.2.1';
     private const CENTRAL_CONFIG_URL = 'https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1/electoral-analytics-public-config';
     private const TRANSIENT_PREFIX = 'zica_electoral_analytics_';
 
@@ -48,6 +48,9 @@ final class Zica_Electoral_Analytics {
             'optin_title' => 'Quero ajudar na campanha',
             'optin_subtitle' => 'Deixe seu contato e diga como quer ajudar.',
             'optin_button_label' => '🪵 MADEIRAAA NELESS',
+            'optin_instagram_enabled' => true,
+            'optin_instagram_url' => 'https://www.instagram.com/rdmadvogados/',
+            'optin_instagram_label' => 'Seguir @rdmadvogados no Instagram',
             'central_config_reachable' => false,
         ];
     }
@@ -90,6 +93,9 @@ final class Zica_Electoral_Analytics {
         $config['optin_title'] = sanitize_text_field((string) ($optin['title'] ?? $config['optin_title']));
         $config['optin_subtitle'] = sanitize_text_field((string) ($optin['subtitle'] ?? $config['optin_subtitle']));
         $config['optin_button_label'] = sanitize_text_field((string) ($optin['button_label'] ?? $config['optin_button_label']));
+        $config['optin_instagram_enabled'] = !empty($optin['instagram_enabled']);
+        $config['optin_instagram_url'] = esc_url_raw((string) ($optin['instagram_url'] ?? $config['optin_instagram_url']));
+        $config['optin_instagram_label'] = sanitize_text_field((string) ($optin['instagram_label'] ?? $config['optin_instagram_label']));
 
         // Estes controles permanecem desligados no runtime dos portais.
         $config['allow_google_signals'] = false;
@@ -275,6 +281,9 @@ final class Zica_Electoral_Analytics {
                 'title' => sanitize_text_field((string) ($config['optin_title'] ?? 'Quero ajudar na campanha')),
                 'subtitle' => sanitize_text_field((string) ($config['optin_subtitle'] ?? 'Deixe seu contato e diga como quer ajudar.')),
                 'buttonLabel' => sanitize_text_field((string) ($config['optin_button_label'] ?? '🪵 MADEIRAAA NELESS')),
+                'instagramEnabled' => !empty($config['optin_instagram_enabled']),
+                'instagramUrl' => esc_url_raw((string) ($config['optin_instagram_url'] ?? '')),
+                'instagramLabel' => sanitize_text_field((string) ($config['optin_instagram_label'] ?? 'Seguir @rdmadvogados no Instagram')),
                 'privacy' => [
                     'browsingHistoryLinkedToContact' => false,
                     'personalizedPoliticalTargeting' => false,
