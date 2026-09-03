@@ -1,0 +1,1 @@
+Acceptance: CI must remain green; Anthropic 400 must not be surfaced as QA rejection; Drive non-image responses must be rejected; OpenAI fallback must be available; supporter identity QA thresholds remain unchanged.
