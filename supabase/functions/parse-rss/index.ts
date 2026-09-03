@@ -1,311 +1,119 @@
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import { discoverFeed, fetchValidatedFeedItems, type FeedItem } from "../_shared/rss-discovery.ts";
 
 const FUNCTION_NAME = "parse-rss";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-export interface RSSItem {
-  title: string;
-  link: string;
-  description: string;
-  pubDate: string;
-  source: string;
-  guid?: string;
-  author?: string;
-  categories?: string[];
-  imageUrl?: string;
-}
+type Input = {
+  feedUrls?: string[];
+  siteUrls?: string[];
+  limit?: number;
+  projectId?: string | null;
+  portalId?: string | null;
+  persistAssociation?: boolean;
+};
 
-export interface RSSFeed {
-  title: string;
-  description: string;
-  link: string;
-  lastBuildDate?: string;
-  items: RSSItem[];
-}
-
-// --- SSRF Protection ---
-function validateRSSUrl(urlString: string): boolean {
-  try {
-    const url = new URL(urlString);
-
-    if (!['http:', 'https:'].includes(url.protocol)) {
-      return false;
-    }
-
-    const hostname = url.hostname.toLowerCase();
-    if (
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname === '[::1]' ||
-      hostname === '0.0.0.0' ||
-      hostname.startsWith('192.168.') ||
-      hostname.startsWith('10.') ||
-      hostname.startsWith('172.16.') ||
-      hostname.startsWith('172.17.') ||
-      hostname.startsWith('172.18.') ||
-      hostname.startsWith('172.19.') ||
-      hostname.startsWith('172.20.') ||
-      hostname.startsWith('172.21.') ||
-      hostname.startsWith('172.22.') ||
-      hostname.startsWith('172.23.') ||
-      hostname.startsWith('172.24.') ||
-      hostname.startsWith('172.25.') ||
-      hostname.startsWith('172.26.') ||
-      hostname.startsWith('172.27.') ||
-      hostname.startsWith('172.28.') ||
-      hostname.startsWith('172.29.') ||
-      hostname.startsWith('172.30.') ||
-      hostname.startsWith('172.31.') ||
-      hostname === '169.254.169.254' ||
-      hostname.endsWith('.internal') ||
-      hostname.endsWith('.local')
-    ) {
-      return false;
-    }
-
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// --- XML Parsing Helpers ---
-function extractCDATA(content: string): string {
-  const cdataMatch = content.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
-  if (cdataMatch) return cdataMatch[1].trim();
-  return content.replace(/<[^>]+>/g, '').trim();
-}
-
-function extractTag(xml: string, tag: string): string {
-  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i');
-  const match = xml.match(regex);
-  return match ? extractCDATA(match[1]) : '';
-}
-
-function extractAttribute(xml: string, tag: string, attr: string): string {
-  const regex = new RegExp(`<${tag}[^>]*${attr}=["']([^"']+)["']`, 'i');
-  const match = xml.match(regex);
-  return match ? match[1] : '';
-}
-
-function parseRSSXML(xmlText: string, feedUrl: string): RSSFeed {
-  const isAtom = xmlText.includes('<feed') && xmlText.includes('xmlns="http://www.w3.org/2005/Atom"');
-
-  let feedTitle = '';
-  let feedDescription = '';
-  let feedLink = '';
-  const items: RSSItem[] = [];
-
-  if (isAtom) {
-    feedTitle = extractTag(xmlText, 'title');
-    feedDescription = extractTag(xmlText, 'subtitle');
-    feedLink = extractAttribute(xmlText, 'link', 'href') || feedUrl;
-
-    const entryRegex = /<entry>([\s\S]*?)<\/entry>/gi;
-    let match;
-
-    while ((match = entryRegex.exec(xmlText)) !== null) {
-      const entryContent = match[1];
-      const link = extractAttribute(entryContent, 'link', 'href') || extractTag(entryContent, 'id');
-      const pubDate = extractTag(entryContent, 'published') || extractTag(entryContent, 'updated');
-      const author = extractTag(entryContent, 'name') || extractTag(entryContent, 'author');
-
-      items.push({
-        title: extractTag(entryContent, 'title'),
-        link,
-        description: extractTag(entryContent, 'summary') || extractTag(entryContent, 'content'),
-        pubDate,
-        source: feedTitle || new URL(feedUrl).hostname,
-        guid: extractTag(entryContent, 'id'),
-        author,
-      });
-    }
-  } else {
-    const channelMatch = xmlText.match(/<channel>([\s\S]*?)<\/channel>/i);
-    const channelContent = channelMatch ? channelMatch[1] : xmlText;
-
-    feedTitle = extractTag(channelContent, 'title');
-    feedDescription = extractTag(channelContent, 'description');
-    feedLink = extractTag(channelContent, 'link') || feedUrl;
-
-    const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
-    let match;
-
-    while ((match = itemRegex.exec(xmlText)) !== null) {
-      const itemContent = match[1];
-
-      let imageUrl = extractAttribute(itemContent, 'media:content', 'url');
-      if (!imageUrl) {
-        imageUrl = extractAttribute(itemContent, 'enclosure', 'url');
-        if (imageUrl && !imageUrl.match(/\.(jpg|jpeg|png|gif|webp)/i)) {
-          imageUrl = '';
-        }
-      }
-
-      const categories: string[] = [];
-      const catRegex = /<category[^>]*>([^<]+)<\/category>/gi;
-      let catMatch;
-      while ((catMatch = catRegex.exec(itemContent)) !== null) {
-        categories.push(extractCDATA(catMatch[1]));
-      }
-
-      items.push({
-        title: extractTag(itemContent, 'title'),
-        link: extractTag(itemContent, 'link'),
-        description: extractTag(itemContent, 'description'),
-        pubDate: extractTag(itemContent, 'pubDate'),
-        source: extractTag(itemContent, 'source') || feedTitle || new URL(feedUrl).hostname,
-        guid: extractTag(itemContent, 'guid'),
-        author: extractTag(itemContent, 'author') || extractTag(itemContent, 'dc:creator'),
-        categories,
-        imageUrl,
-      });
-    }
-  }
-
-  return {
-    title: feedTitle,
-    description: feedDescription,
-    link: feedLink,
-    items,
-  };
-}
-
-async function fetchRSSFeed(feedUrl: string): Promise<RSSFeed> {
-  const response = await fetch(feedUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; ContentFactoryBot/1.0)',
-      'Accept': 'application/rss+xml, application/xml, text/xml, application/atom+xml',
-    },
+function response(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch feed: ${response.status} ${response.statusText}`);
-  }
-
-  const xmlText = await response.text();
-  return parseRSSXML(xmlText, feedUrl);
 }
 
 Deno.serve(async (req) => {
   const requestId = createRequestId();
   const log = createLogger(FUNCTION_NAME, requestId);
   const startTime = Date.now();
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return response({ success: false, error: "Method not allowed", request_id: requestId }, 405);
 
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  log.requestStart(req.method);
-
-  // --- Authentication ---
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(
-      JSON.stringify({ error: "Authorization required" }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
+  if (!authHeader?.startsWith("Bearer ")) return response({ success: false, error: "Authorization required", request_id: requestId }, 401);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: authHeader } } });
   const token = authHeader.replace("Bearer ", "");
   const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
   if (authError || !user) {
     log.warn("auth_failed", { error: authError?.message });
-    return new Response(
-      JSON.stringify({ error: "Invalid authentication" }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return response({ success: false, error: "Invalid authentication", request_id: requestId }, 401);
   }
 
   try {
-    const { feedUrls, limit = 10 } = await req.json();
+    const input = await req.json().catch(() => ({})) as Input;
+    const direct = Array.isArray(input.feedUrls) ? input.feedUrls.filter(Boolean) : [];
+    const sites = Array.isArray(input.siteUrls) ? input.siteUrls.filter(Boolean) : [];
+    const targets = [
+      ...direct.map((url) => ({ siteUrl: url, directCandidate: url })),
+      ...sites.map((url) => ({ siteUrl: url, directCandidate: null as string | null })),
+    ].slice(0, 10);
+    if (!targets.length) return response({ success: false, error: "feedUrls ou siteUrls é obrigatório", request_id: requestId }, 400);
 
-    if (!feedUrls || !Array.isArray(feedUrls) || feedUrls.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "feedUrls array is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const limit = Math.max(1, Math.min(100, Number(input.limit || 10)));
+    const results: any[] = [];
+    const allItems: FeedItem[] = [];
+    let firstValidFeed: any = null;
 
-    // Cap number of feeds to prevent abuse
-    const cappedFeedUrls = feedUrls.slice(0, 10);
-
-    log.info("parsing_feeds", { count: cappedFeedUrls.length, user_id: user.id });
-
-    const results: { url: string; feed?: RSSFeed; error?: string }[] = [];
-    const allItems: RSSItem[] = [];
-
-    for (const url of cappedFeedUrls) {
-      // SSRF validation
-      if (!validateRSSUrl(url)) {
-        log.warn("ssrf_blocked", { url });
-        results.push({ url, error: "Invalid or forbidden URL" });
+    for (const target of targets) {
+      const discovery = await discoverFeed(target.siteUrl, { directCandidate: target.directCandidate });
+      if (!discovery.valid) {
+        results.push({ input_url: target.siteUrl, success: false, discovery });
         continue;
       }
+      const fetched = await fetchValidatedFeedItems(discovery.url, limit);
+      if (!fetched.validation.valid) {
+        results.push({ input_url: target.siteUrl, success: false, discovery, validation: fetched.validation });
+        continue;
+      }
+      firstValidFeed ||= discovery;
+      allItems.push(...fetched.items);
+      results.push({ input_url: target.siteUrl, success: true, discovery, validation: fetched.validation, items: fetched.items });
+      log.info("feed_parsed", { input: target.siteUrl, feed: discovery.url, items: fetched.items.length, method: discovery.discovery_method });
+    }
 
-      try {
-        const feed = await fetchRSSFeed(url);
-        results.push({ url, feed });
-        allItems.push(...feed.items);
-        log.info("feed_parsed", { url, items: feed.items.length });
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : "Unknown error";
-        log.warn("feed_error", { url, error: errorMsg });
-        results.push({ url, error: errorMsg });
+    if (input.persistAssociation && firstValidFeed && serviceKey && (input.projectId || input.portalId)) {
+      const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+      const validatedAt = new Date().toISOString();
+      const validation = {
+        url: firstValidFeed.url,
+        format: firstValidFeed.format,
+        http_status: firstValidFeed.status,
+        content_type: firstValidFeed.content_type,
+        content_type_valid: firstValidFeed.content_type_valid,
+        structure_valid: firstValidFeed.structure_valid,
+        discovery_method: firstValidFeed.discovery_method,
+        attempted: firstValidFeed.attempted,
+      };
+      if (input.projectId) {
+        const { data: owned } = await admin.from("projects").select("id").eq("id", input.projectId).eq("user_id", user.id).maybeSingle();
+        if (owned) await admin.from("projects").update({ rss_feed_url: firstValidFeed.url, rss_feed_validation: validation, rss_feed_validated_at: validatedAt, updated_at: validatedAt }).eq("id", input.projectId);
+      }
+      if (input.portalId) {
+        const { data: owned } = await admin.from("monitored_portals").select("id").eq("id", input.portalId).eq("user_id", user.id).maybeSingle();
+        if (owned) await admin.from("monitored_portals").update({ rss_feed_url: firstValidFeed.url, rss_feed_validation: validation, rss_feed_validated_at: validatedAt, updated_at: validatedAt }).eq("id", input.portalId);
       }
     }
 
-    const sortedItems = allItems
-      .filter(item => item.title && item.link)
-      .sort((a, b) => {
-        const dateA = new Date(a.pubDate || 0).getTime();
-        const dateB = new Date(b.pubDate || 0).getTime();
-        return dateB - dateA;
-      })
-      .filter((item, index, self) =>
-        index === self.findIndex(t => t.link === item.link || t.title === item.title)
-      )
+    const unique = new Map<string, FeedItem>();
+    for (const item of allItems) {
+      const key = item.link || item.title.toLowerCase();
+      if (!unique.has(key)) unique.set(key, item);
+    }
+    const items = [...unique.values()]
+      .sort((a, b) => Date.parse(b.published_at || "1970-01-01") - Date.parse(a.published_at || "1970-01-01"))
       .slice(0, limit);
 
-    log.info("parse_complete", {
-      feeds: cappedFeedUrls.length,
-      totalItems: allItems.length,
-      uniqueItems: sortedItems.length,
-    });
     log.requestEnd(200, Date.now() - startTime);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        feeds: results,
-        items: sortedItems,
-        request_id: requestId,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return response({ success: true, feeds: results, items, request_id: requestId });
   } catch (error) {
     log.error("parse_error", { error: error instanceof Error ? error.message : "unknown" });
     log.requestEnd(500, Date.now() - startTime);
-
-    return new Response(
-      JSON.stringify({
-        error: "Internal server error",
-        request_id: requestId,
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return response({ success: false, error: error instanceof Error ? error.message : "Internal server error", request_id: requestId }, 500);
   }
 });
