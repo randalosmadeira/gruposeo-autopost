@@ -39,7 +39,7 @@ export const REPOST_NEWS_DIRECTIVES = `DIRETRIZES DE REPOSTAGEM JORNALÍSTICA
 export const GEO_AEO_2026_RULES = `POLÍTICA INTERNA ZICA.AI PARA SEO, GEO, AEO E MOTORES DE IA
 - Responda diretamente à intenção principal já no primeiro parágrafo.
 - O título do documento/página é o único H1. Quando o corpo for enviado separadamente ao WordPress, use apenas H2 e H3 no corpo.
-- Sempre que um H2 ou H3 representar uma pergunta ou intenção objetiva, abra a seção com um Answer Capsule de aproximadamente 25 a 45 palavras que entregue a resposta antes do aprofundamento.
+- Sempre que um H2 ou H3 representar uma pergunta ou intenção objetiva, abra a seção com Answer Capsule de aproximadamente 25 a 45 palavras que entregue a resposta antes do aprofundamento.
 - Use entidades, localidades, datas e relações semânticas somente quando forem pertinentes e verificáveis.
 - Dados, percentuais, estatísticas, estudos e anos só podem aparecer quando existirem na fonte ou contexto fornecido. Nunca invente números para cumprir frequência editorial.
 - Tabelas comparativas são recomendadas somente quando houver elementos realmente comparáveis e dados suficientes.
