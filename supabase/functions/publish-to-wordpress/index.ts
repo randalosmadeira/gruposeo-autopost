@@ -21,6 +21,16 @@ type PublishRequest = {
   tags?: Array<number | string>;
 };
 
+type RssVerification = {
+  status: "confirmed" | "pending" | "unreachable" | "not_applicable";
+  checked_at: string;
+  feed_url: string | null;
+  post_url: string | null;
+  attempts: number;
+  http_status: number | null;
+  error: string | null;
+};
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -44,7 +54,11 @@ async function pluginRequest(baseUrl: string, apiKey: string, path: string, init
       });
       const text = await response.text();
       let data: Record<string, any> | null = null;
-      try { data = JSON.parse(text); } catch { /* WordPress may return HTML on routing failures. */ }
+      try {
+        data = JSON.parse(text);
+      } catch {
+        // WordPress may return HTML on routing failures.
+      }
       if (response.ok && data) return { data, endpointMode: endpoint.includes("rest_route=") ? "rest_route" : "wp_json" };
       if (response.status === 401 || response.status === 403) throw new Error("API Key Zica Posts recusada");
       lastError = String(data?.message || data?.error || (text.trim().startsWith("<") ? `WordPress retornou HTML (HTTP ${response.status})` : `HTTP ${response.status}`));
@@ -170,7 +184,11 @@ async function standardRequest(baseUrl: string, path: string, auth: string, init
     lastStatus = response.status;
     const text = await response.text();
     let data: any = null;
-    try { data = JSON.parse(text); } catch { /* ignore non-JSON response */ }
+    try {
+      data = JSON.parse(text);
+    } catch {
+      // Ignore non-JSON response.
+    }
     if (response.ok && data) return data;
     lastMessage = String(data?.message || data?.error || `WordPress REST HTTP ${response.status}`);
   }
@@ -202,6 +220,146 @@ async function publishStandard(
     signal: AbortSignal.timeout(90000),
   });
   return { postId: post.id, postUrl: post.link, duplicate: false, pluginContract: null, pluginNamespace: null, endpointMode: "wp-v2" };
+}
+
+function sleep(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function normalizeComparableUrl(value: string) {
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    url.search = "";
+    return decodeURIComponent(url.toString()).replace(/\/$/, "").toLowerCase();
+  } catch {
+    return decodeURIComponent(value).replace(/\/$/, "").toLowerCase();
+  }
+}
+
+async function discoverFeedUrls(baseUrl: string) {
+  const base = baseUrl.replace(/\/$/, "");
+  const candidates = [
+    `${base}/feed/`,
+    `${base}/?feed=rss2`,
+    `${base}/feed/atom/`,
+  ];
+  try {
+    const response = await fetch(base, {
+      headers: { Accept: "text/html", "User-Agent": "ZicaAI-RSS-Verifier/3.0", "Cache-Control": "no-cache" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(10000),
+    });
+    if (response.ok) {
+      const html = await response.text();
+      for (const match of html.matchAll(/<link\b[^>]*rel=["'][^"']*alternate[^"']*["'][^>]*>/gi)) {
+        const tag = match[0];
+        if (!/application\/(?:rss|atom)\+xml/i.test(tag)) continue;
+        const href = tag.match(/href=["']([^"']+)["']/i)?.[1];
+        if (!href) continue;
+        try {
+          candidates.unshift(new URL(href, base).toString());
+        } catch {
+          // Ignore malformed discovery URLs.
+        }
+      }
+    }
+  } catch {
+    // Default WordPress candidates remain available.
+  }
+  return [...new Set(candidates)];
+}
+
+function feedContainsPost(xml: string, postUrl: string, postId: string | number | null | undefined) {
+  const decoded = xml.replace(/&amp;/gi, "&").replace(/&#0*38;/gi, "&");
+  const normalizedBody = decodeURIComponent(decoded).toLowerCase();
+  const normalizedPost = normalizeComparableUrl(postUrl);
+  if (normalizedPost && normalizedBody.includes(normalizedPost)) return true;
+  try {
+    const path = decodeURIComponent(new URL(postUrl).pathname).replace(/\/$/, "").toLowerCase();
+    if (path.length > 1 && normalizedBody.includes(path)) return true;
+  } catch {
+    // Ignore invalid post URL.
+  }
+  if (postId != null && new RegExp(`<guid[^>]*>[^<]*(?:[?&]p=|/archives/)${String(postId)}(?:<|&|/)`, "i").test(decoded)) return true;
+  return false;
+}
+
+async function verifyPublishedPostInRss(baseUrl: string, postUrl: string | null | undefined, postId: string | number | null | undefined, status: "draft" | "publish"): Promise<RssVerification> {
+  const checkedAt = new Date().toISOString();
+  if (status !== "publish" || !postUrl) {
+    return {
+      status: "not_applicable",
+      checked_at: checkedAt,
+      feed_url: null,
+      post_url: postUrl || null,
+      attempts: 0,
+      http_status: null,
+      error: null,
+    };
+  }
+
+  const feeds = await discoverFeedUrls(baseUrl);
+  const delays = [0, 900, 2200, 4500];
+  let attempts = 0;
+  let lastStatus: number | null = null;
+  let lastError: string | null = null;
+  let reachableFeed: string | null = null;
+
+  for (const delay of delays) {
+    if (delay) await sleep(delay);
+    for (const feedUrl of feeds) {
+      attempts += 1;
+      try {
+        const response = await fetch(feedUrl, {
+          headers: {
+            Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml",
+            "User-Agent": "ZicaAI-RSS-Verifier/3.0",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+          },
+          redirect: "follow",
+          signal: AbortSignal.timeout(15000),
+        });
+        lastStatus = response.status;
+        if (!response.ok) {
+          lastError = `RSS HTTP ${response.status}`;
+          continue;
+        }
+        const xml = await response.text();
+        const contentType = response.headers.get("content-type") || "";
+        const appearsFeed = /<(?:rss|feed)\b/i.test(xml) || /(?:rss|atom|xml)/i.test(contentType);
+        if (!appearsFeed) {
+          lastError = "Endpoint respondeu sem conteúdo RSS ou Atom";
+          continue;
+        }
+        reachableFeed = response.url || feedUrl;
+        if (feedContainsPost(xml, postUrl, postId)) {
+          return {
+            status: "confirmed",
+            checked_at: new Date().toISOString(),
+            feed_url: reachableFeed,
+            post_url: postUrl,
+            attempts,
+            http_status: response.status,
+            error: null,
+          };
+        }
+        lastError = "Feed acessível, mas a publicação ainda não apareceu";
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : "Falha ao consultar RSS";
+      }
+    }
+  }
+
+  return {
+    status: reachableFeed ? "pending" : "unreachable",
+    checked_at: new Date().toISOString(),
+    feed_url: reachableFeed,
+    post_url: postUrl,
+    attempts,
+    http_status: lastStatus,
+    error: lastError,
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -311,7 +469,7 @@ Deno.serve(async (req: Request) => {
       seo_description: metaDescription,
       meta_description_auto: true,
       meta_description_generated_at: normalizedAt,
-      editorial_html_version: "2.1.0",
+      editorial_html_version: "3.0.0",
       editorial_format_pass: true,
       editorial_quality_issues: audit.issues,
       editorial_metrics: audit.metrics,
@@ -351,6 +509,13 @@ Deno.serve(async (req: Request) => {
       result = await publishStandard(project, normalizedArticle, status, categories, tags);
     }
 
+    const rss = await verifyPublishedPostInRss(
+      String(project.wordpress_url),
+      result.postUrl || null,
+      result.postId || null,
+      status,
+    );
+
     const now = new Date().toISOString();
     const publications = normalizedConfig.wordpress_publications && typeof normalizedConfig.wordpress_publications === "object"
       ? { ...normalizedConfig.wordpress_publications }
@@ -365,6 +530,7 @@ Deno.serve(async (req: Request) => {
       tags,
       duplicate: Boolean(result.duplicate),
       published_at: now,
+      rss,
     };
 
     const nextConfig = {
@@ -374,6 +540,8 @@ Deno.serve(async (req: Request) => {
       wordpress_last_project_id: project.id,
       wordpress_last_post_id: result.postId || null,
       wordpress_last_post_url: result.postUrl || null,
+      rss_verification: rss,
+      rss_verification_required: status === "publish",
     };
     const isPrimaryProject = !article.project_id || article.project_id === project.id;
     const articleUpdate = status === "publish"
@@ -382,7 +550,7 @@ Deno.serve(async (req: Request) => {
         published_at: article.published_at || now,
         published_url: isPrimaryProject ? (result.postUrl || article.published_url || null) : (article.published_url || result.postUrl || null),
         scheduled_at: isPrimaryProject ? null : article.scheduled_at,
-        error_message: null,
+        error_message: rss.status === "confirmed" ? null : `RSS ${rss.status}: ${rss.error || "aguardando confirmação"}`.slice(0, 500),
         excerpt: metaDescription,
         config: nextConfig,
         updated_at: now,
@@ -415,7 +583,9 @@ Deno.serve(async (req: Request) => {
       endpointMode: result.endpointMode,
       credentialSource,
       metaDescription,
-      editorial: { version: "2.1.0", issues: audit.issues, metrics: audit.metrics },
+      rss,
+      rssConfirmed: rss.status === "confirmed",
+      editorial: { version: "3.0.0", issues: audit.issues, metrics: audit.metrics },
       request_id: requestId,
     });
   } catch (error) {
