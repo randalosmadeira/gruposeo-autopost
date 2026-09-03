@@ -121,7 +121,8 @@ $$;
 revoke all on function public.record_supporter_avatar_generation_result(uuid, uuid) from public, anon, authenticated;
 grant execute on function public.record_supporter_avatar_generation_result(uuid, uuid) to service_role;
 
--- Refund historical requests that consumed public generation slots without producing any output.
+-- Refund only historical attempts that were consumed by known infrastructure/provider failures
+-- and produced no output. Genuine QA/user-input failures are preserved unchanged.
 update public.supporter_avatar_requests r
 set generation_count = 0,
     status = case when coalesce(r.source_count, 0) > 0 then 'uploaded' else 'needs_input' end,
@@ -134,8 +135,5 @@ where coalesce(r.generation_count, 0) > 0
   and exists (
     select 1 from public.supporter_avatar_jobs j
     where j.request_id = r.id
-      and (
-        coalesce(j.error_message, '') ~* '(legacy_dispatch_gateway_blocked|anthropic_vision_error|openai_vision_unparseable_json|edge_runtime_546|vision_provider_failure|dispatch_http_5|provider_)'
-        or j.status in ('failed','needs_review')
-      )
+      and coalesce(j.error_message, '') ~* '(legacy_dispatch_gateway_blocked|anthropic_vision_error|openai_vision_unparseable_json|edge_runtime_546|vision_provider_failure|dispatch_http_5|provider_|openai_image_error|openai_image_download_error|timeout|rate.?limit|http_429|http_5[0-9][0-9])'
   );
