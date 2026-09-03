@@ -1,6 +1,6 @@
-export const SUPPORTER_AVATAR_PROMPT_VERSION = 'supporter-avatar-auto-select-v2.0.0';
+export const SUPPORTER_AVATAR_PROMPT_VERSION = 'supporter-avatar-auto-select-v3.0.0';
 export const SUPPORTER_PHOTO_AGENT_NAME = 'NEXUS PHOTO 1470';
-export const SUPPORTER_PHOTO_AGENT_ROLE = 'Orquestrador privado de composição fotográfica eleitoral com preservação de identidade';
+export const SUPPORTER_PHOTO_AGENT_ROLE = 'Orquestrador privado e autônomo de composição fotográfica eleitoral com preservação máxima de identidade';
 
 export const SUPPORT_TEXTS = [
   'DR. MADEIRA 1470',
@@ -38,7 +38,6 @@ export const SUPPORT_SOCIAL_PACK = {
 
 export type SupportSocialPackKey = keyof typeof SUPPORT_SOCIAL_PACK;
 
-// Mantido apenas para compatibilidade com telas administrativas antigas.
 export const SUPPORT_OUTPUT_FORMATS = {
   'instagram-profile': { label: 'Foto de perfil · Instagram', exactWidth: 1080, exactHeight: 1080, modelSize: '1024x1024', safeZone: SUPPORT_SOCIAL_PACK.square.safeZone },
   'whatsapp-profile': { label: 'Foto de perfil · WhatsApp', exactWidth: 1080, exactHeight: 1080, modelSize: '1024x1024', safeZone: SUPPORT_SOCIAL_PACK.square.safeZone },
@@ -51,61 +50,53 @@ export type SupportOutputFormat = keyof typeof SUPPORT_OUTPUT_FORMATS;
 
 export const PHOTO_INTAKE_AGENT_PROMPT = `
 AGENTE: PHOTO INTAKE AGENT.
-Analise somente características fotográficas e de composição das fotos do apoiador.
-É proibido identificar a pessoa ou inferir raça, etnia, religião, saúde, deficiência, ideologia política, orientação sexual, condição econômica ou qualquer outro atributo pessoal sensível.
-Retorne JSON puro com:
-reference_index, face_count, primary_subject_detected, face_visibility, face_size_ratio,
-yaw_direction (left|frontal|right), yaw_estimate_degrees, subject_position (left|center|right),
-crop_type (headshot|upper_body|half_body|full_body), lighting_direction (frontal|left|right|mixed),
-lighting_quality (soft|hard|mixed), sharpness_score (0-100), face_quality_score (0-100),
-occlusions, glasses, hair_occlusion, framing_score (0-100), usable_for_identity_preservation,
-recommended_candidate_composition, technical_notes.
-Escolha reference_index pela qualidade técnica, não por aparência pessoal.
+Analise exclusivamente características técnicas das fotografias do apoiador. Nunca identifique a pessoa e nunca infira raça, etnia, religião, saúde, deficiência, ideologia política, orientação sexual, condição econômica ou qualquer atributo pessoal sensível.
+Escolha a melhor referência por nitidez facial, visibilidade, crop, perspectiva, luz e espaço útil. Ordene também as alternativas para recuperação automática caso o QA posterior detecte perda de identidade.
+Retorne somente os campos do schema fornecido. Não peça ao usuário para escolher uma foto quando houver ao menos uma referência tecnicamente utilizável.
 `;
 
 export const CANDIDATE_SELECTOR_AGENT_PROMPT = `
 AGENTE: CANDIDATE SELECTOR AGENT.
-A galeria do candidato é privada. Escolha internamente a fotografia do candidato com maior compatibilidade técnica com a foto do apoiador e com o pacote social quadrado, vertical e horizontal.
-Nunca devolva URL, caminho de storage, Drive ID, nome de arquivo ou qualquer identificador de infraestrutura.
-Avalie de 0 a 100: ângulo facial, ângulo corporal, espaço lateral, perspectiva, crop, luz, roupa/cenário, identidade visual, adequação aos três aspect ratios e risco de o taco ou braços obstruírem o apoiador.
-Retorne JSON puro com selected_index, runner_up_index, selected_score, runner_up_score, score_breakdown, selection_reason e composition_plan.
+A galeria do candidato é privada. Escolha internamente a fotografia autorizada com maior compatibilidade técnica com o apoiador e com os três formatos sociais.
+Nunca exponha URL, Drive ID, nome de arquivo, slug, caminho de storage ou identificador de infraestrutura ao apoiador.
+Avalie ângulo facial/corporal, espaço lateral, perspectiva, crop, iluminação, roupa/cenário, adequação aos três aspect ratios e risco de taco/braços obstruírem o apoiador.
+Escolha também um runner-up para recuperação autônoma. Se houver dúvida, priorize referência sem taco, frontal ou três-quartos limpo e com área lateral livre.
+Retorne somente os campos do schema fornecido.
 `;
 
 export const CAMPAIGN_SCENE_AGENT_PROMPT = `
 AGENTE: CAMPAIGN SCENE AGENT.
 Escolha exatamente um cenário: gente-da-nossa-terra, palanque-convencao-generica, construindo-o-futuro ou institucional-oficial.
-A escolha deve considerar a fotografia do apoiador, roupa do candidato e coerência de iluminação.
-Palanque/convenção deve ser um ambiente eleitoral genérico e claramente publicitário: não invente local real identificável, evento específico, endosso individual ou multidão que pareça prova documental de comparecimento.
-Retorne JSON puro com scene, rationale e lighting_plan.
+A escolha deve considerar crop, roupa, iluminação e compatibilidade com o apoiador. Em caso de incerteza, use institucional-oficial.
+Palanque/convenção é ambiente publicitário sintético e genérico: jamais simule prova documental de evento, multidão, apoio individual ou presença em local real inexistente.
+Retorne somente os campos do schema fornecido.
 `;
 
 export const IDENTITY_GUARDIAN_DIRECTIVE = `
-IDENTITY GUARDIAN AGENT - prioridade máxima.
-Preserve a identidade visual reconhecível das duas pessoas reais das referências autorizadas.
-Preserve proporções faciais, estrutura óssea, distância e formato dos olhos, sobrancelhas, nariz, boca, mandíbula, linha do cabelo, orelhas quando visíveis, tom de pele, textura natural, idade aparente e assimetrias observáveis.
-Não embeleze, não aplique beauty filter, não faça face swap, não reconstrua o rosto, não altere etnia, idade, tom de pele, formato dos olhos, nariz ou mandíbula.
-Se o cenário conflitar com a preservação da identidade, simplifique o cenário.
-A meta interna de fidelidade é 97%, apenas como objetivo editorial de QA, nunca como garantia ou medição biométrica.
+IDENTITY GUARDIAN AGENT - prioridade absoluta.
+A primeira imagem de referência é o apoiador; a segunda é o candidato. Preserve de cada pessoa os traços reais observáveis: proporções faciais, distância e formato dos olhos, sobrancelhas, nariz, boca, mandíbula, linha do cabelo, orelhas quando visíveis, tom e textura natural da pele, idade aparente e assimetrias.
+Não embeleze. Não use face swap. Não reconstrua o rosto. Não altere estrutura óssea, olhos, nariz, mandíbula, idade aparente, tom de pele ou textura natural.
+Se cenário, pose, acessório, texto ou composição competirem com a identidade, simplifique todo o resto e preserve a identidade.
+A meta editorial interna de 97% é objetivo de QA, não garantia nem métrica biométrica.
 `;
 
 export const COMPOSITION_DIRECTOR_DIRECTIVE = `
 COMPOSITION DIRECTOR AGENT.
-Crie uma fotografia conjunta plausível, com escala corporal, altura de câmera, distância interpessoal e perspectiva coerentes.
-Não produza sobreposição impossível, membros extras, mãos deformadas, braços atravessando corpos ou anatomia quebrada.
-Se a referência autorizada do candidato contiver o taco preto de beisebol, preserve sua geometria e presença, sem duplicar, entortar, trocar por outro objeto ou fazê-lo atravessar o rosto/corpo do apoiador.
-Preserve o vestuário autorizado observado na referência.
+Crie fotografia conjunta plausível, com escala corporal, altura de câmera, distância interpessoal e perspectiva coerentes. Preserve a pose-base das referências sempre que possível.
+Não produza membros extras, mãos deformadas, braços atravessando corpos, cabeças mescladas, anatomia quebrada ou perspectiva impossível.
+Se a referência autorizada do candidato contiver taco preto de beisebol, preserve sua presença e geometria sem duplicar, entortar ou fazê-lo atravessar o apoiador. Se não contiver, não invente taco.
+Preserve o vestuário autorizado da referência escolhida.
 `;
 
 export const LIGHTING_HARMONIZER_DIRECTIVE = `
 LIGHTING HARMONIZER AGENT.
 Harmonize balanço de branco, exposição, direção de luz, densidade de sombras, temperatura de cor e profundidade de campo sem alterar identidade.
-Priorize luz frontal, suave, difusa e equilibrada. Não use sombras laterais dramáticas, glow facial, HDR, pele superexposta ou gradação que altere o tom de pele.
+Priorize luz frontal suave e difusa. Não use glow facial, HDR excessivo, pele superexposta ou gradação que altere tom de pele.
 `;
 
 export const SOCIAL_CROP_AGENT_DIRECTIVE = `
 SOCIAL CROP AGENT.
-A composição deve sobreviver aos recortes exatos 1080x1080, 1080x1350 e 1200x630.
-Mantenha rostos, taco quando houver, número 1470 e a indicação de IA dentro das zonas seguras de cada formato.
+A composição deve sobreviver aos recortes exatos 1080x1080, 1080x1350 e 1200x630. Preserve ambos os rostos e elementos essenciais nas zonas seguras. Se um crop ficar inseguro, reposicione enquadramento/corpos sem redesenhar rostos.
 `;
 
 export const NEGATIVE_PROMPT = `
@@ -122,14 +113,10 @@ uncanny expression.
 
 export const QUALITY_AUDITOR_AGENT_PROMPT = `
 AGENTE: QUALITY AUDITOR AGENT.
-Compare a referência do apoiador, a referência privada selecionada do candidato e a composição final.
-Não identifique pessoas e não infira atributos sensíveis.
-Retorne JSON puro com supporter_fidelity_score, candidate_reference_fidelity_score, human_texture_score,
-anatomy_score, crop_safe_score, lighting_consistency_score, disclosure_legibility_score, prop_integrity_score,
-artifacts, remediation e pass.
-pass=true somente se supporter>=92, candidate>=90, texture>=92, anatomy>=92, crop>=90,
-lighting>=90, disclosure>=90 e, quando houver taco, prop_integrity>=90.
-A meta editorial de 97% não é medição biométrica.
+Compare tecnicamente a referência do apoiador, a referência privada do candidato e a composição final. Nunca identifique pessoas nem infira atributos sensíveis.
+Se houver falha, descreva remediação operacional curta e específica para permitir regeneração automática: identity_supporter, identity_candidate, anatomy, crop, lighting, disclosure ou prop.
+O campo pass deve ser conservador. O backend também recalculará os thresholds, portanto não tente forçar aprovação.
+Retorne somente os campos do schema fornecido.
 `;
 
 const sceneDirections: Record<string, string> = {
@@ -156,11 +143,11 @@ export function buildSupporterAvatarPrompt(input: {
   const batRule = input.candidateHasBat
     ? 'A referência do candidato contém seu taco preto de beisebol. Preserve-o fielmente e mantenha-o sem obstruir os rostos.'
     : 'Não invente taco se ele não existir na referência selecionada.';
-  const feedback = input.qaFeedback ? `CORREÇÃO DA TENTATIVA ANTERIOR: ${input.qaFeedback}` : '';
+  const feedback = input.qaFeedback ? `CORREÇÃO AUTÔNOMA DA TENTATIVA ANTERIOR: ${input.qaFeedback}` : '';
 
   return `
 ${SUPPORTER_PHOTO_AGENT_NAME} - ${SUPPORTER_PHOTO_AGENT_ROLE}.
-Crie UMA fotografia de campanha de alta fidelidade contendo exatamente duas pessoas reais das referências fornecidas: apoiador e candidato.
+Crie UMA fotografia de campanha hiper-realista e de alta fidelidade contendo exatamente duas pessoas reais das referências fornecidas: apoiador e candidato.
 
 ${IDENTITY_GUARDIAN_DIRECTIVE}
 ${COMPOSITION_DIRECTOR_DIRECTIVE}
@@ -172,9 +159,9 @@ DIRETRIZ DA REFERÊNCIA: ${input.candidatePresetHint || 'preserve roupa, pose e 
 ${batRule}
 PLANO DE COMPOSIÇÃO: ${input.compositionPlan || 'duas pessoas lado a lado, natural e proporcional'}.
 CENÁRIO: ${scene}.
-ESTILO: fotografia profissional DSLR, textura de pele natural, olhos nítidos, perspectiva óptica realista, luz frontal suave e difusa.
+ESTILO: fotografia profissional DSLR, textura de pele natural, poros e microexpressões preservados, olhos nítidos, perspectiva óptica realista, luz frontal suave e difusa.
 BRANDING: inserir de forma legível e discreta “${supportText}”. Não inventar logotipos ou slogans adicionais.
-TRANSPARÊNCIA: inserir exatamente “Imagem gerada por IA - Campanha Oficial” em pequeno selo discreto, legível, no quadrante inferior direito porém dentro da zona segura do recorte.
+TRANSPARÊNCIA: inserir exatamente “Imagem gerada por IA - Campanha Oficial” em selo discreto e legível, dentro da zona segura.
 FORMATO DE GERAÇÃO: ${spec.modelSize}. DESTINO EXATO: ${spec.exactWidth}x${spec.exactHeight}. ${spec.safeZone}.
 CENÁRIOS SINTÉTICOS NÃO PODEM SER APRESENTADOS COMO PROVA DOCUMENTAL DE EVENTO, MULTIDÃO, ENDOSSO OU LOCAL REAL QUE NÃO TENHA OCORRIDO.
 ${feedback}
