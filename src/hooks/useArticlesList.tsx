@@ -13,7 +13,7 @@ export interface ArticleListFilters {
   perPage: number;
   sortBy: 'created_at' | 'scheduled_at';
   sortOrder: 'asc' | 'desc';
-  dateFilter?: string; // YYYY-MM-DD
+  dateFilter?: string;
 }
 
 const defaultFilters: ArticleListFilters = {
@@ -26,7 +26,6 @@ const defaultFilters: ArticleListFilters = {
   sortOrder: 'desc',
 };
 
-// Lightweight article type for list view (no content)
 export interface ArticleListItem {
   id: string;
   keyword: string;
@@ -66,13 +65,22 @@ const selectFields = `
   id, keyword, title, status, type, slug, excerpt,
   featured_image_url, seo_score, word_count, project_id,
   published_at, published_url, scheduled_at, secondary_keywords,
-  error_message, emotional_trigger, emotional_confidence,
+  config, error_message, emotional_trigger, emotional_confidence,
   created_at, updated_at, user_id
 `;
 
-// Helper: article has content if word_count > 0 (content col not fetched in list for performance)
-export function articleHasContent(article: { word_count: number | null; status: string }): boolean {
-  return (article.word_count ?? 0) > 0;
+// Publicável na lista não significa apenas possuir word_count.
+// O conteúdo precisa ter concluído o preflight (ready) ou já ter sido publicado.
+// Draft/error/generating nunca entram no lote de publicação.
+export function articleHasContent(article: { word_count: number | null; status: string; error_message?: string | null; config?: any }): boolean {
+  if ((article.word_count ?? 0) <= 0) return false;
+  if (article.error_message?.trim()) return false;
+  if (!['ready', 'published'].includes(article.status)) return false;
+  const config = article.config && typeof article.config === 'object' ? article.config : {};
+  if (config.publication_guard_origin_blocked === true) return false;
+  if (config.needs_primary_source === true || config.review_pass === false || config.publication_preflight_pass === false) return false;
+  if (config.complianceSnapshot?.canPublish === false) return false;
+  return true;
 }
 
 export function useArticlesList() {
@@ -81,8 +89,6 @@ export function useArticlesList() {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<ArticleListFilters>(defaultFilters);
 
-  // Fetch status counts using separate lightweight count queries.
-  // A draft with error_message is not a queue item: it represents a publication/preflight failure.
   const { data: statusCounts } = useQuery({
     queryKey: ['articles-counts', user?.id, filters.projectId, filters.search, filters.dateFilter],
     queryFn: async (): Promise<StatusCounts> => {
@@ -127,7 +133,6 @@ export function useArticlesList() {
     refetchInterval: 60000,
   });
 
-  // Fetch paginated articles
   const { data: articlesData, isLoading, error } = useQuery({
     queryKey: ['articles-list', user?.id, filters],
     queryFn: async () => {
@@ -143,13 +148,11 @@ export function useArticlesList() {
         .order(sortBy, { ascending: sortOrder === 'asc' })
         .range(from, to);
 
-      // Status filter. Draft rows with an error are failures, never queue items.
       if (status !== 'all') {
         if (status === 'scheduled') {
           query = query.eq('status', 'ready').gt('scheduled_at', new Date().toISOString());
         } else if (status === 'ready') {
           query = query.eq('status', 'ready');
-          // Scheduled rows are filtered below using the actual due time.
         } else if (status === 'draft') {
           query = query.eq('status', 'draft').is('error_message', null);
         } else if (status === 'error') {
@@ -159,14 +162,8 @@ export function useArticlesList() {
         }
       }
 
-      if (projectId !== 'all') {
-        query = query.eq('project_id', projectId);
-      }
-
-      if (search) {
-        query = query.or(`title.ilike.%${search}%,keyword.ilike.%${search}%`);
-      }
-
+      if (projectId !== 'all') query = query.eq('project_id', projectId);
+      if (search) query = query.or(`title.ilike.%${search}%,keyword.ilike.%${search}%`);
       if (dateFilter) {
         const start = `${dateFilter}T00:00:00`;
         const end = `${dateFilter}T23:59:59`;
@@ -174,27 +171,20 @@ export function useArticlesList() {
       }
 
       const { data, error, count } = await query;
-
       if (error) {
         console.error('[useArticlesList] Query error:', error);
         throw error;
       }
 
       let articles = (data || []) as ArticleListItem[];
-
-      // Client-side filter for 'ready' (exclude future scheduled) and 'scheduled' (only future scheduled)
       if (status === 'ready') {
         articles = articles.filter(a => !a.scheduled_at || new Date(a.scheduled_at) <= new Date());
       } else if (status === 'scheduled') {
         articles = articles.filter(a => a.scheduled_at && new Date(a.scheduled_at) > new Date());
       }
 
-      // Presentation-only normalization. The database status is preserved.
-      // Failed drafts become "Erro" and their exact non-publication reason is shown in the list excerpt.
       articles = articles.map((article) => decorateArticleListStatus(article));
-
       console.log(`[useArticlesList] Loaded ${articles.length} articles (page ${page}, total: ${count})`);
-
       return { articles, total: count || 0 };
     },
     enabled: !!user,
@@ -203,24 +193,16 @@ export function useArticlesList() {
   });
 
   const updateFilter = useCallback((key: keyof ArticleListFilters, value: any) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value,
-      // Reset page when filters change (except page itself)
-      ...(key !== 'page' ? { page: 1 } : {}),
-    }));
+    setFilters(prev => ({ ...prev, [key]: value, ...(key !== 'page' ? { page: 1 } : {}) }));
   }, []);
 
-  const resetFilters = useCallback(() => {
-    setFilters(defaultFilters);
-  }, []);
+  const resetFilters = useCallback(() => setFilters(defaultFilters), []);
 
   const refreshArticles = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: ['articles-list'] });
     await queryClient.invalidateQueries({ queryKey: ['articles-counts'] });
   }, [queryClient]);
 
-  // Delete mutation
   const deleteArticle = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('articles').delete().eq('id', id);

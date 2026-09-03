@@ -48,6 +48,9 @@ interface ArticleConfig {
 
 type Band = { label: string; min: number; max: number; purpose: string };
 
+const REVIEW_MARKER = /\[(?:VERIFICAR|VALIDAR|CONFIRMAR|RECONSULTAR)\b[^\]\r\n]{0,300}\]/i;
+const SOURCE_SIGNAL = /^ZICA_NEEDS_PRIMARY_SOURCE\s*:\s*(.+)$/im;
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -85,7 +88,7 @@ function buildPrompt(config: ArticleConfig, band: Band) {
   const links = (config.internalLinks || []).slice(0, 12).map((item) => `${item.anchor}: ${item.url}`).join("\n");
   const projectContext = Object.entries(config.projectConfig || {}).filter(([, value]) => Boolean(value)).map(([key, value]) => `${key}: ${value}`).join("\n");
 
-  return `Produza somente o conteúdo final solicitado, sem explicar o processo interno.
+  return `Produza somente conteúdo editorial final publicável, sem explicar o processo interno e sem inserir mensagens de revisão no corpo.
 
 ASSUNTO PRINCIPAL: ${config.keyword}
 TÍTULO SUGERIDO: ${config.title || "crie um título claro, específico e fiel ao assunto"}
@@ -104,20 +107,23 @@ REGRAS GEO/AEO INTERNAS DO ZICA.AI:
 1. Densidade informacional e precisão valem mais que volume bruto.
 2. Não repita ideias para atingir contagem de palavras.
 3. Abra o primeiro parágrafo com resposta objetiva à intenção principal.
-4. Use H1 único, H2 e H3 semanticamente claros.
+4. O título do WordPress será o único H1. No corpo use somente H2 e H3 semanticamente claros.
 5. Quando um H2/H3 representar pergunta ou intenção objetiva, inicie com Answer Capsule de aproximadamente 25 a 45 palavras e depois aprofunde.
-6. Inclua dados, percentuais, anos, estatísticas ou estudos somente quando estiverem presentes nas fontes/contexto fornecidos. Nunca invente números.
+6. Inclua dados, percentuais, anos, estatísticas, leis, decisões ou estudos somente quando estiverem sustentados pelas fontes/contexto fornecidos. Nunca invente números ou autoridades.
 7. ${config.includeTable ? "Use tabela comparativa quando houver elementos realmente comparáveis e dados suficientes." : "Tabela é opcional e só deve aparecer se acrescentar clareza."}
 8. ${config.includeList === false ? "Não force listas." : "Use listas em passos, requisitos, documentos, critérios, riscos ou sínteses quando melhorarem a leitura."}
 9. ${config.includeFaq === false ? "Não inclua FAQ." : `Inclua FAQ somente se houver perguntas úteis e respondíveis pelo conteúdo, com até ${config.faqCount || 5} itens.`}
 10. Não use keyword stuffing, alegações sem fonte ou texto genérico de preenchimento.
+11. Não escreva comentários técnicos TITLE_SEO, META_DESCRIPTION, JSON, prompts, TODOs ou qualquer metadado interno no corpo. Título SEO e meta description são produzidos por outra etapa do pipeline.
 
-REGRAS FACTUAIS:
-- Não invente fatos, números, decisões, estudos, citações, pessoas ou fontes.
-- Se uma afirmação atual depender de fonte inexistente no contexto, omita-a ou marque [VERIFICAR] quando for indispensável.
+REGRAS FACTUAIS E DE PUBLICAÇÃO:
+- Não invente fatos, números, decisões, estudos, citações, pessoas, leis ou fontes.
+- É PROIBIDO escrever [VERIFICAR], [VALIDAR], [CONFIRMAR], [RECONSULTAR], “revisão humana”, “consultar fonte antes de publicar” ou equivalentes no conteúdo final.
+- Se uma informação acessória não puder ser comprovada pelo contexto disponível, simplesmente omita essa informação.
+- Se uma fonte primária ausente for indispensável para sustentar a tese central do artigo, NÃO produza o artigo. Retorne somente: ZICA_NEEDS_PRIMARY_SOURCE: seguido de uma descrição objetiva da fonte que falta.
+- Conteúdo jurídico sobre lei, ato normativo, jurisprudência, prazo oficial ou política pública atual exige fonte primária quando a afirmação depender dela.
 - Preserve conformidade jurídica, publicitária e editorial aplicável ao conteúdo.
 - ${config.includeConclusion === false ? "Não force conclusão." : "Finalize com síntese objetiva e CTA coerente, sem promessa de resultado."}
-- ${config.includeMetaDescription === false ? "Não inclua meta description." : "Inclua no início comentários HTML TITLE_SEO e META_DESCRIPTION."}
 
 CONTEXTO DA ORGANIZAÇÃO:
 ${projectContext || "Não informado."}
@@ -170,19 +176,41 @@ Deno.serve(async (req: Request) => {
     const prompt = buildPrompt(config, band);
     const orchestrator = await getOrchestratorForUser(authData.user.id);
     let generation = await orchestrator.callWithMeta("article_generation", [
-      { role: "system", content: "Você é o redator editorial principal do Zica.ai. Entregue apenas o conteúdo final, sem metadiscurso." },
+      { role: "system", content: "Você é o redator editorial principal do Zica.ai. Entregue somente conteúdo publicável ou o sinal ZICA_NEEDS_PRIMARY_SOURCE quando uma fonte primária for indispensável." },
       { role: "user", content: prompt },
-    ], { preferredProvider, maxTokens: 32000, temperature: 0.45 });
+    ], { preferredProvider, maxTokens: 32000, temperature: 0.35 });
 
     let content = generation.content.trim();
+    const initialSourceSignal = content.match(SOURCE_SIGNAL);
+    if (initialSourceSignal || REVIEW_MARKER.test(content)) {
+      return json({
+        error: "Fonte primária necessária antes da geração/publicação.",
+        code: "primary_source_required",
+        detail: initialSourceSignal?.[1]?.trim() || "O modelo detectou uma afirmação que exige verificação em fonte primária.",
+        retryable: false,
+        request_id: requestId,
+      }, 409);
+    }
+
     let words = countWords(content);
     if (words < Math.floor(band.min * 0.85) && band.min >= 1000) {
       const expanded = await orchestrator.callWithMeta("content_editing", [
-        { role: "system", content: "Aprofunde sem inventar fatos, sem repetir ideias e sem alterar a tese central. Preserve todo conteúdo factual sustentado." },
-        { role: "user", content: `Faixa editorial: ${band.label}. O rascunho possui ${words} palavras. Acrescente apenas explicações, critérios, exemplos hipotéticos claramente identificados, listas ou comparações sustentadas pelo próprio contexto. Não invente dados ou fontes.\n\nRASCUNHO:\n${content}` },
-      ], { preferredProvider: generation.provider, maxTokens: 32000, temperature: 0.25 });
-      if (countWords(expanded.content) > words) {
-        content = expanded.content.trim();
+        { role: "system", content: "Aprofunde sem inventar fatos, sem repetir ideias e sem alterar a tese central. Não insira marcadores de revisão, comentários técnicos ou metadados no corpo." },
+        { role: "user", content: `Faixa editorial: ${band.label}. O rascunho possui ${words} palavras. Acrescente apenas explicações, critérios, exemplos hipotéticos claramente identificados, listas ou comparações sustentadas pelo próprio contexto. Se uma fonte primária indispensável estiver ausente, retorne somente ZICA_NEEDS_PRIMARY_SOURCE: <fonte necessária>.\n\nRASCUNHO:\n${content}` },
+      ], { preferredProvider: generation.provider, maxTokens: 32000, temperature: 0.2 });
+      const expandedContent = expanded.content.trim();
+      const expandedSourceSignal = expandedContent.match(SOURCE_SIGNAL);
+      if (expandedSourceSignal || REVIEW_MARKER.test(expandedContent)) {
+        return json({
+          error: "Fonte primária necessária antes da geração/publicação.",
+          code: "primary_source_required",
+          detail: expandedSourceSignal?.[1]?.trim() || "A revisão editorial detectou uma afirmação que exige fonte primária.",
+          retryable: false,
+          request_id: requestId,
+        }, 409);
+      }
+      if (countWords(expandedContent) > words) {
+        content = expandedContent;
         words = countWords(content);
         generation = expanded;
       }
