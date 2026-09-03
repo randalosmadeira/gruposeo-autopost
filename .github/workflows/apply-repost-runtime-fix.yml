@@ -32,7 +32,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
 
       - name: Configure Git
         run: |
@@ -49,7 +48,7 @@ jobs:
         run: node scripts/apply-repost-runtime-fix.mjs
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Run tests
         run: npm run test:zica
