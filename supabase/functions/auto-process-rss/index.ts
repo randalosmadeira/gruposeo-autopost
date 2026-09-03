@@ -1,20 +1,302 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { discoverFeed, fetchValidatedFeedItems } from "../_shared/rss-discovery.ts";
 
-const H={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type","Access-Control-Allow-Methods":"POST, OPTIONS"};
-type RSSItem={title:string;link:string;description:string;publishedAt:string|null;content?:string};
-type Schedule={id:string;user_id:string;project_id:string|null;feed_url:string;feed_name:string;niche:string|null;article_length:string|null;frequency:string|null;auto_publish:boolean|null;last_run_at:string|null;next_run_at:string|null;articles_generated:number|null};
-const J=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...H,"Content-Type":"application/json","Cache-Control":"no-store"}});
-function jwtRole(token:string){try{const p=token.split('.')[1],n=p.replace(/-/g,'+').replace(/_/g,'/'),d=JSON.parse(atob(n.padEnd(Math.ceil(n.length/4)*4,'=')));return String(d?.role||'')}catch{return''}}
-function decodeXml(v:string){return v.replace(/<!\[CDATA\[|\]\]>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#039;/g,"'").trim()}
-const strip=(v:string)=>decodeXml(v).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
-function firstTag(xml:string,tag:string){const e=tag.replace(':','\\:');const m=xml.match(new RegExp(`<${e}[^>]*>([\\s\\S]*?)<\\/${e}>`,'i'));return m?.[1]?decodeXml(m[1]):''}
-async function fetchFeed(url:string):Promise<RSSItem[]>{const parsed=new URL(url);if(!['http:','https:'].includes(parsed.protocol))throw new Error('RSS URL inválida');const r=await fetch(url,{headers:{'User-Agent':'Zica.ai-RSS/3.10.2',Accept:'application/rss+xml, application/atom+xml, application/xml, text/xml'},signal:AbortSignal.timeout(20000)});if(!r.ok)throw new Error(`RSS HTTP ${r.status}`);const xml=await r.text();if(xml.length>5_000_000)throw new Error('RSS excede 5 MB');const rss=[...xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)],atom=[...xml.matchAll(/<entry\b[^>]*>([\s\S]*?)<\/entry>/gi)],blocks=rss.length?rss.map(m=>m[1]):atom.map(m=>m[1]),items:RSSItem[]=[];for(const block of blocks.slice(0,20)){const title=strip(firstTag(block,'title'));let link=firstTag(block,'link');if(!link)link=block.match(/<link\b[^>]*href=["']([^"']+)["'][^>]*>/i)?.[1]||'';const desc=firstTag(block,'description')||firstTag(block,'summary'),content=firstTag(block,'content:encoded')||firstTag(block,'content'),date=firstTag(block,'pubDate')||firstTag(block,'published')||firstTag(block,'updated');if(!title||!link)continue;try{new URL(link)}catch{continue}items.push({title,link,description:strip(desc),content:content?strip(content):undefined,publishedAt:date?new Date(date).toISOString():null})}return items}
-function nextRun(f:string|null){const n=(f||'daily').toLowerCase(),ms=n==='hourly'?3600000:n==='weekly'?604800000:n==='realtime'?900000:86400000;return new Date(Date.now()+ms).toISOString()}
-async function claim(admin:any,s:Schedule){const until=new Date(Date.now()+900000).toISOString();let q=admin.from('rss_schedules').update({next_run_at:until,updated_at:new Date().toISOString()}).eq('id',s.id);q=s.next_run_at?q.eq('next_run_at',s.next_run_at):q.is('next_run_at',null);const{data,error}=await q.select('id').maybeSingle();if(error)throw error;return Boolean(data)}
-async function call(url:string,key:string,slug:string,body:any){const r=await fetch(`${url}/functions/v1/${slug}`,{method:'POST',headers:{Authorization:`Bearer ${key}`,apikey:key,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(120000)});const text=await r.text();let data:any={};try{data=JSON.parse(text)}catch{data={error:text.slice(0,800)}}return{ok:r.ok&&data?.success!==false,status:r.status,data}}
+const H = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
-Deno.serve(async(req:Request)=>{if(req.method==='OPTIONS')return new Response(null,{headers:H});if(req.method!=='POST')return J({success:false,error:'Method not allowed'},405);const auth=req.headers.get('Authorization');if(!auth?.startsWith('Bearer '))return J({success:false,error:'Autorização necessária'},401);const token=auth.slice(7);if(jwtRole(token)!=='service_role')return J({success:false,error:'Execução restrita ao serviço de automação'},403);const url=Deno.env.get('SUPABASE_URL')||'',key=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||'';if(!url||!key)return J({success:false,error:'Backend incompleto'},500);const admin=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}}),now=new Date().toISOString();const{data:schedules,error}=await admin.from('rss_schedules').select('id,user_id,project_id,feed_url,feed_name,niche,article_length,frequency,auto_publish,last_run_at,next_run_at,articles_generated').eq('is_active',true).or(`next_run_at.is.null,next_run_at.lte.${now}`).order('next_run_at',{ascending:true,nullsFirst:true}).limit(25);if(error)return J({success:false,error:error.message},500);if(!schedules?.length)return J({success:true,processed:0,queued:0,schedules:[]});let processed=0,queued=0;const results:any[]=[];
-for(const raw of schedules){const s=raw as Schedule;try{if(!(await claim(admin,s)))continue;const items=await fetchFeed(s.feed_url);let created=0,enqueued=0;await admin.from('monitored_portals').update({last_check_at:new Date().toISOString(),last_success_at:new Date().toISOString(),last_error:null,last_articles_found:items.length,updated_at:new Date().toISOString()}).eq('project_id',s.project_id).eq('rss_feed_url',s.feed_url);for(const item of items.slice(0,3)){const rewrite=await call(url,key,'rewrite-news',{sourceUrl:item.link,sourceContent:item.content||item.description||item.title,sourceName:s.feed_name,analysisAngle:'AUTO_SEMANTIC',niche:'auto',articleLength:'auto',projectId:s.project_id,userId:s.user_id,language:'pt-BR'});if(!rewrite.ok||!rewrite.data?.article){results.push({schedule_id:s.id,source_url:item.link,stage:'rewrite',error:String(rewrite.data?.error||`HTTP ${rewrite.status}`).slice(0,500)});continue}if(!rewrite.data.duplicate){created++;processed++}const article=rewrite.data.article;const currentConfig=article.config&&typeof article.config==='object'?article.config:{};await admin.from('articles').update({config:{...currentConfig,schedule_id:s.id,rss_published_at:item.publishedAt,rss_source_url:item.link,rss_feed_url:s.feed_url}}).eq('id',article.id);if(s.auto_publish&&s.project_id&&!rewrite.data.duplicate&&article.status==='ready'&&Number(article.originality_score||0)>=95){const pub=await call(url,key,'wordpress-operations',{action:'publish',articleId:article.id,projectId:s.project_id,userId:s.user_id,publishStatus:'publish'});if(pub.ok){enqueued++;queued++}else results.push({schedule_id:s.id,article_id:article.id,stage:'distribution',error:String(pub.data?.error||`HTTP ${pub.status}`).slice(0,500)})}}
-await admin.from('rss_schedules').update({last_run_at:new Date().toISOString(),next_run_at:nextRun(s.frequency),articles_generated:Number(s.articles_generated||0)+created,updated_at:new Date().toISOString()}).eq('id',s.id);results.push({schedule_id:s.id,feed:s.feed_name,items_found:items.length,created,queued:enqueued,success:true})}catch(e){const message=e instanceof Error?e.message:'Erro desconhecido';await admin.from('rss_schedules').update({next_run_at:nextRun(s.frequency),updated_at:new Date().toISOString()}).eq('id',s.id);await admin.from('monitored_portals').update({last_check_at:new Date().toISOString(),last_error:message.slice(0,1000),updated_at:new Date().toISOString()}).eq('project_id',s.project_id).eq('rss_feed_url',s.feed_url);results.push({schedule_id:s.id,success:false,error:message})}}
-return J({success:true,processed,queued,schedules:results})});
+type Schedule = {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  feed_url: string;
+  feed_name: string;
+  niche: string | null;
+  article_length: string | null;
+  frequency: string | null;
+  auto_publish: boolean | null;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  articles_generated: number | null;
+};
+
+type Portal = {
+  id: string;
+  project_id: string | null;
+  portal_url: string;
+  rss_feed_url: string | null;
+  automation_mode: string | null;
+  max_articles_per_day: number | null;
+};
+
+const J = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+  status,
+  headers: { ...H, "Content-Type": "application/json", "Cache-Control": "no-store" },
+});
+
+function jwtRole(token: string) {
+  try {
+    const payload = token.split('.')[1];
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    return String(JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')))?.role || '');
+  } catch { return ''; }
+}
+
+function nextRun(frequency: string | null) {
+  const normalized = (frequency || 'hourly').toLowerCase();
+  const ms = normalized === 'realtime' ? 900000 : normalized === 'daily' ? 86400000 : normalized === 'weekly' ? 604800000 : 3600000;
+  return new Date(Date.now() + ms).toISOString();
+}
+
+async function claim(admin: any, schedule: Schedule) {
+  const until = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  let query = admin.from('rss_schedules').update({ next_run_at: until, updated_at: new Date().toISOString() }).eq('id', schedule.id);
+  query = schedule.next_run_at ? query.eq('next_run_at', schedule.next_run_at) : query.is('next_run_at', null);
+  const { data, error } = await query.select('id').maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
+}
+
+async function call(url: string, key: string, slug: string, body: any) {
+  const response = await fetch(`${url}/functions/v1/${slug}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, apikey: key, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(180000),
+  });
+  const text = await response.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { error: text.slice(0, 1000) }; }
+  return { ok: response.ok && data?.success !== false, status: response.status, data };
+}
+
+async function resolvePortal(admin: any, schedule: Schedule): Promise<Portal | null> {
+  if (!schedule.project_id) return null;
+  const { data } = await admin.from('monitored_portals')
+    .select('id,project_id,portal_url,rss_feed_url,automation_mode,max_articles_per_day')
+    .eq('project_id', schedule.project_id)
+    .eq('is_active', true)
+    .or(`rss_feed_url.eq.${schedule.feed_url},portal_name.eq.${schedule.feed_name}`)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data as Portal | null;
+}
+
+async function resolveFeed(admin: any, schedule: Schedule, portal: Portal | null) {
+  let siteUrl = portal?.portal_url || '';
+  if (!siteUrl && schedule.project_id) {
+    const { data: project } = await admin.from('projects').select('wordpress_url').eq('id', schedule.project_id).maybeSingle();
+    siteUrl = String(project?.wordpress_url || schedule.feed_url);
+  }
+  if (!siteUrl) siteUrl = schedule.feed_url;
+
+  const discovery = await discoverFeed(siteUrl, { directCandidate: schedule.feed_url });
+  if (!discovery.valid) throw new Error(`Feed inválido/não descoberto: ${discovery.reason || 'unknown'}`);
+
+  const validatedAt = new Date().toISOString();
+  const validation = {
+    url: discovery.url,
+    format: discovery.format,
+    http_status: discovery.status,
+    content_type: discovery.content_type,
+    content_type_valid: discovery.content_type_valid,
+    structure_valid: discovery.structure_valid,
+    discovery_method: discovery.discovery_method,
+    attempted: discovery.attempted,
+  };
+
+  await admin.from('rss_schedules').update({ feed_url: discovery.url, updated_at: validatedAt }).eq('id', schedule.id);
+  if (portal?.id) {
+    await admin.from('monitored_portals').update({
+      rss_feed_url: discovery.url,
+      rss_feed_validation: validation,
+      rss_feed_validated_at: validatedAt,
+      last_error: null,
+      updated_at: validatedAt,
+    }).eq('id', portal.id);
+  }
+  if (schedule.project_id) {
+    await admin.from('projects').update({
+      rss_feed_url: discovery.url,
+      rss_feed_validation: validation,
+      rss_feed_validated_at: validatedAt,
+      updated_at: validatedAt,
+    }).eq('id', schedule.project_id);
+  }
+  return discovery;
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response(null, { headers: H });
+  if (req.method !== 'POST') return J({ success: false, error: 'Method not allowed' }, 405);
+
+  const auth = req.headers.get('Authorization');
+  if (!auth?.startsWith('Bearer ')) return J({ success: false, error: 'Autorização necessária' }, 401);
+  if (jwtRole(auth.slice(7)) !== 'service_role') return J({ success: false, error: 'Execução restrita ao serviço de automação' }, 403);
+
+  const url = Deno.env.get('SUPABASE_URL') || '';
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  if (!url || !key) return J({ success: false, error: 'Backend incompleto' }, 500);
+
+  const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const now = new Date().toISOString();
+  const { data: schedules, error } = await admin.from('rss_schedules')
+    .select('id,user_id,project_id,feed_url,feed_name,niche,article_length,frequency,auto_publish,last_run_at,next_run_at,articles_generated')
+    .eq('is_active', true)
+    .or(`next_run_at.is.null,next_run_at.lte.${now}`)
+    .order('next_run_at', { ascending: true, nullsFirst: true })
+    .limit(25);
+  if (error) return J({ success: false, error: error.message }, 500);
+  if (!schedules?.length) return J({ success: true, processed: 0, queued: 0, schedules: [] });
+
+  let processed = 0;
+  let queued = 0;
+  let drafts = 0;
+  let skipped = 0;
+  const results: any[] = [];
+
+  for (const raw of schedules) {
+    const schedule = raw as Schedule;
+    try {
+      if (!(await claim(admin, schedule))) continue;
+      const portal = await resolvePortal(admin, schedule);
+      const feed = await resolveFeed(admin, schedule, portal);
+      const limit = Math.max(1, Math.min(10, Number(portal?.max_articles_per_day || 5)));
+      const { validation, items } = await fetchValidatedFeedItems(feed.url, limit);
+      if (!validation.valid) throw new Error(`RSS falhou na segunda validação: ${validation.reason || 'unknown'}`);
+
+      let created = 0;
+      let enqueued = 0;
+      let draftCount = 0;
+      let lastProfile: any = null;
+      let lastConfidence: number | null = null;
+
+      if (portal?.id) {
+        await admin.from('monitored_portals').update({
+          last_check_at: new Date().toISOString(),
+          last_success_at: new Date().toISOString(),
+          last_error: null,
+          last_articles_found: items.length,
+          updated_at: new Date().toISOString(),
+        }).eq('id', portal.id);
+      }
+
+      for (const item of items) {
+        const rewrite = await call(url, key, 'rewrite-news', {
+          sourceUrl: item.link,
+          sourceContent: item.content || item.description || item.title,
+          sourceName: schedule.feed_name,
+          rssFeedUrl: feed.url,
+          analysisAngle: 'AUTO_SEMANTIC',
+          niche: 'auto',
+          articleLength: 'auto',
+          automationMode: portal?.automation_mode || 'ai_95',
+          projectId: schedule.project_id,
+          userId: schedule.user_id,
+          language: 'pt-BR',
+        });
+
+        if (!rewrite.ok) {
+          results.push({ schedule_id: schedule.id, source_url: item.link, stage: 'rewrite', error: String(rewrite.data?.error || `HTTP ${rewrite.status}`).slice(0, 700) });
+          continue;
+        }
+        if (rewrite.data?.skipped) {
+          skipped++;
+          results.push({ schedule_id: schedule.id, source_url: item.link, stage: 'triage', skipped: true, triage: rewrite.data?.triage || null });
+          continue;
+        }
+        const article = rewrite.data?.article;
+        if (!article?.id) continue;
+        if (!rewrite.data?.duplicate) { created++; processed++; }
+        lastProfile = rewrite.data?.triage || article.config?.automation_profile || null;
+        lastConfidence = Number(lastProfile?.confidence ?? 0) || null;
+
+        await admin.from('articles').update({
+          rss_feed_url: feed.url,
+          source_canonical_url: item.link,
+          config: {
+            ...(article.config && typeof article.config === 'object' ? article.config : {}),
+            schedule_id: schedule.id,
+            rss_published_at: item.published_at,
+            rss_source_url: item.link,
+            rss_feed_url: feed.url,
+          },
+        }).eq('id', article.id);
+
+        if (schedule.project_id && !rewrite.data?.duplicate) {
+          const safeToPublish = Boolean(
+            schedule.auto_publish &&
+            article.status === 'ready' &&
+            Number(article.originality_score || 0) >= 95 &&
+            rewrite.data?.auto_publish_recommended === true
+          );
+          const publishStatus = safeToPublish ? 'publish' : 'draft';
+          const profile = rewrite.data?.triage || {};
+          const distribution = await call(url, key, 'wordpress-operations', {
+            action: 'publish',
+            articleId: article.id,
+            projectId: schedule.project_id,
+            userId: schedule.user_id,
+            publishStatus,
+            categories: profile.wordpress_category ? [profile.wordpress_category] : [],
+            tags: Array.isArray(profile.tags) ? profile.tags : [],
+          });
+          if (distribution.ok) {
+            enqueued++;
+            queued++;
+            if (publishStatus === 'draft') { draftCount++; drafts++; }
+          } else {
+            results.push({ schedule_id: schedule.id, article_id: article.id, stage: 'distribution', publish_status: publishStatus, error: String(distribution.data?.error || `HTTP ${distribution.status}`).slice(0, 700) });
+          }
+        }
+      }
+
+      const updatedAt = new Date().toISOString();
+      await admin.from('rss_schedules').update({
+        feed_url: feed.url,
+        last_run_at: updatedAt,
+        next_run_at: nextRun(schedule.frequency),
+        articles_generated: Number(schedule.articles_generated || 0) + created,
+        updated_at: updatedAt,
+      }).eq('id', schedule.id);
+
+      if (portal?.id) {
+        await admin.from('monitored_portals').update({
+          rss_feed_url: feed.url,
+          last_ai_profile: lastProfile || {},
+          last_ai_confidence: lastConfidence,
+          articles_generated: Number(schedule.articles_generated || 0) + created,
+          last_article_at: created > 0 ? updatedAt : undefined,
+          next_check_at: nextRun(schedule.frequency),
+          updated_at: updatedAt,
+        }).eq('id', portal.id);
+      }
+
+      results.push({
+        schedule_id: schedule.id,
+        feed: schedule.feed_name,
+        resolved_feed_url: feed.url,
+        discovery_method: feed.discovery_method,
+        feed_format: feed.format,
+        items_found: items.length,
+        created,
+        queued: enqueued,
+        drafts: draftCount,
+        success: true,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro desconhecido';
+      await admin.from('rss_schedules').update({ next_run_at: nextRun(schedule.frequency), updated_at: new Date().toISOString() }).eq('id', schedule.id);
+      if (schedule.project_id) {
+        await admin.from('monitored_portals').update({ last_check_at: new Date().toISOString(), last_error: message.slice(0, 1000), updated_at: new Date().toISOString() }).eq('project_id', schedule.project_id).eq('portal_name', schedule.feed_name);
+      }
+      results.push({ schedule_id: schedule.id, success: false, error: message });
+    }
+  }
+
+  return J({ success: true, processed, queued, drafts, skipped, schedules: results });
+});
