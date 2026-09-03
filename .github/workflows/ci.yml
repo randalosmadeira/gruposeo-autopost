@@ -14,9 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      # Supabase publishable credentials are browser-side identifiers; authorization is enforced by RLS.
       VITE_SUPABASE_URL: https://ubahrbgaxrkjxklytobl.supabase.co
-      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_8XzHfqXP8o3XOcGwRY35zw_P-jg1kiE
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ github.event_name == 'push' && secrets.ZICA_AI_SUPABASE_PUBLISHABLE_KEY || 'ci-public-placeholder' }}
       VITE_APP_NAME: Zica.ai
     steps:
       - name: Checkout
@@ -26,6 +25,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Enforce private deployment boundaries
         run: node scripts/verify-private-deployment-boundaries.mjs
@@ -35,10 +35,14 @@ jobs:
         shell: bash
         run: |
           test -n "$VITE_SUPABASE_URL" || { echo "VITE_SUPABASE_URL ausente" >&2; exit 1; }
-          test -n "$VITE_SUPABASE_PUBLISHABLE_KEY" || { echo "VITE_SUPABASE_PUBLISHABLE_KEY ausente" >&2; exit 1; }
+          test -n "$VITE_SUPABASE_PUBLISHABLE_KEY" || { echo "ZICA_AI_SUPABASE_PUBLISHABLE_KEY ausente" >&2; exit 1; }
+          test "$VITE_SUPABASE_PUBLISHABLE_KEY" != 'ci-public-placeholder' || {
+            echo "ZICA_AI_SUPABASE_PUBLISHABLE_KEY deve ser configurada para push em main" >&2
+            exit 1
+          }
 
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
 
       - name: Lint report
         continue-on-error: true
