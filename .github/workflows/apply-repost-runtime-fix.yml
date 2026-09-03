@@ -44,6 +44,33 @@ jobs:
             git cherry-pick 9bade7fcfdbc458444b8cc882ab917b64ad01b86
           fi
 
+      - name: Repair patch applicator quoting
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          target = Path('scripts/apply-repost-runtime-fix.mjs')
+          source = target.read_text(encoding='utf-8')
+
+          def protect_template(variable: str, closing_marker: str) -> None:
+              global source
+              opening = f"  const {variable} = `"
+              start = source.index(opening) + len(opening)
+              end = source.index(closing_marker, start)
+              body = source[start:end]
+              body = body.replace('`', r'\`').replace('${', r'\${')
+              source = source[:start] + body + source[end:]
+
+          protect_template('imageHelper', '`;\n\n  source = replaceOnce')
+          protect_template('imageBlock', '`;\n\n  source = replaceOnce')
+          protect_template('helper', '`;\n\n  source = replaceOnce')
+          protect_template('newImageRequest', '`;\n  source = replaceOnce')
+
+          target.write_text(source, encoding='utf-8')
+          PY
+          node --check scripts/apply-repost-runtime-fix.mjs
+
       - name: Apply guarded runtime patch
         run: node scripts/apply-repost-runtime-fix.mjs
 
