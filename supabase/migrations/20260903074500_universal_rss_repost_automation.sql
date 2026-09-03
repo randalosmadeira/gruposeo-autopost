@@ -34,6 +34,39 @@ alter table public.monitored_portals
   add constraint monitored_portals_automation_mode_check
   check (automation_mode in ('manual','assisted','ai_95'));
 
+create or replace function public.zica_project_rss_same_host()
+returns trigger
+language plpgsql
+set search_path=public
+as $$
+declare
+  wp_host text;
+  rss_host text;
+begin
+  if new.rss_feed_url is null or new.wordpress_url is null then return new; end if;
+  wp_host := lower(substring(new.wordpress_url from '^[a-zA-Z][a-zA-Z0-9+.-]*://([^/:?#]+)'));
+  rss_host := lower(substring(new.rss_feed_url from '^[a-zA-Z][a-zA-Z0-9+.-]*://([^/:?#]+)'));
+  if wp_host is null or rss_host is null or wp_host <> rss_host then
+    if tg_op='UPDATE' then
+      new.rss_feed_url := old.rss_feed_url;
+      new.rss_feed_validation := old.rss_feed_validation;
+      new.rss_feed_validated_at := old.rss_feed_validated_at;
+    else
+      new.rss_feed_url := null;
+      new.rss_feed_validation := '{}'::jsonb;
+      new.rss_feed_validated_at := null;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_zica_project_rss_same_host on public.projects;
+create trigger trg_zica_project_rss_same_host
+before insert or update of rss_feed_url,wordpress_url
+on public.projects
+for each row execute function public.zica_project_rss_same_host();
+
 create or replace function public.zica_separate_repost_rss()
 returns trigger
 language plpgsql
@@ -69,7 +102,7 @@ create index if not exists idx_projects_rss_feed_url
 create index if not exists idx_monitored_portals_automation_mode
   on public.monitored_portals(automation_mode,is_active,next_check_at);
 
-comment on column public.projects.rss_feed_url is 'Feed RSS/Atom próprio e validado do site de destino; nunca substitui canonical/permalink.';
+comment on column public.projects.rss_feed_url is 'Feed RSS/Atom próprio e validado do site de destino; nunca substitui canonical/permalink e deve compartilhar host com wordpress_url.';
 comment on column public.articles.rss_feed_url is 'Feed RSS/Atom próprio do projeto de destino associado ao conteúdo publicado; canonical permanece independente.';
 comment on column public.articles.source_rss_feed_url is 'Feed RSS/Atom do portal de origem em fluxos de repostagem; jamais é tratado como feed do projeto de destino.';
 comment on column public.articles.source_canonical_url is 'URL canônica da fonte de origem em repostagem. Não substitui a canonical da publicação de destino.';
