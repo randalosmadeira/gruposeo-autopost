@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = process.cwd();
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
+const app = read('src/App.tsx');
+const indexHtml = read('index.html');
 const ui = read('src/pages/SupporterAvatar1470V2.tsx');
 const publicApi = read('supabase/functions/supporter-avatar-public-v2/index.ts');
 const legacyProxy = read('supabase/functions/supporter-avatar-public/index.ts');
@@ -16,6 +18,15 @@ const migration = read('supabase/migrations/20260902173000_supporter_avatar_auto
 const runtime = [ui, publicApi, generator, candidateAssets, prompts].join('\n');
 
 describe('Supporter Avatar 1470 auto-selector v2 regressions', () => {
+  it('0. hard-pins both public routes to V2 and removes the legacy UI source', () => {
+    expect(app).toContain('import("./pages/SupporterAvatar1470V2")');
+    expect(app).toContain('<Route path="/1470" element={<SupporterAvatar1470 />} />');
+    expect(app).toContain('<Route path="/apoiadores/avatar" element={<SupporterAvatar1470 />} />');
+    expect(app).not.toContain('import("./pages/SupporterAvatar1470")');
+    expect(existsSync(resolve(root, 'src/pages/SupporterAvatar1470.tsx'))).toBe(false);
+    expect(indexHtml).toContain('name="zica-supporter-flow" content="supporter-avatar-public-v2"');
+  });
+
   it('1. does not require candidatePresetSlug from the supporter', () => {
     expect(ui).not.toContain('candidatePresetSlug');
     expect(publicApi).not.toContain('candidatePresetSlug');
@@ -111,6 +122,13 @@ describe('Supporter Avatar 1470 auto-selector v2 regressions', () => {
     expect(runtime.toLowerCase()).not.toContain('legacy_dispatch');
     expect(runtime.toLowerCase()).not.toContain('legacy-dispatch');
     expect(legacyProxy).toContain('supporter-avatar-public-v2');
+  });
+
+  it('16. public UI contains no legacy gallery/error copy', () => {
+    expect(ui).not.toContain('Fotos oficiais indisponíveis');
+    expect(ui).not.toContain('Escolha uma foto oficial');
+    expect(ui).not.toContain('Escolha a foto oficial');
+    expect(ui).not.toContain('PRESETS_URL');
   });
 
   it('preserves candidate attire, bat integrity, safe synthetic scenes and AI disclosure', () => {
