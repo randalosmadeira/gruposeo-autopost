@@ -34,6 +34,29 @@ alter table public.monitored_portals
   add constraint monitored_portals_automation_mode_check
   check (automation_mode in ('manual','assisted','ai_95'));
 
+create or replace function public.zica_separate_repost_rss()
+returns trigger
+language plpgsql
+set search_path=public
+as $$
+begin
+  if coalesce(new.config->>'type','')='rewrite'
+     and new.source_canonical_url is not null
+     and new.rss_feed_url is not null
+     and coalesce(new.config->>'rss_feed_url','')=new.rss_feed_url then
+    new.source_rss_feed_url := coalesce(new.source_rss_feed_url,new.rss_feed_url);
+    new.rss_feed_url := null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_zica_separate_repost_rss on public.articles;
+create trigger trg_zica_separate_repost_rss
+before insert or update of rss_feed_url,source_rss_feed_url,source_canonical_url,config
+on public.articles
+for each row execute function public.zica_separate_repost_rss();
+
 create index if not exists idx_articles_rss_feed_url
   on public.articles(rss_feed_url)
   where rss_feed_url is not null;
