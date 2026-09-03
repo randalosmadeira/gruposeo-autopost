@@ -7,6 +7,7 @@ alter table public.projects
 
 alter table public.articles
   add column if not exists rss_feed_url text,
+  add column if not exists source_rss_feed_url text,
   add column if not exists source_canonical_url text;
 
 alter table public.monitored_portals
@@ -36,14 +37,17 @@ alter table public.monitored_portals
 create index if not exists idx_articles_rss_feed_url
   on public.articles(rss_feed_url)
   where rss_feed_url is not null;
-
+create index if not exists idx_articles_source_rss_feed_url
+  on public.articles(source_rss_feed_url)
+  where source_rss_feed_url is not null;
 create index if not exists idx_projects_rss_feed_url
   on public.projects(rss_feed_url)
   where rss_feed_url is not null;
-
 create index if not exists idx_monitored_portals_automation_mode
   on public.monitored_portals(automation_mode,is_active,next_check_at);
 
-comment on column public.projects.rss_feed_url is 'Feed RSS/Atom validado e associado ao projeto; nunca substitui canonical/permalink.';
-comment on column public.articles.rss_feed_url is 'Feed RSS/Atom associado ao conteúdo; canonical permanece em published_url/source_canonical_url.';
+comment on column public.projects.rss_feed_url is 'Feed RSS/Atom próprio e validado do site de destino; nunca substitui canonical/permalink.';
+comment on column public.articles.rss_feed_url is 'Feed RSS/Atom próprio do projeto de destino associado ao conteúdo publicado; canonical permanece independente.';
+comment on column public.articles.source_rss_feed_url is 'Feed RSS/Atom do portal de origem em fluxos de repostagem; jamais é tratado como feed do projeto de destino.';
+comment on column public.articles.source_canonical_url is 'URL canônica da fonte de origem em repostagem. Não substitui a canonical da publicação de destino.';
 comment on column public.monitored_portals.automation_mode is 'manual, assisted ou ai_95. ai_95 delega nicho, ângulo, extensão, keyword, categoria/tags e recomendação de publicação à IA.';
