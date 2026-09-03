@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,25 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useToast } from '@/hooks/use-toast';
 import {
-  Plus,
-  Globe,
-  Clock,
-  Settings2,
-  Trash2,
-  Edit,
-  Rss,
-  Calendar,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  ExternalLink,
-  Target,
-  FileText,
-  Sparkles,
+  Plus, Globe, Clock, Trash2, Rss, CheckCircle2, XCircle, Loader2,
+  ExternalLink, Sparkles, Play, Bot, ShieldCheck, FileText, Target,
 } from 'lucide-react';
 import { useMonitoredPortals, type CreatePortalInput, type MonitoredPortal } from '@/hooks/useMonitoredPortals';
 import { useProjects } from '@/hooks/useProjects';
@@ -34,382 +21,120 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const FREQUENCY_OPTIONS = [
-  { value: 'realtime', label: 'Tempo Real', description: 'Verificar a cada 15 minutos' },
-  { value: 'hourly', label: 'Por Hora', description: 'Verificar a cada hora' },
-  { value: 'daily', label: 'Diário', description: 'Verificar 1x ao dia' },
-  { value: 'weekly', label: 'Semanal', description: 'Verificar 1x por semana' },
-];
+  { value: 'realtime', label: 'A cada 15 minutos' },
+  { value: 'hourly', label: 'A cada hora' },
+  { value: 'daily', label: 'Uma vez ao dia' },
+  { value: 'weekly', label: 'Uma vez por semana' },
+] as const;
 
-const ARTICLE_LENGTH_OPTIONS = [
-  { value: 'medium', label: 'Padrão', description: '2.400-3.600 palavras' },
-  { value: 'long', label: 'Extenso', description: '3.600-5.200 palavras' },
-  { value: 'extra-long', label: 'Completo', description: '5.200-7.000 palavras' },
-];
+type ProjectOption = { id: string; name: string; domain: string };
 
-const DAYS_OPTIONS = [
-  { value: 'seg', label: 'Seg' },
-  { value: 'ter', label: 'Ter' },
-  { value: 'qua', label: 'Qua' },
-  { value: 'qui', label: 'Qui' },
-  { value: 'sex', label: 'Sex' },
-  { value: 'sab', label: 'Sáb' },
-  { value: 'dom', label: 'Dom' },
-];
-
-interface AddPortalDialogProps {
-  onAdd: (portal: CreatePortalInput) => Promise<MonitoredPortal>;
-  isLoading: boolean;
-  projects: Array<{ id: string; name: string; domain: string }>;
+function safeHost(value?: string | null) {
+  try { return new URL(value || '').hostname.replace(/^www\./, ''); } catch { return ''; }
 }
 
-function AddPortalDialog({ onAdd, isLoading, projects }: AddPortalDialogProps) {
+function AddPortalDialog({
+  onAdd,
+  isLoading,
+  projects,
+}: {
+  onAdd: (portal: CreatePortalInput) => Promise<MonitoredPortal>;
+  isLoading: boolean;
+  projects: ProjectOption[];
+}) {
   const [open, setOpen] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
+  const { toast } = useToast();
   const [formData, setFormData] = useState<CreatePortalInput>({
-    portal_name: '',
-    portal_url: '',
-    project_id: '',
-    rss_feed_url: '',
-    niches: [],
-    preferred_keywords: [],
-    article_length: 'medium',
-    monitoring_frequency: 'hourly',
-    active_days: ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'],
-    max_articles_per_day: 5,
-    auto_publish: false,
-    preserve_original_seo: true,
-    seo_preservation_percent: 95,
-    update_sitemap: true,
+    portal_name: '', portal_url: '', project_id: '', rss_feed_url: '', automation_mode: 'ai_95',
+    monitoring_frequency: 'hourly', max_articles_per_day: 5, auto_publish: true,
   });
 
-  const [keywordsInput, setKeywordsInput] = useState('');
-  const [nichesInput, setNichesInput] = useState('');
+  const reset = () => setFormData({
+    portal_name: '', portal_url: '', project_id: '', rss_feed_url: '', automation_mode: 'ai_95',
+    monitoring_frequency: 'hourly', max_articles_per_day: 5, auto_publish: true,
+  });
 
   const handleSubmit = async () => {
-    if (!formData.portal_name || !formData.portal_url) return;
-
-    await onAdd({
-      ...formData,
-      preferred_keywords: keywordsInput.split(',').map(k => k.trim()).filter(Boolean),
-      niches: nichesInput.split(',').map(n => n.trim()).filter(Boolean),
-    });
-
-    setOpen(false);
-    setFormData({
-      portal_name: '',
-      portal_url: '',
-      project_id: '',
-      rss_feed_url: '',
-      niches: [],
-      preferred_keywords: [],
-      article_length: 'medium',
-      monitoring_frequency: 'hourly',
-      active_days: ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'],
-      max_articles_per_day: 5,
-      auto_publish: false,
-      preserve_original_seo: true,
-      seo_preservation_percent: 95,
-      update_sitemap: true,
-    });
-    setKeywordsInput('');
-    setNichesInput('');
-  };
-
-  const toggleDay = (day: string) => {
-    const days = formData.active_days || [];
-    if (days.includes(day)) {
-      setFormData({ ...formData, active_days: days.filter(d => d !== day) });
-    } else {
-      setFormData({ ...formData, active_days: [...days, day] });
+    if (!formData.portal_name?.trim() || !formData.portal_url?.trim() || !formData.project_id) return;
+    const portal = await onAdd(formData);
+    setDiscovering(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('monitor-portals', {
+        body: { force: true, portalId: portal.id, itemLimit: 1 },
+      });
+      if (error || data?.success === false) {
+        toast({ title: 'Portal salvo; RSS ainda pendente', description: error?.message || data?.error || 'A validação será repetida automaticamente.', variant: 'destructive' });
+      } else {
+        toast({ title: 'Automação ativada', description: 'RSS validado e portal conectado ao pipeline de Repostagem IA 95%.' });
+      }
+    } finally {
+      setDiscovering(false);
+      setOpen(false);
+      reset();
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Plus className="w-4 h-4" />
-          Adicionar Portal
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogTrigger asChild><Button className="gap-2"><Plus className="h-4 w-4" />Adicionar portal</Button></DialogTrigger>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Adicionar Portal Monitorado</DialogTitle>
-          <DialogDescription>
-            Configure um portal para monitoramento automático 24/7
-          </DialogDescription>
+          <DialogTitle>Novo portal de Repostagem</DialogTitle>
+          <DialogDescription>Informe somente a fonte e a operação. O agente decide os filtros editoriais.</DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="basic" className="mt-4">
-          <TabsList className="grid grid-cols-4 w-full">
-            <TabsTrigger value="basic">Básico</TabsTrigger>
-            <TabsTrigger value="content">Conteúdo</TabsTrigger>
-            <TabsTrigger value="schedule">Agenda</TabsTrigger>
-            <TabsTrigger value="seo">SEO</TabsTrigger>
-          </TabsList>
+        <Alert>
+          <Bot className="h-4 w-4" />
+          <AlertTitle>Modo IA 95%</AlertTitle>
+          <AlertDescription>
+            A IA analisa cada matéria e determina relevância, nicho, ângulo, extensão, palavra-chave, categoria, tags, risco e elegibilidade para publicação. Conteúdo de baixa confiança ou com fonte primária pendente fica em rascunho.
+          </AlertDescription>
+        </Alert>
 
-          <TabsContent value="basic" className="space-y-4 mt-4">
-            <div className="grid gap-4">
-              <div>
-                <Label htmlFor="portal_name">Nome do Portal *</Label>
-                <Input
-                  id="portal_name"
-                  placeholder="Ex: Migalhas, G1, Folha..."
-                  value={formData.portal_name}
-                  onChange={(e) => setFormData({ ...formData, portal_name: e.target.value })}
-                />
-              </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="portal-name">Nome do portal</Label>
+            <Input id="portal-name" placeholder="Ex.: STJ Notícias, Agência Brasil, Migalhas" value={formData.portal_name} onChange={(e) => setFormData({ ...formData, portal_name: e.target.value })} />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="portal-url">URL principal do portal</Label>
+            <Input id="portal-url" placeholder="https://portal.exemplo.com.br" value={formData.portal_url} onChange={(e) => setFormData({ ...formData, portal_url: e.target.value })} />
+            <p className="text-xs text-muted-foreground">O sistema procura primeiro rel=&quot;alternate&quot; RSS/Atom e depois testa os fallbacks suportados.</p>
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="rss-url">Feed RSS/Atom conhecido (opcional)</Label>
+            <Input id="rss-url" placeholder="Deixe vazio para descoberta automática" value={formData.rss_feed_url || ''} onChange={(e) => setFormData({ ...formData, rss_feed_url: e.target.value })} />
+          </div>
+          <div className="space-y-2">
+            <Label>Destino WordPress</Label>
+            <Select value={formData.project_id || ''} onValueChange={(value) => setFormData({ ...formData, project_id: value })}>
+              <SelectTrigger><SelectValue placeholder="Selecione o destino" /></SelectTrigger>
+              <SelectContent>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name} · {project.domain}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Frequência</Label>
+            <Select value={formData.monitoring_frequency} onValueChange={(value: any) => setFormData({ ...formData, monitoring_frequency: value })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{FREQUENCY_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="max-articles">Limite diário por portal</Label>
+            <Input id="max-articles" type="number" min={1} max={50} value={formData.max_articles_per_day || 5} onChange={(e) => setFormData({ ...formData, max_articles_per_day: Math.max(1, Math.min(50, Number(e.target.value) || 5)) })} />
+          </div>
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div><Label>Publicação automática</Label><p className="text-xs text-muted-foreground">Somente após todos os gates.</p></div>
+            <Switch checked={formData.auto_publish !== false} onCheckedChange={(checked) => setFormData({ ...formData, auto_publish: checked })} />
+          </div>
+        </div>
 
-              <div>
-                <Label htmlFor="portal_url">URL do Portal *</Label>
-                <Input
-                  id="portal_url"
-                  placeholder="https://www.migalhas.com.br"
-                  value={formData.portal_url}
-                  onChange={(e) => setFormData({ ...formData, portal_url: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="rss_feed_url">URL do Feed RSS (opcional)</Label>
-                <Input
-                  id="rss_feed_url"
-                  placeholder="https://www.migalhas.com.br/rss"
-                  value={formData.rss_feed_url || ''}
-                  onChange={(e) => setFormData({ ...formData, rss_feed_url: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="project_id">Projeto WordPress de Destino</Label>
-                <Select
-                  value={formData.project_id || 'none'}
-                  onValueChange={(value) => setFormData({ ...formData, project_id: value === 'none' ? '' : value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um projeto" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum (manual)</SelectItem>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name} ({project.domain})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="content" className="space-y-4 mt-4">
-            <div className="grid gap-4">
-              <div>
-                <Label htmlFor="niches">Nichos de Conteúdo</Label>
-                <Input
-                  id="niches"
-                  placeholder="advocacia, tecnologia, marketing (separados por vírgula)"
-                  value={nichesInput}
-                  onChange={(e) => setNichesInput(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Defina os nichos para filtrar e adaptar o conteúdo
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="keywords">Palavras-chave Preferidas</Label>
-                <Input
-                  id="keywords"
-                  placeholder="direito digital, LGPD, cibersegurança (separados por vírgula)"
-                  value={keywordsInput}
-                  onChange={(e) => setKeywordsInput(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <Label>Tamanho do Artigo</Label>
-                <div className="grid grid-cols-3 gap-2 mt-2">
-                  {ARTICLE_LENGTH_OPTIONS.map((option) => (
-                    <div
-                      key={option.value}
-                      className={cn(
-                        "p-3 rounded-lg border-2 cursor-pointer transition-all text-center",
-                        formData.article_length === option.value
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border hover:border-primary/50'
-                      )}
-                      onClick={() => setFormData({ ...formData, article_length: option.value as any })}
-                    >
-                      <p className="font-medium text-sm">{option.label}</p>
-                      <p className="text-xs text-muted-foreground">{option.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="default_angle">Ângulo de Análise Padrão</Label>
-                <Input
-                  id="default_angle"
-                  placeholder="Ex: Impacto para consumidores brasileiros"
-                  value={formData.default_angle || ''}
-                  onChange={(e) => setFormData({ ...formData, default_angle: e.target.value })}
-                />
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="schedule" className="space-y-4 mt-4">
-            <div className="grid gap-4">
-              <div>
-                <Label>Frequência de Monitoramento</Label>
-                <Select
-                  value={formData.monitoring_frequency}
-                  onValueChange={(value: any) => setFormData({ ...formData, monitoring_frequency: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FREQUENCY_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label} - {option.description}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Dias Ativos</Label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {DAYS_OPTIONS.map((day) => (
-                    <Badge
-                      key={day.value}
-                      variant={formData.active_days?.includes(day.value) ? 'default' : 'outline'}
-                      className="cursor-pointer"
-                      onClick={() => toggleDay(day.value)}
-                    >
-                      {day.label}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="max_articles">Máximo de Artigos por Dia</Label>
-                <Input
-                  id="max_articles"
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={formData.max_articles_per_day}
-                  onChange={(e) => setFormData({ ...formData, max_articles_per_day: parseInt(e.target.value) || 5 })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Publicar Automaticamente</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Publicar no WordPress sem revisão manual
-                  </p>
-                </div>
-                <Switch
-                  checked={formData.auto_publish}
-                  onCheckedChange={(checked) => setFormData({ ...formData, auto_publish: checked })}
-                />
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="seo" className="space-y-4 mt-4">
-            <div className="grid gap-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Preservar SEO Original (95%)</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Manter título e keywords para indexação
-                  </p>
-                </div>
-                <Switch
-                  checked={formData.preserve_original_seo}
-                  onCheckedChange={(checked) => setFormData({ ...formData, preserve_original_seo: checked })}
-                />
-              </div>
-
-              {formData.preserve_original_seo && (
-                <div>
-                  <Label>Percentual de Preservação SEO</Label>
-                  <Input
-                    type="number"
-                    min={50}
-                    max={100}
-                    value={formData.seo_preservation_percent}
-                    onChange={(e) => setFormData({ ...formData, seo_preservation_percent: parseInt(e.target.value) || 95 })}
-                  />
-                </div>
-              )}
-
-              <div>
-                <Label htmlFor="custom_slug_prefix">Prefixo de URL Customizado</Label>
-                <Input
-                  id="custom_slug_prefix"
-                  placeholder="Ex: noticias, blog, artigos"
-                  value={formData.custom_slug_prefix || ''}
-                  onChange={(e) => setFormData({ ...formData, custom_slug_prefix: e.target.value })}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Será adicionado antes do slug: /prefixo/slug-do-artigo
-                </p>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Atualizar Sitemap Automaticamente</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Notificar motores de busca após publicação
-                  </p>
-                </div>
-                <Switch
-                  checked={formData.update_sitemap}
-                  onCheckedChange={(checked) => setFormData({ ...formData, update_sitemap: checked })}
-                />
-              </div>
-
-              {formData.update_sitemap && (
-                <div>
-                  <Label>Prioridade no Sitemap</Label>
-                  <Select
-                    value={String(formData.sitemap_priority)}
-                    onValueChange={(value) => setFormData({ ...formData, sitemap_priority: parseFloat(value) })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1.0">1.0 (Máxima)</SelectItem>
-                      <SelectItem value="0.8">0.8 (Alta)</SelectItem>
-                      <SelectItem value="0.6">0.6 (Média)</SelectItem>
-                      <SelectItem value="0.4">0.4 (Baixa)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        <div className="flex justify-end gap-2 mt-6">
-          <Button variant="outline" onClick={() => setOpen(false)}>
-            Cancelar
-          </Button>
-          <Button 
-            onClick={handleSubmit} 
-            disabled={isLoading || !formData.portal_name || !formData.portal_url}
-          >
-            {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            Adicionar Portal
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+          <Button onClick={handleSubmit} disabled={isLoading || discovering || !formData.portal_name?.trim() || !formData.portal_url?.trim() || !formData.project_id}>
+            {(isLoading || discovering) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Salvar e validar RSS
           </Button>
         </div>
       </DialogContent>
@@ -417,107 +142,62 @@ function AddPortalDialog({ onAdd, isLoading, projects }: AddPortalDialogProps) {
   );
 }
 
-interface PortalCardProps {
+function PortalCard({ portal, project, onToggle, onDelete, onProcess }: {
   portal: MonitoredPortal;
+  project?: ProjectOption;
   onToggle: (id: string, active: boolean) => void;
   onDelete: (id: string) => void;
-  onEdit: (portal: MonitoredPortal) => void;
-}
-
-function PortalCard({ portal, onToggle, onDelete, onEdit }: PortalCardProps) {
+  onProcess: (portal: MonitoredPortal) => void;
+}) {
+  const validation = (portal.rss_feed_validation || {}) as Record<string, any>;
+  const profile = (portal.last_ai_profile || {}) as Record<string, any>;
+  const validated = Boolean(portal.rss_feed_url && portal.rss_feed_validated_at && validation.structure_valid !== false);
   return (
-    <Card className={cn("transition-all", !portal.is_active && "opacity-60")}>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className={cn(
-              "w-10 h-10 rounded-lg flex items-center justify-center",
-              portal.is_active ? "bg-primary/10" : "bg-muted"
-            )}>
-              <Globe className={cn("w-5 h-5", portal.is_active ? "text-primary" : "text-muted-foreground")} />
-            </div>
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                {portal.portal_name}
-                {portal.is_active ? (
-                  <Badge variant="default" className="text-xs">Ativo</Badge>
-                ) : (
-                  <Badge variant="secondary" className="text-xs">Pausado</Badge>
-                )}
-              </CardTitle>
-              <CardDescription className="flex items-center gap-1">
-                <a 
-                  href={portal.portal_url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="hover:underline flex items-center gap-1"
-                >
-                  {portal.portal_domain}
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </CardDescription>
+    <Card className={cn('h-full transition-all', !portal.is_active && 'opacity-60')}>
+      <CardHeader className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="rounded-lg bg-primary/10 p-2"><Globe className="h-5 w-5 text-primary" /></div>
+            <div className="min-w-0">
+              <CardTitle className="truncate text-base">{portal.portal_name}</CardTitle>
+              <CardDescription className="truncate">{portal.portal_domain || safeHost(portal.portal_url)}</CardDescription>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={portal.is_active}
-              onCheckedChange={(checked) => onToggle(portal.id, checked)}
-            />
-          </div>
+          <Switch checked={portal.is_active} onCheckedChange={(checked) => onToggle(portal.id, checked)} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="secondary" className="gap-1"><Sparkles className="h-3 w-3" />IA 95%</Badge>
+          <Badge variant={validated ? 'default' : 'outline'} className="gap-1">{validated ? <CheckCircle2 className="h-3 w-3" /> : <Rss className="h-3 w-3" />}{validated ? 'RSS validado' : 'RSS pendente'}</Badge>
+          {portal.last_ai_confidence != null && <Badge variant="outline">Confiança {Math.round(portal.last_ai_confidence)}%</Badge>}
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-muted-foreground" />
-            <span className="capitalize">{portal.monitoring_frequency}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-muted-foreground" />
-            <span>{portal.articles_generated} artigos</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Target className="w-4 h-4 text-muted-foreground" />
-            <span className="capitalize">{portal.article_length}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-muted-foreground" />
-            <span>{portal.seo_preservation_percent}% SEO</span>
-          </div>
+      <CardContent className="space-y-4">
+        <div className="rounded-lg border bg-muted/20 p-3 text-sm">
+          <p className="font-medium">Destino</p>
+          <p className="truncate text-muted-foreground">{project ? `${project.name} · ${project.domain}` : 'Projeto não localizado'}</p>
         </div>
-
-        {portal.niches?.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {portal.niches.map((niche, i) => (
-              <Badge key={i} variant="outline" className="text-xs">
-                {niche}
-              </Badge>
-            ))}
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="rounded-md border p-2"><Clock className="mb-1 h-4 w-4 text-muted-foreground" /><strong>{FREQUENCY_OPTIONS.find((x) => x.value === portal.monitoring_frequency)?.label || portal.monitoring_frequency}</strong></div>
+          <div className="rounded-md border p-2"><FileText className="mb-1 h-4 w-4 text-muted-foreground" /><strong>{portal.articles_generated || 0} gerados</strong><div className="text-muted-foreground">{portal.last_articles_found || 0} vistos na última leitura</div></div>
+        </div>
+        {profile.niche && (
+          <div className="space-y-2 rounded-lg border p-3">
+            <div className="flex items-center gap-2 text-xs font-medium"><Target className="h-4 w-4" />Última decisão da IA</div>
+            <div className="flex flex-wrap gap-1">
+              <Badge variant="outline">{String(profile.niche)}</Badge>
+              {profile.wordpress_category && <Badge variant="outline">{String(profile.wordpress_category)}</Badge>}
+              {profile.risk_level && <Badge variant="outline">Risco {String(profile.risk_level)}</Badge>}
+            </div>
+            {profile.analysis_angle && <p className="line-clamp-2 text-xs text-muted-foreground">{String(profile.analysis_angle)}</p>}
           </div>
         )}
-
-        {portal.last_check_at && (
-          <p className="text-xs text-muted-foreground">
-            Última verificação: {formatDistanceToNow(new Date(portal.last_check_at), { addSuffix: true, locale: ptBR })}
-          </p>
-        )}
-
-        {portal.last_error && (
-          <p className="text-xs text-destructive flex items-center gap-1">
-            <XCircle className="w-3 h-3" />
-            {portal.last_error}
-          </p>
-        )}
-
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="ghost" size="sm" onClick={() => onEdit(portal)}>
-            <Edit className="w-4 h-4 mr-1" />
-            Editar
-          </Button>
-          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDelete(portal.id)}>
-            <Trash2 className="w-4 h-4 mr-1" />
-            Remover
-          </Button>
+        {portal.rss_feed_url && <a href={portal.rss_feed_url} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-primary hover:underline">RSS: {portal.rss_feed_url}</a>}
+        {portal.last_success_at && <p className="text-xs text-muted-foreground">Último sucesso {formatDistanceToNow(new Date(portal.last_success_at), { addSuffix: true, locale: ptBR })}</p>}
+        {portal.last_error && <p className="flex items-start gap-1 text-xs text-destructive"><XCircle className="mt-0.5 h-3 w-3 shrink-0" />{portal.last_error}</p>}
+        <div className="flex flex-wrap gap-2 border-t pt-3">
+          <Button size="sm" onClick={() => onProcess(portal)} disabled={!portal.is_active}><Play className="mr-1 h-4 w-4" />Processar agora</Button>
+          <Button size="sm" variant="outline" asChild><a href={portal.portal_url} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1 h-4 w-4" />Portal</a></Button>
+          <Button size="sm" variant="ghost" className="ml-auto text-destructive" onClick={() => onDelete(portal.id)}><Trash2 className="h-4 w-4" /></Button>
         </div>
       </CardContent>
     </Card>
@@ -527,155 +207,50 @@ function PortalCard({ portal, onToggle, onDelete, onEdit }: PortalCardProps) {
 export function MonitoredPortalsManager() {
   const { portals, isLoading, createPortal, deletePortal, toggleActive, isCreating } = useMonitoredPortals();
   const { projects } = useProjects();
+  const { toast } = useToast();
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const projectOptions = (projects || []).map((project: any) => ({ id: project.id, name: project.name, domain: project.domain })) as ProjectOption[];
+  const projectById = useMemo(() => new Map(projectOptions.map((project) => [project.id, project])), [projectOptions]);
+  const active = portals.filter((portal) => portal.is_active).length;
+  const validated = portals.filter((portal) => portal.rss_feed_url && portal.rss_feed_validated_at).length;
+  const generated = portals.reduce((sum, portal) => sum + Number(portal.articles_generated || 0), 0);
 
-  const activePortals = portals.filter(p => p.is_active);
-  
-  // Fetch real article counts from articles table
-  const [realArticleCounts, setRealArticleCounts] = useState<Record<string, number>>({});
-  
-  useEffect(() => {
-    const fetchCounts = async () => {
-      if (!portals.length) return;
-      const portalNames = portals.map(p => p.portal_name);
-      
-      const { data } = await supabase
-        .from('articles')
-        .select('config')
-        .eq('config->>type', 'rewrite');
-      
-      if (data) {
-        const counts: Record<string, number> = {};
-        data.forEach((article: any) => {
-          const sourceName = article.config?.source_name;
-          if (sourceName && portalNames.includes(sourceName)) {
-            counts[sourceName] = (counts[sourceName] || 0) + 1;
-          }
-        });
-        setRealArticleCounts(counts);
-      }
-    };
-    fetchCounts();
-
-    // Realtime updates
-    const channel = supabase
-      .channel('portal-articles-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'articles' }, () => {
-        fetchCounts();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [portals]);
-
-  const totalArticles = Object.values(realArticleCounts).reduce((sum, c) => sum + c, 0);
+  const processNow = async (portal: MonitoredPortal) => {
+    setProcessingId(portal.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('monitor-portals', { body: { force: true, portalId: portal.id } });
+      if (error || data?.success === false) throw new Error(error?.message || data?.error || 'Falha no processamento');
+      toast({ title: 'Portal processado', description: `${data?.articles_created || 0} artigo(s) criado(s); ${data?.wordpress_operations || 0} operação(ões) WordPress encaminhada(s).` });
+    } catch (error) {
+      toast({ title: 'Falha ao processar portal', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
+    } finally { setProcessingId(null); }
+  };
 
   return (
     <div className="space-y-6">
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Globe className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{portals.length}</p>
-                <p className="text-xs text-muted-foreground">Portais</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <Alert>
+        <ShieldCheck className="h-4 w-4" />
+        <AlertTitle>Repostagem 95% automatizada</AlertTitle>
+        <AlertDescription>RSS é descoberto e validado automaticamente. A IA classifica cada matéria antes de redigir; a publicação automática só ocorre quando revisão, originalidade, segurança editorial e confiança passam pelos gates.</AlertDescription>
+      </Alert>
 
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{activePortals.length}</p>
-                <p className="text-xs text-muted-foreground">Ativos</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                <FileText className="w-5 h-5 text-blue-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{totalArticles}</p>
-                <p className="text-xs text-muted-foreground">Artigos Gerados</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                <Rss className="w-5 h-5 text-purple-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">24/7</p>
-                <p className="text-xs text-muted-foreground">Monitoramento</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Card><CardContent className="pt-4"><div className="text-2xl font-bold">{portals.length}</div><div className="text-xs text-muted-foreground">Portais cadastrados</div></CardContent></Card>
+        <Card><CardContent className="pt-4"><div className="text-2xl font-bold">{active}</div><div className="text-xs text-muted-foreground">Monitorando</div></CardContent></Card>
+        <Card><CardContent className="pt-4"><div className="text-2xl font-bold">{validated}</div><div className="text-xs text-muted-foreground">RSS validado</div></CardContent></Card>
+        <Card><CardContent className="pt-4"><div className="text-2xl font-bold">{generated}</div><div className="text-xs text-muted-foreground">Artigos gerados</div></CardContent></Card>
       </div>
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold">Portais Monitorados</h3>
-          <p className="text-sm text-muted-foreground">
-            Configure fontes de conteúdo para repostagem automática
-          </p>
-        </div>
-        <AddPortalDialog 
-          onAdd={createPortal} 
-          isLoading={isCreating}
-          projects={projects || []}
-        />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div><h3 className="text-lg font-semibold">Portais e fontes</h3><p className="text-sm text-muted-foreground">Molduras operacionais com acesso direto, RSS, destino e última decisão do agente.</p></div>
+        <AddPortalDialog onAdd={createPortal} isLoading={isCreating} projects={projectOptions} />
       </div>
 
-      {/* Portal List */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : portals.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Globe className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">Nenhum portal configurado</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Adicione portais para monitorar e gerar conteúdo automaticamente
-            </p>
-            <AddPortalDialog 
-              onAdd={createPortal} 
-              isLoading={isCreating}
-              projects={projects || []}
-            />
-          </CardContent>
-        </Card>
+      {isLoading ? <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div> : portals.length === 0 ? (
+        <Card><CardContent className="py-12 text-center"><Rss className="mx-auto mb-4 h-10 w-10 text-muted-foreground" /><h4 className="font-medium">Nenhum portal configurado</h4><p className="mt-1 text-sm text-muted-foreground">Cadastre a URL principal; o RSS será descoberto automaticamente.</p></CardContent></Card>
       ) : (
-        <div className="grid gap-4">
-          {portals.map((portal) => (
-            <PortalCard
-              key={portal.id}
-              portal={portal}
-              onToggle={toggleActive}
-              onDelete={deletePortal}
-              onEdit={() => {/* TODO: Edit modal */}}
-            />
-          ))}
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {portals.map((portal) => <div key={portal.id} className={processingId === portal.id ? 'pointer-events-none opacity-70' : ''}><PortalCard portal={portal} project={portal.project_id ? projectById.get(portal.project_id) : undefined} onToggle={toggleActive} onDelete={deletePortal} onProcess={processNow} /></div>)}
         </div>
       )}
     </div>
