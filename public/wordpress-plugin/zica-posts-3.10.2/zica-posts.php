@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Zica Posts — Conector WordPress Oficial Zica.ai
  * Plugin URI: https://zica.ai
- * Description: Agente WordPress leve da Zica.ai com outbox persistente, HMAC, idempotência, GEO/Schema, discovery LLM, IndexNow em lote, cards e integração com Zica Orchestrator.
- * Version: 3.10.2
+ * Description: Agente WordPress leve da Zica.ai com outbox persistente, HMAC, idempotência, GEO/Schema, RSS/discovery LLM, IndexNow em lote, cards e integração com Zica Orchestrator.
+ * Version: 3.10.3
  * Author: Equipe Zica.ai
  * Author URI: https://zica.ai
  * License: GPL v2 or later
@@ -14,7 +14,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('ZICA_POSTS_VERSION', '3.10.2');
+define('ZICA_POSTS_VERSION', '3.10.3');
 define('ZICA_POSTS_SOFTWARE_ID', 'zica-posts');
 define('ZICA_POSTS_FILE', __FILE__);
 define('ZICA_POSTS_DIR', plugin_dir_path(__FILE__));
@@ -32,7 +32,7 @@ require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-cards.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-rest.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-admin.php';
 
-final class Zica_Posts_3102 {
+final class Zica_Posts_3103 {
     private static $instance = null;
     public $auth;
     public $discovery;
@@ -59,9 +59,7 @@ final class Zica_Posts_3102 {
     }
 
     public function cron_schedules($schedules) {
-        if (!isset($schedules['five_minutes'])) {
-            $schedules['five_minutes'] = array('interval' => 300, 'display' => 'A cada 5 minutos');
-        }
+        if (!isset($schedules['five_minutes'])) $schedules['five_minutes'] = array('interval' => 300, 'display' => 'A cada 5 minutos');
         return $schedules;
     }
 
@@ -75,10 +73,8 @@ final class Zica_Posts_3102 {
         $auth = new Zica_Posts_Auth();
         $discovery = new Zica_Posts_Discovery($auth);
         $outbox = new Zica_Posts_Outbox($auth, $discovery);
-
         $auth->ensure_secrets();
         $outbox->ensure_table();
-
         add_option('zica_posts_cards_position', 'after_content');
         add_option('zica_posts_cards_count', 3);
         add_option('zica_posts_ai_crawlers_enabled', '1');
@@ -87,7 +83,6 @@ final class Zica_Posts_3102 {
         add_option('zica_posts_hub_webhook_url', '');
         add_option('zica_posts_hub_delegates_indexing', '1');
         add_option('zica_posts_hub_delegates_discovery', '0');
-
         $outbox->clear_schedules();
         $outbox->ensure_schedules();
         wp_schedule_single_event(time() + 10, ZICA_POSTS_CRON_DISCOVERY);
@@ -101,6 +96,6 @@ final class Zica_Posts_3102 {
     }
 }
 
-register_activation_hook(__FILE__, array('Zica_Posts_3102', 'activate'));
-register_deactivation_hook(__FILE__, array('Zica_Posts_3102', 'deactivate'));
-Zica_Posts_3102::instance();
+register_activation_hook(__FILE__, array('Zica_Posts_3103', 'activate'));
+register_deactivation_hook(__FILE__, array('Zica_Posts_3103', 'deactivate'));
+Zica_Posts_3103::instance();
