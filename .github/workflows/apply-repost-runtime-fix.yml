@@ -6,6 +6,7 @@ on:
       - fix/repost-image-seo-rss-runtime-20260903
     paths:
       - scripts/apply-repost-runtime-fix.mjs
+      - scripts/repost-runtime-payload/**
       - .github/workflows/apply-repost-runtime-fix.yml
   workflow_dispatch:
 
@@ -44,35 +45,28 @@ jobs:
             git cherry-pick 9bade7fcfdbc458444b8cc882ab917b64ad01b86
           fi
 
-      - name: Repair patch applicator quoting
+      - name: Reconstruct validated runtime patch
         shell: bash
         run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          target = Path('scripts/apply-repost-runtime-fix.mjs')
-          source = target.read_text(encoding='utf-8')
-
-          def protect_template(variable: str, closing_marker: str) -> None:
-              global source
-              opening = f"  const {variable} = `"
-              start = source.index(opening) + len(opening)
-              end = source.index(closing_marker, start)
-              body = source[start:end]
-              body = body.replace('`', r'\`').replace('${', r'\${')
-              source = source[:start] + body + source[end:]
-
-          protect_template('imageHelper', '`;\n\n  source = replaceOnce')
-          protect_template('imageBlock', '`;\n\n  source = replaceOnce')
-          protect_template('helper', '`;\n\n  source = replaceOnce')
-          protect_template('newImageRequest', '`;\n  source = replaceOnce')
-
-          target.write_text(source, encoding='utf-8')
-          PY
-          node --check scripts/apply-repost-runtime-fix.mjs
+          set -euo pipefail
+          printf '%s  %s\n' '48d3108a39070d3b8a339d84df6c6fab5b0d400fd7b16a6f56c99fedbfadcbd8' scripts/repost-runtime-payload/part-00.b64 | sha256sum -c -
+          printf '%s  %s\n' '398b6b917f3eedab33b1db7bdfd1701f196e4152b2096571e1f3e0e1697c5b69' scripts/repost-runtime-payload/part-01.b64 | sha256sum -c -
+          printf '%s  %s\n' 'f738b1c02af517052412e1b6351db65b6f3b209c3258d3a7d309aff9852ab0b7' scripts/repost-runtime-payload/part-02.b64 | sha256sum -c -
+          printf '%s  %s\n' 'f9c53d389c373745adcac4fe77388cc0c939883682db691eb8ff13ce912d720e' scripts/repost-runtime-payload/part-03.b64 | sha256sum -c -
+          printf '%s  %s\n' '87c10a306690a97b688b469efd597360dcbfcdf3f5577b239868f1b2f62988a0' scripts/repost-runtime-payload/part-04.b64 | sha256sum -c -
+          printf '%s  %s\n' 'afdc5b7b0b91f1a3e49a782a1500c13b447c5ee10930055fc94e1755a2281f6b' scripts/repost-runtime-payload/part-05.b64 | sha256sum -c -
+          printf '%s  %s\n' '59a05a8c0e82310fc36a7e3209ee353214aaf1ebc4a3958229bfc129046b782d' scripts/repost-runtime-payload/part-06.b64 | sha256sum -c -
+          printf '%s  %s\n' 'a0d6674114e99d216b0e6904ca2c71b76414b9553499a818988b3e446749a4ab' scripts/repost-runtime-payload/part-07.b64 | sha256sum -c -
+          cat scripts/repost-runtime-payload/part-{00..07}.b64 > /tmp/apply-repost-runtime-fix.gz.b64
+          printf '%s  %s\n' '551d7d0a9b1ffeee1f897aa0beef1f4569a3515617310ff2cf33666a3c8acda8' /tmp/apply-repost-runtime-fix.gz.b64 | sha256sum -c -
+          base64 --decode /tmp/apply-repost-runtime-fix.gz.b64 | gzip --decompress > /tmp/apply-repost-runtime-fix.mjs
+          printf '%s  %s\n' '11a6e8a6be520f8ec8efcc768935f33cbc31394287474e2368aade0080d902f2' /tmp/apply-repost-runtime-fix.mjs | sha256sum -c -
+          node --check /tmp/apply-repost-runtime-fix.mjs
 
       - name: Apply guarded runtime patch
-        run: node scripts/apply-repost-runtime-fix.mjs
+        run: |
+          node /tmp/apply-repost-runtime-fix.mjs
+          rm -f scripts/apply-repost-runtime-fix.mjs
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
