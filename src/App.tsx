@@ -28,7 +28,7 @@ const LandingPageGenerator = lazy(() => import("./pages/LandingPageGenerator"));
 const BulkSalesPagesGenerator = lazy(() => import("./pages/BulkSalesPagesGenerator"));
 const Auth = lazy(() => import("./pages/Auth"));
 const HelpPage = lazy(() => import("./pages/HelpPage"));
-const NewsRewriter = lazy(() => import("./pages/NewsRewriter"));
+const NewsRewriter = lazy(() => import("./pages/NewsRewriterAutonomous"));
 const BulkKeywordGenerator = lazy(() => import("./pages/BulkKeywordGenerator"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const QueueMonitor = lazy(() => import("./pages/QueueMonitor"));
