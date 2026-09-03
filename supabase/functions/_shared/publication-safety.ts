@@ -23,8 +23,9 @@ const RESIDUE_RULES: ResidueRule[] = [
   { code: 'scaffold_notice', label: 'Scaffold editorial interno', pattern: /(?:este\s+)?scaffold\s+n[aã]o\s+representa\s+conte[uú]do\s+final/i },
   { code: 'replace_before_publish', label: 'Instrução interna pré-publicação', pattern: /antes\s+da\s+publica[cç][aã]o[^.]{0,180}substitua\s+esta\s+estrutura/i },
   { code: 'pending_review_token', label: 'Marcador interno de revisão pendente', pattern: /\[?PENDENTE\s+(?:DE\s+)?REVIS[AÃ]O\]?/i },
-  { code: 'verify_primary_source', label: 'Marcador interno de fonte primária', pattern: /\[VERIFICAR\s+FONTE\s+PRIM[ÁA]RIA\]/i },
-  { code: 'requery_external_source', label: 'Marcador interno de fonte externa', pattern: /\[RECONSULTAR\s+FONTE\s+EXTERNA\]/i },
+  { code: 'verification_marker', label: 'Marcador interno de verificação pendente', pattern: /\[(?:VERIFICAR|VALIDAR|CONFIRMAR)\b[^\]\r\n]{0,240}\]/i },
+  { code: 'requery_marker', label: 'Marcador interno de reconsulta pendente', pattern: /\[RECONSULTAR\b[^\]\r\n]{0,240}\]/i },
+  { code: 'editorial_verification_notice', label: 'Nota editorial de verificação pendente', pattern: /(?:NOTA\s+EDITORIAL\s*:[\s\S]{0,520}(?:FONTE\s+OFICIAL|PUBLICA[CÇ][AÃ]O\s+FINAL|REVIS[AÃ]O\s+HUMANA)|MODELO\s+EDITORIAL[^.]{0,220}(?:ATUALIZA[CÇ][AÃ]O|REVIS[AÃ]O\s+HUMANA))/i },
   { code: 'internal_error_token', label: 'Erro interno do sistema', pattern: /\b(?:internal_error|legacy_dispatch_gateway_blocked|provider_not_configured|stack\s*trace)\b/i },
   { code: 'system_prompt_residue', label: 'Resíduo de prompt do sistema', pattern: /(?:^|[\n\r])\s*(?:SYSTEM|ASSISTANT|DEVELOPER|PROMPT)\s*:/im },
   { code: 'code_fence_residue', label: 'Bloco técnico não editorial', pattern: /```(?:json|html|markdown|text|typescript|javascript|tsx|jsx|sql)?/i },
@@ -39,6 +40,16 @@ const ENTITIES: Record<string, string> = {
   '&lt;': '<',
   '&gt;': '>',
 };
+
+function stripSafeStructuralEnvelope(field: 'title' | 'content' | 'excerpt', raw: string) {
+  if (field !== 'content') return raw;
+  let value = raw.trim();
+  const fenced = value.match(/^```(?:html|markdown|text)?\s*\n([\s\S]*?)\n```\s*$/i);
+  if (fenced) value = fenced[1];
+  return value
+    .replace(/<!--\s*TITLE_SEO\s*:[\s\S]*?-->/gi, ' ')
+    .replace(/<!--\s*META_DESCRIPTION\s*:[\s\S]*?-->/gi, ' ');
+}
 
 export function htmlToPlainText(value: string | null | undefined) {
   return String(value || '')
@@ -61,8 +72,9 @@ export function findPublicationResidues(input: PublicationSafetyInput): Publicat
     ['excerpt', String(input.excerpt || '')],
   ];
   const found: PublicationResidue[] = [];
-  for (const [field, value] of fields) {
-    if (!value) continue;
+  for (const [field, raw] of fields) {
+    if (!raw) continue;
+    const value = stripSafeStructuralEnvelope(field, raw);
     for (const rule of RESIDUE_RULES) {
       rule.pattern.lastIndex = 0;
       if (rule.pattern.test(value)) found.push({ code: rule.code, label: rule.label, field });

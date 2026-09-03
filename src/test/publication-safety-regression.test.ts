@@ -8,18 +8,28 @@ const publisher = read('supabase/functions/publish-to-wordpress/index.ts');
 const guard = read('supabase/functions/_shared/publication-safety.ts');
 const modal = read('src/components/articles/BulkPublishModal.tsx');
 const migration = read('supabase/migrations/20260902223000_publication_safety_guard.sql');
+const readyPreflight = read('supabase/migrations/20260902225000_article_ready_preflight_guard.sql');
 
 describe('fail-closed publication safety', () => {
-  it('blocks internal scaffolds, review markers, prompt residue and operational errors before WordPress', () => {
+  it('blocks internal scaffolds, unresolved source markers, prompt residue and operational errors before WordPress', () => {
     expect(publisher).toContain('findPublicationResidues');
     expect(publisher).toContain('publication_residue_gate');
     expect(guard).toContain('RASCUNHO\\s+ELEITORAL');
     expect(guard).toContain('ALVO\\s+EDITORIAL\\s+CONFIGURADO');
-    expect(guard).toContain('verify_primary_source');
-    expect(guard).toContain('requery_external_source');
+    expect(guard).toContain('verification_marker');
+    expect(guard).toContain('requery_marker');
+    expect(guard).toContain('editorial_verification_notice');
     expect(guard).toContain('internal_error_token');
     expect(guard).toContain('system_prompt_residue');
     expect(guard).toContain('placeholder_token');
+  });
+
+  it('allows only a safe outer markdown/html envelope to be normalized instead of treating it as a substantive editorial failure', () => {
+    expect(guard).toContain('stripSafeStructuralEnvelope');
+    expect(guard).toContain('^```(?:html|markdown|text)?');
+    expect(guard).toContain('TITLE_SEO');
+    expect(guard).toContain('META_DESCRIPTION');
+    expect(guard).toContain('code_fence_residue');
   });
 
   it('generates and persists a clean meta description automatically before publication', () => {
@@ -45,5 +55,14 @@ describe('fail-closed publication safety', () => {
     expect(migration).toContain("new.content := ''");
     expect(migration).toContain('publication_guard_origin_blocked');
     expect(migration).toContain("status::text <> 'published'");
+  });
+
+  it('does not allow unresolved legal or factual verification markers to become READY', () => {
+    expect(readyPreflight).toContain('guard_article_ready_preflight');
+    expect(readyPreflight).toContain("new.status := 'draft'");
+    expect(readyPreflight).toContain('publication_preflight_reasons');
+    expect(readyPreflight).toContain('needs_primary_source');
+    expect(readyPreflight).toContain('review_pass');
+    expect(readyPreflight).toContain('verification_marker');
   });
 });
