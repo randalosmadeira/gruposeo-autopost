@@ -8,7 +8,7 @@ const isPublicSupporterRoute = normalizedPath === "/1470" || normalizedPath === 
 async function bootstrap() {
   if (isPublicSupporterRoute) {
     const [{ default: SupporterAvatar1470 }, { Toaster }] = await Promise.all([
-      import("./pages/SupporterAvatar1470"),
+      import("./pages/SupporterAvatar1470V2"),
       import("@/components/ui/toaster"),
     ]);
 
