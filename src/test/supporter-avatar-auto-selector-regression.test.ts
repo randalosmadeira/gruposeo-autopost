@@ -44,7 +44,7 @@ describe('Supporter Avatar 1470 auto-selector v2 regressions', () => {
 
   it('3. keeps candidate gallery inaccessible to anonymous public users', () => {
     expect(candidateAssets).toContain('requireCeo');
-    expect(candidateAssets).toContain("ceo_access_required");
+    expect(candidateAssets).toContain('ceo_access_required');
     expect(candidateAssets).toContain("'Cache-Control': 'private, max-age=300'");
     expect(ui).not.toContain('supporter-avatar-candidate-assets');
   });
@@ -132,6 +132,32 @@ describe('Supporter Avatar 1470 auto-selector v2 regressions', () => {
     expect(ui).not.toContain('Escolha uma foto oficial');
     expect(ui).not.toContain('Escolha a foto oficial');
     expect(ui).not.toContain('PRESETS_URL');
+  });
+
+  it('17. downsizes supporter and QA images before sending them to vision providers', () => {
+    expect(generator).toContain('VISION_MAX_EDGE = 896');
+    expect(generator).toContain('VISION_PREVIEW_EDGE = 768');
+    expect(generator).toContain('visionImageFromBytes');
+    expect(generator).toContain('image.resize(');
+  });
+
+  it('18. falls back from Anthropic vision to OpenAI vision instead of converting a 400 into fake QA failure', () => {
+    expect(generator).toContain('anthropicVisionJson');
+    expect(generator).toContain('openAIVisionJson');
+    expect(generator).toContain('falling back to OpenAI');
+    expect(generator).toContain('vision_all_providers_failed');
+  });
+
+  it('19. rejects Drive HTML/login responses before they can be sent as an image to a vision model', () => {
+    expect(generator).toContain('candidate_preview_invalid_mime');
+    expect(generator).toContain('candidate_asset_invalid_mime');
+    expect(generator).toContain('isSupportedVisionMime');
+  });
+
+  it('20. distinguishes an actual QA rejection from a provider/infrastructure failure', () => {
+    expect(generator).toContain("error_message: allPass ? null : 'qa_threshold_not_met'");
+    expect(generator).toContain('vision_provider_failure:');
+    expect(generator).toMatch(/vision_all_providers_failed\|anthropic_vision_error\|openai_vision_error/);
   });
 
   it('preserves candidate attire, bat integrity, safe synthetic scenes and AI disclosure', () => {
