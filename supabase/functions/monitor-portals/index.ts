@@ -1,608 +1,215 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
+import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
+import { discoverFeed } from "../_shared/rss-discovery.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-interface MonitoredPortal {
+type Input = {
+  force?: boolean;
+  portalId?: string | null;
+  userId?: string;
+  forceDraft?: boolean;
+  itemLimit?: number;
+};
+
+type Portal = {
   id: string;
   user_id: string;
   project_id: string | null;
   portal_name: string;
   portal_url: string;
-  portal_domain: string;
   rss_feed_url: string | null;
-  niches: string[];
-  preferred_keywords: string[];
-  excluded_keywords: string[];
-  article_length: string;
-  default_angle: string | null;
-  custom_slug_prefix: string | null;
-  auto_title: boolean;
-  auto_meta_description: boolean;
-  preserve_original_seo: boolean;
-  seo_preservation_percent: number;
+  niches: string[] | null;
+  monitoring_frequency: string | null;
+  max_articles_per_day: number | null;
+  auto_publish: boolean | null;
+  automation_mode: string | null;
   is_active: boolean;
-  monitoring_frequency: string;
-  active_days: string[];
-  max_articles_per_day: number;
-  auto_publish: boolean;
-  update_sitemap: boolean;
-  sitemap_priority: number;
-  articles_generated: number;
-}
-
-interface ArticleLink {
-  url: string;
-  title: string;
-  description?: string;
-  pubDate?: string;
-}
-
-// Known RSS feed patterns for common news sites
-const RSS_PATTERNS: Record<string, string[]> = {
-  'migalhas.com.br': [
-    'https://www.migalhas.com.br/rss/quentes',
-    'https://www.migalhas.com.br/rss/noticias',
-  ],
-  'jurinews.com.br': [
-    'https://jurinews.com.br/feed/',
-    'https://jurinews.com.br/rss',
-  ],
-  'conjur.com.br': [
-    'https://www.conjur.com.br/rss.xml',
-    'https://www.conjur.com.br/feed/',
-  ],
-  'amazonasdireito.com.br': [
-    'https://www.amazonasdireito.com.br/feed/',
-  ],
-  'lawletter.com.br': [
-    'https://portal.lawletter.com.br/feed/',
-  ],
+  next_check_at: string | null;
 };
 
-// Try to discover RSS feed from a website
-async function discoverRSSFeed(portalUrl: string): Promise<string | null> {
-  console.log(`Discovering RSS feed for: ${portalUrl}`);
-  
-  try {
-    // Extract domain for known patterns
-    const urlObj = new URL(portalUrl);
-    const domain = urlObj.hostname.replace('www.', '');
-    
-    // Check known patterns first
-    for (const [knownDomain, feeds] of Object.entries(RSS_PATTERNS)) {
-      if (domain.includes(knownDomain)) {
-        for (const feedUrl of feeds) {
-          try {
-            console.log(`Trying known feed: ${feedUrl}`);
-            const response = await fetch(feedUrl, {
-              headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ContentFactoryBot/1.0)' },
-            });
-            if (response.ok) {
-              const text = await response.text();
-              if (text.includes('<rss') || text.includes('<feed') || text.includes('<channel>')) {
-                console.log(`Found valid RSS at: ${feedUrl}`);
-                return feedUrl;
-              }
-            }
-          } catch (e) {
-            console.log(`Feed ${feedUrl} not accessible`);
-          }
-        }
-      }
-    }
-    
-    // Try common RSS patterns
-    const commonPatterns = [
-      `${urlObj.origin}/feed/`,
-      `${urlObj.origin}/rss`,
-      `${urlObj.origin}/rss.xml`,
-      `${urlObj.origin}/feed.xml`,
-      `${urlObj.origin}/atom.xml`,
-    ];
-    
-    for (const feedUrl of commonPatterns) {
-      try {
-        console.log(`Trying: ${feedUrl}`);
-        const response = await fetch(feedUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ContentFactoryBot/1.0)' },
-        });
-        if (response.ok) {
-          const text = await response.text();
-          if (text.includes('<rss') || text.includes('<feed') || text.includes('<channel>')) {
-            console.log(`Found valid RSS at: ${feedUrl}`);
-            return feedUrl;
-          }
-        }
-      } catch (e) {
-        // Continue trying
-      }
-    }
-    
-    // Try to parse the HTML page for RSS link tags
-    console.log(`Scraping page for RSS links: ${portalUrl}`);
-    const pageResponse = await fetch(portalUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ContentFactoryBot/1.0)' },
-    });
-    
-    if (pageResponse.ok) {
-      const html = await pageResponse.text();
-      
-      // Look for RSS link tags
-      const rssLinkMatch = html.match(/<link[^>]+type=["']application\/(rss|atom)\+xml["'][^>]*href=["']([^"']+)["']/i);
-      if (rssLinkMatch) {
-        let feedUrl = rssLinkMatch[2];
-        if (feedUrl.startsWith('/')) {
-          feedUrl = urlObj.origin + feedUrl;
-        }
-        console.log(`Found RSS link in HTML: ${feedUrl}`);
-        return feedUrl;
-      }
-    }
-    
-    return null;
-  } catch (error) {
-    console.error(`Error discovering RSS for ${portalUrl}:`, error);
-    return null;
-  }
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+  status,
+  headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+});
+
+function nextCheck(frequency: string | null) {
+  const normalized = String(frequency || "hourly").toLowerCase();
+  const ms = normalized === "realtime" ? 15 * 60_000 : normalized === "daily" ? 86_400_000 : normalized === "weekly" ? 604_800_000 : 3_600_000;
+  return new Date(Date.now() + ms).toISOString();
 }
 
-// Scrape article links directly from HTML if no RSS available
-async function scrapeArticleLinks(portalUrl: string, limit: number = 10): Promise<ArticleLink[]> {
-  console.log(`Scraping articles from: ${portalUrl}`);
-  const articles: ArticleLink[] = [];
-  
-  try {
-    const response = await fetch(portalUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ContentFactoryBot/1.0)' },
-    });
-    
-    if (!response.ok) {
-      console.error(`Failed to fetch portal: ${response.status}`);
-      return articles;
-    }
-    
-    const html = await response.text();
-    const urlObj = new URL(portalUrl);
-    
-    // Extract article links - look for common patterns
-    const articlePatterns = [
-      // Common news article patterns
-      /<a[^>]+href=["']([^"']+(?:\/noticias?\/|\/artigos?\/|\/news\/|\/post\/|\/\d{4}\/\d{2}\/)[^"']*)["'][^>]*>([^<]+)/gi,
-      // Links with titles
-      /<a[^>]+href=["']([^"']+)["'][^>]*title=["']([^"']+)["']/gi,
-      // Article cards with h2/h3 titles
-      /<article[^>]*>[\s\S]*?<a[^>]+href=["']([^"']+)["'][^>]*>[\s\S]*?<h[23][^>]*>([^<]+)/gi,
-    ];
-    
-    for (const pattern of articlePatterns) {
-      let match;
-      while ((match = pattern.exec(html)) !== null && articles.length < limit * 2) {
-        let url = match[1];
-        const title = match[2]?.replace(/<[^>]+>/g, '').trim();
-        
-        if (!url || !title || title.length < 10) continue;
-        
-        // Make URL absolute
-        if (url.startsWith('/')) {
-          url = urlObj.origin + url;
-        } else if (!url.startsWith('http')) {
-          continue;
-        }
-        
-        // Skip non-article URLs
-        if (url.includes('/tag/') || url.includes('/category/') || 
-            url.includes('/autor/') || url.includes('/page/') ||
-            url.includes('#') || url.includes('javascript:')) {
-          continue;
-        }
-        
-        // Avoid duplicates
-        if (!articles.find(a => a.url === url)) {
-          articles.push({ url, title });
-        }
-      }
-    }
-    
-    console.log(`Scraped ${articles.length} article links`);
-    return articles.slice(0, limit);
-  } catch (error) {
-    console.error(`Error scraping ${portalUrl}:`, error);
-    return articles;
-  }
+async function callInternal(supabaseUrl: string, serviceKey: string, slug: string, body: unknown) {
+  const response = await fetch(`${supabaseUrl}/functions/v1/${slug}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(240000),
+  });
+  const text = await response.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { error: text.slice(0, 1000) }; }
+  return { ok: response.ok && data?.success !== false, status: response.status, data };
 }
 
-// Parse RSS feed directly
-async function parseRSSFeed(feedUrl: string, limit: number = 10): Promise<ArticleLink[]> {
-  console.log(`Parsing RSS: ${feedUrl}`);
-  const articles: ArticleLink[] = [];
-  
-  try {
-    const response = await fetch(feedUrl, {
-      headers: { 
-        'User-Agent': 'Mozilla/5.0 (compatible; ContentFactoryBot/1.0)',
-        'Accept': 'application/rss+xml, application/xml, text/xml',
-      },
-    });
-    
-    if (!response.ok) {
-      console.error(`Failed to fetch RSS: ${response.status}`);
-      return articles;
-    }
-    
-    const xml = await response.text();
-    
-    // Parse RSS items
-    const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
-    let match;
-    
-    while ((match = itemRegex.exec(xml)) !== null && articles.length < limit) {
-      const itemContent = match[1];
-      
-      const titleMatch = itemContent.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i);
-      const linkMatch = itemContent.match(/<link[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/i);
-      const descMatch = itemContent.match(/<description[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i);
-      const pubDateMatch = itemContent.match(/<pubDate[^>]*>([^<]+)<\/pubDate>/i);
-      
-      if (titleMatch && linkMatch) {
-        const title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
-        const url = linkMatch[1].replace(/<[^>]+>/g, '').trim();
-        const description = descMatch ? descMatch[1].replace(/<[^>]+>/g, '').trim() : undefined;
-        const pubDate = pubDateMatch ? pubDateMatch[1].trim() : undefined;
-        
-        if (title && url && url.startsWith('http')) {
-          articles.push({ url, title, description, pubDate });
-        }
-      }
-    }
-    
-    // Also try Atom format
-    if (articles.length === 0) {
-      const entryRegex = /<entry>([\s\S]*?)<\/entry>/gi;
-      while ((match = entryRegex.exec(xml)) !== null && articles.length < limit) {
-        const entryContent = match[1];
-        
-        const titleMatch = entryContent.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i);
-        const linkMatch = entryContent.match(/<link[^>]+href=["']([^"']+)["']/i);
-        const summaryMatch = entryContent.match(/<summary[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/summary>/i);
-        const publishedMatch = entryContent.match(/<published[^>]*>([^<]+)<\/published>/i);
-        
-        if (titleMatch && linkMatch) {
-          const title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
-          const url = linkMatch[1].trim();
-          
-          if (title && url && url.startsWith('http')) {
-            articles.push({
-              url,
-              title,
-              description: summaryMatch ? summaryMatch[1].replace(/<[^>]+>/g, '').trim() : undefined,
-              pubDate: publishedMatch ? publishedMatch[1].trim() : undefined,
-            });
-          }
-        }
-      }
-    }
-    
-    console.log(`Parsed ${articles.length} articles from RSS`);
-    return articles;
-  } catch (error) {
-    console.error(`Error parsing RSS ${feedUrl}:`, error);
-    return articles;
-  }
-}
+async function ensureSchedule(admin: any, portal: Portal, feedUrl: string) {
+  if (!portal.project_id) return null;
+  const payload = {
+    user_id: portal.user_id,
+    project_id: portal.project_id,
+    feed_url: feedUrl,
+    feed_name: portal.portal_name,
+    niche: Array.isArray(portal.niches) && portal.niches[0] ? portal.niches[0] : "auto",
+    article_length: "auto",
+    frequency: portal.monitoring_frequency || "hourly",
+    auto_publish: portal.auto_publish !== false,
+    is_active: portal.is_active,
+    next_run_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
 
-async function processPortal(
-  supabase: ReturnType<typeof createClient>,
-  portal: MonitoredPortal,
-  geminiKey: string
-): Promise<{ success: boolean; articlesCreated: number; error?: string }> {
-  console.log(`\n=== Processing portal: ${portal.portal_name} ===`);
-  
-  let articlesCreated = 0;
-  let articleLinks: ArticleLink[] = [];
-  let discoveredFeed: string | null = null;
-  
-  try {
-    // Step 1: Get articles either from RSS or scraping
-    if (portal.rss_feed_url) {
-      console.log(`Using configured RSS: ${portal.rss_feed_url}`);
-      articleLinks = await parseRSSFeed(portal.rss_feed_url, portal.max_articles_per_day);
-    } else {
-      // Try to discover RSS feed
-      discoveredFeed = await discoverRSSFeed(portal.portal_url);
-      
-      if (discoveredFeed) {
-        console.log(`Using discovered RSS: ${discoveredFeed}`);
-        articleLinks = await parseRSSFeed(discoveredFeed, portal.max_articles_per_day);
-        
-        // Save discovered feed for future use
-        await supabase
-          .from('monitored_portals')
-          .update({ rss_feed_url: discoveredFeed })
-          .eq('id', portal.id);
-      } else {
-        // Fallback to scraping
-        console.log(`No RSS found, scraping directly...`);
-        articleLinks = await scrapeArticleLinks(portal.portal_url, portal.max_articles_per_day);
-      }
-    }
-    
-    if (articleLinks.length === 0) {
-      console.log(`No articles found for ${portal.portal_name}`);
-      await supabase
-        .from('monitored_portals')
-        .update({
-          last_check_at: new Date().toISOString(),
-          next_check_at: calculateNextCheckTime(portal.monitoring_frequency),
-          last_error: 'Nenhum artigo encontrado no portal',
-        })
-        .eq('id', portal.id);
-      return { success: true, articlesCreated: 0 };
-    }
-    
-    console.log(`Found ${articleLinks.length} potential articles`);
-    
-    // Step 2: Process each article
-    for (const article of articleLinks) {
-      try {
-        // Check if article already exists (by URL)
-        const { data: existingArticle } = await supabase
-          .from('articles')
-          .select('id')
-          .eq('user_id', portal.user_id)
-          .or(`config->>source_url.ilike.%${encodeURIComponent(article.url)}%,keyword.ilike.%${article.title.substring(0, 50)}%`)
-          .maybeSingle();
-
-        if (existingArticle) {
-          console.log(`Skipping (already exists): ${article.title.substring(0, 50)}...`);
-          continue;
-        }
-
-        // Filter by preferred keywords if set
-        if (portal.preferred_keywords?.length > 0) {
-          const titleLower = article.title.toLowerCase();
-          const hasKeyword = portal.preferred_keywords.some(kw => 
-            titleLower.includes(kw.toLowerCase())
-          );
-          if (!hasKeyword) {
-            console.log(`Skipping (no matching keywords): ${article.title.substring(0, 50)}...`);
-            continue;
-          }
-        }
-
-        // Filter out excluded keywords
-        if (portal.excluded_keywords?.length > 0) {
-          const titleLower = article.title.toLowerCase();
-          const hasExcluded = portal.excluded_keywords.some(kw => 
-            titleLower.includes(kw.toLowerCase())
-          );
-          if (hasExcluded) {
-            console.log(`Skipping (excluded keyword): ${article.title.substring(0, 50)}...`);
-            continue;
-          }
-        }
-
-        console.log(`Processing: ${article.title.substring(0, 60)}...`);
-
-        // Invoke rewrite-news to create the article
-        const { data: rewriteResult, error: rewriteError } = await supabase.functions.invoke('rewrite-news', {
-          body: {
-            sourceUrl: article.url,
-            sourceContent: article.description || article.title,
-            sourceName: portal.portal_name,
-            analysisAngle: portal.default_angle || 'Análise aprofundada',
-            keyword: '',
-            niche: portal.niches?.[0] || 'geral',
-            articleLength: portal.article_length || 'long',
-            projectId: portal.project_id,
-            userId: portal.user_id,
-            autoPublish: portal.auto_publish,
-            preserveOriginalSeo: portal.preserve_original_seo,
-            seoPreservationPercent: portal.seo_preservation_percent || 95,
-          }
-        });
-
-        if (rewriteError) {
-          console.error(`Rewrite error: ${rewriteError.message}`);
-          continue;
-        }
-
-        if (rewriteResult?.articleId) {
-          articlesCreated++;
-          console.log(`✓ Created article: ${rewriteResult.articleId}`);
-          
-          // Create dashboard notification
-          try {
-            await supabase.from('cron_notifications').insert({
-              user_id: portal.user_id,
-              type: 'article_generated',
-              title: `Artigo gerado: ${article.title.substring(0, 80)}`,
-              message: `Novo artigo reescrito automaticamente do portal ${portal.portal_name} com ${rewriteResult.originalityScore || 95}% de originalidade.`,
-              metadata: {
-                article_id: rewriteResult.articleId,
-                portal_name: portal.portal_name,
-                portal_id: portal.id,
-                source_url: article.url,
-                originality_score: rewriteResult.originalityScore || 95,
-              }
-            });
-          } catch (notifErr) {
-            console.error('Notification insert error:', notifErr);
-          }
-        }
-        
-        // Small delay to avoid overwhelming the AI
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-      } catch (articleError) {
-        console.error(`Error processing article ${article.url}:`, articleError);
-      }
-    }
-
-    // Update portal stats
-    await supabase
-      .from('monitored_portals')
-      .update({
-        last_check_at: new Date().toISOString(),
-        articles_generated: portal.articles_generated + articlesCreated,
-        next_check_at: calculateNextCheckTime(portal.monitoring_frequency),
-        last_error: null,
-        ...(discoveredFeed ? { rss_feed_url: discoveredFeed } : {}),
-      })
-      .eq('id', portal.id);
-
-    console.log(`=== Portal ${portal.portal_name}: ${articlesCreated} articles created ===\n`);
-    return { success: true, articlesCreated };
-    
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`Error processing portal ${portal.portal_name}:`, error);
-    
-    // Update portal with error
-    await supabase
-      .from('monitored_portals')
-      .update({
-        last_check_at: new Date().toISOString(),
-        next_check_at: calculateNextCheckTime(portal.monitoring_frequency),
-        last_error: errorMessage,
-      })
-      .eq('id', portal.id);
-
-    return { success: false, articlesCreated, error: errorMessage };
-  }
-}
-
-function calculateNextCheckTime(frequency: string): string {
-  const now = new Date();
-  
-  switch (frequency) {
-    case 'realtime':
-      now.setMinutes(now.getMinutes() + 15);
-      break;
-    case 'hourly':
-      now.setHours(now.getHours() + 1);
-      break;
-    case 'daily':
-      now.setDate(now.getDate() + 1);
-      break;
-    case 'weekly':
-      now.setDate(now.getDate() + 7);
-      break;
-    default:
-      now.setHours(now.getHours() + 1);
-  }
-  
-  return now.toISOString();
-}
-
-function getCurrentDayCode(): string {
-  const days = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
-  return days[new Date().getDay()];
-}
-
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  const { data: byFeed, error: feedError } = await admin.from("rss_schedules")
+    .select("id,feed_url")
+    .eq("project_id", portal.project_id)
+    .eq("feed_url", feedUrl)
+    .limit(1)
+    .maybeSingle();
+  if (feedError) throw feedError;
+  if (byFeed?.id) {
+    const { data, error } = await admin.from("rss_schedules").update(payload).eq("id", byFeed.id).select("id,feed_url").single();
+    if (error) throw error;
+    return data;
   }
 
-  const startTime = Date.now();
-  console.log("=== Starting portal monitoring job ===");
-  console.log(`Time: ${new Date().toISOString()}`);
+  const { data: sameName, error: nameError } = await admin.from("rss_schedules")
+    .select("id,feed_url")
+    .eq("project_id", portal.project_id)
+    .eq("feed_name", portal.portal_name)
+    .limit(1)
+    .maybeSingle();
+  if (nameError) throw nameError;
+  if (sameName?.id) {
+    const { data, error } = await admin.from("rss_schedules").update(payload).eq("id", sameName.id).select("id,feed_url").single();
+    if (error) throw error;
+    return data;
+  }
+
+  const { data, error } = await admin.from("rss_schedules").insert({ ...payload, articles_generated: 0, created_at: new Date().toISOString() }).select("id,feed_url").single();
+  if (error) throw error;
+  return data;
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return json({ success: false, error: "Method not allowed" }, 405);
+  const requestId = crypto.randomUUID();
 
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const input = await req.json().catch(() => ({})) as Input;
+    const actor = await resolveRequestActor(req, input.userId);
+    const userId = actor.userId;
+    const supabaseUrl = String(Deno.env.get("SUPABASE_URL") || "");
+    const serviceKey = String(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || "");
+    if (!supabaseUrl || !serviceKey) return json({ success: false, error: "Backend incompleto", request_id: requestId }, 500);
 
-    const geminiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!geminiKey) {
-      console.warn("GEMINI_API_KEY not configured at platform level, will try BYOK per user");
-    }
-
-    // Parse request body for options
-    let forceProcess = false;
-    let specificPortalId: string | null = null;
-    
-    try {
-      const body = await req.json();
-      forceProcess = body.force === true;
-      specificPortalId = body.portalId || null;
-      console.log(`Options: force=${forceProcess}, portalId=${specificPortalId}`);
-    } catch {
-      // No body, use defaults
-    }
-
-    const currentDay = getCurrentDayCode();
+    const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const now = new Date().toISOString();
-    console.log(`Current day: ${currentDay}`);
+    let query = admin.from("monitored_portals").select("id,user_id,project_id,portal_name,portal_url,rss_feed_url,niches,monitoring_frequency,max_articles_per_day,auto_publish,automation_mode,is_active,next_check_at").eq("user_id", userId).eq("is_active", true);
+    if (input.portalId) query = query.eq("id", input.portalId);
+    else if (!input.force) query = query.or(`next_check_at.is.null,next_check_at.lte.${now}`);
+    const { data, error } = await query.order("next_check_at", { ascending: true, nullsFirst: true }).limit(input.portalId ? 1 : 25);
+    if (error) throw error;
 
-    // Build query for portals
-    let query = supabase
-      .from('monitored_portals')
-      .select('*')
-      .eq('is_active', true);
-    
-    if (specificPortalId) {
-      query = query.eq('id', specificPortalId);
-    } else if (!forceProcess) {
-      // Only check time-based conditions if not forcing
-      query = query
-        .lte('next_check_at', now)
-        .contains('active_days', [currentDay]);
+    const portals = (data || []) as Portal[];
+    const results: any[] = [];
+    let generated = 0;
+    let drafts = 0;
+    let queued = 0;
+
+    for (const portal of portals) {
+      const startedAt = new Date().toISOString();
+      try {
+        const discovery = await discoverFeed(portal.portal_url, { directCandidate: portal.rss_feed_url });
+        if (!discovery.valid) {
+          await admin.from("monitored_portals").update({
+            last_check_at: startedAt,
+            next_check_at: nextCheck(portal.monitoring_frequency),
+            last_error: `RSS não validado: ${discovery.reason || "feed_not_found"}`,
+            rss_feed_validation: { ...discovery, attempted: discovery.attempted.slice(0, 30) },
+            rss_feed_validated_at: null,
+            updated_at: new Date().toISOString(),
+          }).eq("id", portal.id).eq("user_id", userId);
+          results.push({ portal_id: portal.id, portal_name: portal.portal_name, success: false, stage: "rss_discovery", discovery });
+          continue;
+        }
+
+        const validatedAt = new Date().toISOString();
+        const validation = {
+          url: discovery.url,
+          format: discovery.format,
+          http_status: discovery.status,
+          content_type: discovery.content_type,
+          content_type_valid: discovery.content_type_valid,
+          structure_valid: discovery.structure_valid,
+          discovery_method: discovery.discovery_method,
+          attempted: discovery.attempted,
+        };
+        await admin.from("monitored_portals").update({
+          rss_feed_url: discovery.url,
+          rss_feed_validation: validation,
+          rss_feed_validated_at: validatedAt,
+          last_check_at: startedAt,
+          last_success_at: validatedAt,
+          next_check_at: nextCheck(portal.monitoring_frequency),
+          last_error: null,
+          automation_mode: portal.automation_mode || "ai_95",
+          updated_at: validatedAt,
+        }).eq("id", portal.id).eq("user_id", userId);
+
+        if (!portal.project_id) {
+          results.push({ portal_id: portal.id, portal_name: portal.portal_name, success: true, feed: discovery.url, discovery_method: discovery.discovery_method, processing: "not_started_without_project" });
+          continue;
+        }
+
+        await admin.from("projects").update({ rss_feed_url: discovery.url, rss_feed_validation: validation, rss_feed_validated_at: validatedAt, updated_at: validatedAt }).eq("id", portal.project_id).eq("user_id", userId);
+        const schedule = await ensureSchedule(admin, portal, discovery.url);
+        if (!schedule?.id) throw new Error("Não foi possível sincronizar rss_schedule");
+
+        const processed = await callInternal(supabaseUrl, serviceKey, "auto-process-rss", {
+          scheduleId: schedule.id,
+          forceDraft: Boolean(input.forceDraft),
+          itemLimit: Math.max(1, Math.min(10, Number(input.itemLimit || portal.max_articles_per_day || 5))),
+        });
+        if (!processed.ok) throw new Error(String(processed.data?.error || `auto-process-rss HTTP ${processed.status}`));
+        generated += Number(processed.data?.processed || 0);
+        drafts += Number(processed.data?.drafts || 0);
+        queued += Number(processed.data?.queued || 0);
+        results.push({
+          portal_id: portal.id,
+          portal_name: portal.portal_name,
+          success: true,
+          feed: discovery.url,
+          feed_http_status: discovery.status,
+          feed_content_type: discovery.content_type,
+          discovery_method: discovery.discovery_method,
+          schedule_id: schedule.id,
+          pipeline: processed.data,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Falha ao processar portal";
+        await admin.from("monitored_portals").update({ last_check_at: startedAt, next_check_at: nextCheck(portal.monitoring_frequency), last_error: message.slice(0, 1000), updated_at: new Date().toISOString() }).eq("id", portal.id).eq("user_id", userId);
+        results.push({ portal_id: portal.id, portal_name: portal.portal_name, success: false, error: message });
+      }
     }
 
-    const { data: portals, error: portalsError } = await query;
-
-    if (portalsError) {
-      console.error("Error fetching portals:", portalsError);
-      return new Response(
-        JSON.stringify({ error: portalsError.message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    console.log(`Found ${portals?.length || 0} portals to process`);
-
-    const results = [];
-    let totalArticlesCreated = 0;
-
-    for (const portal of portals || []) {
-      // Load user's BYOK keys into env for this portal's processing
-      await setEnvKeysForUser(portal.user_id);
-      const result = await processPortal(supabase, portal, Deno.env.get("GEMINI_API_KEY") || "");
-      results.push({
-        portal_id: portal.id,
-        portal_name: portal.portal_name,
-        ...result
-      });
-      totalArticlesCreated += result.articlesCreated;
-    }
-
-    const duration = Date.now() - startTime;
-    console.log(`\n=== Portal monitoring completed ===`);
-    console.log(`Duration: ${duration}ms`);
-    console.log(`Total articles created: ${totalArticlesCreated}`);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        portalsProcessed: portals?.length || 0,
-        totalArticlesCreated,
-        results,
-        duration,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ success: true, portals_processed: portals.length, articles_created: generated, wordpress_operations: queued, drafts, results, request_id: requestId });
   } catch (error) {
-    console.error("Portal monitoring error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    if (error instanceof RequestAuthError) return json({ success: false, error: error.message, code: error.code, request_id: requestId }, error.status);
+    return json({ success: false, error: error instanceof Error ? error.message : "Erro interno", request_id: requestId }, 500);
   }
 });
