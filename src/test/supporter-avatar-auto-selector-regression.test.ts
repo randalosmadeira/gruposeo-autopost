@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 const root = process.cwd();
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
+const mainEntry = read('src/main.tsx');
 const app = read('src/App.tsx');
 const indexHtml = read('index.html');
 const ui = read('src/pages/SupporterAvatar1470V2.tsx');
@@ -18,7 +19,9 @@ const migration = read('supabase/migrations/20260902173000_supporter_avatar_auto
 const runtime = [ui, publicApi, generator, candidateAssets, prompts].join('\n');
 
 describe('Supporter Avatar 1470 auto-selector v2 regressions', () => {
-  it('0. hard-pins both public routes to V2 and removes the legacy UI source', () => {
+  it('0. hard-pins both public routes and the bootstrap entrypoint to V2 and removes the legacy UI source', () => {
+    expect(mainEntry).toContain('import("./pages/SupporterAvatar1470V2")');
+    expect(mainEntry).not.toContain('import("./pages/SupporterAvatar1470")');
     expect(app).toContain('import("./pages/SupporterAvatar1470V2")');
     expect(app).toContain('<Route path="/1470" element={<SupporterAvatar1470 />} />');
     expect(app).toContain('<Route path="/apoiadores/avatar" element={<SupporterAvatar1470 />} />');
