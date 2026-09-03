@@ -82,6 +82,7 @@ const App = () => (
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/1470" element={<SupporterAvatar1470 />} />
+              <Route path="/apoiadores" element={<SupporterAvatar1470 />} />
               <Route path="/apoiadores/avatar" element={<SupporterAvatar1470 />} />
               <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route path="/" element={<Dashboard />} />
