@@ -1,0 +1,74 @@
+name: Zica.ai VPS Capacity Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vps-capacity-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    environment: zica-ai-production
+    timeout-minutes: 10
+    env:
+      ZICA_AI_VPS_HOST: ${{ secrets.ZICA_AI_VPS_HOST }}
+      ZICA_AI_VPS_USER: ${{ secrets.ZICA_AI_VPS_USER }}
+      ZICA_AI_VPS_PORT_RAW: ${{ secrets.ZICA_AI_VPS_PORT }}
+      ZICA_AI_VPS_SSH_PRIVATE_KEY_B64: ${{ secrets.ZICA_AI_VPS_SSH_PRIVATE_KEY_B64 }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ZICA_AI_VPS_HOST"
+          test -n "$ZICA_AI_VPS_USER"
+          test -n "$ZICA_AI_VPS_SSH_PRIVATE_KEY_B64"
+          ZICA_AI_VPS_PORT="${ZICA_AI_VPS_PORT_RAW:-22}"
+          echo "ZICA_AI_VPS_PORT=$ZICA_AI_VPS_PORT" >> "$GITHUB_ENV"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s' "$ZICA_AI_VPS_SSH_PRIVATE_KEY_B64" | base64 --decode > "$HOME/.ssh/zica_ai_audit"
+          chmod 600 "$HOME/.ssh/zica_ai_audit"
+          ssh-keyscan -p "$ZICA_AI_VPS_PORT" -H "$ZICA_AI_VPS_HOST" >> "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Collect VPS capacity and runtime health
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$HOME/.ssh/zica_ai_audit" -p "$ZICA_AI_VPS_PORT" "$ZICA_AI_VPS_USER@$ZICA_AI_VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          echo '=== SYSTEM ==='
+          hostname
+          uptime -p || true
+          echo '=== DISK_ROOT_BYTES ==='
+          df -B1 / | tail -1 | awk '{print "filesystem_bytes=" $2 " used_bytes=" $3 " available_bytes=" $4 " use_percent=" $5}'
+          echo '=== MEMORY_BYTES ==='
+          free -b | awk '/^Mem:/ {print "mem_total_bytes=" $2 " mem_used_bytes=" $3 " mem_available_bytes=" $7} /^Swap:/ {print "swap_total_bytes=" $2 " swap_used_bytes=" $3}'
+          echo '=== ZICA_AI_PATHS_BYTES ==='
+          for p in /opt/zica-ai /opt/zica-ai/frontend /opt/zica-ai/orchestrator; do
+            if [ -e "$p" ]; then printf '%s=' "$p"; du -sb "$p" | awk '{print $1}'; fi
+          done
+          echo '=== RELEASE_COUNTS ==='
+          printf 'frontend_releases='; find /opt/zica-ai/frontend/releases -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l || true
+          printf 'orchestrator_releases='; find /opt/zica-ai/orchestrator/releases -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l || true
+          echo '=== DOCKER_DF ==='
+          docker system df || true
+          echo '=== DOCKER_CONTAINERS ==='
+          docker ps --format 'container={{.Names}} image={{.Image}} status={{.Status}}' || true
+          echo '=== DOCKER_STATS ==='
+          docker stats --no-stream --format 'container={{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}} mem_perc={{.MemPerc}}' || true
+          echo '=== REDIS_VOLUME_BYTES ==='
+          VOL=zica-ai-orchestrator-redis-data
+          MP="$(docker volume inspect "$VOL" --format '{{ .Mountpoint }}' 2>/dev/null || true)"
+          if [ -n "$MP" ] && sudo -n true >/dev/null 2>&1; then printf 'redis_volume_bytes='; sudo du -sb "$MP" | awk '{print $1}'; fi
+          echo '=== HEALTH ==='
+          curl --fail --silent http://127.0.0.1:8787/health || true
+          echo
+          echo '=== CURRENT_SHA ==='
+          cat /opt/zica-ai/orchestrator/shared/current.sha 2>/dev/null || true
+          REMOTE
