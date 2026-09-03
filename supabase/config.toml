@@ -31,6 +31,9 @@ verify_jwt = false
 [functions.execute-news-agents]
 verify_jwt = false
 
+[functions.auto-process-rss]
+verify_jwt = false
+
 # Public supporter ingress uses its own short-lived public token and rate limits.
 [functions.supporter-avatar-public]
 verify_jwt = false
@@ -79,9 +82,6 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.monitor-portals]
-verify_jwt = true
-
-[functions.auto-process-rss]
 verify_jwt = true
 
 [functions.seo-agent]
