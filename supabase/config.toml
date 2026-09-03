@@ -13,6 +13,9 @@ verify_jwt = true
 [functions.generate-authority-plan-stream]
 verify_jwt = true
 
+[functions.discover-rss-feed]
+verify_jwt = true
+
 # These functions participate in server-to-server chains. They validate either
 # a real user JWT through auth.getUser(), an exact opaque service credential,
 # or a dedicated automation secret inside the function body.
@@ -29,6 +32,12 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.execute-news-agents]
+verify_jwt = false
+
+[functions.auto-process-rss]
+verify_jwt = false
+
+[functions.zica-brain-tick]
 verify_jwt = false
 
 # Public supporter ingress uses its own short-lived public token and rate limits.
@@ -79,9 +88,6 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.monitor-portals]
-verify_jwt = true
-
-[functions.auto-process-rss]
 verify_jwt = true
 
 [functions.seo-agent]
