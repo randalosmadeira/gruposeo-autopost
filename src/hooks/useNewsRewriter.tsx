@@ -78,25 +78,21 @@ export type AuditStatus = 'approved' | 'review' | 'rejected' | 'pending';
 
 export interface AuditResult {
   status: AuditStatus;
-  scores: {
-    originality: number;
-    quality: number;
-    readability: number;
-    overall: number;
-  };
+  scores: { originality: number; quality: number; readability: number; overall: number };
   passed: boolean;
   reasons: string[];
 }
 
-interface PublishResult {
-  success: boolean;
-  postId?: string | number;
-  postUrl?: string;
-  rss?: {
-    status?: string;
-    feed_url?: string | null;
-    error?: string | null;
+interface PublicationPayload {
+  success?: boolean;
+  operation_id?: string;
+  status?: string;
+  payload?: {
+    postId?: string | number;
+    postUrl?: string;
+    rss?: { status?: string; feed_url?: string | null; error?: string | null };
   };
+  error?: string;
 }
 
 function numberOrFallback(value: unknown, fallback = 0) {
@@ -121,20 +117,12 @@ export function performAuditCheck(compliance: ComplianceCheck, qualityScore = 0)
     readability: compliance.readabilityScore,
     overall: 0,
   };
-
-  scores.overall = Math.round(
-    scores.originality * 0.4 +
-    scores.quality * 0.35 +
-    scores.readability * 0.25
-  );
-
+  scores.overall = Math.round(scores.originality * 0.4 + scores.quality * 0.35 + scores.readability * 0.25);
   const reasons: string[] = [];
   let status: AuditStatus = 'pending';
-
   if (scores.originality >= 95 && scores.quality >= 85 && compliance.citationCompliance) {
     status = 'approved';
-    reasons.push('Originalidade excelente (≥95%)');
-    reasons.push('Qualidade alta (≥85%)');
+    reasons.push('Originalidade excelente (≥95%)', 'Qualidade alta (≥85%)');
   } else if (scores.originality >= 85 && scores.quality >= 70) {
     status = 'review';
     if (scores.originality < 95) reasons.push('Originalidade moderada (85-95%)');
@@ -145,13 +133,7 @@ export function performAuditCheck(compliance: ComplianceCheck, qualityScore = 0)
     if (scores.quality < 70) reasons.push('Qualidade insuficiente (<70%)');
     if (!compliance.citationCompliance) reasons.push('Citações ou fonte primária pendentes');
   }
-
-  return {
-    status,
-    scores,
-    passed: status === 'approved',
-    reasons,
-  };
+  return { status, scores, passed: status === 'approved', reasons };
 }
 
 export function useNewsRewriter() {
@@ -164,31 +146,20 @@ export function useNewsRewriter() {
   const [lastEditorialDecision, setLastEditorialDecision] = useState<EditorialDecision | null>(null);
   const { toast } = useToast();
 
-  const autoPublishToWordPress = useCallback(async (
-    articleId: string,
-    projectId: string
-  ): Promise<PublishResult | null> => {
+  const autoPublishThroughQueue = useCallback(async (articleId: string, projectId: string): Promise<PublicationPayload | null> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return null;
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-to-wordpress`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ articleId, projectId, publishStatus: 'publish' }),
-        }
-      );
-
-      const data = await response.json().catch(() => ({})) as PublishResult & { error?: string };
-      if (!response.ok || !data.success) throw new Error(data.error || 'Falha ao publicar');
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wordpress-operations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'publish', articleId, projectId, publishStatus: 'publish' }),
+      });
+      const data = await response.json().catch(() => ({})) as PublicationPayload;
+      if (!response.ok || !data.success) throw new Error(data.error || 'Falha na fila de publicação');
       return data;
     } catch (error) {
-      console.error('Auto-publish error:', error);
+      console.error('Auto-publish queue error:', error);
       return null;
     }
   }, []);
@@ -205,60 +176,42 @@ export function useNewsRewriter() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
-        toast({
-          title: 'Erro de autenticação',
-          description: 'Faça login para continuar',
-          variant: 'destructive',
-        });
+        toast({ title: 'Erro de autenticação', description: 'Faça login para continuar', variant: 'destructive' });
         return null;
       }
 
       setProgress(request.editorialAutonomy === false
         ? 'Aplicando overrides editoriais...'
-        : 'Agentes de IA definindo nicho, ângulo, tamanho, tom e gatilho...');
+        : 'Agentes de IA definindo nicho, ângulo, profundidade, palavra-chave, tom e gatilho...');
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/rewrite-news`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            ...request,
-            niche: request.niche || 'auto',
-            articleLength: request.articleLength || 'auto',
-            analysisAngle: request.analysisAngle || 'auto',
-            emotionalTriggerOverride: request.emotionalTriggerOverride || undefined,
-            rewriteMode: request.rewriteMode || 'standard',
-            editorialAutonomy: request.editorialAutonomy ?? true,
-          }),
-        }
-      );
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/rewrite-news`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          ...request,
+          niche: request.niche || 'auto',
+          articleLength: request.articleLength || 'auto',
+          analysisAngle: request.analysisAngle || 'auto',
+          emotionalTriggerOverride: request.emotionalTriggerOverride || undefined,
+          rewriteMode: request.rewriteMode || 'standard',
+          editorialAutonomy: request.editorialAutonomy ?? true,
+        }),
+      });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({})) as { error?: string };
         if (response.status === 429) {
-          toast({
-            title: 'Limite de requisições',
-            description: 'Aguarde alguns minutos e tente novamente',
-            variant: 'destructive',
-          });
+          toast({ title: 'Limite de requisições', description: 'Aguarde alguns minutos e tente novamente', variant: 'destructive' });
           return null;
         }
         if (response.status === 402) {
-          toast({
-            title: 'Créditos insuficientes',
-            description: 'Adicione créditos para continuar gerando conteúdo',
-            variant: 'destructive',
-          });
+          toast({ title: 'Créditos insuficientes', description: 'Adicione créditos para continuar gerando conteúdo', variant: 'destructive' });
           return null;
         }
         throw new Error(errorData.error || `Erro ${response.status}`);
       }
 
-      setProgress('Gerando e revisando o artigo...');
+      setProgress('Gerando, verificando fontes e revisando o artigo...');
       const data = await response.json() as {
         success?: boolean;
         article?: Record<string, unknown>;
@@ -266,16 +219,11 @@ export function useNewsRewriter() {
         editorialDecision?: EditorialDecision;
         viralPackage?: ViralPackage;
       };
-
       if (!data.success || !data.article) throw new Error('Resposta inválida do servidor');
 
       const rawArticle = data.article;
-      const rawConfig = rawArticle.config && typeof rawArticle.config === 'object'
-        ? rawArticle.config as Record<string, unknown>
-        : {};
-      const decision = data.editorialDecision
-        || rawConfig.editorial_decision as EditorialDecision | undefined
-        || null;
+      const rawConfig = rawArticle.config && typeof rawArticle.config === 'object' ? rawArticle.config as Record<string, unknown> : {};
+      const decision = data.editorialDecision || rawConfig.editorial_decision as EditorialDecision | undefined || null;
       const compliance = normalizeCompliance(data.compliance, rawArticle);
       const result = {
         ...rawArticle,
@@ -305,7 +253,6 @@ export function useNewsRewriter() {
       setProgress('Auditando qualidade e risco...');
       const audit = performAuditCheck(compliance, result.quality_score);
       setLastAudit(audit);
-
       const nextConfig = {
         ...rawConfig,
         audit_status: audit.status,
@@ -313,69 +260,45 @@ export function useNewsRewriter() {
         audit_reasons: audit.reasons,
         audit_checked_at: new Date().toISOString(),
       };
-      await supabase
-        .from('articles')
-        .update({ config: nextConfig })
-        .eq('id', result.id);
+      await supabase.from('articles').update({ config: nextConfig }).eq('id', result.id);
 
       const requiresReview = Boolean(decision?.requiresHumanReview || rawConfig.requires_human_review || result.status !== 'ready');
       const canAutoPublish = audit.passed && !requiresReview;
 
       if (request.autoPublish && request.projectId && canAutoPublish) {
-        setProgress('Publicando e confirmando no RSS do WordPress...');
-        const publication = await autoPublishToWordPress(result.id, request.projectId);
-        if (publication) {
-          const rssStatus = publication.rss?.status || 'pending';
+        setProgress('Enfileirando publicação, interlinks e redes sociais...');
+        const operation = await autoPublishThroughQueue(result.id, request.projectId);
+        if (operation) {
+          const post = operation.payload || {};
+          const rssStatus = post.rss?.status || 'pending';
           toast({
-            title: rssStatus === 'confirmed' ? 'Artigo publicado e confirmado no RSS' : 'Artigo publicado, RSS em confirmação',
-            description: rssStatus === 'confirmed'
-              ? `"${result.title}" já aparece no feed ${publication.rss?.feed_url || 'do WordPress'}.`
-              : `"${result.title}" foi publicado. O verificador registrou o estado ${rssStatus}.`,
+            title: 'Repostagem distribuída pela fila WordPress',
+            description: post.postUrl
+              ? `"${result.title}" foi enviado ao WordPress. RSS: ${rssStatus}.`
+              : `"${result.title}" concluiu a operação ${operation.operation_id || ''}.`,
           });
         } else {
-          toast({
-            title: 'Repostagem concluída',
-            description: `O artigo "${result.title}" foi aprovado, mas a publicação automática falhou.`,
-            variant: 'destructive',
-          });
+          toast({ title: 'Falha na distribuição', description: `O artigo "${result.title}" foi aprovado, mas a fila WordPress falhou.`, variant: 'destructive' });
         }
       } else if (requiresReview) {
-        toast({
-          title: 'Agente encaminhou para revisão',
-          description: decision?.reasoningSummary || `O artigo "${result.title}" exige validação antes da publicação.`,
-        });
+        toast({ title: 'Agente encaminhou para revisão', description: decision?.reasoningSummary || `O artigo "${result.title}" exige validação antes da publicação.` });
       } else if (audit.passed) {
-        toast({
-          title: 'Repostagem aprovada',
-          description: `A IA definiu ${decision?.niche || result.niche}, ${decision?.articleLength || 'tamanho adequado'} e ${decision?.emotionalTrigger || 'tom editorial seguro'}.`,
-        });
+        toast({ title: 'Repostagem aprovada', description: `A IA definiu ${decision?.niche || result.niche}, ${decision?.articleLength || 'profundidade adequada'} e ${decision?.emotionalTrigger || 'tom editorial seguro'}.` });
       } else if (audit.status === 'review') {
-        toast({
-          title: 'Repostagem em revisão',
-          description: `O artigo "${result.title}" precisa de revisão antes da publicação.`,
-        });
+        toast({ title: 'Repostagem em revisão', description: `O artigo "${result.title}" precisa de revisão antes da publicação.` });
       } else {
-        toast({
-          title: 'Repostagem reprovada',
-          description: `O artigo "${result.title}" não atingiu os critérios mínimos de qualidade.`,
-          variant: 'destructive',
-        });
+        toast({ title: 'Repostagem reprovada', description: `O artigo "${result.title}" não atingiu os critérios mínimos de qualidade.`, variant: 'destructive' });
       }
-
       return result;
     } catch (error) {
       console.error('Rewrite error:', error);
-      toast({
-        title: 'Erro na repostagem',
-        description: error instanceof Error ? error.message : 'Erro desconhecido',
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro na repostagem', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
       return null;
     } finally {
       setIsRewriting(false);
       setProgress(null);
     }
-  }, [toast, autoPublishToWordPress]);
+  }, [toast, autoPublishThroughQueue]);
 
   return {
     rewriteNews,
