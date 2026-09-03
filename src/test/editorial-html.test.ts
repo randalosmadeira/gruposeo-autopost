@@ -30,6 +30,25 @@ describe("editorial HTML quality gate", () => {
     expect(result.html).toContain('class="zica-answer-capsule"');
   });
 
+  it("removes escaped TITLE_SEO and META_DESCRIPTION comments before reader render", () => {
+    const source = `<p class="zica-answer-capsule">&lt;!-- TITLE_SEO: Título interno --&gt; &lt;!-- META_DESCRIPTION: descrição interna --&gt;</p>\n<h2>Título editorial</h2>\n<p>Conteúdo público válido.</p>`;
+    const result = normalizeEditorialHtml(source);
+
+    expect(result.pass).toBe(true);
+    expect(result.html).not.toContain("TITLE_SEO");
+    expect(result.html).not.toContain("META_DESCRIPTION");
+    expect(result.html).not.toContain("&lt;!--");
+    expect(result.issues).toContain("escaped_html_comment_detected_and_removed");
+  });
+
+  it("converts textual markdown separators into semantic horizontal rules", () => {
+    const result = normalizeEditorialHtml(`<p>Introdução.</p><p>---</p><h2>Próxima seção</h2><p>Texto.</p>`);
+    expect(result.pass).toBe(true);
+    expect(result.html).toContain("<hr>");
+    expect(result.html).not.toContain("<p>---</p>");
+    expect(result.issues).toContain("text_separator_detected_and_normalized");
+  });
+
   it("blocks raw JSON masquerading as article content", () => {
     const result = normalizeEditorialHtml('{"title":"erro","content":"não publicar"}');
     expect(result.pass).toBe(false);

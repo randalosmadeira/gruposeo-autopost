@@ -138,7 +138,9 @@ function sanitizeAttributes(tag: string, attrs: string) {
 
 function sanitizeHtml(input: string) {
   let html = input
+    .replace(/&(?:amp;)?lt;!--[\s\S]*?--&(?:amp;)?gt;/gi, "")
     .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<p\b[^>]*>\s*(?:---|___|\*\*\*)\s*<\/p>/gi, "<hr>")
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<(?:iframe|object|embed|form|input|button|textarea|select|option|svg|canvas|meta|link)\b[^>]*>[\s\S]*?<\/(?:iframe|object|embed|form|button|textarea|select|option|svg|canvas)>/gi, "")
@@ -164,11 +166,11 @@ function sanitizeHtml(input: string) {
   html = html
     .replace(/<b>/gi, "<strong>").replace(/<\/b>/gi, "</strong>")
     .replace(/<i>/gi, "<em>").replace(/<\/i>/gi, "</em>")
-    .replace(/<p>\s*<\/p>/gi, "")
+    .replace(/<p\b[^>]*>\s*<\/p>/gi, "")
     .replace(/(?:<br>\s*){3,}/gi, "<br><br>")
     .trim();
 
-  if (html && !/<(?:p|h2|h3|h4|ul|ol|blockquote|table|figure|details)\b/i.test(html)) {
+  if (html && !/<(?:p|h2|h3|h4|ul|ol|blockquote|table|figure|details|hr)\b/i.test(html)) {
     html = `<p>${html}</p>`;
   }
 
@@ -212,6 +214,8 @@ export function normalizeEditorialHtml(input: string): EditorialAudit {
   if (/\*\*[^*\n]+\*\*/.test(original) || /__[^_\n]+__/.test(original)) issues.push("markdown_emphasis_detected_and_normalized");
   if (/<h1\b/i.test(original)) issues.push("body_h1_detected_and_demoted");
   if (/<(?:script|style|iframe|object|embed|form)\b/i.test(original)) issues.push("unsafe_markup_detected_and_removed");
+  if (/&(?:amp;)?lt;!--[\s\S]*?--&(?:amp;)?gt;/i.test(original)) issues.push("escaped_html_comment_detected_and_removed");
+  if (/<p\b[^>]*>\s*(?:---|___|\*\*\*)\s*<\/p>/i.test(original)) issues.push("text_separator_detected_and_normalized");
 
   const hasBlockHtml = /<(?:p|h1|h2|h3|h4|ul|ol|li|blockquote|table|figure|div|details)\b/i.test(original);
   const initial = hasBlockHtml ? original : markdownToHtml(original);
@@ -224,6 +228,7 @@ export function normalizeEditorialHtml(input: string): EditorialAudit {
   if (/```/.test(html)) fatalIssues.push("code_fence_remaining");
   if (/<h1\b/i.test(html)) fatalIssues.push("body_h1_remaining");
   if (/<(?:script|style|iframe|object|embed|form)\b/i.test(html)) fatalIssues.push("unsafe_markup_remaining");
+  if (/&(?:amp;)?lt;!--|\b(?:TITLE_SEO|META_DESCRIPTION)\s*:/i.test(html)) fatalIssues.push("escaped_editorial_metadata_remaining");
   if (/\b(?:system prompt|developer message|ignore previous instructions|retorne somente json)\b/i.test(plain)) fatalIssues.push("prompt_residue_detected");
 
   const words = plain.split(/\s+/).filter(Boolean);
