@@ -1,0 +1,1 @@
+Vision fallback fix branch. No QA thresholds were relaxed.
