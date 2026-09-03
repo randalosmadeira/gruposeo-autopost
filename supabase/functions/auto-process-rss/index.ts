@@ -26,10 +26,18 @@ type Schedule = {
 type Portal = {
   id: string;
   project_id: string | null;
+  portal_name: string;
   portal_url: string;
   rss_feed_url: string | null;
   automation_mode: string | null;
   max_articles_per_day: number | null;
+};
+
+type Input = {
+  scheduleId?: string | null;
+  forceDraft?: boolean;
+  maxSchedules?: number;
+  itemLimit?: number;
 };
 
 const J = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
@@ -51,10 +59,10 @@ function nextRun(frequency: string | null) {
   return new Date(Date.now() + ms).toISOString();
 }
 
-async function claim(admin: any, schedule: Schedule) {
+async function claim(admin: any, schedule: Schedule, targeted: boolean) {
   const until = new Date(Date.now() + 15 * 60 * 1000).toISOString();
   let query = admin.from('rss_schedules').update({ next_run_at: until, updated_at: new Date().toISOString() }).eq('id', schedule.id);
-  query = schedule.next_run_at ? query.eq('next_run_at', schedule.next_run_at) : query.is('next_run_at', null);
+  if (!targeted) query = schedule.next_run_at ? query.eq('next_run_at', schedule.next_run_at) : query.is('next_run_at', null);
   const { data, error } = await query.select('id').maybeSingle();
   if (error) throw error;
   return Boolean(data);
@@ -75,15 +83,17 @@ async function call(url: string, key: string, slug: string, body: any) {
 
 async function resolvePortal(admin: any, schedule: Schedule): Promise<Portal | null> {
   if (!schedule.project_id) return null;
-  const { data } = await admin.from('monitored_portals')
-    .select('id,project_id,portal_url,rss_feed_url,automation_mode,max_articles_per_day')
+  const { data, error } = await admin.from('monitored_portals')
+    .select('id,project_id,portal_name,portal_url,rss_feed_url,automation_mode,max_articles_per_day')
     .eq('project_id', schedule.project_id)
     .eq('is_active', true)
-    .or(`rss_feed_url.eq.${schedule.feed_url},portal_name.eq.${schedule.feed_name}`)
     .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return data as Portal | null;
+    .limit(100);
+  if (error) throw error;
+  const rows = (data || []) as Portal[];
+  return rows.find((portal) => portal.rss_feed_url === schedule.feed_url)
+    || rows.find((portal) => portal.portal_name === schedule.feed_name)
+    || null;
 }
 
 async function resolveFeed(admin: any, schedule: Schedule, portal: Portal | null) {
@@ -109,7 +119,11 @@ async function resolveFeed(admin: any, schedule: Schedule, portal: Portal | null
     attempted: discovery.attempted,
   };
 
-  await admin.from('rss_schedules').update({ feed_url: discovery.url, updated_at: validatedAt }).eq('id', schedule.id);
+  if (discovery.url !== schedule.feed_url) {
+    const { data: conflict } = await admin.from('rss_schedules')
+      .select('id').eq('project_id', schedule.project_id).eq('feed_url', discovery.url).neq('id', schedule.id).limit(1).maybeSingle();
+    if (!conflict) await admin.from('rss_schedules').update({ feed_url: discovery.url, updated_at: validatedAt }).eq('id', schedule.id);
+  }
   if (portal?.id) {
     await admin.from('monitored_portals').update({
       rss_feed_url: discovery.url,
@@ -138,20 +152,23 @@ Deno.serve(async (req: Request) => {
   if (!auth?.startsWith('Bearer ')) return J({ success: false, error: 'Autorização necessária' }, 401);
   if (jwtRole(auth.slice(7)) !== 'service_role') return J({ success: false, error: 'Execução restrita ao serviço de automação' }, 403);
 
+  const input = await req.json().catch(() => ({})) as Input;
+  const targeted = Boolean(input.scheduleId);
+  const maxSchedules = targeted ? 1 : Math.max(1, Math.min(25, Number(input.maxSchedules || 25)));
   const url = Deno.env.get('SUPABASE_URL') || '';
   const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
   if (!url || !key) return J({ success: false, error: 'Backend incompleto' }, 500);
 
   const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const now = new Date().toISOString();
-  const { data: schedules, error } = await admin.from('rss_schedules')
+  let schedulesQuery = admin.from('rss_schedules')
     .select('id,user_id,project_id,feed_url,feed_name,niche,article_length,frequency,auto_publish,last_run_at,next_run_at,articles_generated')
-    .eq('is_active', true)
-    .or(`next_run_at.is.null,next_run_at.lte.${now}`)
-    .order('next_run_at', { ascending: true, nullsFirst: true })
-    .limit(25);
+    .eq('is_active', true);
+  if (input.scheduleId) schedulesQuery = schedulesQuery.eq('id', input.scheduleId);
+  else schedulesQuery = schedulesQuery.or(`next_run_at.is.null,next_run_at.lte.${now}`);
+  const { data: schedules, error } = await schedulesQuery.order('next_run_at', { ascending: true, nullsFirst: true }).limit(maxSchedules);
   if (error) return J({ success: false, error: error.message }, 500);
-  if (!schedules?.length) return J({ success: true, processed: 0, queued: 0, schedules: [] });
+  if (!schedules?.length) return J({ success: true, processed: 0, queued: 0, drafts: 0, skipped: 0, schedules: [], targeted });
 
   let processed = 0;
   let queued = 0;
@@ -162,11 +179,11 @@ Deno.serve(async (req: Request) => {
   for (const raw of schedules) {
     const schedule = raw as Schedule;
     try {
-      if (!(await claim(admin, schedule))) continue;
+      if (!(await claim(admin, schedule, targeted))) continue;
       const portal = await resolvePortal(admin, schedule);
       const feed = await resolveFeed(admin, schedule, portal);
-      const limit = Math.max(1, Math.min(10, Number(portal?.max_articles_per_day || 5)));
-      const { validation, items } = await fetchValidatedFeedItems(feed.url, limit);
+      const itemLimit = Math.max(1, Math.min(10, Number(input.itemLimit || portal?.max_articles_per_day || 5)));
+      const { validation, items } = await fetchValidatedFeedItems(feed.url, itemLimit);
       if (!validation.valid) throw new Error(`RSS falhou na segunda validação: ${validation.reason || 'unknown'}`);
 
       let created = 0;
@@ -229,6 +246,7 @@ Deno.serve(async (req: Request) => {
 
         if (schedule.project_id && !rewrite.data?.duplicate) {
           const safeToPublish = Boolean(
+            !input.forceDraft &&
             schedule.auto_publish &&
             article.status === 'ready' &&
             Number(article.originality_score || 0) >= 95 &&
@@ -257,7 +275,6 @@ Deno.serve(async (req: Request) => {
 
       const updatedAt = new Date().toISOString();
       await admin.from('rss_schedules').update({
-        feed_url: feed.url,
         last_run_at: updatedAt,
         next_run_at: nextRun(schedule.frequency),
         articles_generated: Number(schedule.articles_generated || 0) + created,
@@ -265,15 +282,16 @@ Deno.serve(async (req: Request) => {
       }).eq('id', schedule.id);
 
       if (portal?.id) {
-        await admin.from('monitored_portals').update({
+        const portalUpdate: Record<string, any> = {
           rss_feed_url: feed.url,
           last_ai_profile: lastProfile || {},
           last_ai_confidence: lastConfidence,
           articles_generated: Number(schedule.articles_generated || 0) + created,
-          last_article_at: created > 0 ? updatedAt : undefined,
           next_check_at: nextRun(schedule.frequency),
           updated_at: updatedAt,
-        }).eq('id', portal.id);
+        };
+        if (created > 0) portalUpdate.last_article_at = updatedAt;
+        await admin.from('monitored_portals').update(portalUpdate).eq('id', portal.id);
       }
 
       results.push({
@@ -282,21 +300,27 @@ Deno.serve(async (req: Request) => {
         resolved_feed_url: feed.url,
         discovery_method: feed.discovery_method,
         feed_format: feed.format,
+        feed_http_status: feed.status,
+        feed_content_type: feed.content_type,
+        feed_structure_valid: feed.structure_valid,
         items_found: items.length,
         created,
         queued: enqueued,
         drafts: draftCount,
+        force_draft: Boolean(input.forceDraft),
         success: true,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro desconhecido';
       await admin.from('rss_schedules').update({ next_run_at: nextRun(schedule.frequency), updated_at: new Date().toISOString() }).eq('id', schedule.id);
       if (schedule.project_id) {
-        await admin.from('monitored_portals').update({ last_check_at: new Date().toISOString(), last_error: message.slice(0, 1000), updated_at: new Date().toISOString() }).eq('project_id', schedule.project_id).eq('portal_name', schedule.feed_name);
+        const { data: portals } = await admin.from('monitored_portals').select('id,portal_name').eq('project_id', schedule.project_id).eq('is_active', true).limit(100);
+        const match = (portals || []).find((portal: any) => portal.portal_name === schedule.feed_name);
+        if (match?.id) await admin.from('monitored_portals').update({ last_check_at: new Date().toISOString(), last_error: message.slice(0, 1000), updated_at: new Date().toISOString() }).eq('id', match.id);
       }
       results.push({ schedule_id: schedule.id, success: false, error: message });
     }
   }
 
-  return J({ success: true, processed, queued, drafts, skipped, schedules: results });
+  return J({ success: true, processed, queued, drafts, skipped, schedules: results, targeted, force_draft: Boolean(input.forceDraft) });
 });
