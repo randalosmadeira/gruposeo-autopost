@@ -1,0 +1,1 @@
+Auditoria consolidada em docs/audits/2026-09-03-bulk-publication-readiness.md. Este arquivo registra que o lote deve considerar estado/preflight real e que conectividade WordPress foi validada separadamente dos bloqueios editoriais.
