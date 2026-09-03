@@ -1,12 +1,12 @@
 {
   "software_id": "zica-posts",
   "name": "Zica Posts",
-  "version": "3.10.2",
+  "version": "3.10.3",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",
   "api_namespace": "zica-posts/v1",
   "timezone": "America/Sao_Paulo",
-  "features": ["modular_light_agent","persistent_outbox","hmac_sha256","nonce_replay_protection","content_hash_idempotency","correlation_ids","anti_echo_hub_sync","async_hub_webhook","delegated_indexing","indexnow_batch_500","llms_txt","llms_full_txt","ai_txt","dynamic_sitemap","schema_jsonld","automatic_related_cards","frontend_card_styles","daily_1500_sao_paulo","physical_file_atomic_write","virtual_file_fallback","ai_crawler_robots_rules","legacy_api_compatibility"],
-  "notes": ["IndexNow submission is not indexing confirmation.","Google Indexing API is not used for generic articles.","No automatic permalink, blog_public, comments, WAF or global cache mutation."]
+  "features": ["modular_light_agent","persistent_outbox","hmac_sha256","nonce_replay_protection","content_hash_idempotency","correlation_ids","anti_echo_hub_sync","async_hub_webhook","delegated_indexing","indexnow_batch_500","rss_alternate","rss_llm_discovery","rss_manifest","datafeed_schema","indexnow_canonical_only","llms_txt","llms_full_txt","ai_txt","dynamic_sitemap","schema_jsonld","automatic_related_cards","frontend_card_styles","daily_1500_sao_paulo","physical_file_atomic_write","virtual_file_fallback","ai_crawler_robots_rules","legacy_api_compatibility"],
+  "notes": ["RSS is a discovery resource and never replaces post/page canonical URLs.","IndexNow submission filters the site feed and accepts canonical same-host content URLs only.","DataFeed schema is emitted only on feed/listing surfaces.","IndexNow submission is not indexing confirmation.","Google Indexing API is not used for generic articles.","No automatic permalink, blog_public, comments, WAF or global cache mutation."]
 }
