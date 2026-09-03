@@ -21,7 +21,7 @@ begin
     reasons := array_append(reasons, 'requery_marker');
   end if;
 
-  if body_text ~* 'NOTA[[:space:]]+EDITORIAL[[:space:]]*:[\s\S]{0,520}(FONTE[[:space:]]+OFICIAL|PUBLICA(C|Ç)(A|Ã)O[[:space:]]+FINAL|REVIS(A|Ã)O[[:space:]]+HUMANA)' then
+  if body_text ~* 'NOTA[[:space:]]+EDITORIAL[[:space:]]*:[\s\S]{0,240}(FONTE[[:space:]]+OFICIAL|PUBLICA(C|Ç)(A|Ã)O[[:space:]]+FINAL|REVIS(A|Ã)O[[:space:]]+HUMANA)' then
     reasons := array_append(reasons, 'editorial_verification_notice');
   end if;
 
