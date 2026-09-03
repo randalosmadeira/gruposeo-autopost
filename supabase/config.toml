@@ -37,6 +37,9 @@ verify_jwt = false
 [functions.auto-process-rss]
 verify_jwt = false
 
+[functions.zica-brain-tick]
+verify_jwt = false
+
 # Public supporter ingress uses its own short-lived public token and rate limits.
 [functions.supporter-avatar-public]
 verify_jwt = false
