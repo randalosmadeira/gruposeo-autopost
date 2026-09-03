@@ -134,7 +134,8 @@ describe('Supporter Avatar 1470 autonomous auto-selector v3 regressions', () => 
 
   it('16. validates Drive asset MIME before generation and can fall back to the runner-up asset', () => {
     expect(generator).toContain('candidate_asset_invalid_mime');
-    expect(generator).toContain('runnerUpMeta.slug !== candidateMeta.slug');
+    expect(generator).toContain('runnerUpMeta.slug === candidateMeta.slug');
+    expect(generator).toContain('runnerUpMeta.slug !== currentCandidateMeta.slug');
   });
 
   it('17. uses high image input fidelity when supported and transparently retries without the optional parameter if rejected', () => {
