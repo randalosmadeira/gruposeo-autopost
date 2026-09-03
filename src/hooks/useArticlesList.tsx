@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { decorateArticleListStatus } from '@/lib/article-list-status';
 import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
 
@@ -80,7 +81,8 @@ export function useArticlesList() {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<ArticleListFilters>(defaultFilters);
 
-  // Fetch status counts using separate lightweight count queries
+  // Fetch status counts using separate lightweight count queries.
+  // A draft with error_message is not a queue item: it represents a publication/preflight failure.
   const { data: statusCounts } = useQuery({
     queryKey: ['articles-counts', user?.id, filters.projectId, filters.search, filters.dateFilter],
     queryFn: async (): Promise<StatusCounts> => {
@@ -96,20 +98,25 @@ export function useArticlesList() {
         return q;
       };
 
-      const [allRes, pubRes, readyRes, genRes, draftRes, errRes] = await Promise.all([
+      const now = new Date().toISOString();
+      const [allRes, pubRes, readyAllRes, scheduledRes, genRes, draftRes, errRes] = await Promise.all([
         buildBaseQuery(),
         buildBaseQuery().eq('status', 'published'),
         buildBaseQuery().eq('status', 'ready'),
+        buildBaseQuery().eq('status', 'ready').gt('scheduled_at', now),
         buildBaseQuery().eq('status', 'generating'),
-        buildBaseQuery().eq('status', 'draft'),
-        buildBaseQuery().eq('status', 'error'),
+        buildBaseQuery().eq('status', 'draft').is('error_message', null),
+        buildBaseQuery().or('status.eq.error,and(status.eq.draft,error_message.not.is.null)'),
       ]);
+
+      const scheduled = scheduledRes.count ?? 0;
+      const readyAll = readyAllRes.count ?? 0;
 
       return {
         all: allRes.count ?? 0,
         published: pubRes.count ?? 0,
-        scheduled: 0, // Will be computed from ready articles with scheduled_at
-        ready: readyRes.count ?? 0,
+        scheduled,
+        ready: Math.max(0, readyAll - scheduled),
         generating: genRes.count ?? 0,
         draft: draftRes.count ?? 0,
         error: errRes.count ?? 0,
@@ -136,13 +143,17 @@ export function useArticlesList() {
         .order(sortBy, { ascending: sortOrder === 'asc' })
         .range(from, to);
 
-      // Status filter
+      // Status filter. Draft rows with an error are failures, never queue items.
       if (status !== 'all') {
         if (status === 'scheduled') {
-          query = query.eq('status', 'ready').not('scheduled_at', 'is', null);
+          query = query.eq('status', 'ready').gt('scheduled_at', new Date().toISOString());
         } else if (status === 'ready') {
           query = query.eq('status', 'ready');
-          // We'll filter scheduled out client-side for simplicity
+          // Scheduled rows are filtered below using the actual due time.
+        } else if (status === 'draft') {
+          query = query.eq('status', 'draft').is('error_message', null);
+        } else if (status === 'error') {
+          query = query.or('status.eq.error,and(status.eq.draft,error_message.not.is.null)');
         } else {
           query = query.eq('status', status as any);
         }
@@ -171,12 +182,16 @@ export function useArticlesList() {
 
       let articles = (data || []) as ArticleListItem[];
 
-      // Client-side filter for 'ready' (exclude scheduled) and 'scheduled' (only future scheduled)
+      // Client-side filter for 'ready' (exclude future scheduled) and 'scheduled' (only future scheduled)
       if (status === 'ready') {
         articles = articles.filter(a => !a.scheduled_at || new Date(a.scheduled_at) <= new Date());
       } else if (status === 'scheduled') {
         articles = articles.filter(a => a.scheduled_at && new Date(a.scheduled_at) > new Date());
       }
+
+      // Presentation-only normalization. The database status is preserved.
+      // Failed drafts become "Erro" and their exact non-publication reason is shown in the list excerpt.
+      articles = articles.map((article) => decorateArticleListStatus(article));
 
       console.log(`[useArticlesList] Loaded ${articles.length} articles (page ${page}, total: ${count})`);
 
