@@ -17,6 +17,8 @@ describe("zica brain provider health", () => {
     expect(providerHealth).not.toContain("api.anthropic.com/v1/messages");
     expect(providerHealth).toContain('billable_probe: false');
     expect(providerHealth).toContain('mode: "non_billable_configuration_check"');
+    expect(source).toContain("bucket(1440)");
+    expect(source).toContain('Deno.env.get("SUPABASE_SECRET_KEY")');
   });
 });
 

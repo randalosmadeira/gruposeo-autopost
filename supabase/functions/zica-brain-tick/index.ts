@@ -151,7 +151,7 @@ Deno.serve(async (req: Request) => {
   const started = Date.now();
   try {
     const url = Deno.env.get("SUPABASE_URL") || "";
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || "";
     if (!url || !serviceKey) return json({ success: false, error: "backend_not_configured", request_id: requestId }, 500);
     const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
@@ -170,13 +170,13 @@ Deno.serve(async (req: Request) => {
     ]);
     const users = [...new Set([...(projectUsers || []), ...(articleUsers || []), ...(agentUsers || [])].map((r: any) => String(r.user_id)).filter(Boolean))];
 
-    const five = bucket(5), fifteen = bucket(15), sixHours = bucket(360);
+    const reconcileWindow = bucket(15), providerWindow = bucket(15), auditWindow = bucket(1440);
     let enqueued = 0;
     for (const userId of users) {
       await state(admin, userId, "brain", "healthy", { phase: "enqueue", tick: requestId });
       const { data: projects } = await admin.from("projects").select("id").eq("user_id", userId).eq("is_connected", true).eq("wordpress_connector_mode", "zica_posts");
       for (const project of projects || []) {
-        await enqueue(admin, { user_id: userId, project_id: project.id, job_type: "wordpress_reconcile", status: "queued", priority: 75, idempotency_key: `wordpress:${project.id}:${five}`, payload: { projectId: project.id }, next_attempt_at: new Date().toISOString() });
+        await enqueue(admin, { user_id: userId, project_id: project.id, job_type: "wordpress_reconcile", status: "queued", priority: 75, idempotency_key: `wordpress:${project.id}:${reconcileWindow}`, payload: { projectId: project.id }, next_attempt_at: new Date().toISOString() });
         enqueued++;
       }
 
@@ -186,13 +186,13 @@ Deno.serve(async (req: Request) => {
         enqueued++;
       }
 
-      await enqueue(admin, { user_id: userId, job_type: "provider_health", status: "queued", priority: 80, idempotency_key: `providers:${fifteen}`, payload: {}, next_attempt_at: new Date().toISOString() });
+      await enqueue(admin, { user_id: userId, job_type: "provider_health", status: "queued", priority: 80, idempotency_key: `providers:${providerWindow}`, payload: {}, next_attempt_at: new Date().toISOString() });
       enqueued++;
 
       const cutoff = new Date(Date.now() - 6 * 3600_000).toISOString();
       const { data: auditRows } = await admin.from("articles").select("id").eq("user_id", userId).in("status", ["ready", "published"]).or(`last_llm_audit_at.is.null,last_llm_audit_at.lt.${cutoff}`).limit(50);
       for (const article of auditRows || []) {
-        await enqueue(admin, { user_id: userId, article_id: article.id, job_type: "llm_audit", status: "queued", priority: 55, idempotency_key: `llm-audit:${article.id}:${sixHours}`, payload: { articleId: article.id }, next_attempt_at: new Date().toISOString() });
+        await enqueue(admin, { user_id: userId, article_id: article.id, job_type: "llm_audit", status: "queued", priority: 55, idempotency_key: `llm-audit:${article.id}:${auditWindow}`, payload: { articleId: article.id }, next_attempt_at: new Date().toISOString() });
         enqueued++;
       }
     }
@@ -250,4 +250,3 @@ Deno.serve(async (req: Request) => {
     return json({ success: false, error: error instanceof Error ? error.message : "brain_tick_failed", request_id: requestId, duration_ms: Date.now() - started }, 500);
   }
 });
-
