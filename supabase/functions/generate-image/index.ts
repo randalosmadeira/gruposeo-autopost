@@ -122,7 +122,7 @@ async function pool(admin: any, userId: string, moduleKey: string, projectId?: s
   let scoped: any = null;
   if (projectId) { const { data } = await admin.from("module_image_policies").select("*").eq("user_id", userId).eq("module_key", moduleKey).eq("project_id", projectId).maybeSingle(); scoped = data; }
   const { data: globalPolicy } = await admin.from("module_image_policies").select("*").eq("user_id", userId).eq("module_key", moduleKey).is("project_id", null).maybeSingle();
-  const policy = scoped || globalPolicy || { required_asset_count: 6, allow_ai_generation: false, allow_background_editing: false, auto_select: true, hero_width: 1200, hero_height: 630, body_width: 800, preferred_format: "webp", max_hero_kb: 200, max_body_kb: 100 };
+  let policy = scoped || globalPolicy || { required_asset_count: 6, allow_ai_generation: false, allow_background_editing: false, auto_select: true, hero_width: 1200, hero_height: 630, body_width: 800, preferred_format: "webp", max_hero_kb: 200, max_body_kb: 100 };
   const select = "id,slot,label,source_type,bucket_name,storage_path,external_url,alt_text,semantic_filename,caption,semantic_tags,usage_count,last_used_at,background_mode,background_prompt";
   let assetScope: "project" | "global" = scoped && projectId ? "project" : "global";
   let q = admin.from("module_image_assets").select(select).eq("user_id", userId).eq("module_key", moduleKey).eq("is_active", true).order("slot", { ascending: true }).limit(6);
@@ -134,6 +134,10 @@ async function pool(admin: any, userId: string, moduleKey: string, projectId?: s
     if (fallback.error) throw fallback.error;
     data = fallback.data;
     assetScope = "global";
+    // A project policy can point to an empty project pool. When assets fall
+    // back to the global pool, their global chroma/editing policy must follow
+    // them. Otherwise raw green-screen sources are published unchanged.
+    if (globalPolicy) policy = globalPolicy;
   }
   const assets = (data || []) as PoolAsset[];
   return { policy, assets, assetScope };

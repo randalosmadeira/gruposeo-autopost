@@ -17,7 +17,7 @@ export function markdownToHTML(content: string): string {
   if (!content) return '';
   
   // Strip META_DESCRIPTION and TITLE_SEO comments before processing
-  let cleaned = content
+  const cleaned = content
     .replace(/<!--\s*META_DESCRIPTION:\s*.*?-->/gi, '')
     .replace(/<!--\s*TITLE_SEO:\s*.*?-->/gi, '')
     .trim();

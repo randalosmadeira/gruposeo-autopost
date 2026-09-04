@@ -45,7 +45,7 @@ export function ArticleEditorContent({
     if (!content) return '';
     
     // Strip META_DESCRIPTION and TITLE_SEO comments (they shouldn't be visible)
-    let cleaned = content
+    const cleaned = content
       .replace(/<!--\s*META_DESCRIPTION:\s*.*?-->/gi, '')
       .replace(/<!--\s*TITLE_SEO:\s*.*?-->/gi, '')
       .trim();
@@ -314,7 +314,7 @@ export function ArticleEditorContent({
             selectedImage.style.borderRadius = styles.borderRadius;
             
             // Handle alignment by wrapping in div
-            let parent = selectedImage.parentElement;
+            const parent = selectedImage.parentElement;
             if (parent && parent.classList.contains('image-wrapper')) {
               parent.style.textAlign = styles.alignment;
             } else {

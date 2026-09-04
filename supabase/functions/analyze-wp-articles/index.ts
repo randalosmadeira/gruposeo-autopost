@@ -134,7 +134,7 @@ IMPORTANTE:
 
     // Parse JSON from response
     try {
-      let jsonStr = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const jsonStr = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       return { result: JSON.parse(jsonStr), usedAI: true, creditsExhausted: false };
     } catch (e) {
       console.error("Failed to parse AI response:", aiContent);

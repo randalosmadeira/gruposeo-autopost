@@ -121,7 +121,7 @@ function extractMainContent(html: string): string {
 function extractSourceName(url: string): string {
   try {
     const urlObj = new URL(url);
-    let hostname = urlObj.hostname.replace('www.', '');
+    const hostname = urlObj.hostname.replace('www.', '');
     
     // Map known domains to names
     const domainNames: Record<string, string> = {

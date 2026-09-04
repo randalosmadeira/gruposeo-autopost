@@ -143,7 +143,7 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
     setIsTesting(true);
     try {
       // Validate via backend to avoid exposing key to third-party domains in the browser.
-      let { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         toast({
           title: 'Sessão expirada',
