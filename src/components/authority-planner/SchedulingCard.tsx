@@ -62,7 +62,7 @@ export function SchedulingCard({ form, isScheduleMode }: SchedulingCardProps) {
 
   const quickSchedule = (type: 'daily' | 'weekly' | 'custom') => {
     const now = new Date();
-    let times: ScheduledTime[] = [];
+    const times: ScheduledTime[] = [];
 
     if (type === 'daily') {
       // Schedule for next 7 days at 9AM
