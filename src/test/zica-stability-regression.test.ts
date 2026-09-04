@@ -63,6 +63,15 @@ describe('Zica Posts stability regressions', () => {
     expect(brain).toContain('Math.min(20, Number(body?.maxJobs || 5))');
   });
 
+  it('serves article images through Storage CDN instead of database data URLs', () => {
+    const image = read('supabase/functions/generate-image/index.ts');
+    const brain = read('supabase/functions/zica-brain-tick/index.ts');
+    const migration = read('supabase/migrations/20260904034000_externalize_article_images.sql');
+    expect(image).toContain('storage.from("article-images").upload');
+    expect(image).toContain('getPublicUrl(path)');
+    expect(migration).toContain(`'{"maxJobs":5}'::jsonb`);
+  });
+
   it('allows bulk image generation to use the configured provider only after pool fallback', () => {
     const page = read('src/pages/ArticlesList.tsx');
     expect(page).toContain('allowAiGeneration: true');

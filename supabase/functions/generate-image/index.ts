@@ -33,6 +33,25 @@ function toBase64(bytes: Uint8Array) { const chunks: string[] = []; for (let i =
 function fromBase64(value: string) { const raw = atob(value); const out = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i); return out; }
 function extension(mime: string) { if (mime.includes("png")) return "png"; if (mime.includes("webp")) return "webp"; return "jpg"; }
 
+async function sha256Bytes(bytes: Uint8Array) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function persistImage(admin: any, userId: string, image: { bytes: Uint8Array; mime: string }) {
+  const hash = await sha256Bytes(image.bytes);
+  const path = `${userId}/${hash}.${extension(image.mime)}`;
+  const { error } = await admin.storage.from("article-images").upload(path, image.bytes, {
+    contentType: image.mime,
+    cacheControl: "31536000",
+    upsert: true,
+  });
+  if (error) throw new Error(`article_image_upload_failed:${error.message}`);
+  const { data } = admin.storage.from("article-images").getPublicUrl(path);
+  if (!data?.publicUrl) throw new Error("article_image_public_url_missing");
+  return { url: data.publicUrl, path, hash };
+}
+
 async function sourceAsset(admin: any, asset: PoolAsset) {
   if (asset.source_type === "storage") {
     if (!asset.bucket_name || !asset.storage_path) throw new Error("fixed_asset_storage_invalid");
@@ -144,7 +163,7 @@ async function synthetic(openaiKey: string, body: ImageRequest) {
   const prompt = `Crie uma imagem editorial horizontal original para: ${body.title}. Contexto: ${[body.context, body.keywords].filter(Boolean).join(". ")}. ${brandRule} Sem pessoa pública identificável não fornecida como referência. Não copiar logotipos, assinaturas ou composição protegida da matéria de origem.`;
   const response = await fetch("https://api.openai.com/v1/images/generations", { method: "POST", headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: OPENAI_IMAGE_MODEL, prompt, n: 1, size: size(body.aspectRatio), quality: body.quality === "low" ? "low" : body.quality === "medium" || body.quality === "standard" ? "medium" : "high" }), signal: AbortSignal.timeout(150000) });
   const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(String(payload?.error?.message || `openai_image_http_${response.status}`));
-  if (payload?.data?.[0]?.b64_json) return `data:image/png;base64,${payload.data[0].b64_json}`;
+  if (payload?.data?.[0]?.b64_json) return { bytes: fromBase64(payload.data[0].b64_json), mime: "image/png" };
   throw new Error("synthetic_image_missing_output");
 }
 
@@ -182,15 +201,19 @@ Deno.serve(async (req: Request) => {
         admin.from("module_image_selection_logs").insert({ user_id: userId, module_key: moduleKey, project_id: body.projectId || null, article_id: body.articleId || null, asset_id: selected.asset.id, selector_provider: selected.provider, selector_model: selected.model, selection_reason: selected.reason.slice(0, 1000) }),
       ]);
       const meta = { source, module_key: moduleKey, asset_id: selected.asset.id, asset_scope: assetScope, pool_asset_count: assets.length, pool_required_count: required, pool_complete: assets.length >= required, unavailable_assets_skipped: assetFailures.length, slot: selected.asset.slot, background_mode: selected.asset.background_mode, background_edited: edited, synthetic_person_generation: false, alt_text: selected.asset.alt_text, semantic_filename: selected.asset.semantic_filename, caption: selected.asset.caption, target_hero: `${policy.hero_width || 1200}x${policy.hero_height || 630}`, preferred_format: policy.preferred_format || "webp", selection_reason: selected.reason };
-      await saveArticle(admin, userId, body, finalImage.dataUrl, source, meta);
-      return json({ success: true, image: finalImage.dataUrl, source, generated: false, edited, syntheticPersonGeneration: false, moduleKey, selectedSlot: selected.asset.slot, alt: selected.asset.alt_text, filename: selected.asset.semantic_filename, caption: selected.asset.caption, geo: meta, request_id: requestId });
+      const persisted = await persistImage(admin, userId, finalImage);
+      const persistedMeta = { ...meta, storage_bucket: "article-images", storage_path: persisted.path, content_hash: persisted.hash };
+      await saveArticle(admin, userId, body, persisted.url, source, persistedMeta);
+      return json({ success: true, image: persisted.url, source, generated: false, edited, syntheticPersonGeneration: false, moduleKey, selectedSlot: selected.asset.slot, alt: selected.asset.alt_text, filename: selected.asset.semantic_filename, caption: selected.asset.caption, geo: persistedMeta, request_id: requestId });
       }
     }
 
     if (!(body.allowAiGeneration === true && policy.allow_ai_generation === true)) return json({ success: false, error: `Nenhuma das ${assets.length} imagens cadastradas no módulo ${moduleKey} está acessível.`, code: "image_pool_incomplete", retryable: false }, 409);
     const keys = await fetchUserKeys(userId); if (!keys.openai) return json({ success: false, error: "OpenAI não configurada", code: "openai_missing" }, 503);
-    const image = await synthetic(keys.openai, body); const meta = { source: "openai", synthetic: true, model: OPENAI_IMAGE_MODEL, module_key: moduleKey, watermark_requested: String(body.watermark || "").trim() || null };
-    await saveArticle(admin, userId, body, image, "openai", meta); return json({ success: true, image, source: "openai", generated: true, provider: "openai", model: OPENAI_IMAGE_MODEL, geo: meta });
+    const image = await synthetic(keys.openai, body);
+    const persisted = await persistImage(admin, userId, image);
+    const meta = { source: "openai", synthetic: true, model: OPENAI_IMAGE_MODEL, module_key: moduleKey, watermark_requested: String(body.watermark || "").trim() || null, storage_bucket: "article-images", storage_path: persisted.path, content_hash: persisted.hash };
+    await saveArticle(admin, userId, body, persisted.url, "openai", meta); return json({ success: true, image: persisted.url, source: "openai", generated: true, provider: "openai", model: OPENAI_IMAGE_MODEL, geo: meta });
   } catch (error) {
     if (error instanceof RequestAuthError) return json({ success: false, error: error.message, code: error.code }, error.status);
     const message = error instanceof Error ? error.message : "image_processing_failed"; return json({ success: false, error: message, code: "image_processing_failed", image_pending: true, retryable: true, request_id: requestId }, 500);
