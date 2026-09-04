@@ -161,7 +161,10 @@ Deno.serve(async (req: Request) => {
       return json({ success: false, error: "automation_unauthorized", request_id: requestId }, 401);
     }
     const body = await req.json().catch(() => ({}));
-    const maxJobs = Math.max(1, Math.min(50, Number(body?.maxJobs || 20)));
+    // Image jobs can download several unavailable candidates before succeeding.
+    // Keep the default batch below the Edge Function wall-clock limit so locks
+    // are completed instead of being abandoned by an overlapping cron tick.
+    const maxJobs = Math.max(1, Math.min(20, Number(body?.maxJobs || 5)));
 
     const [{ data: projectUsers }, { data: articleUsers }, { data: agentUsers }] = await Promise.all([
       admin.from("projects").select("user_id"),
