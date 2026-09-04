@@ -197,7 +197,37 @@ Deno.serve(async (req: Request) => {
           },
         }).eq("id", article.id);
 
-        if (schedule.auto_publish && schedule.project_id && !rewriteResult.duplicate && Number(article.originality_score || 0) >= 95) {
+        let imageReady = Boolean(article.featured_image_url);
+        if (!imageReady && schedule.project_id) {
+          const image = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: schedule.user_id,
+              articleId: article.id,
+              projectId: schedule.project_id,
+              moduleKey: "news",
+              allowAiGeneration: true,
+              watermark: "RDM ADVOGADOS",
+              title: article.title,
+              context: article.excerpt || item.description || "",
+              content: article.content || "",
+              segment: "news",
+              aspectRatio: "16:9",
+              quality: "high",
+            }),
+          });
+          const imageBody = await image.json().catch(() => ({}));
+          imageReady = image.ok && imageBody?.success === true;
+          if (!imageReady) {
+            await admin.from("articles").update({
+              error_message: String(imageBody?.error || `Imagem pendente: HTTP ${image.status}`).slice(0, 500),
+              updated_at: new Date().toISOString(),
+            }).eq("id", article.id);
+          }
+        }
+
+        if (schedule.auto_publish && schedule.project_id && imageReady && !rewriteResult.duplicate && Number(article.originality_score || 0) >= 95) {
           const publish = await fetch(`${supabaseUrl}/functions/v1/publish-to-wordpress`, {
             method: "POST",
             headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
