@@ -49,7 +49,7 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"action":"capabilities"}' \
             'https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1/supporter-avatar-public-v2' > /tmp/avatar-capabilities.json
-          node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/avatar-capabilities.json','utf8')); if(!x.ok) process.exit(1); if(x.pipeline!=='auto-selector-v2') process.exit(2); if(x.candidateSelection!=='private-automatic') process.exit(3); if(x.publicCandidateGallery!==false) process.exit(4); if(!Array.isArray(x.socialOutputs)||x.socialOutputs.join(',')!=='1080x1080,1080x1350,1200x630') process.exit(5);"
+          node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/avatar-capabilities.json','utf8')); if(!x.ok) process.exit(1); if(x.pipeline!=='supporter-avatar-resumable-v5') process.exit(2); if(x.candidateSelection!=='private-automatic') process.exit(3); if(x.publicCandidateGallery!==false) process.exit(4); if(!Array.isArray(x.socialOutputs)||x.socialOutputs.join(',')!=='1080x1080,1080x1350,1200x630') process.exit(5);"
 
       - name: Validate public Zica.ai route
         shell: bash

@@ -172,6 +172,15 @@ jobs:
           cd "$ORCH_RELEASE"
           docker build --pull -t "$IMAGE" .
 
+          # One-time migration from the former shared product name. Preserve the
+          # Redis container and its mounted queue data, but free the API port.
+          docker rm -f zica-ai-orchestrator-api zica-ai-orchestrator-worker >/dev/null 2>&1 || true
+          if docker inspect zica-ai-orchestrator-redis >/dev/null 2>&1 && ! docker inspect "$REDIS" >/dev/null 2>&1; then
+            docker stop zica-ai-orchestrator-redis >/dev/null 2>&1 || true
+            docker rename zica-ai-orchestrator-redis "$REDIS"
+            docker network connect "$NETWORK" "$REDIS" >/dev/null 2>&1 || true
+          fi
+
           if ! docker inspect "$REDIS" >/dev/null 2>&1; then
             docker run -d --name "$REDIS" --restart unless-stopped \
               --network "$NETWORK" --memory 512m --cpus 0.50 \
@@ -260,6 +269,7 @@ jobs:
           if [ -n "$NGINX_LINK" ]; then
             sudo ln -sfn "$NGINX_FILE" "$NGINX_LINK"
           fi
+          sudo rm -f /etc/nginx/conf.d/zica-ai-orchestrator.conf /etc/nginx/sites-enabled/zica-ai-orchestrator
           sudo nginx -t
           sudo systemctl reload nginx || sudo nginx -s reload
 
