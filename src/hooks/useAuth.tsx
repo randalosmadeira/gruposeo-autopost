@@ -135,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(sessionTimeout);
       subscription.unsubscribe();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const signUp = useCallback(
     async (email: string, password: string, fullName?: string) => {
