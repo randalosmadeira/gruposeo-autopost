@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { fetchUserKeys, getOrchestratorForUser } from "../_shared/byok-resolver.ts";
+import { fetchUserKeys } from "../_shared/byok-resolver.ts";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 
 const OPENAI_IMAGE_MODEL = "gpt-image-2";
@@ -15,6 +15,7 @@ type ImageRequest = {
   segment?: string; aspectRatio?: "16:9" | "1:1" | "4:3" | "9:16" | "4:5";
   quality?: "low" | "medium" | "high" | "standard"; articleId?: string;
   projectId?: string | null; moduleKey?: string; allowAiGeneration?: boolean; userId?: string;
+  watermark?: string;
 };
 type PoolAsset = {
   id: string; slot: number; label: string; source_type: "storage" | "external_url";
@@ -49,25 +50,34 @@ async function sourceAsset(admin: any, asset: PoolAsset) {
   return { bytes, mime, dataUrl: `data:${mime};base64,${toBase64(bytes)}` };
 }
 
-function parseSelection(text: string) {
-  const clean = text.replace(/```json/gi, "").replace(/```/g, "").trim(); const a = clean.indexOf("{"); const z = clean.lastIndexOf("}");
-  if (a < 0 || z <= a) return null; try { return JSON.parse(clean.slice(a, z + 1)) as { asset_id?: string; reason?: string }; } catch { return null; }
+function normalize(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/<[^>]+>/g, " ").replace(/[^a-z0-9]+/g, " ");
 }
 
-async function choose(userId: string, body: ImageRequest, assets: PoolAsset[]) {
-  const context = [body.title, body.keywords, body.context, body.content?.replace(/<[^>]+>/g, " ").slice(0, 2200)].filter(Boolean).join("\n");
-  try {
-    const orchestrator = await getOrchestratorForUser(userId);
-    const options = assets.map((a) => ({ asset_id: a.id, slot: a.slot, label: a.label, alt_text: a.alt_text, tags: a.semantic_tags, usage_count: a.usage_count, last_used_at: a.last_used_at, background_mode: a.background_mode }));
-    const result = await orchestrator.callWithMeta("strategy_planning", [
-      { role: "system", content: "Escolha exatamente uma foto autorizada do pool. Não crie imagem. Prefira aderência semântica e diversidade de uso. Responda somente JSON." },
-      { role: "user", content: `CONTEÚDO:\n${context}\n\nFOTOS:\n${JSON.stringify(options)}\n\nRetorne {\"asset_id\":\"uuid\",\"reason\":\"motivo em uma frase\"}.` },
-    ], { preferredProvider: "openai", maxTokens: 600, temperature: 0.05 });
-    const parsed = parseSelection(result.content); const asset = assets.find((a) => a.id === parsed?.asset_id);
-    if (asset) return { asset, reason: String(parsed?.reason || "Aderência semântica ao conteúdo."), provider: result.provider, model: result.model };
-  } catch (error) { console.warn("[generate-image] selector fallback:", error instanceof Error ? error.message : "unknown"); }
-  const asset = [...assets].sort((a, b) => a.usage_count - b.usage_count || Date.parse(a.last_used_at || "1970-01-01") - Date.parse(b.last_used_at || "1970-01-01") || a.slot - b.slot)[0];
-  return { asset, reason: "Fallback determinístico: foto autorizada menos utilizada.", provider: "deterministic", model: "least-used-v1" };
+function stableHash(value: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) hash = Math.imul(hash ^ value.charCodeAt(i), 16777619);
+  return hash >>> 0;
+}
+
+function choose(body: ImageRequest, assets: PoolAsset[]) {
+  const context = normalize([body.title, body.keywords, body.context, body.content?.slice(0, 2200)].filter(Boolean).join(" "));
+  const ranked = assets.map((asset) => {
+    const terms = [asset.label, asset.alt_text, ...(asset.semantic_tags || [])]
+      .flatMap((value) => normalize(value).split(" "))
+      .filter((value) => value.length >= 4);
+    const semanticScore = new Set(terms.filter((term) => context.includes(term))).size;
+    return { asset, semanticScore };
+  });
+  const bestScore = Math.max(...ranked.map((item) => item.semanticScore));
+  const candidates = ranked.filter((item) => item.semanticScore === bestScore).sort((a, b) => a.asset.slot - b.asset.slot);
+  const selected = candidates[stableHash(body.articleId || body.title) % candidates.length];
+  return {
+    asset: selected?.asset,
+    reason: selected?.semanticScore ? `Seleção semântica local: ${selected.semanticScore} termo(s) compatível(is).` : "Seleção local distribuída entre as fotos autorizadas.",
+    provider: "deterministic",
+    model: "semantic-stable-v3",
+  };
 }
 
 async function pool(admin: any, userId: string, moduleKey: string, projectId?: string | null) {
@@ -75,9 +85,20 @@ async function pool(admin: any, userId: string, moduleKey: string, projectId?: s
   if (projectId) { const { data } = await admin.from("module_image_policies").select("*").eq("user_id", userId).eq("module_key", moduleKey).eq("project_id", projectId).maybeSingle(); scoped = data; }
   const { data: globalPolicy } = await admin.from("module_image_policies").select("*").eq("user_id", userId).eq("module_key", moduleKey).is("project_id", null).maybeSingle();
   const policy = scoped || globalPolicy || { required_asset_count: 6, allow_ai_generation: false, allow_background_editing: false, auto_select: true, hero_width: 1200, hero_height: 630, body_width: 800, preferred_format: "webp", max_hero_kb: 200, max_body_kb: 100 };
-  let q = admin.from("module_image_assets").select("id,slot,label,source_type,bucket_name,storage_path,external_url,alt_text,semantic_filename,caption,semantic_tags,usage_count,last_used_at,background_mode,background_prompt").eq("user_id", userId).eq("module_key", moduleKey).eq("is_active", true).order("slot", { ascending: true }).limit(6);
-  q = scoped && projectId ? q.eq("project_id", projectId) : q.is("project_id", null);
-  const { data, error } = await q; if (error) throw error; return { policy, assets: (data || []) as PoolAsset[] };
+  const select = "id,slot,label,source_type,bucket_name,storage_path,external_url,alt_text,semantic_filename,caption,semantic_tags,usage_count,last_used_at,background_mode,background_prompt";
+  let assetScope: "project" | "global" = scoped && projectId ? "project" : "global";
+  let q = admin.from("module_image_assets").select(select).eq("user_id", userId).eq("module_key", moduleKey).eq("is_active", true).order("slot", { ascending: true }).limit(6);
+  q = assetScope === "project" ? q.eq("project_id", projectId) : q.is("project_id", null);
+  let { data, error } = await q;
+  if (error) throw error;
+  if (!data?.length && assetScope === "project") {
+    const fallback = await admin.from("module_image_assets").select(select).eq("user_id", userId).eq("module_key", moduleKey).is("project_id", null).eq("is_active", true).order("slot", { ascending: true }).limit(6);
+    if (fallback.error) throw fallback.error;
+    data = fallback.data;
+    assetScope = "global";
+  }
+  const assets = (data || []) as PoolAsset[];
+  return { policy, assets, assetScope };
 }
 
 async function backgroundEdit(openaiKey: string, source: { bytes: Uint8Array; mime: string }, asset: PoolAsset, body: ImageRequest) {
@@ -97,7 +118,11 @@ REGRAS OBRIGATÓRIAS:\n- Esta é uma EDIÇÃO DE FUNDO de uma fotografia real au
 }
 
 async function synthetic(openaiKey: string, body: ImageRequest) {
-  const prompt = `Crie uma imagem editorial para: ${body.title}. Contexto: ${[body.context, body.keywords].filter(Boolean).join(". ")}. Sem texto, sem marca d'água e sem pessoa pública identificável não fornecida como referência.`;
+  const watermark = String(body.watermark || "").trim();
+  const brandRule = watermark
+    ? `Aplicar no rodapé uma marca d'água discreta, legível e exatamente com o texto: ${watermark}. Não inserir nenhum outro texto.`
+    : "Sem texto e sem marca d'água.";
+  const prompt = `Crie uma imagem editorial horizontal original para: ${body.title}. Contexto: ${[body.context, body.keywords].filter(Boolean).join(". ")}. ${brandRule} Sem pessoa pública identificável não fornecida como referência. Não copiar logotipos, assinaturas ou composição protegida da matéria de origem.`;
   const response = await fetch("https://api.openai.com/v1/images/generations", { method: "POST", headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: OPENAI_IMAGE_MODEL, prompt, n: 1, size: size(body.aspectRatio), quality: body.quality === "low" ? "low" : body.quality === "medium" || body.quality === "standard" ? "medium" : "high" }), signal: AbortSignal.timeout(150000) });
   const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(String(payload?.error?.message || `openai_image_http_${response.status}`));
   if (payload?.data?.[0]?.b64_json) return `data:image/png;base64,${payload.data[0].b64_json}`;
@@ -121,10 +146,10 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = env("SUPABASE_URL"); const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY") || env("SUPABASE_SECRET_KEY");
     if (!supabaseUrl || !serviceKey) return json({ success: false, error: "Backend incompleto" }, 500);
     const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-    const moduleKey = moduleFor(body); const { policy, assets } = await pool(admin, userId, moduleKey, body.projectId); const required = Number(policy.required_asset_count || 6);
+    const moduleKey = moduleFor(body); const { policy, assets, assetScope } = await pool(admin, userId, moduleKey, body.projectId); const required = Number(policy.required_asset_count || 6);
 
-    if (assets.length >= required && policy.auto_select !== false) {
-      const selected = await choose(userId, body, assets.slice(0, 6)); if (!selected.asset) throw new Error("fixed_image_selection_failed");
+    if (assets.length > 0 && policy.auto_select !== false) {
+      const selected = choose(body, assets.slice(0, 6)); if (!selected.asset) throw new Error("fixed_image_selection_failed");
       const original = await sourceAsset(admin, selected.asset); let finalImage = original; let source = "fixed_pool"; let edited = false;
       if (selected.asset.background_mode === "chroma_replace") {
         if (policy.allow_background_editing !== true) throw new Error("background_editing_not_authorized");
@@ -136,14 +161,14 @@ Deno.serve(async (req: Request) => {
         admin.from("module_image_assets").update({ usage_count: Number(selected.asset.usage_count || 0) + 1, last_used_at: now, updated_at: now }).eq("id", selected.asset.id).eq("user_id", userId),
         admin.from("module_image_selection_logs").insert({ user_id: userId, module_key: moduleKey, project_id: body.projectId || null, article_id: body.articleId || null, asset_id: selected.asset.id, selector_provider: selected.provider, selector_model: selected.model, selection_reason: selected.reason.slice(0, 1000) }),
       ]);
-      const meta = { source, module_key: moduleKey, asset_id: selected.asset.id, slot: selected.asset.slot, background_mode: selected.asset.background_mode, background_edited: edited, synthetic_person_generation: false, alt_text: selected.asset.alt_text, semantic_filename: selected.asset.semantic_filename, caption: selected.asset.caption, target_hero: `${policy.hero_width || 1200}x${policy.hero_height || 630}`, preferred_format: policy.preferred_format || "webp", selection_reason: selected.reason };
+      const meta = { source, module_key: moduleKey, asset_id: selected.asset.id, asset_scope: assetScope, pool_asset_count: assets.length, pool_required_count: required, pool_complete: assets.length >= required, slot: selected.asset.slot, background_mode: selected.asset.background_mode, background_edited: edited, synthetic_person_generation: false, alt_text: selected.asset.alt_text, semantic_filename: selected.asset.semantic_filename, caption: selected.asset.caption, target_hero: `${policy.hero_width || 1200}x${policy.hero_height || 630}`, preferred_format: policy.preferred_format || "webp", selection_reason: selected.reason };
       await saveArticle(admin, userId, body, finalImage.dataUrl, source, meta);
       return json({ success: true, image: finalImage.dataUrl, source, generated: false, edited, syntheticPersonGeneration: false, moduleKey, selectedSlot: selected.asset.slot, alt: selected.asset.alt_text, filename: selected.asset.semantic_filename, caption: selected.asset.caption, geo: meta, request_id: requestId });
     }
 
     if (!(body.allowAiGeneration === true && policy.allow_ai_generation === true)) return json({ success: false, error: `O módulo ${moduleKey} exige ${required} fotos fixas e possui ${assets.length}.`, code: "image_pool_incomplete", retryable: false }, 409);
     const keys = await fetchUserKeys(userId); if (!keys.openai) return json({ success: false, error: "OpenAI não configurada", code: "openai_missing" }, 503);
-    const image = await synthetic(keys.openai, body); const meta = { source: "openai", synthetic: true, model: OPENAI_IMAGE_MODEL, module_key: moduleKey };
+    const image = await synthetic(keys.openai, body); const meta = { source: "openai", synthetic: true, model: OPENAI_IMAGE_MODEL, module_key: moduleKey, watermark_requested: String(body.watermark || "").trim() || null };
     await saveArticle(admin, userId, body, image, "openai", meta); return json({ success: true, image, source: "openai", generated: true, provider: "openai", model: OPENAI_IMAGE_MODEL, geo: meta });
   } catch (error) {
     if (error instanceof RequestAuthError) return json({ success: false, error: error.message, code: error.code }, error.status);
