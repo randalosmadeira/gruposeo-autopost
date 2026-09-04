@@ -693,7 +693,7 @@ export async function callAIStream(
  */
 export function extractJSON<T>(text: string): T | null {
   // Strip markdown code fences
-  let cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+  const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
   
   // Try to find the outermost JSON object
   const startIdx = cleaned.indexOf('{');
@@ -716,7 +716,7 @@ export function extractJSON<T>(text: string): T | null {
   if (result) return result;
   
   // Fix common issues: trailing commas
-  let fixed = jsonStr
+  const fixed = jsonStr
     .replace(/,\s*}/g, '}')
     .replace(/,\s*]/g, ']')
     .replace(/'/g, '"');
