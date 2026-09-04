@@ -46,6 +46,8 @@ describe('Zica Posts stability regressions', () => {
     expect(image).toContain('stableHash(body.articleId || body.title)');
     expect(image).toContain('assetScope === "project"');
     expect(image).toContain('watermark_requested');
+    expect(image).toContain('chooseUsableAsset');
+    expect(image).toContain('unavailable_assets_skipped');
     expect(image).not.toContain('getOrchestratorForUser');
   });
 

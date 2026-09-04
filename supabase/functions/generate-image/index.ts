@@ -80,6 +80,25 @@ function choose(body: ImageRequest, assets: PoolAsset[]) {
   };
 }
 
+async function chooseUsableAsset(admin: any, body: ImageRequest, assets: PoolAsset[]) {
+  let remaining = [...assets];
+  const failures: Array<{ assetId: string; reason: string }> = [];
+  while (remaining.length) {
+    const selected = choose(body, remaining);
+    if (!selected.asset) break;
+    try {
+      const original = await sourceAsset(admin, selected.asset);
+      return { selected, original, failures };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "fixed_asset_unavailable";
+      failures.push({ assetId: selected.asset.id, reason });
+      console.warn(`[generate-image] fixed asset unavailable: ${selected.asset.id} ${reason}`);
+      remaining = remaining.filter((asset) => asset.id !== selected.asset?.id);
+    }
+  }
+  return null;
+}
+
 async function pool(admin: any, userId: string, moduleKey: string, projectId?: string | null) {
   let scoped: any = null;
   if (projectId) { const { data } = await admin.from("module_image_policies").select("*").eq("user_id", userId).eq("module_key", moduleKey).eq("project_id", projectId).maybeSingle(); scoped = data; }
@@ -149,10 +168,11 @@ Deno.serve(async (req: Request) => {
     const moduleKey = moduleFor(body); const { policy, assets, assetScope } = await pool(admin, userId, moduleKey, body.projectId); const required = Number(policy.required_asset_count || 6);
 
     if (assets.length > 0 && policy.auto_select !== false) {
-      const selected = choose(body, assets.slice(0, 6)); if (!selected.asset) throw new Error("fixed_image_selection_failed");
-      const original = await sourceAsset(admin, selected.asset); let finalImage = original; let source = "fixed_pool"; let edited = false;
-      if (selected.asset.background_mode === "chroma_replace") {
-        if (policy.allow_background_editing !== true) throw new Error("background_editing_not_authorized");
+      const usable = await chooseUsableAsset(admin, body, assets.slice(0, 6));
+      if (usable) {
+      const { selected, original, failures: assetFailures } = usable;
+      let finalImage = original; let source = "fixed_pool"; let edited = false;
+      if (selected.asset.background_mode === "chroma_replace" && policy.allow_background_editing === true) {
         const keys = await fetchUserKeys(userId); if (!keys.openai) throw new Error("OpenAI não configurada para edição de fundo");
         finalImage = await backgroundEdit(keys.openai, original, selected.asset, body); source = "fixed_pool_background_edited"; edited = true;
       }
@@ -161,12 +181,13 @@ Deno.serve(async (req: Request) => {
         admin.from("module_image_assets").update({ usage_count: Number(selected.asset.usage_count || 0) + 1, last_used_at: now, updated_at: now }).eq("id", selected.asset.id).eq("user_id", userId),
         admin.from("module_image_selection_logs").insert({ user_id: userId, module_key: moduleKey, project_id: body.projectId || null, article_id: body.articleId || null, asset_id: selected.asset.id, selector_provider: selected.provider, selector_model: selected.model, selection_reason: selected.reason.slice(0, 1000) }),
       ]);
-      const meta = { source, module_key: moduleKey, asset_id: selected.asset.id, asset_scope: assetScope, pool_asset_count: assets.length, pool_required_count: required, pool_complete: assets.length >= required, slot: selected.asset.slot, background_mode: selected.asset.background_mode, background_edited: edited, synthetic_person_generation: false, alt_text: selected.asset.alt_text, semantic_filename: selected.asset.semantic_filename, caption: selected.asset.caption, target_hero: `${policy.hero_width || 1200}x${policy.hero_height || 630}`, preferred_format: policy.preferred_format || "webp", selection_reason: selected.reason };
+      const meta = { source, module_key: moduleKey, asset_id: selected.asset.id, asset_scope: assetScope, pool_asset_count: assets.length, pool_required_count: required, pool_complete: assets.length >= required, unavailable_assets_skipped: assetFailures.length, slot: selected.asset.slot, background_mode: selected.asset.background_mode, background_edited: edited, synthetic_person_generation: false, alt_text: selected.asset.alt_text, semantic_filename: selected.asset.semantic_filename, caption: selected.asset.caption, target_hero: `${policy.hero_width || 1200}x${policy.hero_height || 630}`, preferred_format: policy.preferred_format || "webp", selection_reason: selected.reason };
       await saveArticle(admin, userId, body, finalImage.dataUrl, source, meta);
       return json({ success: true, image: finalImage.dataUrl, source, generated: false, edited, syntheticPersonGeneration: false, moduleKey, selectedSlot: selected.asset.slot, alt: selected.asset.alt_text, filename: selected.asset.semantic_filename, caption: selected.asset.caption, geo: meta, request_id: requestId });
+      }
     }
 
-    if (!(body.allowAiGeneration === true && policy.allow_ai_generation === true)) return json({ success: false, error: `O módulo ${moduleKey} exige ${required} fotos fixas e possui ${assets.length}.`, code: "image_pool_incomplete", retryable: false }, 409);
+    if (!(body.allowAiGeneration === true && policy.allow_ai_generation === true)) return json({ success: false, error: `Nenhuma das ${assets.length} imagens cadastradas no módulo ${moduleKey} está acessível.`, code: "image_pool_incomplete", retryable: false }, 409);
     const keys = await fetchUserKeys(userId); if (!keys.openai) return json({ success: false, error: "OpenAI não configurada", code: "openai_missing" }, 503);
     const image = await synthetic(keys.openai, body); const meta = { source: "openai", synthetic: true, model: OPENAI_IMAGE_MODEL, module_key: moduleKey, watermark_requested: String(body.watermark || "").trim() || null };
     await saveArticle(admin, userId, body, image, "openai", meta); return json({ success: true, image, source: "openai", generated: true, provider: "openai", model: OPENAI_IMAGE_MODEL, geo: meta });
