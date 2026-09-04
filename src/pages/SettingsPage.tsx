@@ -8,6 +8,7 @@ import { ArticleTemplatesCard } from '@/components/settings/ArticleTemplatesCard
 import { IndexNowConfigCard } from '@/components/settings/IndexNowConfigCard';
 import { useSettings } from '@/hooks/useSettings';
 import { PressCitationsCard } from '@/components/settings/PressCitationsCard';
+import { InstitutionalInfo } from '@/components/shared/InstitutionalInfo';
 
 import { Settings, Folder, FileText, Globe, BarChart3 } from 'lucide-react';
 
@@ -59,6 +60,7 @@ export default function SettingsPage() {
 
         {/* General Tab */}
         <TabsContent value="general" className="space-y-6">
+          <InstitutionalInfo />
           <AIConfigCard 
             settings={settings as any}
             onSave={handleSaveSettings}
