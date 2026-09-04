@@ -195,6 +195,42 @@ Deno.serve(async (req: Request) => {
         await enqueue(admin, { user_id: userId, article_id: article.id, job_type: "llm_audit", status: "queued", priority: 55, idempotency_key: `llm-audit:${article.id}:${auditWindow}`, payload: { articleId: article.id }, next_attempt_at: new Date().toISOString() });
         enqueued++;
       }
+
+      // Keep image recovery deliberately serial. The previous UI flow launched
+      // hundreds of direct requests and retried HTTP 500 responses, consuming
+      // provider budget without durable queue state.
+      const { count: activeImageJobs } = await admin.from("zica_brain_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("job_type", "image_generate")
+        .in("status", ["queued", "processing", "retry"]);
+      if (!activeImageJobs) {
+        const { data: imageArticle } = await admin.from("articles")
+          .select("id,project_id")
+          .eq("user_id", userId)
+          .in("status", ["ready", "draft"])
+          .not("project_id", "is", null)
+          .not("content", "is", null)
+          .or("featured_image_url.is.null,featured_image_url.eq.")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (imageArticle) {
+          await enqueue(admin, {
+            user_id: userId,
+            project_id: imageArticle.project_id,
+            article_id: imageArticle.id,
+            job_type: "image_generate",
+            status: "queued",
+            priority: 65,
+            max_attempts: 3,
+            idempotency_key: `image-generate:${imageArticle.id}:v2`,
+            payload: { articleId: imageArticle.id, projectId: imageArticle.project_id },
+            next_attempt_at: new Date().toISOString(),
+          });
+          enqueued++;
+        }
+      }
     }
 
     const { data: jobs, error: claimError } = await admin.rpc("claim_zica_brain_jobs", { p_limit: maxJobs, p_worker: `edge:${requestId}` });
@@ -225,6 +261,41 @@ Deno.serve(async (req: Request) => {
             { openai: result.openai, anthropic: result.anthropic, automaticProbe: "non_billable" },
             configured ? undefined : "Nenhum provedor textual configurado",
           );
+        } else if (job.job_type === "image_generate") {
+          const { data: article } = await admin.from("articles")
+            .select("id,title,keyword,excerpt,content,project_id,featured_image_url")
+            .eq("id", job.article_id)
+            .eq("user_id", job.user_id)
+            .maybeSingle();
+          if (!article) throw new Error("image_article_not_found");
+          if (String(article.featured_image_url || "").trim()) {
+            ok = true;
+            result = { skipped: true, reason: "image_already_present" };
+          } else {
+            const call = await edgeCall(url, serviceKey, "generate-image", {
+              userId: job.user_id,
+              articleId: article.id,
+              projectId: article.project_id,
+              moduleKey: "article",
+              title: article.title,
+              keywords: article.keyword || "",
+              context: article.excerpt || "",
+              content: article.content || "",
+              aspectRatio: "16:9",
+              quality: "high",
+              allowAiGeneration: true,
+            }, 170000);
+            ok = call.ok;
+            result = call.ok
+              ? { source: call.data?.source, generated: call.data?.generated === true, requestId: call.data?.request_id }
+              : call.data;
+            errorMessage = call.ok ? "" : String(call.data?.error || `HTTP ${call.status}`);
+            await state(admin, job.user_id, "image_generation", ok ? "healthy" : "degraded", {
+              articleId: article.id,
+              projectId: article.project_id,
+              httpStatus: call.status,
+            }, errorMessage || undefined);
+          }
         } else if (job.job_type === "llm_audit" || job.job_type === "semantic_audit") {
           result = await auditArticle(admin, job.user_id, job.article_id);
           ok = true;
@@ -247,6 +318,12 @@ Deno.serve(async (req: Request) => {
 
     return json({ success: true, request_id: requestId, users: users.length, enqueued, claimed: (jobs || []).length, results, duration_ms: Date.now() - started });
   } catch (error) {
-    return json({ success: false, error: error instanceof Error ? error.message : "brain_tick_failed", request_id: requestId, duration_ms: Date.now() - started }, 500);
+    const message = error instanceof Error
+      ? error.message
+      : typeof error === "object" && error
+        ? JSON.stringify(error).slice(0, 1200)
+        : String(error || "brain_tick_failed");
+    console.error("[zica-brain-tick]", requestId, message);
+    return json({ success: false, error: message, request_id: requestId, duration_ms: Date.now() - started }, 500);
   }
 });
