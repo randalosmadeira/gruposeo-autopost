@@ -37,17 +37,6 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function jwtRole(token: string) {
-  try {
-    const payload = token.split(".")[1];
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const decoded = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")));
-    return String(decoded?.role || "");
-  } catch {
-    return "";
-  }
-}
-
 function decodeXml(value: string) {
   return value
     .replace(/<!\[CDATA\[|\]\]>/g, "")
@@ -139,11 +128,10 @@ Deno.serve(async (req: Request) => {
   const auth = req.headers.get("Authorization");
   if (!auth?.startsWith("Bearer ")) return json({ error: "Autorização necessária" }, 401);
   const token = auth.slice(7);
-  if (jwtRole(token) !== "service_role") return json({ error: "Execução restrita ao serviço de automação" }, 403);
-
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || "";
   if (!supabaseUrl || !serviceKey) return json({ error: "Backend incompleto" }, 500);
+  if (token !== serviceKey) return json({ error: "Execução restrita ao serviço de automação" }, 403);
 
   const admin = createClient(supabaseUrl, serviceKey);
   const nowIso = new Date().toISOString();
@@ -229,6 +217,14 @@ Deno.serve(async (req: Request) => {
         last_run_at: new Date().toISOString(),
         next_run_at: nextRun(schedule.frequency),
         articles_generated: Number(schedule.articles_generated || 0) + createdForSchedule,
+        last_decision: {
+          status: "completed",
+          items_found: items.length,
+          created: createdForSchedule,
+          published: publishedForSchedule,
+          checked_at: new Date().toISOString(),
+        },
+        last_error: null,
         updated_at: new Date().toISOString(),
       }).eq("id", schedule.id);
 
@@ -241,8 +237,14 @@ Deno.serve(async (req: Request) => {
         success: true,
       });
     } catch (scheduleError) {
-      await admin.from("rss_schedules").update({ next_run_at: nextRun(schedule.frequency), updated_at: new Date().toISOString() }).eq("id", schedule.id);
-      results.push({ schedule_id: schedule.id, success: false, error: scheduleError instanceof Error ? scheduleError.message : "Erro desconhecido" });
+      const message = scheduleError instanceof Error ? scheduleError.message : "Erro desconhecido";
+      await admin.from("rss_schedules").update({
+        next_run_at: nextRun(schedule.frequency),
+        last_error: message.slice(0, 1000),
+        last_decision: { status: "failed", checked_at: new Date().toISOString() },
+        updated_at: new Date().toISOString(),
+      }).eq("id", schedule.id);
+      results.push({ schedule_id: schedule.id, success: false, error: message });
     }
   }
 

@@ -410,18 +410,26 @@ function fallbackCandidate(candidates: CandidateMeta[], style: string, reason: s
 
 async function candidateSelectorAgent(supporter: SourceImage, intake: any, candidates: CandidateMeta[], style: string, keys: { openai: string; anthropic: string }) {
   if (!candidates.length) throw new Error('candidate_gallery_empty');
-  const descriptions = candidates.map((candidate, index) => `CANDIDATO ${index}: roupa=${candidate.wardrobe}; taco=${candidate.prop}; diretriz=${candidate.prompt_hint || 'preservar referência'}`).join('\n');
+  // A seleção visual deve caber com folga nos limites dos provedores. Enviar a
+  // galeria completa causava payloads de ~17 MB e cobrava uma chamada inválida.
+  const shortlist = candidates
+    .map((candidate, index) => ({ candidate, index, score: Number(Boolean(candidate.prompt_hint)) + Number(Boolean(candidate.wardrobe)) + Number(Boolean(candidate.prop)) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, 5);
+  const descriptions = shortlist.map((item, visionIndex) => `CANDIDATO ${visionIndex}: roupa=${item.candidate.wardrobe}; taco=${item.candidate.prop}; diretriz=${item.candidate.prompt_hint || 'preservar referência'}`).join('\n');
   const prompt = `${CANDIDATE_SELECTOR_AGENT_PROMPT}\nANÁLISE DO APOIADOR: ${JSON.stringify(intake)}\nESTILO: ${style}.\nORDEM: imagem 0 é o apoiador; imagens 1..N correspondem aos candidatos 0..N-1.\n${descriptions}`;
   const inputs: VisionInput[] = [{ url: supporter.signed_url, mimeType: supporter.mime_type, approxBytes: supporter.file_size_bytes }];
-  for (const candidate of candidates) inputs.push({ url: candidatePreviewUrl(candidate, 1024), mimeType: mimeFor(candidate.drive_file_name), approxBytes: 700_000 });
+  for (const item of shortlist) inputs.push({ url: candidatePreviewUrl(item.candidate, 768), mimeType: mimeFor(item.candidate.drive_file_name), approxBytes: 450_000 });
   try {
     const selection: any = await visionJson(prompt, inputs, keys, 'candidate_selector', CANDIDATE_SCHEMA);
     const selectedRaw = Number(selection?.selected_index);
     const runnerRaw = Number(selection?.runner_up_index);
-    const selectedIndex = Number.isInteger(selectedRaw) && selectedRaw >= 0 && selectedRaw < candidates.length ? selectedRaw : 0;
-    const runnerUpIndex = Number.isInteger(runnerRaw) && runnerRaw >= 0 && runnerRaw < candidates.length && runnerRaw !== selectedIndex
-      ? runnerRaw : (candidates.length > 1 ? (selectedIndex === 0 ? 1 : 0) : selectedIndex);
-    return { selectedIndex, runnerUpIndex, selection, degraded: false };
+    const selectedShortIndex = Number.isInteger(selectedRaw) && selectedRaw >= 0 && selectedRaw < shortlist.length ? selectedRaw : 0;
+    const runnerShortIndex = Number.isInteger(runnerRaw) && runnerRaw >= 0 && runnerRaw < shortlist.length && runnerRaw !== selectedShortIndex
+      ? runnerRaw : (shortlist.length > 1 ? (selectedShortIndex === 0 ? 1 : 0) : selectedShortIndex);
+    const selectedIndex = shortlist[selectedShortIndex]?.index ?? 0;
+    const runnerUpIndex = shortlist[runnerShortIndex]?.index ?? selectedIndex;
+    return { selectedIndex, runnerUpIndex, selection: { ...selection, gallery_size: candidates.length, vision_shortlist_size: shortlist.length }, degraded: false };
   } catch (error) {
     return fallbackCandidate(candidates, style, error instanceof Error ? error.message : String(error));
   }
