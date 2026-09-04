@@ -24,7 +24,8 @@ describe('Zica Posts stability regressions', () => {
     const agent = read('supabase/functions/execute-news-agents/index.ts');
     expect(agent).toContain('"wordpress-operations"');
     expect(agent).toContain('moduleKey: "news"');
-    expect(agent).toContain('allowAiGeneration: false');
+    expect(agent).toContain('allowAiGeneration: true');
+    expect(agent).toContain('watermark: "RDM ADVOGADOS"');
   });
 
   it('uses the shared AI orchestrator for unit and bulk article generation', () => {
@@ -40,6 +41,26 @@ describe('Zica Posts stability regressions', () => {
     expect(image).toContain('module_image_assets');
     expect(image).toContain('image_pool_incomplete');
     expect(image).toContain('body.allowAiGeneration === true && policy.allow_ai_generation === true');
+    expect(image).toContain('assets.length > 0 && policy.auto_select !== false');
+    expect(image).toContain('semantic-stable-v3');
+    expect(image).toContain('stableHash(body.articleId || body.title)');
+    expect(image).toContain('assetScope === "project"');
+    expect(image).toContain('watermark_requested');
+    expect(image).not.toContain('getOrchestratorForUser');
+  });
+
+  it('generates a branded image before an automatic RSS publication', () => {
+    const rss = read('supabase/functions/auto-process-rss/index.ts');
+    expect(rss).toContain('/functions/v1/generate-image');
+    expect(rss).toContain('watermark: "RDM ADVOGADOS"');
+    expect(rss).toContain('schedule.auto_publish && schedule.project_id && imageReady');
+  });
+
+  it('allows bulk image generation to use the configured provider only after pool fallback', () => {
+    const page = read('src/pages/ArticlesList.tsx');
+    expect(page).toContain('allowAiGeneration: true');
+    expect(page).toContain('O pool oficial é priorizado');
+    expect(page).not.toContain('RDM usa somente o pool oficial de 3 imagens.');
   });
 
   it('edits chroma backgrounds without authorizing synthetic people', () => {
