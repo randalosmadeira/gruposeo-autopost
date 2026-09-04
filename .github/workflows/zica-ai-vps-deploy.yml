@@ -1,4 +1,4 @@
-name: Deploy Zica.ai Orchestrator VPS
+name: Deploy zica-ia-posts VPS
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: zica-ai-orchestrator-production
+  group: zica-ia-posts-production
   cancel-in-progress: true
 
 jobs:
@@ -37,7 +37,7 @@ jobs:
       ZICA_AI_SUPABASE_URL: https://ubahrbgaxrkjxklytobl.supabase.co
       VITE_SUPABASE_URL: https://ubahrbgaxrkjxklytobl.supabase.co
       VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_8XzHfqXP8o3XOcGwRY35zw_P-jg1kiE
-      VITE_APP_NAME: Zica.ai
+      VITE_APP_NAME: Zica Posts
       TARGET_HOST: app.zica.posts.zicajuris.com.br
       TARGET_URL: https://app.zica.posts.zicajuris.com.br
 
@@ -132,25 +132,25 @@ jobs:
           ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$HOME/.ssh/zica_ai_deploy" -p "$ZICA_AI_VPS_PORT" "$ZICA_AI_VPS_USER@$ZICA_AI_VPS_HOST" \
             "ZICA_SHA='$GITHUB_SHA' TARGET_HOST='$TARGET_HOST' bash -s" <<'REMOTE'
           set -euo pipefail
-          ORCH_ROOT=/opt/zica-ai/orchestrator
-          FRONT_ROOT=/opt/zica-ai/frontend
+          ORCH_ROOT=/opt/zica-ia-posts/orchestrator
+          FRONT_ROOT=/opt/zica-ia-posts/frontend
           ORCH_RELEASE="$ORCH_ROOT/releases/$ZICA_SHA"
           FRONT_RELEASE="$FRONT_ROOT/releases/$ZICA_SHA"
           ORCH_SHARED="$ORCH_ROOT/shared"
           ENV_FILE="$ORCH_SHARED/.env.production"
           PASS_FILE="$ORCH_SHARED/redis.password"
-          NETWORK=zica-ai-orchestrator-net
-          REDIS=zica-ai-orchestrator-redis
-          API=zica-ai-orchestrator-api
-          WORKER=zica-ai-orchestrator-worker
-          VOLUME=zica-ai-orchestrator-redis-data
-          IMAGE="zica-ai-orchestrator:$ZICA_SHA"
+          NETWORK=zica-ia-posts-net
+          REDIS=zica-ia-posts-redis
+          API=zica-ia-posts-api
+          WORKER=zica-ia-posts-worker
+          VOLUME=zica-ia-posts-redis-data
+          IMAGE="zica-ia-posts-orchestrator:$ZICA_SHA"
 
           sudo -n true >/dev/null
           command -v docker >/dev/null
           command -v nginx >/dev/null
           sudo mkdir -p "$ORCH_RELEASE" "$ORCH_SHARED" "$FRONT_RELEASE"
-          sudo chown -R "$(id -u):$(id -g)" /opt/zica-ai
+          sudo chown -R "$(id -u):$(id -g)" /opt/zica-ia-posts
           rm -rf "$ORCH_RELEASE"/* "$FRONT_RELEASE"/*
           tar -xzf "/tmp/zica-ai-orchestrator-$ZICA_SHA.tgz" -C "$ORCH_RELEASE"
           tar -xzf "/tmp/zica-ai-frontend-$ZICA_SHA.tgz" -C "$FRONT_RELEASE"
@@ -193,7 +193,7 @@ jobs:
 
           READY=false
           for attempt in $(seq 1 36); do
-            if curl --fail --silent http://127.0.0.1:8787/health | grep -q '"service":"zica-orchestrator"'; then READY=true; break; fi
+            if curl --fail --silent http://127.0.0.1:8787/health | grep -q '"service":"zica-ia-posts-orchestrator"'; then READY=true; break; fi
             sleep 5
           done
           if [ "$READY" != true ]; then
@@ -209,11 +209,11 @@ jobs:
           NGINX_LINK=''
           if printf '%s\n' "$NGINX_DUMP" | grep -Eq 'include[[:space:]]+/etc/nginx/conf\.d/\*\.conf'; then
             sudo mkdir -p /etc/nginx/conf.d
-            NGINX_FILE=/etc/nginx/conf.d/zica-ai-orchestrator.conf
+            NGINX_FILE=/etc/nginx/conf.d/zica-ia-posts.conf
           elif printf '%s\n' "$NGINX_DUMP" | grep -Eq 'include[[:space:]]+/etc/nginx/sites-enabled/\*'; then
             sudo mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
-            NGINX_FILE=/etc/nginx/sites-available/zica-ai-orchestrator
-            NGINX_LINK=/etc/nginx/sites-enabled/zica-ai-orchestrator
+            NGINX_FILE=/etc/nginx/sites-available/zica-ia-posts
+            NGINX_LINK=/etc/nginx/sites-enabled/zica-ia-posts
           else
             echo 'ERRO: layout de includes do Nginx não reconhecido.' >&2
             exit 1
@@ -281,9 +281,9 @@ jobs:
           set -euo pipefail
           BODY="$(ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$HOME/.ssh/zica_ai_deploy" -p "$ZICA_AI_VPS_PORT" "$ZICA_AI_VPS_USER@$ZICA_AI_VPS_HOST" 'curl --fail --silent http://127.0.0.1:8787/health')"
           echo "$BODY" | grep -q '"ok":true'
-          echo "$BODY" | grep -q '"service":"zica-orchestrator"'
-          echo "$BODY" | grep -q '"version":"3.10.2"'
-          ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$HOME/.ssh/zica_ai_deploy" -p "$ZICA_AI_VPS_PORT" "$ZICA_AI_VPS_USER@$ZICA_AI_VPS_HOST" 'test -f /opt/zica-ai/frontend/current/index.html'
+          echo "$BODY" | grep -q '"service":"zica-ia-posts-orchestrator"'
+          echo "$BODY" | grep -q '"version":"3.10.3"'
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$HOME/.ssh/zica_ai_deploy" -p "$ZICA_AI_VPS_PORT" "$ZICA_AI_VPS_USER@$ZICA_AI_VPS_HOST" 'test -f /opt/zica-ia-posts/frontend/current/index.html'
 
       - name: Verify public application
         shell: bash
@@ -294,7 +294,7 @@ jobs:
             echo "$ROOT" | grep -q 'id="root"'
             HEALTH="$(curl --fail --silent --show-error --retry 12 --retry-delay 5 "$TARGET_URL/health")"
             echo "$HEALTH" | grep -q '"ok":true'
-            echo "$HEALTH" | grep -q '"version":"3.10.2"'
+            echo "$HEALTH" | grep -q '"version":"3.10.3"'
           else
             echo "DNS ainda não resolve; frontend e runtime foram instalados localmente."
           fi
@@ -302,9 +302,9 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "### Zica.ai production deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "### zica-ia-posts production deployment" >> "$GITHUB_STEP_SUMMARY"
           echo "- Environment: \`zica-ai-production\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Frontend: \`/opt/zica-ai/frontend\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Orchestrator: \`/opt/zica-ai/orchestrator\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Frontend: \`/opt/zica-ia-posts/frontend\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Orchestrator: \`/opt/zica-ia-posts/orchestrator\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Public URL: \`$TARGET_URL\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- No ZicaJuris files, credentials or containers are used." >> "$GITHUB_STEP_SUMMARY"

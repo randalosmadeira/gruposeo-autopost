@@ -20,13 +20,23 @@ export interface AICallOptions {
   preferredProvider?: string;
   prioritizeCost?: boolean;
   prioritizeQuality?: boolean;
+  articleId?: string;
+  correlationId?: string;
+}
+
+export interface AIUsage {
+  inputTokens: number;
+  outputTokens: number;
 }
 
 export interface AICallResult {
   content: string;
   provider: 'openai' | 'anthropic' | 'gemini';
   model: string;
+  usage: AIUsage;
 }
+
+type UsageSink = (entry: { taskType: TaskType; provider: AIProvider['name']; model: string; usage: AIUsage; options?: AICallOptions }) => Promise<void>;
 
 export type TaskType =
   | 'article_generation'
@@ -91,6 +101,7 @@ function isCoolingDown(provider: string) {
 export class AIOrchestrator {
   private apiKeys: Record<string, string>;
   private platformKeys: Record<string, string>;
+  private usageSink?: UsageSink;
 
   constructor() {
     const openaiKey = Deno.env.get('OPENAI_API_KEY') || '';
@@ -106,6 +117,10 @@ export class AIOrchestrator {
     if (keys.openai?.startsWith('sk-')) this.apiKeys.openai = keys.openai;
     if (keys.anthropic) this.apiKeys.anthropic = keys.anthropic;
     if (keys.gemini) this.apiKeys.gemini = keys.gemini;
+  }
+
+  setUsageSink(sink: UsageSink) {
+    this.usageSink = sink;
   }
 
   getAvailableProviders(): string[] {
@@ -156,8 +171,13 @@ export class AIOrchestrator {
     for (const provider of providers) {
       for (const key of this.getKeysForProvider(provider.name)) {
         try {
-          const content = await this.callProvider(provider, key, enriched, options);
-          return { content, provider: provider.name, model: provider.model };
+          const result = await this.callProvider(provider, key, enriched, options);
+          if (this.usageSink) {
+            await this.usageSink({ taskType, provider: provider.name, model: provider.model, usage: result.usage, options }).catch((error) => {
+              console.error(`[AIOrchestrator] Falha não bloqueante ao registrar consumo: ${error instanceof Error ? error.message : String(error)}`);
+            });
+          }
+          return { content: result.content, provider: provider.name, model: provider.model, usage: result.usage };
         } catch (error) {
           lastError = error instanceof Error ? error : new Error(String(error));
           const cooldown = errorCooldownMs(lastError.message);
@@ -169,13 +189,13 @@ export class AIOrchestrator {
     throw lastError || new Error('Todos os provedores falharam.');
   }
 
-  private async callProvider(provider: AIProvider, key: string, messages: AIMessage[], options?: AICallOptions): Promise<string> {
+  private async callProvider(provider: AIProvider, key: string, messages: AIMessage[], options?: AICallOptions): Promise<{ content: string; usage: AIUsage }> {
     if (provider.name === 'openai') return this.callOpenAI(provider.model, key, messages, options);
     if (provider.name === 'anthropic') return this.callAnthropic(provider.model, key, messages, options);
     return this.callGemini(provider.model, key, messages, options);
   }
 
-  private async callOpenAI(model: string, key: string, messages: AIMessage[], options?: AICallOptions): Promise<string> {
+  private async callOpenAI(model: string, key: string, messages: AIMessage[], options?: AICallOptions): Promise<{ content: string; usage: AIUsage }> {
     const response = await fetch(`${OPENAI_API_BASE}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
@@ -187,10 +207,10 @@ export class AIOrchestrator {
     const data = JSON.parse(text);
     const content = data?.choices?.[0]?.message?.content || '';
     if (!content) throw new Error('OpenAI retornou resposta vazia.');
-    return content;
+    return { content, usage: { inputTokens: Number(data?.usage?.prompt_tokens || data?.usage?.input_tokens || 0), outputTokens: Number(data?.usage?.completion_tokens || data?.usage?.output_tokens || 0) } };
   }
 
-  private async callAnthropic(model: string, key: string, messages: AIMessage[], options?: AICallOptions): Promise<string> {
+  private async callAnthropic(model: string, key: string, messages: AIMessage[], options?: AICallOptions): Promise<{ content: string; usage: AIUsage }> {
     const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
     const conversation = messages.filter((m) => m.role !== 'system').map((m) => ({ role: m.role === 'assistant' || m.role === 'model' ? 'assistant' : 'user', content: m.content }));
     const response = await fetch(`${ANTHROPIC_API_BASE}/messages`, {
@@ -204,10 +224,10 @@ export class AIOrchestrator {
     const data = JSON.parse(text);
     const content = data?.content?.map((part: { text?: string }) => part.text || '').join('') || '';
     if (!content) throw new Error('Claude retornou resposta vazia.');
-    return content;
+    return { content, usage: { inputTokens: Number(data?.usage?.input_tokens || 0), outputTokens: Number(data?.usage?.output_tokens || 0) } };
   }
 
-  private async callGemini(model: string, key: string, messages: AIMessage[], options?: AICallOptions): Promise<string> {
+  private async callGemini(model: string, key: string, messages: AIMessage[], options?: AICallOptions): Promise<{ content: string; usage: AIUsage }> {
     const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
     const contents = messages.filter((m) => m.role !== 'system').map((m) => ({ role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user', parts: [{ text: m.content }] }));
     const body: Record<string, unknown> = { contents, generationConfig: { maxOutputTokens: options?.maxTokens || 16384, temperature: options?.temperature ?? 0.45 } };
@@ -216,7 +236,9 @@ export class AIOrchestrator {
     const text = await response.text();
     if (!response.ok) throw new Error(`Gemini HTTP ${response.status}: ${text.slice(0, 500)}`);
     const data = JSON.parse(text);
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const content = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (!content) throw new Error('Gemini retornou resposta vazia.');
+    return { content, usage: { inputTokens: Number(data?.usageMetadata?.promptTokenCount || 0), outputTokens: Number(data?.usageMetadata?.candidatesTokenCount || 0) } };
   }
 }
 

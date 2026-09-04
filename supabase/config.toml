@@ -82,7 +82,11 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.auto-process-rss]
-verify_jwt = true
+verify_jwt = false
+
+# Cron ingress is authenticated by the hashed x-zica-automation-key in the function.
+[functions.zica-brain-tick]
+verify_jwt = false
 
 [functions.seo-agent]
 verify_jwt = true

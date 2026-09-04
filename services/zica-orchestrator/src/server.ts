@@ -7,7 +7,7 @@ import type { InboundBatch } from './types.js';
 
 const app=Fastify({logger:true,bodyLimit:2*1024*1024});
 app.addContentTypeParser('application/json',{parseAs:'buffer'},(_request,body,done)=>{try{const raw=body.toString('utf8');done(null,{__raw:raw,__json:JSON.parse(raw)});}catch(error){done(error as Error,undefined);}});
-app.get('/health',async()=>({ok:true,service:'zica-orchestrator',version:'3.10.2'}));
+app.get('/health',async()=>({ok:true,service:'zica-ia-posts-orchestrator',version:'3.10.3'}));
 
 app.post('/webhooks/wordpress',async(request,reply)=>{
   const wrapped=request.body as {__raw?:string;__json?:InboundBatch};

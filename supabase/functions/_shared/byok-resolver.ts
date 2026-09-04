@@ -71,6 +71,30 @@ export async function getOrchestratorForUser(userId: string): Promise<AIOrchestr
   if (userKeys.anthropic) keys.anthropic = userKeys.anthropic;
   orchestrator.setKeys(keys);
 
+  const supabaseUrl = env("SUPABASE_URL");
+  const serviceRoleKey = env("SUPABASE_SERVICE_ROLE_KEY") || env("SUPABASE_SECRET_KEY");
+  if (supabaseUrl && serviceRoleKey) {
+    const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    orchestrator.setUsageSink(async ({ taskType, provider, model, usage, options }) => {
+      const { error } = await admin.from("token_usage_logs").insert({
+        user_id: userId,
+        article_id: options?.articleId || null,
+        provider,
+        model,
+        operation: taskType,
+        input_tokens: usage.inputTokens,
+        output_tokens: usage.outputTokens,
+        estimated_cost_usd: 0,
+        metadata: {
+          source: "provider_reported_usage",
+          correlation_id: options?.correlationId || null,
+          cost_pending_pricing_resolution: true,
+        },
+      });
+      if (error) throw error;
+    });
+  }
+
   const available = orchestrator.getAvailableProviders();
   if (!available.includes("openai") && !available.includes("anthropic")) {
     throw new Error("Nenhum provedor OpenAI/Claude disponível. Configure a credencial no painel CEO ou no Vault do Zica.ai.");

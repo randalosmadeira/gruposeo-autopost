@@ -1,5 +1,5 @@
 {
-  "name": "zica-ai",
+  "name": "zica-ia-posts",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -91,5 +91,5 @@
     "vite": "^5.4.19",
     "vitest": "^3.2.4"
   },
-  "description": "Zica.ai - Autonomous Organic Traffic Engine for SEO, GEO and LLM semantic optimization."
+  "description": "Zica Posts - plataforma isolada de geração, publicação e republicação de conteúdo."
 }
