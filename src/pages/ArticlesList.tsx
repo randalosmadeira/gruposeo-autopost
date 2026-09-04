@@ -255,7 +255,7 @@ export default function ArticlesList() {
               moduleKey: 'article',
               aspectRatio: '16:9',
               quality: 'high',
-              allowAiGeneration: false,
+              allowAiGeneration: true,
             },
           });
           if (fnError || !data?.success || !data?.image) throw fnError || new Error(data?.error || 'image_failed');
@@ -272,7 +272,7 @@ export default function ArticlesList() {
       failed += Math.max(0, notReturned);
       toast({
         title: 'Imagens processadas',
-        description: `${success} criada(s)/selecionada(s), ${skipped} já existente(s), ${failed} falha(s).${ids.some((id) => rows?.find((r) => r.id === id)?.project_id === RDM_PROJECT_ID) ? ' RDM usa somente o pool oficial de 3 imagens.' : ''}`,
+        description: `${success} criada(s)/selecionada(s), ${skipped} já existente(s), ${failed} falha(s).${ids.some((id) => rows?.find((r) => r.id === id)?.project_id === RDM_PROJECT_ID) ? ' O pool oficial é priorizado e a IA é usada apenas quando não houver imagem autorizada disponível.' : ''}`,
         variant: failed ? 'destructive' : 'default',
       });
       await refreshArticles();
