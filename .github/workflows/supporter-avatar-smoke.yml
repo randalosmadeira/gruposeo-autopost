@@ -49,7 +49,7 @@ jobs:
           import json
           p=json.load(open('/tmp/capabilities.json', encoding='utf-8'))
           assert p.get('ok') is True
-          assert p.get('pipeline') == 'auto-selector-v2'
+          assert p.get('pipeline') == 'supporter-avatar-resumable-v5'
           assert p.get('candidateSelection') == 'private-automatic'
           assert p.get('publicCandidateGallery') is False
           assert p.get('socialOutputs') == ['1080x1080','1080x1350','1200x630']
@@ -100,7 +100,7 @@ jobs:
             echo '## Supporter Avatar /1470 smoke'
             echo ''
             echo '- Public route: HTTP 200'
-            echo '- Pipeline contract: auto-selector-v2'
+            echo '- Pipeline contract: supporter-avatar-resumable-v5'
             echo '- Candidate gallery: anonymous access denied'
             echo '- Public candidate metadata: absent'
             echo '- Social pack: 1080x1080, 1080x1350, 1200x630'
