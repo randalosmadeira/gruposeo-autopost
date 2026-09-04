@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
 
     // Fetch project data for context
     const projectIds = [...new Set(articles.map(a => a.project_id).filter(Boolean))];
-    let projectsMap: Record<string, any> = {};
+    const projectsMap: Record<string, any> = {};
     if (projectIds.length > 0) {
       const { data: projects } = await supabase
         .from("projects")
@@ -174,8 +174,8 @@ Deno.serve(async (req) => {
     }
 
     // Fetch existing published articles for internal linking — EXPANDED to 100+ for better coverage
-    let internalLinksMap: Record<string, Array<{title: string, url: string, keyword?: string, cluster?: string}>> = {};
-    let orphanDataMap: Record<string, { orphanCount: number; totalArticles: number; duplicateHashes: Set<string> }> = {};
+    const internalLinksMap: Record<string, Array<{title: string, url: string, keyword?: string, cluster?: string}>> = {};
+    const orphanDataMap: Record<string, { orphanCount: number; totalArticles: number; duplicateHashes: Set<string> }> = {};
     
     for (const pid of projectIds) {
       const { data: publishedArticles } = await supabase
