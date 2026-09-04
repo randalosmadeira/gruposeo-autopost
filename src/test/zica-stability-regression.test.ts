@@ -58,6 +58,11 @@ describe('Zica Posts stability regressions', () => {
     expect(rss).toContain('schedule.auto_publish && schedule.project_id && imageReady');
   });
 
+  it('keeps the brain worker batch within the Edge Function execution window', () => {
+    const brain = read('supabase/functions/zica-brain-tick/index.ts');
+    expect(brain).toContain('Math.min(20, Number(body?.maxJobs || 5))');
+  });
+
   it('allows bulk image generation to use the configured provider only after pool fallback', () => {
     const page = read('src/pages/ArticlesList.tsx');
     expect(page).toContain('allowAiGeneration: true');
