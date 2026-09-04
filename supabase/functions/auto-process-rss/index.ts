@@ -3,7 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-zica-automation-key",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -35,6 +35,11 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+async function sha256(value: string) {
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function decodeXml(value: string) {
@@ -125,15 +130,22 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
-  const auth = req.headers.get("Authorization");
-  if (!auth?.startsWith("Bearer ")) return json({ error: "Autorização necessária" }, 401);
-  const token = auth.slice(7);
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || "";
   if (!supabaseUrl || !serviceKey) return json({ error: "Backend incompleto" }, 500);
-  if (token !== serviceKey) return json({ error: "Execução restrita ao serviço de automação" }, 403);
+  const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const auth = req.headers.get("Authorization") || "";
+  const serviceAuthorized = auth.startsWith("Bearer ") && auth.slice(7) === serviceKey;
+  const automationKey = req.headers.get("x-zica-automation-key") || "";
+  let automationAuthorized = false;
+  if (automationKey) {
+    const { data: ingress } = await admin.from("automation_ingress_keys").select("secret_hash,enabled").eq("name", "news-agents").maybeSingle();
+    automationAuthorized = Boolean(ingress?.enabled && ingress.secret_hash && await sha256(automationKey) === ingress.secret_hash);
+  }
+  if (!serviceAuthorized && !automationAuthorized) return json({ error: "Autorização necessária" }, 401);
+  const body = await req.json().catch(() => ({}));
+  if (body?.dryRun === true) return json({ success: true, authorized: true, dry_run: true });
 
-  const admin = createClient(supabaseUrl, serviceKey);
   const nowIso = new Date().toISOString();
   const { data: schedules, error } = await admin
     .from("rss_schedules")

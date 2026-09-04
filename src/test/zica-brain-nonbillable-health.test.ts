@@ -30,7 +30,8 @@ describe("RSS automation service authentication", () => {
     );
 
     expect(rss).toContain('Deno.env.get("SUPABASE_SECRET_KEY")');
-    expect(rss).toContain("if (token !== serviceKey)");
+    expect(rss).toContain("serviceAuthorized");
+    expect(rss).toContain("automationAuthorized");
     expect(rss).not.toContain("function jwtRole");
   });
 });
