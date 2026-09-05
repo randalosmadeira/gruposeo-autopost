@@ -42,7 +42,8 @@ describe("image pool normalization", () => {
   });
 
   it("uses the global editing policy when it falls back to global chroma assets", () => {
-    expect(generator).toContain("if (globalPolicy) policy = globalPolicy");
-    expect(generator.indexOf('assetScope = "global"')).toBeLessThan(generator.indexOf("if (globalPolicy) policy = globalPolicy"));
+    expect(generator).toContain("allow_background_editing: globalPolicy.allow_background_editing");
+    expect(generator).toContain("...policy");
+    expect(generator.indexOf('assetScope = "global"')).toBeLessThan(generator.indexOf("allow_background_editing: globalPolicy.allow_background_editing"));
   });
 });

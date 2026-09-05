@@ -32,5 +32,14 @@ describe('durable editorial pipeline', () => {
     expect(image).toContain('syntheticWithFallback');
     expect(image).toContain('provider: "gemini"');
     expect(image).toContain('provider_fallback');
+    expect(image).toContain('...policy');
+    expect(image).toContain('allow_background_editing: globalPolicy.allow_background_editing');
+  });
+
+  it('advances image recovery past articles already attempted', () => {
+    const brain = read('supabase/functions/zica-brain-tick/index.ts');
+    expect(brain).toContain('attemptedIds');
+    expect(brain).toContain('recovery-v3');
+    expect(brain).not.toContain('image-generate:${imageArticle.id}:v2');
   });
 });

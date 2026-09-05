@@ -138,7 +138,16 @@ async function pool(admin: any, userId: string, moduleKey: string, projectId?: s
     // A project policy can point to an empty project pool. When assets fall
     // back to the global pool, their global chroma/editing policy must follow
     // them. Otherwise raw green-screen sources are published unchanged.
-    if (globalPolicy) policy = globalPolicy;
+    if (globalPolicy) {
+      policy = {
+        ...globalPolicy,
+        ...policy,
+        // Asset treatment follows the pool that supplied the files. Project
+        // generation permission remains authoritative when those files are
+        // missing, otherwise a global pool can accidentally disable AI fallback.
+        allow_background_editing: globalPolicy.allow_background_editing,
+      };
+    }
   }
   const assets = (data || []) as PoolAsset[];
   return { policy, assets, assetScope };
