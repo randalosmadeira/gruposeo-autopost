@@ -208,7 +208,7 @@ Deno.serve(async (req: Request) => {
         .eq("job_type", "image_generate")
         .in("status", ["queued", "processing", "retry"]);
       if (!activeImageJobs) {
-        const { data: imageArticle } = await admin.from("articles")
+        const { data: imageCandidates } = await admin.from("articles")
           .select("id,project_id")
           .eq("user_id", userId)
           .in("status", ["ready", "draft"])
@@ -216,8 +216,19 @@ Deno.serve(async (req: Request) => {
           .not("content", "is", null)
           .or("featured_image_url.is.null,featured_image_url.eq.")
           .order("created_at", { ascending: true })
-          .limit(1)
-          .maybeSingle();
+          .limit(50);
+        const candidateIds = (imageCandidates || []).map((article: any) => article.id);
+        let attemptedIds = new Set<string>();
+        if (candidateIds.length) {
+          const { data: attempted } = await admin.from("zica_brain_jobs")
+            .select("article_id")
+            .eq("user_id", userId)
+            .eq("job_type", "image_generate")
+            .in("article_id", candidateIds)
+            .like("idempotency_key", "image-generate:%:recovery-v3");
+          attemptedIds = new Set((attempted || []).map((row: any) => String(row.article_id)));
+        }
+        const imageArticle = (imageCandidates || []).find((article: any) => !attemptedIds.has(String(article.id)));
         if (imageArticle) {
           await enqueue(admin, {
             user_id: userId,
@@ -227,7 +238,7 @@ Deno.serve(async (req: Request) => {
             status: "queued",
             priority: 65,
             max_attempts: 3,
-            idempotency_key: `image-generate:${imageArticle.id}:v2`,
+            idempotency_key: `image-generate:${imageArticle.id}:recovery-v3`,
             payload: { articleId: imageArticle.id, projectId: imageArticle.project_id },
             next_attempt_at: new Date().toISOString(),
           });
