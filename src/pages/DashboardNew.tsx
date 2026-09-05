@@ -344,13 +344,6 @@ export default function DashboardNew() {
                 color="bg-primary"
               />
               <QuickActionCard
-                icon={Target}
-                title="Página de Alta Conversão / Vendas"
-                description="Landing page orientada à conversão"
-                href="/landing-page/new"
-                color="bg-gradient-accent"
-              />
-              <QuickActionCard
                 icon={Newspaper}
                 title="Novo Agente Autônomo 24/7"
                 description="Monitorar e publicar notícias continuamente"
