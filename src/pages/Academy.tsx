@@ -38,17 +38,6 @@ const courses = [
     status: 'in-progress',
   },
   {
-    id: 'landing-pages',
-    title: 'Landing Pages de Alta Conversão',
-    description: 'Crie páginas que vendem com copywriting persuasivo',
-    duration: '30 min',
-    lessons: 6,
-    progress: 0,
-    icon: FileText,
-    color: '#FF6B2B',
-    status: 'not-started',
-  },
-  {
     id: 'automation',
     title: 'Automação com Agentes',
     description: 'Configure agentes de notícias e automação de conteúdo',
@@ -89,7 +78,7 @@ export default function Academy() {
           </div>
         </div>
         <Badge variant="outline" className="text-primary border-primary">
-          2 de 4 cursos concluídos
+          2 de 3 cursos concluídos
         </Badge>
       </div>
 
