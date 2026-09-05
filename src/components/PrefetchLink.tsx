@@ -12,6 +12,11 @@ const routeModules: Record<string, () => Promise<unknown>> = {
   '/news-agents/new': () => import('@/pages/CreateNewsAgent'),
   '/projects': () => import('@/pages/ProjectsList'),
   '/settings': () => import('@/pages/SettingsPage'),
+  '/account': () => import('@/pages/SettingsPage'),
+  '/integrations': () => import('@/pages/SettingsPage'),
+  '/admin/ai-engine': () => import('@/pages/SettingsPage'),
+  '/admin/prompts': () => import('@/pages/SettingsPage'),
+  '/admin/queues': () => import('@/pages/QueueMonitor'),
 };
 
 interface PrefetchLinkProps extends LinkProps {
