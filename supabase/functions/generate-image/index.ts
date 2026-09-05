@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { fetchUserKeys } from "../_shared/byok-resolver.ts";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
+import { generateGeminiImage, setRuntimeKey } from "../_shared/gemini.ts";
 
 const OPENAI_IMAGE_MODEL = "gpt-image-2";
 const corsHeaders = {
@@ -171,6 +172,32 @@ async function synthetic(openaiKey: string, body: ImageRequest) {
   throw new Error("synthetic_image_missing_output");
 }
 
+async function syntheticWithFallback(keys: { openai: string; gemini: string }, body: ImageRequest) {
+  let openAIError = "";
+  if (keys.openai) {
+    try {
+      const image = await synthetic(keys.openai, body);
+      return { image, provider: "openai", model: OPENAI_IMAGE_MODEL, fallback: false };
+    } catch (error) {
+      openAIError = error instanceof Error ? error.message : "openai_image_failed";
+      console.warn(`[generate-image] OpenAI unavailable, activating Gemini fallback: ${openAIError.slice(0, 240)}`);
+    }
+  }
+  if (keys.gemini) {
+    setRuntimeKey("GEMINI_API_KEY", keys.gemini);
+    const watermark = String(body.watermark || "").trim();
+    const result = await generateGeminiImage(
+      `Imagem editorial original para ${body.title}. Contexto: ${[body.context, body.keywords].filter(Boolean).join(". ")}. ${watermark ? `Marca d'água discreta: ${watermark}.` : "Sem texto."}`,
+      { aspectRatio: body.aspectRatio === "4:5" ? "3:4" : body.aspectRatio || "16:9", provider: "gemini" },
+    );
+    if (result?.imageData) {
+      const encoded = result.imageData.split(",")[1] || "";
+      if (encoded) return { image: { bytes: fromBase64(encoded), mime: result.mimeType }, provider: "gemini", model: "imagen", fallback: Boolean(openAIError) };
+    }
+  }
+  throw new Error(openAIError || "Nenhum provedor de imagem configurado ou disponível");
+}
+
 async function saveArticle(admin: any, userId: string, body: ImageRequest, image: string, source: string, meta: Record<string, unknown>) {
   if (!body.articleId) return;
   const { data: article } = await admin.from("articles").select("config").eq("id", body.articleId).eq("user_id", userId).maybeSingle();
@@ -213,11 +240,12 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!(body.allowAiGeneration === true && policy.allow_ai_generation === true)) return json({ success: false, error: `Nenhuma das ${assets.length} imagens cadastradas no módulo ${moduleKey} está acessível.`, code: "image_pool_incomplete", retryable: false }, 409);
-    const keys = await fetchUserKeys(userId); if (!keys.openai) return json({ success: false, error: "OpenAI não configurada", code: "openai_missing" }, 503);
-    const image = await synthetic(keys.openai, body);
-    const persisted = await persistImage(admin, userId, image);
-    const meta = { source: "openai", synthetic: true, model: OPENAI_IMAGE_MODEL, module_key: moduleKey, watermark_requested: String(body.watermark || "").trim() || null, storage_bucket: "article-images", storage_path: persisted.path, content_hash: persisted.hash };
-    await saveArticle(admin, userId, body, persisted.url, "openai", meta); return json({ success: true, image: persisted.url, source: "openai", generated: true, provider: "openai", model: OPENAI_IMAGE_MODEL, geo: meta });
+    const keys = await fetchUserKeys(userId);
+    if (!keys.openai && !keys.gemini) return json({ success: false, error: "Nenhum provedor de imagem configurado", code: "image_provider_missing" }, 503);
+    const generated = await syntheticWithFallback(keys, body);
+    const persisted = await persistImage(admin, userId, generated.image);
+    const meta = { source: generated.provider, synthetic: true, model: generated.model, provider_fallback: generated.fallback, module_key: moduleKey, watermark_requested: String(body.watermark || "").trim() || null, storage_bucket: "article-images", storage_path: persisted.path, content_hash: persisted.hash };
+    await saveArticle(admin, userId, body, persisted.url, generated.provider, meta); return json({ success: true, image: persisted.url, source: generated.provider, generated: true, provider: generated.provider, model: generated.model, fallback: generated.fallback, geo: meta });
   } catch (error) {
     if (error instanceof RequestAuthError) return json({ success: false, error: error.message, code: error.code }, error.status);
     const message = error instanceof Error ? error.message : "image_processing_failed"; return json({ success: false, error: message, code: "image_processing_failed", image_pending: true, retryable: true, request_id: requestId }, 500);
