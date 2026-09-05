@@ -151,7 +151,7 @@ async function createOrRefreshOperation(
   return data as OperationRow;
 }
 
-async function callPublisher(admin: any, operation: OperationRow) {
+async function callPublisher(admin: any, operation: OperationRow, automated = false) {
   const supabaseUrl = env("SUPABASE_URL");
   const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY") || env("SUPABASE_SECRET_KEY");
   if (!supabaseUrl || !serviceKey) throw new Error("Backend interno incompleto");
@@ -178,6 +178,7 @@ async function callPublisher(admin: any, operation: OperationRow) {
         userId: operation.user_id,
         publishStatus: operation.operation_type === "draft" ? "draft" : "publish",
         requireFeaturedImage: operation.operation_type === "publish",
+        automated,
       }),
       signal: AbortSignal.timeout(90000),
     });
@@ -238,7 +239,7 @@ async function processDue(admin: any, limit: number) {
     .filter((row) => !row.scheduled_at || Date.parse(row.scheduled_at) <= Date.now())
     .slice(0, limit);
   const results = [];
-  for (const operation of due) results.push({ id: operation.id, ...(await callPublisher(admin, operation)) });
+  for (const operation of due) results.push({ id: operation.id, ...(await callPublisher(admin, operation, true)) });
   return results;
 }
 
@@ -372,7 +373,7 @@ Deno.serve(async (req: Request) => {
         status: "pending",
         scheduledAt: null,
       });
-      const result = await callPublisher(admin, operation);
+      const result = await callPublisher(admin, operation, actor.mode === "service");
       return json({ success: result.success, operation_id: operation.id, ...result, request_id: requestId }, result.success ? 200 : 502);
     }
 
@@ -383,7 +384,7 @@ Deno.serve(async (req: Request) => {
       if (!operation) return json({ success: false, error: "Operação não encontrada", request_id: requestId }, 404);
       if (["processing", "completed", "cancelled"].includes(String(operation.status))) return json({ success: false, error: "Operação não pode ser reprocessada neste estado", request_id: requestId }, 409);
       await admin.from("wordpress_operations").update({ status: "pending", last_error: null, completed_at: null, updated_at: new Date().toISOString() }).eq("id", operation.id);
-      const result = await callPublisher(admin, { ...operation, status: "pending", last_error: null } as OperationRow);
+      const result = await callPublisher(admin, { ...operation, status: "pending", last_error: null } as OperationRow, actor.mode === "service");
       return json({ success: result.success, operation_id: operation.id, ...result, request_id: requestId }, result.success ? 200 : 502);
     }
 

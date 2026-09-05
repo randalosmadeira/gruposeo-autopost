@@ -19,6 +19,7 @@ type PublishRequest = {
   allowCrossProject?: boolean;
   categories?: Array<number | string>;
   tags?: Array<number | string>;
+  automated?: boolean;
 };
 
 function json(body: unknown, status = 200) {
@@ -223,12 +224,15 @@ Deno.serve(async (req: Request) => {
 
     const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const [{ data: article }, { data: project }] = await Promise.all([
-      admin.from("articles").select("*").eq("id", body.articleId).eq("user_id", userId).maybeSingle(),
-      admin.from("projects").select("*").eq("id", body.projectId).eq("user_id", userId).maybeSingle(),
+      admin.from("articles").select("*").eq("id", body.articleId).maybeSingle(),
+      admin.from("projects").select("*").eq("id", body.projectId).maybeSingle(),
     ]);
 
     if (!article) return json({ success: false, error: "Artigo não encontrado", request_id: requestId }, 404);
     if (!project?.wordpress_url) return json({ success: false, error: "Projeto WordPress não encontrado", request_id: requestId }, 404);
+    if (!article.organization_id || !project.organization_id || article.organization_id !== project.organization_id) {
+      return json({ success: false, error: "Fronteira organizacional inválida", code: "organization_boundary", request_id: requestId }, 403);
+    }
     if (article.project_id && article.project_id !== body.projectId && body.allowCrossProject !== true) {
       return json({
         success: false,
@@ -240,6 +244,25 @@ Deno.serve(async (req: Request) => {
 
     const status = body.publishStatus || "publish";
     const config = article.config && typeof article.config === "object" ? article.config as Record<string, any> : {};
+
+    if (status === "publish") {
+      const { data: permission, error: permissionError } = await admin.rpc("check_organization_publication_permission", {
+        p_organization_id: project.organization_id,
+        p_user_id: userId,
+        p_automated: body.automated === true,
+      });
+      if (permissionError) throw permissionError;
+      if (permission?.allowed !== true) {
+        const code = String(permission?.code || "publication_forbidden");
+        return json({
+          success: false,
+          error: code === "publication_approval_required" ? "Publicação aguardando aprovação de um papel autorizado" : "Publicação não autorizada pela política da organização",
+          code,
+          retryable: false,
+          request_id: requestId,
+        }, 403);
+      }
+    }
 
     if (status === "publish" && article.scheduled_at && Date.parse(article.scheduled_at) > Date.now() + 1000) {
       return json({ success: false, error: "Publicação agendada ainda não venceu", code: "scheduled_not_due", scheduled_at: article.scheduled_at, retryable: true, request_id: requestId }, 409);
@@ -331,7 +354,7 @@ Deno.serve(async (req: Request) => {
       word_count: words,
       config: normalizedConfig,
       updated_at: normalizedAt,
-    }).eq("id", article.id).eq("user_id", userId);
+    }).eq("id", article.id).eq("organization_id", article.organization_id);
     if (normalizeError) throw normalizeError;
 
     const categories = Array.isArray(body.categories) ? body.categories : [];
@@ -396,8 +419,8 @@ Deno.serve(async (req: Request) => {
       };
 
     await Promise.all([
-      admin.from("articles").update(articleUpdate).eq("id", article.id).eq("user_id", userId),
-      admin.from("projects").update({ is_connected: true, wordpress_last_verified_at: now, updated_at: now }).eq("id", project.id).eq("user_id", userId),
+      admin.from("articles").update(articleUpdate).eq("id", article.id).eq("organization_id", article.organization_id),
+      admin.from("projects").update({ is_connected: true, wordpress_last_verified_at: now, updated_at: now }).eq("id", project.id).eq("organization_id", project.organization_id),
     ]);
 
     return json({
