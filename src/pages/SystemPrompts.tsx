@@ -27,6 +27,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AgentConfig {
   id: string;
@@ -38,9 +39,9 @@ interface AgentConfig {
   enabled: boolean;
   prompt: string;
   category: string;
+  databaseId?: string;
+  version?: number;
 }
-
-const STORAGE_KEY = 'cf_system_prompts_config';
 
 const defaultAgents: AgentConfig[] = [
   {
@@ -106,23 +107,37 @@ export default function SystemPrompts() {
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [loadingTemplates, setLoadingTemplates] = useState<Set<string>>(new Set());
   const [hasChanges, setHasChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Load saved config from localStorage
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as Partial<AgentConfig>[];
-        setAgents(prev => prev.map(agent => {
-          const savedAgent = parsed.find((s: any) => s.id === agent.id);
-          if (savedAgent) {
-            return { ...agent, enabled: savedAgent.enabled ?? agent.enabled, prompt: savedAgent.prompt || '' };
-          }
-          return agent;
-        }));
+    let active = true;
+    const loadRegistry = async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) return;
+      const { data, error } = await supabase
+        .from('prompt_templates')
+        .select('id,name,prompt,is_active,version')
+        .eq('user_id', auth.user.id)
+        .is('project_id', null);
+      if (!active) return;
+      if (error) {
+        toast({ title: 'Falha ao carregar prompts', description: error.message, variant: 'destructive' });
+        return;
       }
-    } catch { /* ignore */ }
-  }, []);
+      setAgents((current) => current.map((agent) => {
+        const saved = data?.find((item) => item.name === agent.id);
+        return saved ? {
+          ...agent,
+          databaseId: saved.id,
+          prompt: saved.prompt,
+          enabled: saved.is_active,
+          version: saved.version,
+        } : agent;
+      }));
+    };
+    void loadRegistry();
+    return () => { active = false; };
+  }, [toast]);
 
   const loadTemplate = async (agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
@@ -155,11 +170,40 @@ export default function SystemPrompts() {
     setHasChanges(true);
   };
 
-  const saveAll = () => {
-    const toSave = agents.map(a => ({ id: a.id, enabled: a.enabled, prompt: a.prompt }));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-    setHasChanges(false);
-    toast({ title: 'Salvo!', description: 'Configurações dos agentes salvas com sucesso.' });
+  const saveAll = async () => {
+    setIsSaving(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) throw new Error('Sessão expirada. Entre novamente.');
+      for (const agent of agents) {
+        const payload = {
+          user_id: auth.user.id,
+          name: agent.id,
+          description: agent.description,
+          prompt: agent.prompt,
+          is_active: agent.enabled,
+          is_default: false,
+          template_type: 'system',
+          agent_name: agent.name,
+          agent_type: agent.id,
+          target_function: agent.id === 'agente-jornalistico' ? 'news_rewriter' : 'article_generator',
+          source: agent.prompt ? 'database' : 'bundled-template',
+        };
+        if (agent.databaseId) {
+          const { error } = await supabase.from('prompt_templates').update(payload).eq('id', agent.databaseId);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from('prompt_templates').insert(payload);
+          if (error) throw error;
+        }
+      }
+      setHasChanges(false);
+      toast({ title: 'Prompts versionados', description: 'Configurações salvas no registro canônico do Supabase.' });
+    } catch (error) {
+      toast({ title: 'Falha ao salvar', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const copyPrompt = (prompt: string) => {
@@ -189,9 +233,9 @@ export default function SystemPrompts() {
             <Badge variant="secondary" className="text-sm">
               {enabledCount}/{agents.length} ativos
             </Badge>
-            <Button onClick={saveAll} disabled={!hasChanges} className="bg-gradient-accent hover:opacity-90">
+            <Button onClick={() => void saveAll()} disabled={!hasChanges || isSaving} className="bg-gradient-accent hover:opacity-90">
               <Save className="w-4 h-4 mr-2" />
-              Salvar Tudo
+              {isSaving ? 'Salvando...' : 'Salvar Tudo'}
             </Button>
           </div>
         </div>
@@ -228,6 +272,7 @@ export default function SystemPrompts() {
                                     <EyeOff className="w-3 h-3 mr-1" /> Inativo
                                   </Badge>
                                 )}
+                                {agent.version && <Badge variant="secondary" className="text-xs">v{agent.version}</Badge>}
                               </div>
                               <p className="text-sm text-muted-foreground mt-0.5">{agent.description}</p>
                             </div>
