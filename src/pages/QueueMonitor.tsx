@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, AlertTriangle, CalendarClock, CheckCircle2, Clock3, Loader2, RefreshCw, RotateCcw, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import {
   WordPressOperation,
   WordPressOperationStatus,
 } from '@/services/wordpressOperations';
+import { supabase } from '@/integrations/supabase/client';
 
 const statusMeta: Record<WordPressOperationStatus, { label: string; className: string }> = {
   scheduled: { label: 'Agendado', className: 'bg-blue-500/10 text-blue-600 border-blue-500/20' },
@@ -49,15 +50,31 @@ export default function QueueMonitor() {
   const statsQuery = useQuery({
     queryKey: ['wordpress-operations', 'stats', projectId],
     queryFn: () => getWordPressQueueStats(projectId),
-    refetchInterval: 5_000,
+    refetchInterval: false,
     retry: 2,
   });
   const operationsQuery = useQuery({
     queryKey: ['wordpress-operations', 'list', projectId],
     queryFn: () => listWordPressOperations(projectId, 100),
-    refetchInterval: 5_000,
+    refetchInterval: false,
     retry: 2,
   });
+
+  useEffect(() => {
+    const filter = projectId ? `project_id=eq.${projectId}` : undefined;
+    const channel = supabase
+      .channel(`wordpress-operations-monitor-${projectId || 'all'}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'wordpress_operations',
+        ...(filter ? { filter } : {}),
+      }, () => {
+        void queryClient.invalidateQueries({ queryKey: ['wordpress-operations'] });
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [projectId, queryClient]);
 
   const refresh = async () => {
     await Promise.all([statsQuery.refetch(), operationsQuery.refetch()]);
@@ -104,7 +121,7 @@ export default function QueueMonitor() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">Monitor de Filas</h1>
-            <p className="text-sm text-muted-foreground">Fonte única: wordpress-operations. Atualização automática a cada 5 segundos.</p>
+            <p className="text-sm text-muted-foreground">Fonte única: wordpress-operations. Atualização em tempo real, sem consultas cíclicas.</p>
           </div>
           <Button variant="outline" onClick={() => void refresh()} disabled={statsQuery.isFetching || operationsQuery.isFetching}>
             <RefreshCw className={`w-4 h-4 mr-2 ${(statsQuery.isFetching || operationsQuery.isFetching) ? 'animate-spin' : ''}`} />
