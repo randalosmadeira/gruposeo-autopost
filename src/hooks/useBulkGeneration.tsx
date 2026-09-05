@@ -236,7 +236,7 @@ export function useBulkGeneration() {
     // Build config from bulk settings + keyword analysis
     const config = {
       keyword: job.keyword.keyword,
-      type: job.keyword.tipoConteudo === 'landing_page' ? 'sales' : 'blog',
+      type: 'blog',
       language: bulkConfig?.language || 'pt-BR',
       tone: bulkConfig?.tone || 'profissional',
       wordCount: bulkConfig?.contentLength || job.keyword.comprimentoSugerido || 'long',
@@ -443,7 +443,7 @@ export function useBulkGeneration() {
             keyword: job.keyword.keyword,
             title: `${job.keyword.keyword}: Guia Completo ${new Date().getFullYear()}`,
             status: 'draft', // Start as draft (Na Fila)
-            type: job.keyword.tipoConteudo === 'landing_page' ? 'sales' : 'blog',
+            type: 'blog',
             project_id: projectId && projectId !== 'none' ? projectId : null,
             config: { bulkGenerated: true, ...bulkConfig },
           })
