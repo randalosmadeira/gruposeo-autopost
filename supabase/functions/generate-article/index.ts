@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
+import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,6 +44,7 @@ interface ArticleConfig {
   internalLinks?: Array<{ anchor: string; url: string }>;
   sourcesContext?: string;
   projectId?: string;
+  articleId?: string;
   projectConfig?: Record<string, string | undefined>;
 }
 
@@ -58,7 +60,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function sse(content: string, provider: string, model: string) {
+function sse(content: string, provider: string, model: string, promptVersion?: number) {
   const payload = `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\ndata: [DONE]\n\n`;
   return new Response(payload, {
     headers: {
@@ -67,6 +69,7 @@ function sse(content: string, provider: string, model: string) {
       "Cache-Control": "no-cache",
       "X-AI-Provider": provider,
       "X-AI-Model": model,
+      "X-Prompt-Version": String(promptVersion || 0),
     },
   });
 }
@@ -144,39 +147,72 @@ Deno.serve(async (req: Request) => {
   const requestId = crypto.randomUUID();
 
   try {
-    const authHeader = req.headers.get("Authorization") || "";
-    if (!authHeader.startsWith("Bearer ")) return json({ error: "Autorização necessária", request_id: requestId }, 401);
-
     const supabaseUrl = String(Deno.env.get("SUPABASE_URL") || "");
-    const anonKey = String(Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "");
-    if (!supabaseUrl || !anonKey) return json({ error: "Backend incompleto", request_id: requestId }, 500);
-
-    const token = authHeader.slice(7);
-    const client = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data: authData, error: authError } = await client.auth.getUser(token);
-    if (authError || !authData.user) return json({ error: "Sessão inválida", request_id: requestId }, 401);
-
     const body = await req.json().catch(() => ({}));
+    const actor = await resolveRequestActor(req, body?.userId);
+    const userId = actor.userId;
     const config = (body?.config || body) as ArticleConfig;
     if (!config?.keyword?.trim()) return json({ error: "keyword é obrigatório", request_id: requestId }, 400);
 
     const serviceKey = String(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || "");
-    const admin = serviceKey ? createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+    if (!supabaseUrl || !serviceKey) return json({ error: "Backend incompleto", request_id: requestId }, 500);
+    const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    if (body?.enqueueOnly === true) {
+      if (!config.articleId) return json({ error: "articleId é obrigatório para enfileirar", request_id: requestId }, 400);
+      const { data: article } = await admin.from("articles").select("id,project_id")
+        .eq("id", config.articleId).eq("user_id", userId).maybeSingle();
+      if (!article) return json({ error: "Artigo não encontrado ou acesso negado", request_id: requestId }, 403);
+      const projectId = config.projectId || article.project_id || null;
+      const { error: queueError } = await admin.from("zica_brain_jobs").upsert({
+        user_id: userId, project_id: projectId, article_id: article.id,
+        job_type: "article_generate", status: "queued", priority: 85, max_attempts: 3,
+        idempotency_key: `article-generate:${article.id}:v1`,
+        payload: { config: { ...config, projectId, articleId: article.id } },
+        next_attempt_at: new Date().toISOString(),
+      }, { onConflict: "user_id,idempotency_key", ignoreDuplicates: true });
+      if (queueError) return json({ error: queueError.message, request_id: requestId }, 500);
+      await admin.from("articles").update({ status: "generating", error_message: null, updated_at: new Date().toISOString() })
+        .eq("id", article.id).eq("user_id", userId);
+      return json({ success: true, queued: true, articleId: article.id, request_id: requestId }, 202);
+    }
     let preferredProvider: "openai" | "anthropic" | undefined;
+    let systemPrompt = "Você é o redator editorial principal do Zica.ai. Entregue somente conteúdo publicável ou o sinal ZICA_NEEDS_PRIMARY_SOURCE quando uma fonte primária for indispensável.";
+    let promptVersion = 0;
     if (admin) {
-      const { data: settings } = await admin.from("user_settings").select("ai_provider").eq("user_id", authData.user.id).maybeSingle();
+      const { data: settings } = await admin.from("user_settings").select("ai_provider").eq("user_id", userId).maybeSingle();
       const provider = String(settings?.ai_provider || "").toLowerCase();
       if (provider === "openai" || provider === "anthropic") preferredProvider = provider;
+      if (config.projectId) {
+        const { data: project } = await admin.from("projects").select("id,name,description,commercial_info,social_links,editorial_identity").eq("id", config.projectId).eq("user_id", userId).maybeSingle();
+        if (!project) return json({ error: "Projeto não encontrado ou acesso negado", request_id: requestId }, 403);
+        config.projectConfig = {
+          ...(config.projectConfig || {}),
+          project_name: String(project.name || ""),
+          project_description: String(project.description || ""),
+          commercial_info: JSON.stringify(project.commercial_info || {}),
+          social_links: JSON.stringify(project.social_links || {}),
+          editorial_identity: JSON.stringify(project.editorial_identity || {}),
+        };
+      }
+      const templateQuery = admin.from("prompt_templates").select("prompt,version,project_id")
+        .eq("user_id", userId).eq("name", "editor-seo-geo").eq("is_active", true)
+        .order("updated_at", { ascending: false }).limit(1);
+      const { data: templates } = config.projectId
+        ? await templateQuery.or(`project_id.eq.${config.projectId},project_id.is.null`)
+        : await templateQuery.is("project_id", null);
+      const selectedTemplate = templates?.find((item) => item.project_id === config.projectId && Boolean(item.prompt?.trim()))
+        || templates?.find((item) => item.project_id === null && Boolean(item.prompt?.trim()));
+      if (selectedTemplate?.prompt) {
+        systemPrompt = selectedTemplate.prompt;
+        promptVersion = Number(selectedTemplate.version || 1);
+      }
     }
 
     const band = bandFor(config.wordCount);
     const prompt = buildPrompt(config, band);
-    const orchestrator = await getOrchestratorForUser(authData.user.id);
+    const orchestrator = await getOrchestratorForUser(userId);
     let generation = await orchestrator.callWithMeta("article_generation", [
-      { role: "system", content: "Você é o redator editorial principal do Zica.ai. Entregue somente conteúdo publicável ou o sinal ZICA_NEEDS_PRIMARY_SOURCE quando uma fonte primária for indispensável." },
+      { role: "system", content: systemPrompt },
       { role: "user", content: prompt },
     ], { preferredProvider, maxTokens: 32000, temperature: 0.35 });
 
@@ -217,8 +253,12 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log(`[generate-article] request=${requestId} provider=${generation.provider} model=${generation.model} words=${words} band=${band.min}-${band.max}`);
-    return sse(content, generation.provider, generation.model);
+    if (body?.responseFormat === "json") {
+      return json({ success: true, content, provider: generation.provider, model: generation.model, words, promptVersion, request_id: requestId });
+    }
+    return sse(content, generation.provider, generation.model, promptVersion);
   } catch (error) {
+    if (error instanceof RequestAuthError) return json({ error: error.message, code: error.code, request_id: requestId }, error.status);
     return json({ error: error instanceof Error ? error.message : "Erro interno", request_id: requestId }, 500);
   }
 });
