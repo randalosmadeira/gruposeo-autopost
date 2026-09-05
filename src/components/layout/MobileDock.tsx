@@ -1,13 +1,13 @@
 import { NavLink } from 'react-router-dom';
-import { CalendarDays, FilePlus2, FolderKanban, Home, Settings } from 'lucide-react';
+import { CalendarDays, FileText, Globe2, Home, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const items = [
-  { to: '/', label: 'Cérebro', icon: Home, end: true },
-  { to: '/projects', label: 'Ecossistemas', icon: FolderKanban },
-  { to: '/articles/new', label: 'Onda', icon: FilePlus2, primary: true },
-  { to: '/calendar', label: 'Ondas', icon: CalendarDays },
-  { to: '/settings', label: 'Ajustes', icon: Settings },
+  { to: '/dashboard', label: 'Painel', icon: Home, end: true },
+  { to: '/articles', label: 'Conteúdo', icon: FileText },
+  { to: '/calendar', label: 'Calendário', icon: CalendarDays, primary: true },
+  { to: '/integrations', label: 'Blogs', icon: Globe2 },
+  { to: '/account', label: 'Conta', icon: UserRound },
 ];
 
 export function MobileDock() {

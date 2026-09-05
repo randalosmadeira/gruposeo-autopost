@@ -1,28 +1,33 @@
-import { useSearchParams } from 'react-router-dom';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AIConfigCard } from '@/components/settings/AIConfigCard';
-import { WordPressSitesCard } from '@/components/settings/WordPressSitesCard';
-import { PromptTemplatesCard } from '@/components/settings/PromptTemplatesCard';
-import { TokenUsageCard } from '@/components/settings/TokenUsageCard';
-import { ArticleTemplatesCard } from '@/components/settings/ArticleTemplatesCard';
-import { IndexNowConfigCard } from '@/components/settings/IndexNowConfigCard';
+import { lazy, Suspense } from 'react';
 import { useSettings } from '@/hooks/useSettings';
-import { PressCitationsCard } from '@/components/settings/PressCitationsCard';
 import { InstitutionalInfo } from '@/components/shared/InstitutionalInfo';
 
-import { Settings, Folder, FileText, Globe, BarChart3 } from 'lucide-react';
+import { Settings, UserRound, Globe, Cpu, FileCode2 } from 'lucide-react';
 
-export default function SettingsPage() {
+const AIConfigCard = lazy(() => import('@/components/settings/AIConfigCard').then((module) => ({ default: module.AIConfigCard })));
+const WordPressSitesCard = lazy(() => import('@/components/settings/WordPressSitesCard').then((module) => ({ default: module.WordPressSitesCard })));
+const PromptTemplatesCard = lazy(() => import('@/components/settings/PromptTemplatesCard').then((module) => ({ default: module.PromptTemplatesCard })));
+const TokenUsageCard = lazy(() => import('@/components/settings/TokenUsageCard').then((module) => ({ default: module.TokenUsageCard })));
+const ArticleTemplatesCard = lazy(() => import('@/components/settings/ArticleTemplatesCard').then((module) => ({ default: module.ArticleTemplatesCard })));
+const IndexNowConfigCard = lazy(() => import('@/components/settings/IndexNowConfigCard').then((module) => ({ default: module.IndexNowConfigCard })));
+const PressCitationsCard = lazy(() => import('@/components/settings/PressCitationsCard').then((module) => ({ default: module.PressCitationsCard })));
+
+type SettingsMode = 'account' | 'integrations' | 'ai' | 'prompts';
+
+const headings: Record<SettingsMode, { title: string; description: string; icon: typeof Settings }> = {
+  account: { title: 'Minha Conta', description: 'Dados institucionais e informações da sua conta', icon: UserRound },
+  integrations: { title: 'Meus Blogs', description: 'Sites e canais editoriais conectados', icon: Globe },
+  ai: { title: 'Motor de IA', description: 'Configuração restrita da infraestrutura de inteligência artificial', icon: Cpu },
+  prompts: { title: 'Engenharia de Prompts', description: 'Modelos proprietários e regras editoriais protegidas', icon: FileCode2 },
+};
+
+export default function SettingsPage({ mode = 'account' }: { mode?: SettingsMode }) {
   const { settings, updateSettings } = useSettings();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const currentTab = searchParams.get('tab') || 'general';
+  const heading = headings[mode];
+  const HeadingIcon = heading.icon;
 
-  const handleSaveSettings = async (updates: Record<string, any>) => {
+  const handleSaveSettings = async (updates: Parameters<typeof updateSettings.mutateAsync>[0]) => {
     await updateSettings.mutateAsync(updates);
-  };
-
-  const handleTabChange = (value: string) => {
-    setSearchParams({ tab: value });
   };
 
   return (
@@ -30,63 +35,38 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Settings className="w-5 h-5 text-primary" />
+          <HeadingIcon className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
-          <p className="text-sm text-muted-foreground">Gerencie suas preferências e integrações</p>
+          <h1 className="text-2xl font-bold text-foreground">{heading.title}</h1>
+          <p className="text-sm text-muted-foreground">{heading.description}</p>
         </div>
       </div>
 
-      <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
-          <TabsTrigger value="general" className="gap-2">
-            <Settings className="w-4 h-4" />
-            <span className="hidden sm:inline">Geral</span>
-          </TabsTrigger>
-          <TabsTrigger value="templates" className="gap-2">
-            <Folder className="w-4 h-4" />
-            <span className="hidden sm:inline">Modelos</span>
-          </TabsTrigger>
-          <TabsTrigger value="prompts" className="gap-2">
-            <FileText className="w-4 h-4" />
-            <span className="hidden sm:inline">Prompts</span>
-          </TabsTrigger>
-          <TabsTrigger value="integrations" className="gap-2">
-            <Globe className="w-4 h-4" />
-            <span className="hidden sm:inline">Integrações</span>
-          </TabsTrigger>
-        </TabsList>
-
-        {/* General Tab */}
-        <TabsContent value="general" className="space-y-6">
+      <Suspense fallback={<div className="rounded-xl border p-6 text-sm text-muted-foreground" role="status">Carregando configurações...</div>}>
+      <div className="space-y-6">
+        {mode === 'account' ? (
           <InstitutionalInfo />
+        ) : null}
+        {mode === 'ai' ? <>
           <AIConfigCard 
-            settings={settings as any}
+            settings={settings ?? undefined}
             onSave={handleSaveSettings}
             isSaving={updateSettings.isPending}
           />
           <TokenUsageCard />
-        </TabsContent>
-
-        {/* Templates Tab */}
-        <TabsContent value="templates" className="space-y-6">
+        </> : null}
+        {mode === 'prompts' ? <>
           <ArticleTemplatesCard />
-        </TabsContent>
-
-        {/* Prompts Tab */}
-        <TabsContent value="prompts" className="space-y-6">
           <PromptTemplatesCard />
-        </TabsContent>
-
-        {/* Integrations Tab */}
-        <TabsContent value="integrations" className="space-y-6">
+        </> : null}
+        {mode === 'integrations' ? <>
           <WordPressSitesCard />
-          <IndexNowConfigCard />
           <PressCitationsCard />
-        </TabsContent>
-
-      </Tabs>
+        </> : null}
+        {mode === 'ai' ? <IndexNowConfigCard /> : null}
+      </div>
+      </Suspense>
     </div>
   );
 }

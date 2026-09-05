@@ -45,6 +45,26 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { useAdminAccess } from '@/hooks/useAdminAccess';
+import type { Tables, TablesUpdate } from '@/integrations/supabase/types';
+
+type Project = Tables<'projects'>;
+type ProjectUpdate = TablesUpdate<'projects'> & { id: string };
+
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null) {
+    const candidate = error as Record<string, unknown>;
+    for (const key of ['message', 'error_description', 'details']) {
+      if (typeof candidate[key] === 'string' && candidate[key]) return candidate[key];
+    }
+  }
+  return 'Aguardando sincronização automática do servidor.';
+}
+
+function isPluginProject(project: Pick<Project, 'wordpress_username'>) {
+  return project.wordpress_username === '__ZICA_AI_PLUGIN__' || project.wordpress_username === '__CFRDM_PLUGIN__';
+}
 
 const SEO_PLUGINS = [
   { value: 'none', label: 'Nenhum' },
@@ -66,6 +86,7 @@ interface ConnectionHealth {
 }
 
 export function WordPressSitesCard() {
+  const { isAdmin } = useAdminAccess();
   const { toast } = useToast();
   const { projects, createProject, updateProject, deleteProject } = useProjects();
   
@@ -88,7 +109,7 @@ export function WordPressSitesCard() {
   const [connectionHealth, setConnectionHealth] = useState<Record<string, ConnectionHealth>>({});
   
   // Edit mode
-  const [editingProject, setEditingProject] = useState<any | null>(null);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [editForm, setEditForm] = useState({
     name: '',
     wordpress_url: '',
@@ -107,7 +128,7 @@ export function WordPressSitesCard() {
       [projectId]: { ...prev[projectId], status: 'testing' }
     }));
 
-    const isPluginAuth = project.wordpress_username === '__CFRDM_PLUGIN__';
+    const isPluginAuth = isPluginProject(project);
 
     try {
       const { data, error } = await supabase.functions.invoke('test-wordpress-connection', {
@@ -173,7 +194,7 @@ export function WordPressSitesCard() {
     });
   }, [projects, checkConnectionHealth, connectionHealth]);
 
-  const openEditDialog = (project: any) => {
+  const openEditDialog = (project: Project) => {
     setEditingProject(project);
     setEditForm({
       name: project.name,
@@ -187,14 +208,14 @@ export function WordPressSitesCard() {
     if (!editingProject) return;
     
     try {
-      const updates: any = {
+      const updates: ProjectUpdate = {
         id: editingProject.id,
         name: editForm.name,
         wordpress_url: editForm.wordpress_url,
       };
       
       // Only update credentials if provided
-      if (editForm.wordpress_username && editingProject.wordpress_username !== '__CFRDM_PLUGIN__') {
+      if (editForm.wordpress_username && !isPluginProject(editingProject)) {
         updates.wordpress_username = editForm.wordpress_username;
       }
       if (editForm.wordpress_app_password) {
@@ -278,11 +299,11 @@ export function WordPressSitesCard() {
         title: 'Site adicionado!',
         description: 'O site WordPress foi adicionado com sucesso.',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[handleAddSite] Error:', error);
       toast({
         title: 'Erro ao adicionar site',
-        description: error instanceof Error ? error.message : (error?.message || 'Erro desconhecido'),
+        description: errorMessage(error),
         variant: 'destructive',
       });
     } finally {
@@ -359,10 +380,8 @@ export function WordPressSitesCard() {
         title: 'Site adicionado e conectado! ✓',
         description: `Conectado a: ${testData.site?.name || finalUrl}${testData.pluginVersion ? ` (Plugin v${testData.pluginVersion})` : ''}`,
       });
-    } catch (error: any) {
-      const message = error instanceof Error 
-        ? error.message 
-        : (error?.message || error?.error_description || error?.details || JSON.stringify(error) || 'Erro desconhecido');
+    } catch (error: unknown) {
+      const message = errorMessage(error);
       const isNetworkError = message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('fetch') || message.includes('Load failed');
       
       console.error('[handleAddPluginSite] Error:', error);
@@ -393,7 +412,7 @@ export function WordPressSitesCard() {
       return;
     }
 
-    const isPluginAuth = project.wordpress_username === '__CFRDM_PLUGIN__';
+    const isPluginAuth = isPluginProject(project);
 
     try {
       if (isPluginAuth) {
@@ -532,7 +551,7 @@ export function WordPressSitesCard() {
     });
   };
 
-  const isPluginConnection = (project: any) => project.wordpress_username === '__CFRDM_PLUGIN__';
+  const isPluginConnection = isPluginProject;
 
   return (
     <Card>
@@ -604,11 +623,11 @@ export function WordPressSitesCard() {
                       </div>
                       <p className="text-sm text-muted-foreground">{project.domain}</p>
                     </div>
-                    <div className="flex items-center gap-3 flex-wrap">
+                    {isAdmin ? <div className="flex items-center gap-3 flex-wrap">
                       <div className="flex items-center gap-2">
                         <Label className="text-xs text-muted-foreground">Plugin SEO:</Label>
                         <Select 
-                          value={(project as any).seo_plugin || 'none'} 
+                          value={project.seo_plugin || 'none'}
                           onValueChange={(value) => handleSeoPluginChange(project.id, value)}
                         >
                           <SelectTrigger className="h-7 w-28 text-xs">
@@ -623,13 +642,13 @@ export function WordPressSitesCard() {
                           </SelectContent>
                         </Select>
                       </div>
-                      {(project as any).seo_plugin && (project as any).seo_plugin !== 'none' && (
+                      {project.seo_plugin && project.seo_plugin !== 'none' && (
                         <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-900/30 dark:border-emerald-800">
                           <CheckCircle2 className="w-3 h-3 mr-1" />
                           Meta SEO será preenchido
                         </Badge>
                       )}
-                    </div>
+                    </div> : null}
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
@@ -644,14 +663,14 @@ export function WordPressSitesCard() {
                         'Testar'
                       )}
                     </Button>
-                    <Button 
+                    {isAdmin ? <Button
                       variant="ghost" 
                       size="icon" 
                       className="h-8 w-8"
                       onClick={() => openEditDialog(project)}
                     >
                       <Pencil className="w-4 h-4" />
-                    </Button>
+                    </Button> : null}
                     <Button 
                       variant="ghost" 
                       size="icon" 
@@ -723,19 +742,19 @@ export function WordPressSitesCard() {
             Novo Site
           </Label>
           
-          <Tabs defaultValue="standard" onValueChange={(v) => setConnectionMethod(v as 'standard' | 'plugin')}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="standard" className="flex items-center gap-2">
+          <Tabs defaultValue={isAdmin ? 'standard' : 'plugin'} onValueChange={(v) => setConnectionMethod(v as 'standard' | 'plugin')}>
+            <TabsList className={cn('grid w-full', isAdmin ? 'grid-cols-2' : 'grid-cols-1')}>
+              {isAdmin ? <TabsTrigger value="standard" className="flex items-center gap-2">
                 <Key className="w-4 h-4" />
                 Senha de Aplicação
-              </TabsTrigger>
+              </TabsTrigger> : null}
               <TabsTrigger value="plugin" className="flex items-center gap-2">
                 <Plug className="w-4 h-4" />
                 Plugin + API Key
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="standard" className="space-y-4 mt-4">
+            {isAdmin ? <TabsContent value="standard" className="space-y-4 mt-4">
               {/* Standard Connection Instructions */}
               <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
                 <div className="flex items-start gap-3">
@@ -786,7 +805,7 @@ export function WordPressSitesCard() {
                 )}
                 Adicionar Site
               </Button>
-            </TabsContent>
+            </TabsContent> : null}
 
             <TabsContent value="plugin" className="space-y-4 mt-4">
               {/* Plugin Connection Instructions */}
@@ -795,7 +814,7 @@ export function WordPressSitesCard() {
                   <Plug className="w-4 h-4 text-emerald-600 mt-0.5" />
                   <div className="text-xs space-y-1">
                     <p className="font-medium text-emerald-900 dark:text-emerald-100">
-                      Conexão via Plugin Zica.ai:
+                      Conexão em 3 passos:
                     </p>
                     <ol className="list-decimal list-inside space-y-0.5 text-emerald-800 dark:text-emerald-200">
                       <li>
@@ -804,8 +823,8 @@ export function WordPressSitesCard() {
                         </Link>
                       </li>
                       <li>No WordPress: <strong>Zica.ai → Dashboard</strong></li>
-                      <li>Copie a API Key gerada automaticamente</li>
-                      <li>Cole abaixo junto com a URL do site</li>
+                      <li>Copie o Código de Ativação gerado pelo plugin</li>
+                      <li>Cole o código abaixo junto com a URL do site</li>
                     </ol>
                   </div>
                 </div>
@@ -835,7 +854,7 @@ export function WordPressSitesCard() {
                 />
               </div>
               <Input
-                placeholder="API Key do Plugin (encontrada em Zica.ai → Dashboard)"
+                placeholder="Código de Ativação do Plugin"
                 value={pluginApiKey}
                 onChange={(e) => setPluginApiKey(e.target.value)}
                 className="font-mono"
@@ -851,7 +870,7 @@ export function WordPressSitesCard() {
                   ) : (
                     <Plus className="w-4 h-4 mr-2" />
                   )}
-                  Adicionar Site via Plugin
+                  Conectar Site
                 </Button>
                 <Button variant="outline" asChild>
                   <Link to="/wordpress-plugin">
@@ -865,7 +884,7 @@ export function WordPressSitesCard() {
         </div>
 
         {/* Troubleshooting Guide */}
-        <div className="p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+        {isAdmin ? <div className="p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
             <div className="text-sm space-y-3">
@@ -888,7 +907,7 @@ export function WordPressSitesCard() {
               </ul>
             </div>
           </div>
-        </div>
+        </div> : null}
       </CardContent>
       
       {/* Edit Dialog */}
@@ -920,7 +939,7 @@ export function WordPressSitesCard() {
               />
             </div>
             
-            {editingProject && !isPluginConnection(editingProject) && (
+            {isAdmin && editingProject && !isPluginConnection(editingProject) && (
               <div className="space-y-2">
                 <Label htmlFor="edit-username">Usuário</Label>
                 <Input
@@ -931,7 +950,7 @@ export function WordPressSitesCard() {
               </div>
             )}
             
-            <div className="space-y-2">
+            {isAdmin ? <div className="space-y-2">
               <Label htmlFor="edit-password">
                 {editingProject && isPluginConnection(editingProject) ? 'Nova API Key' : 'Nova Senha de Aplicação'}
               </Label>
@@ -945,7 +964,7 @@ export function WordPressSitesCard() {
               <p className="text-xs text-muted-foreground">
                 Deixe em branco para manter a credencial atual.
               </p>
-            </div>
+            </div> : null}
           </div>
           
           <DialogFooter>

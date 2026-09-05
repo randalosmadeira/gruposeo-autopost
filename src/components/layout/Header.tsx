@@ -57,7 +57,7 @@ export const Header = memo(function Header() {
             <DropdownMenuContent align="end" className="w-60 border-[#30363D] bg-[#161B22]/95 backdrop-blur-xl">
               <DropdownMenuLabel><p className="text-sm font-medium text-slate-100">{displayName}</p><p className="text-xs font-normal text-slate-500">{user?.email}</p></DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-[#30363D]" />
-              <DropdownMenuItem asChild><Link to="/settings">Configurações</Link></DropdownMenuItem>
+              <DropdownMenuItem asChild><Link to="/account">Minha Conta</Link></DropdownMenuItem>
               <DropdownMenuSeparator className="bg-[#30363D]" />
               <DropdownMenuItem className="text-destructive" onClick={() => signOut()}><LogOut className="mr-2 h-4 w-4" />Sair</DropdownMenuItem>
             </DropdownMenuContent>
