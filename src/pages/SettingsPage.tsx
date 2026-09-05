@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { useSettings } from '@/hooks/useSettings';
 import { InstitutionalInfo } from '@/components/shared/InstitutionalInfo';
+import { ProfileIdentityCard } from '@/components/settings/ProfileIdentityCard';
 
 import { Settings, UserRound, Globe, Cpu, FileCode2 } from 'lucide-react';
 
@@ -48,6 +49,7 @@ export default function SettingsPage({ mode = 'account' }: { mode?: SettingsMode
       <div className="space-y-6">
         {mode === 'account' ? (
           <>
+            <ProfileIdentityCard />
             <SubscriptionOverviewCard />
             <InstitutionalInfo />
           </>
