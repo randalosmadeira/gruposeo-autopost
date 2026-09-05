@@ -264,6 +264,33 @@ Deno.serve(async (req: Request) => {
             { openai: result.openai, anthropic: result.anthropic, automaticProbe: "non_billable" },
             configured ? undefined : "Nenhum provedor textual configurado",
           );
+        } else if (job.job_type === "article_generate") {
+          const config = job.payload?.config && typeof job.payload.config === "object" ? job.payload.config : {};
+          const call = await edgeCall(url, serviceKey, "generate-article", {
+            userId: job.user_id,
+            responseFormat: "json",
+            config: { ...config, articleId: job.article_id, projectId: job.project_id },
+          }, 170000);
+          ok = call.ok;
+          result = call.data;
+          errorMessage = call.ok ? "" : String(call.data?.error || `HTTP ${call.status}`);
+          if (ok) {
+            const content = String(call.data?.content || "");
+            const wordCount = Number(call.data?.words || stripHtml(content).split(/\s+/).filter(Boolean).length);
+            await admin.from("articles").update({
+              content, status: "ready", word_count: wordCount, error_message: null, updated_at: new Date().toISOString(),
+            }).eq("id", job.article_id).eq("user_id", job.user_id);
+            await enqueue(admin, {
+              user_id: job.user_id, project_id: job.project_id, article_id: job.article_id,
+              job_type: "image_generate", status: "queued", priority: 70, max_attempts: 3,
+              idempotency_key: `image-generate:${job.article_id}:v3`,
+              payload: { articleId: job.article_id, projectId: job.project_id, moduleKey: "article" },
+              next_attempt_at: new Date().toISOString(),
+            });
+          }
+          await state(admin, job.user_id, "article_generation", ok ? "healthy" : "degraded", {
+            articleId: job.article_id, projectId: job.project_id, httpStatus: call.status,
+          }, errorMessage || undefined);
         } else if (job.job_type === "image_generate") {
           const { data: article } = await admin.from("articles")
             .select("id,title,keyword,excerpt,content,project_id,featured_image_url")
@@ -279,7 +306,7 @@ Deno.serve(async (req: Request) => {
               userId: job.user_id,
               articleId: article.id,
               projectId: article.project_id,
-              moduleKey: "article",
+              moduleKey: String(job.payload?.moduleKey || "article"),
               title: article.title,
               keywords: article.keyword || "",
               context: article.excerpt || "",
