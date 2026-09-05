@@ -10,8 +10,6 @@ import { Layout } from "@/components/layout/Layout";
 
 const Dashboard = lazy(() => import("./pages/DashboardNew"));
 const ContentCalendar = lazy(() => import("./pages/ContentCalendar"));
-const ArticleTypeSelection = lazy(() => import("./pages/ArticleTypeSelection"));
-const ArticleGenerator = lazy(() => import("./pages/ArticleGenerator"));
 const ArticleGeneratorV2 = lazy(() => import("./pages/ArticleGeneratorV2"));
 const BulkArticleGenerator = lazy(() => import("./pages/BulkArticleGenerator"));
 const ArticlesList = lazy(() => import("./pages/ArticlesList"));
@@ -89,9 +87,9 @@ const App = () => (
                 <Route path="/calendar" element={<ContentCalendar />} />
                 <Route path="/academia" element={<Academy />} />
                 <Route path="/articles" element={<ArticlesList />} />
-                <Route path="/articles/types" element={<ArticleTypeSelection />} />
+                <Route path="/articles/types" element={<Navigate to="/articles/new" replace />} />
                 <Route path="/articles/new" element={<ArticleGeneratorV2 />} />
-                <Route path="/articles/new/:type" element={<ArticleGenerator />} />
+                <Route path="/articles/new/:type" element={<Navigate to="/articles/new" replace />} />
                 <Route path="/articles/bulk" element={<BulkArticleGenerator />} />
                 <Route path="/bulk-articles" element={<Navigate to="/articles/bulk" replace />} />
                 <Route path="/articles/:id/edit" element={<ArticleEditPage />} />
