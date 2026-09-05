@@ -68,7 +68,6 @@ export default function HelpPage() {
                 description="Crie artigos otimizados para SEO com IA, incluindo imagens e estrutura profissional."
                 items={[
                   'Artigos de blog (800-2500 palavras)',
-                  'Páginas de vendas (Landing Pages)',
                   'Artigos em massa (campanhas SEO)',
                   'Sequências de artigos (Pillar + Cluster)'
                 ]}
@@ -179,18 +178,6 @@ export default function HelpPage() {
                           <li>Parágrafos: máx 4 linhas (mobile-first)</li>
                           <li>Inclui FAQ para Featured Snippets</li>
                           <li>Meta description otimizada (150-160 chars)</li>
-                        </ul>
-                      </AccordionContent>
-                    </AccordionItem>
-                    <AccordionItem value="landing">
-                      <AccordionTrigger>Página de Vendas (Landing Page)</AccordionTrigger>
-                      <AccordionContent className="space-y-3">
-                        <p>Copywriting persuasivo focado em conversão.</p>
-                        <ul className="list-disc pl-6 space-y-1 text-sm text-muted-foreground">
-                          <li>Frameworks: AIDA, PAS, FAB</li>
-                          <li>CTAs estratégicos</li>
-                          <li>Gatilhos mentais (escassez, autoridade, prova social)</li>
-                          <li>SEO Local e Nacional</li>
                         </ul>
                       </AccordionContent>
                     </AccordionItem>

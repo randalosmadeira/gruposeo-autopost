@@ -4,19 +4,11 @@ import { useToast } from '@/hooks/use-toast';
 import type { ViralPackage } from '@/components/news-rewriter/MadeiraNelesPainel';
 
 export interface RewriteRequest {
-  sourceUrl: string;
-  sourceContent: string;
-  sourceName: string;
-  analysisAngle: string;
-  keyword?: string;
-  niche?: string;
-  articleLength?: 'short' | 'medium' | 'long' | 'extra-long';
-  language?: string;
-  projectId?: string;
-  internalLinks?: Array<{ anchor: string; url: string }>;
-  autoPublish?: boolean;
-  emotionalTriggerOverride?: string;
-  rewriteMode?: 'standard' | 'madeira_neles';
+  sourceUrl?: string;
+  sourceContent?: string;
+  sourceName?: string;
+  projectId: string;
+  autoPilot?: boolean;
 }
 
 export interface ComplianceCheck {
@@ -109,59 +101,6 @@ export function useNewsRewriter() {
   const [lastViralPackage, setLastViralPackage] = useState<ViralPackage | null>(null);
   const { toast } = useToast();
 
-  const autoPublishToWordPress = useCallback(async (
-    articleId: string,
-    projectId: string
-  ): Promise<boolean> => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return false;
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-to-wordpress`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            articleId,
-            projectId,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to publish');
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        // Update article config with publish info
-        await supabase
-          .from('articles')
-          .update({
-            config: {
-              auto_published: true,
-              wordpress_post_id: data.postId,
-              wordpress_post_url: data.postUrl,
-            },
-          })
-          .eq('id', articleId);
-
-        return true;
-      }
-      
-      return false;
-    } catch (error) {
-      console.error('Auto-publish error:', error);
-      return false;
-    }
-  }, []);
-
   const rewriteNews = useCallback(async (request: RewriteRequest): Promise<RewriteResult | null> => {
     setIsRewriting(true);
     setProgress('Preparando repostagem...');
@@ -194,10 +133,6 @@ export function useNewsRewriter() {
           },
           body: JSON.stringify({
             ...request,
-            niche: request.niche || 'geral',
-            articleLength: request.articleLength || 'medium',
-            emotionalTriggerOverride: request.emotionalTriggerOverride || undefined,
-            rewriteMode: request.rewriteMode || 'standard',
           }),
         }
       );
@@ -234,7 +169,12 @@ export function useNewsRewriter() {
       }
 
       const result = data.article as RewriteResult;
-      const compliance = data.compliance as ComplianceCheck;
+      const compliance: ComplianceCheck = data.compliance || {
+        originalityScore: Number(result.originality_score || 0),
+        citationCompliance: !data.review?.needs_primary_source,
+        seoOptimized: Boolean(data.editorial?.pass),
+        readabilityScore: Number(result.readability_score || 80),
+      };
       
       setLastResult(result);
       setLastCompliance(compliance);
@@ -261,22 +201,7 @@ export function useNewsRewriter() {
         .eq('id', result.id);
 
       // Auto-publish if approved and enabled
-      if (request.autoPublish && request.projectId && audit.passed) {
-        setProgress('Publicando no WordPress...');
-        const published = await autoPublishToWordPress(result.id, request.projectId);
-        
-        if (published) {
-          toast({
-            title: 'Artigo auto-publicado! 🎉',
-            description: `"${result.title}" foi publicado automaticamente no WordPress.`,
-          });
-        } else {
-          toast({
-            title: 'Repostagem concluída!',
-            description: `Artigo "${result.title}" aprovado mas a publicação automática falhou. Publique manualmente.`,
-          });
-        }
-      } else if (audit.passed) {
+      if (audit.passed) {
         toast({
           title: 'Repostagem aprovada! ✅',
           description: `Artigo "${result.title}" passou na auditoria com ${result.originality_score}% de originalidade.`,
@@ -307,7 +232,7 @@ export function useNewsRewriter() {
       setIsRewriting(false);
       setProgress(null);
     }
-  }, [toast, autoPublishToWordPress]);
+  }, [toast]);
 
   return {
     rewriteNews,

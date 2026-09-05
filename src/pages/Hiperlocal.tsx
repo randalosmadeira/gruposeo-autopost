@@ -419,7 +419,7 @@ export default function Hiperlocal() {
       return;
     }
     const payload = encodeURIComponent(JSON.stringify(selected));
-    navigate(`/bulk-articles?titles=${payload}`);
+    navigate(`/articles/bulk?titles=${payload}`);
   };
 
   const criarTitulo = async () => {

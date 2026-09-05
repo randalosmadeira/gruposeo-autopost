@@ -88,7 +88,6 @@ const VARIABLES = [
 const TARGET_FUNCTIONS = [
   { id: 'article_generator', label: 'Gerador de Artigos', icon: '📝' },
   { id: 'news_rewriter', label: 'Repostagem Jornalística', icon: '📰' },
-  { id: 'landing_page', label: 'Landing Pages', icon: '🎯' },
   { id: 'authority_planner', label: 'Planejador de Autoridade', icon: '📊' },
   { id: 'bulk_generator', label: 'Geração em Massa', icon: '⚡' },
   { id: 'image_generator', label: 'Geração de Imagens', icon: '🎨' },

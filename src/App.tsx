@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Layout } from "@/components/layout/Layout";
@@ -24,8 +24,6 @@ const NewsAgents = lazy(() => import("./pages/NewsAgents"));
 const CreateNewsAgent = lazy(() => import("./pages/CreateNewsAgent"));
 const WordPressPlugin = lazy(() => import("./pages/WordPressPlugin"));
 const WordPressMonitor = lazy(() => import("./pages/WordPressMonitor"));
-const LandingPageGenerator = lazy(() => import("./pages/LandingPageGenerator"));
-const BulkSalesPagesGenerator = lazy(() => import("./pages/BulkSalesPagesGenerator"));
 const Auth = lazy(() => import("./pages/Auth"));
 const HelpPage = lazy(() => import("./pages/HelpPage"));
 const NewsRewriter = lazy(() => import("./pages/NewsRewriter"));
@@ -84,6 +82,7 @@ const App = () => (
               <Route path="/1470" element={<SupporterAvatar1470 />} />
               <Route path="/apoiadores" element={<SupporterAvatar1470 />} />
               <Route path="/apoiadores/avatar" element={<SupporterAvatar1470 />} />
+              <Route path="/collab/:campaignSlug" element={<SupporterAvatar1470 />} />
               <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/dashboard" element={<Dashboard />} />
@@ -94,11 +93,9 @@ const App = () => (
                 <Route path="/articles/new" element={<ArticleGeneratorV2 />} />
                 <Route path="/articles/new/:type" element={<ArticleGenerator />} />
                 <Route path="/articles/bulk" element={<BulkArticleGenerator />} />
-                <Route path="/bulk-articles" element={<BulkArticleGenerator />} />
+                <Route path="/bulk-articles" element={<Navigate to="/articles/bulk" replace />} />
                 <Route path="/articles/:id/edit" element={<ArticleEditPage />} />
                 <Route path="/articles/:id" element={<ArticleViewPage />} />
-                <Route path="/landing-page/new" element={<LandingPageGenerator />} />
-                <Route path="/landing-page/bulk" element={<BulkSalesPagesGenerator />} />
                 <Route path="/authority-planner" element={<AuthorityPlanner />} />
                 <Route path="/news-agents" element={<NewsAgents />} />
                 <Route path="/news-agents/new" element={<CreateNewsAgent />} />
@@ -112,7 +109,8 @@ const App = () => (
                 <Route path="/queue-monitor" element={<QueueMonitor />} />
                 <Route path="/help" element={<HelpPage />} />
                 <Route path="/news-rewriter" element={<NewsRewriter />} />
-                <Route path="/bulk-generator" element={<BulkKeywordGenerator />} />
+                <Route path="/keywords/bulk" element={<BulkKeywordGenerator />} />
+                <Route path="/bulk-generator" element={<Navigate to="/keywords/bulk" replace />} />
                 <Route path="/ai-chat" element={<AIChat />} />
                 <Route path="/electoral-campaign" element={<ElectoralCampaign />} />
                 <Route path="/electoral-campaign/portal-network" element={<ElectoralPortalNetwork />} />
