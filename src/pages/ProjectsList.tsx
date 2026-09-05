@@ -504,6 +504,16 @@ function EditProjectForm({
   const [ctaComunidade, setCtaComunidade] = useState(project.cta_comunidade || '');
   const [ctaConclusao, setCtaConclusao] = useState(project.cta_conclusao || '');
   const [ctaLeads, setCtaLeads] = useState(project.cta_leads || '');
+  const [phone, setPhone] = useState(project.commercial_info?.phone || '');
+  const [whatsapp, setWhatsapp] = useState(project.commercial_info?.whatsapp || '');
+  const [email, setEmail] = useState(project.commercial_info?.email || '');
+  const [address, setAddress] = useState(project.commercial_info?.address || '');
+  const [defaultCtaText, setDefaultCtaText] = useState(project.commercial_info?.default_cta_text || 'Fale com nossa equipe pelo WhatsApp');
+  const [defaultCtaUrl, setDefaultCtaUrl] = useState(project.commercial_info?.default_cta_url || '');
+  const [targetAudience, setTargetAudience] = useState(project.editorial_identity?.target_audience || '');
+  const [primaryGeo, setPrimaryGeo] = useState(project.editorial_identity?.primary_geo || '');
+  const [authorName, setAuthorName] = useState(project.editorial_identity?.author_name || 'Redação');
+  const [authorBio, setAuthorBio] = useState(project.editorial_identity?.author_bio || '');
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
@@ -519,6 +529,16 @@ function EditProjectForm({
     setCtaComunidade(project.cta_comunidade || '');
     setCtaConclusao(project.cta_conclusao || '');
     setCtaLeads(project.cta_leads || '');
+    setPhone(project.commercial_info?.phone || '');
+    setWhatsapp(project.commercial_info?.whatsapp || '');
+    setEmail(project.commercial_info?.email || '');
+    setAddress(project.commercial_info?.address || '');
+    setDefaultCtaText(project.commercial_info?.default_cta_text || 'Fale com nossa equipe pelo WhatsApp');
+    setDefaultCtaUrl(project.commercial_info?.default_cta_url || '');
+    setTargetAudience(project.editorial_identity?.target_audience || '');
+    setPrimaryGeo(project.editorial_identity?.primary_geo || '');
+    setAuthorName(project.editorial_identity?.author_name || 'Redação');
+    setAuthorBio(project.editorial_identity?.author_bio || '');
     setHasChanges(false);
   }, [project]);
 
@@ -542,6 +562,28 @@ function EditProjectForm({
       cta_comunidade: ctaComunidade || null,
       cta_conclusao: ctaConclusao || null,
       cta_leads: ctaLeads || null,
+      commercial_info: {
+        phone,
+        whatsapp,
+        email,
+        address,
+        google_maps_url: socialGoogleMaps,
+        default_cta_text: defaultCtaText,
+        default_cta_url: defaultCtaUrl,
+      },
+      social_links: {
+        instagram: socialInstagram,
+        linkedin: socialLinkedin,
+        youtube: socialYoutube,
+        facebook: project.social_links?.facebook || '',
+        twitter: socialTwitter,
+      },
+      editorial_identity: {
+        target_audience: targetAudience,
+        primary_geo: primaryGeo,
+        author_name: authorName,
+        author_bio: authorBio,
+      },
     });
     setHasChanges(false);
   };
@@ -577,6 +619,23 @@ function EditProjectForm({
       <div className="space-y-2">
         <Label htmlFor="editDescription" className="text-sm font-medium">Descrição</Label>
         <Input id="editDescription" placeholder="Descrição do projeto..." value={description} onChange={(e) => handleFieldChange(setDescription)(e.target.value)} className="h-10" />
+      </div>
+
+      {/* Redes Sociais */}
+      <div className="pt-4 border-t border-border">
+        <h3 className="text-sm font-semibold mb-3">Identidade editorial e contato canônico</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1"><Label className="text-xs text-muted-foreground">Telefone</Label><Input value={phone} onChange={(e) => handleFieldChange(setPhone)(e.target.value)} className="h-9 text-sm" /></div>
+          <div className="space-y-1"><Label className="text-xs text-muted-foreground">WhatsApp</Label><Input value={whatsapp} onChange={(e) => handleFieldChange(setWhatsapp)(e.target.value)} className="h-9 text-sm" /></div>
+          <div className="space-y-1"><Label className="text-xs text-muted-foreground">E-mail</Label><Input type="email" value={email} onChange={(e) => handleFieldChange(setEmail)(e.target.value)} className="h-9 text-sm" /></div>
+          <div className="space-y-1"><Label className="text-xs text-muted-foreground">Geografia principal</Label><Input value={primaryGeo} onChange={(e) => handleFieldChange(setPrimaryGeo)(e.target.value)} className="h-9 text-sm" /></div>
+          <div className="col-span-2 space-y-1"><Label className="text-xs text-muted-foreground">Endereço</Label><Input value={address} onChange={(e) => handleFieldChange(setAddress)(e.target.value)} className="h-9 text-sm" /></div>
+          <div className="col-span-2 space-y-1"><Label className="text-xs text-muted-foreground">Público-alvo</Label><Input value={targetAudience} onChange={(e) => handleFieldChange(setTargetAudience)(e.target.value)} className="h-9 text-sm" /></div>
+          <div className="space-y-1"><Label className="text-xs text-muted-foreground">Autor padrão</Label><Input value={authorName} onChange={(e) => handleFieldChange(setAuthorName)(e.target.value)} className="h-9 text-sm" /></div>
+          <div className="space-y-1"><Label className="text-xs text-muted-foreground">Biografia do autor</Label><Input value={authorBio} onChange={(e) => handleFieldChange(setAuthorBio)(e.target.value)} className="h-9 text-sm" /></div>
+          <div className="col-span-2 space-y-1"><Label className="text-xs text-muted-foreground">Texto padrão do CTA</Label><Input value={defaultCtaText} onChange={(e) => handleFieldChange(setDefaultCtaText)(e.target.value)} className="h-9 text-sm" /></div>
+          <div className="col-span-2 space-y-1"><Label className="text-xs text-muted-foreground">URL padrão do CTA</Label><Input value={defaultCtaUrl} onChange={(e) => handleFieldChange(setDefaultCtaUrl)(e.target.value)} className="h-9 text-sm" /></div>
+        </div>
       </div>
 
       {/* Redes Sociais */}
