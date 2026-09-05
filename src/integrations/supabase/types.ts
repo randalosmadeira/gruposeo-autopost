@@ -1513,45 +1513,74 @@ export type Database = {
       }
       prompt_templates: {
         Row: {
+          agent_type: string | null
           agent_name: string | null
+          context_rules: Json
           created_at: string
           description: string | null
           id: string
+          is_active: boolean
           is_default: boolean | null
           name: string
+          output_schema: Json
           prompt: string
+          project_id: string | null
+          source: string
           target_function: string | null
           template_type: string | null
           updated_at: string
           user_id: string
+          version: number
         }
         Insert: {
+          agent_type?: string | null
           agent_name?: string | null
+          context_rules?: Json
           created_at?: string
           description?: string | null
           id?: string
+          is_active?: boolean
           is_default?: boolean | null
           name: string
+          output_schema?: Json
           prompt: string
+          project_id?: string | null
+          source?: string
           target_function?: string | null
           template_type?: string | null
           updated_at?: string
           user_id: string
+          version?: number
         }
         Update: {
+          agent_type?: string | null
           agent_name?: string | null
+          context_rules?: Json
           created_at?: string
           description?: string | null
           id?: string
+          is_active?: boolean
           is_default?: boolean | null
           name?: string
+          output_schema?: Json
           prompt?: string
+          project_id?: string | null
+          source?: string
           target_function?: string | null
           template_type?: string | null
           updated_at?: string
           user_id?: string
+          version?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "prompt_templates_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rss_schedules: {
         Row: {
