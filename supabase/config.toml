@@ -66,9 +66,6 @@ verify_jwt = false
 [functions.ai-api]
 verify_jwt = true
 
-[functions.generate-landing-page]
-verify_jwt = true
-
 [functions.parse-rss]
 verify_jwt = true
 
