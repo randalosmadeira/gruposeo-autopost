@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { cn } from '@/lib/utils';
-import { Activity, Calendar, Cpu, FileCode2, FileText, Globe2, LayoutDashboard, ListChecks, UserRound } from 'lucide-react';
+import { Activity, Building2, Calendar, Cpu, FileCode2, FileText, Globe2, LayoutDashboard, ListChecks, UserRound } from 'lucide-react';
 import { ZicaLogo } from '@/components/brand/ZicaLogo';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
 
@@ -17,6 +17,7 @@ const clientItems: NavItem[] = [
 ];
 
 const adminItems: NavItem[] = [
+  { label: 'Contratantes & Planos', icon: Building2, href: '/admin/organizations' },
   { label: 'Motor de IA & Chaves', icon: Cpu, href: '/admin/ai-engine' },
   { label: 'Engenharia de Prompts', icon: FileCode2, href: '/admin/prompts' },
   { label: 'Filas & Operações', icon: ListChecks, href: '/admin/queues' },
