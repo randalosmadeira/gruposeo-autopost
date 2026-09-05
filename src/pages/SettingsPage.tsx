@@ -11,6 +11,7 @@ const TokenUsageCard = lazy(() => import('@/components/settings/TokenUsageCard')
 const ArticleTemplatesCard = lazy(() => import('@/components/settings/ArticleTemplatesCard').then((module) => ({ default: module.ArticleTemplatesCard })));
 const IndexNowConfigCard = lazy(() => import('@/components/settings/IndexNowConfigCard').then((module) => ({ default: module.IndexNowConfigCard })));
 const PressCitationsCard = lazy(() => import('@/components/settings/PressCitationsCard').then((module) => ({ default: module.PressCitationsCard })));
+const SubscriptionOverviewCard = lazy(() => import('@/components/settings/SubscriptionOverviewCard').then((module) => ({ default: module.SubscriptionOverviewCard })));
 
 type SettingsMode = 'account' | 'integrations' | 'ai' | 'prompts';
 
@@ -46,7 +47,10 @@ export default function SettingsPage({ mode = 'account' }: { mode?: SettingsMode
       <Suspense fallback={<div className="rounded-xl border p-6 text-sm text-muted-foreground" role="status">Carregando configurações...</div>}>
       <div className="space-y-6">
         {mode === 'account' ? (
-          <InstitutionalInfo />
+          <>
+            <SubscriptionOverviewCard />
+            <InstitutionalInfo />
+          </>
         ) : null}
         {mode === 'ai' ? <>
           <AIConfigCard 

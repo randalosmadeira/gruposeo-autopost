@@ -40,6 +40,7 @@ const SupporterAvatarPromptEditor = lazy(() => import("./pages/SupporterAvatarPr
 const SupportersAdminPage = lazy(() => import("./pages/SupportersAdminPage"));
 const AuditoriaGBP = lazy(() => import("./pages/AuditoriaGBP"));
 const Hiperlocal = lazy(() => import("./pages/Hiperlocal"));
+const AdminOrganizations = lazy(() => import("./pages/AdminOrganizations"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -111,6 +112,7 @@ const App = () => (
                 <Route path="/admin/ai-engine" element={<AdminRoute><SettingsPage mode="ai" /></AdminRoute>} />
                 <Route path="/admin/prompts" element={<AdminRoute><SettingsPage mode="prompts" /></AdminRoute>} />
                 <Route path="/admin/queues" element={<AdminRoute><QueueMonitor /></AdminRoute>} />
+                <Route path="/admin/organizations" element={<AdminRoute><AdminOrganizations /></AdminRoute>} />
                 <Route path="/help" element={<HelpPage />} />
                 <Route path="/news-rewriter" element={<NewsRewriter />} />
                 <Route path="/keywords/bulk" element={<BulkKeywordGenerator />} />
