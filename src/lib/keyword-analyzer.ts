@@ -17,7 +17,7 @@ export interface KeywordData {
 
 export interface AnalyzedKeyword extends KeywordData {
   scoreConversao: number;
-  tipoConteudo: 'landing_page' | 'conteudo_misto' | 'artigo_blog';
+  tipoConteudo: 'artigo_servico' | 'artigo_comparativo' | 'artigo_blog';
   tipoConteudoLabel: string;
   estrategiasPersuasao: string[];
   ehLocal: boolean;
@@ -47,32 +47,25 @@ const PALAVRAS_COMERCIAIS = [
 
 // Estratégias por tipo de conteúdo
 const ESTRATEGIAS_POR_TIPO = {
-  landing_page: ['AIDA', 'PAS', 'FAB', 'Scarcity', 'Social Proof'],
-  conteudo_misto: ['AIDA', 'Problem-Solution', 'Authority', 'Educational'],
+  artigo_servico: ['Problem-Solution', 'Authority', 'Educational', 'Contextual CTA'],
+  artigo_comparativo: ['Comparison', 'Evidence', 'Authority', 'Educational'],
   artigo_blog: ['Problem-Solution', 'Educational', 'Subtle CTA', 'E-E-A-T']
 };
 
 // Elementos obrigatórios por tipo
 const ELEMENTOS_POR_TIPO = {
-  landing_page: [
-    'Título persuasivo com benefício claro',
-    'Subtítulo com proposta de valor',
-    'Seção de benefícios (bullet points)',
-    'Prova social (cases, depoimentos)',
-    'CTA principal acima da dobra',
-    'CTA secundário no rodapé',
-    'FAQ com objeções comuns',
-    'Formulário de contato/lead',
-    'Garantia ou diferencial competitivo'
+  artigo_servico: [
+    'Resposta direta para a intenção comercial',
+    'Explicação técnica do serviço',
+    'Critérios objetivos para contratação',
+    'Limites, riscos e perguntas frequentes',
+    'CTA contextual do projeto'
   ],
-  conteudo_misto: [
-    'Título educacional + keyword',
-    'Introdução com gancho emocional',
-    'Seções educacionais (H2)',
-    'Dados e estatísticas',
-    'CTA contextual no meio',
-    'Conclusão com CTA final',
-    'FAQ complementar'
+  artigo_comparativo: [
+    'Critérios de comparação explícitos',
+    'Tabela comparativa quando os dados permitirem',
+    'Fontes e limitações',
+    'Orientação prática sem promessa de resultado'
   ],
   artigo_blog: [
     'Título informativo otimizado',
@@ -151,10 +144,10 @@ export function calcularScoreConversao(data: KeywordData): number {
 /**
  * Determina o tipo de conteúdo ideal
  */
-export function determinarTipoConteudo(intencao: string): 'landing_page' | 'conteudo_misto' | 'artigo_blog' {
+export function determinarTipoConteudo(intencao: string): 'artigo_servico' | 'artigo_comparativo' | 'artigo_blog' {
   switch (intencao) {
-    case 'Transacional': return 'landing_page';
-    case 'Comercial': return 'conteudo_misto';
+    case 'Transacional': return 'artigo_servico';
+    case 'Comercial': return 'artigo_comparativo';
     default: return 'artigo_blog';
   }
 }
@@ -164,8 +157,8 @@ export function determinarTipoConteudo(intencao: string): 'landing_page' | 'cont
  */
 export function getTipoConteudoLabel(tipo: string): string {
   const labels: Record<string, string> = {
-    landing_page: 'Landing Page',
-    conteudo_misto: 'Conteúdo Misto',
+    artigo_servico: 'Artigo de Serviço',
+    artigo_comparativo: 'Artigo Comparativo',
     artigo_blog: 'Artigo de Blog'
   };
   return labels[tipo] || tipo;
@@ -176,8 +169,8 @@ export function getTipoConteudoLabel(tipo: string): string {
  */
 export function calcularComprimentoSugerido(tipo: string): number {
   switch (tipo) {
-    case 'landing_page': return 1500;
-    case 'conteudo_misto': return 2000;
+    case 'artigo_servico': return 1400;
+    case 'artigo_comparativo': return 1800;
     case 'artigo_blog': return 1800;
     default: return 1500;
   }
@@ -249,8 +242,8 @@ export function generateSummary(keywords: AnalyzedKeyword[]) {
   
   return {
     total,
-    landingPages: (byType.landing_page || []).length,
-    conteudoMisto: (byType.conteudo_misto || []).length,
+    artigosServico: (byType.artigo_servico || []).length,
+    artigosComparativos: (byType.artigo_comparativo || []).length,
     artigosBlog: (byType.artigo_blog || []).length,
     avgScore: Math.round(avgScore),
     localKeywords: localCount,
