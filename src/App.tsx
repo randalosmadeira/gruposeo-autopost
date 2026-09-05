@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Layout } from "@/components/layout/Layout";
+import { AdminRoute } from "@/components/AdminRoute";
 
 const Dashboard = lazy(() => import("./pages/DashboardNew"));
 const ContentCalendar = lazy(() => import("./pages/ContentCalendar"));
@@ -101,10 +102,15 @@ const App = () => (
                 <Route path="/internal-linking" element={<InternalLinking />} />
                 <Route path="/internal-links" element={<InternalLinking />} />
                 <Route path="/topical-maps" element={<Dashboard />} />
-                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/settings" element={<Navigate to="/account" replace />} />
+                <Route path="/account" element={<SettingsPage mode="account" />} />
+                <Route path="/integrations" element={<SettingsPage mode="integrations" />} />
                 <Route path="/wordpress-plugin" element={<WordPressPlugin />} />
-                <Route path="/wordpress-monitor" element={<WordPressMonitor />} />
-                <Route path="/queue-monitor" element={<QueueMonitor />} />
+                <Route path="/wordpress-monitor" element={<AdminRoute><WordPressMonitor /></AdminRoute>} />
+                <Route path="/queue-monitor" element={<AdminRoute><QueueMonitor /></AdminRoute>} />
+                <Route path="/admin/ai-engine" element={<AdminRoute><SettingsPage mode="ai" /></AdminRoute>} />
+                <Route path="/admin/prompts" element={<AdminRoute><SettingsPage mode="prompts" /></AdminRoute>} />
+                <Route path="/admin/queues" element={<AdminRoute><QueueMonitor /></AdminRoute>} />
                 <Route path="/help" element={<HelpPage />} />
                 <Route path="/news-rewriter" element={<NewsRewriter />} />
                 <Route path="/keywords/bulk" element={<BulkKeywordGenerator />} />
@@ -118,7 +124,7 @@ const App = () => (
                 <Route path="/electoral-campaign/supporters" element={<SupportersAdminPage />} />
                 <Route path="/auditoria-gbp" element={<AuditoriaGBP />} />
                 <Route path="/hiperlocal" element={<Hiperlocal />} />
-                <Route path="/system-prompts" element={<SettingsPage />} />
+                <Route path="/system-prompts" element={<AdminRoute><Navigate to="/admin/prompts" replace /></AdminRoute>} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
