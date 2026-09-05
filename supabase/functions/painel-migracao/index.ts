@@ -13,7 +13,7 @@ const IGNORE_KEYS = new Set([
 const KNOWN_FUNCTION_NAMES = [
   'generate-article','news-agent','generate-authority-plan','generate-authority-plan-stream',
   'publish-to-wordpress','regenerate-content','test-wordpress-connection','wordpress-api',
-  'articles-api','webhooks','ai-api','generate-landing-page','rewrite-news','parse-rss',
+  'articles-api','webhooks','ai-api','rewrite-news','parse-rss',
   'execute-news-agents','generate-secondary-keywords','analyze-url-content','monitor-portals',
   'auto-process-rss','seo-agent','ai-chat','analyze-seo-advanced','analyze-file',
   'generate-electoral-content','generate-image','generate-content-variations',
