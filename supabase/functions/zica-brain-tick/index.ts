@@ -259,7 +259,7 @@ Deno.serve(async (req: Request) => {
           ok = call.ok; result = call.data; errorMessage = call.ok ? "" : String(call.data?.error || `HTTP ${call.status}`);
           await state(admin, job.user_id, "wordpress", ok ? "healthy" : "degraded", { projectId: job.project_id, httpStatus: call.status }, errorMessage || undefined);
         } else if (job.job_type === "scheduled_publish") {
-          const call = await edgeCall(url, serviceKey, "publish-to-wordpress", { userId: job.user_id, articleId: job.article_id, projectId: job.project_id, publishStatus: "publish", requireFeaturedImage: false }, 90000);
+          const call = await edgeCall(url, serviceKey, "publish-to-wordpress", { userId: job.user_id, articleId: job.article_id, projectId: job.project_id, publishStatus: "publish", requireFeaturedImage: false, automated: true }, 90000);
           ok = call.ok; result = call.data; errorMessage = call.ok ? "" : String(call.data?.error || `HTTP ${call.status}`);
           if (ok) await state(admin, job.user_id, "scheduler", "healthy", { lastPublishedArticleId: job.article_id });
           else await state(admin, job.user_id, "scheduler", "degraded", { articleId: job.article_id }, errorMessage);
