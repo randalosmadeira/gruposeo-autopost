@@ -195,7 +195,7 @@ export function useBulkGeneration() {
     bulkConfig: BulkGenerationConfig | undefined,
     onProgress: (content: string, progress: number, step: string) => void,
     retryAttempt = 0,
-    projectData?: Record<string, any> | null,
+    projectData?: Record<string, unknown> | null,
   ): Promise<{ content: string; articleId: string | null; imageUrl: string | null }> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) {
@@ -221,7 +221,7 @@ export function useBulkGeneration() {
         });
 
         if (linkResponse.data?.success && linkResponse.data?.suggestions) {
-          internalLinks = linkResponse.data.suggestions.map((s: any) => ({
+          internalLinks = linkResponse.data.suggestions.map((s: { anchor_text: string; url: string }) => ({
             anchor: s.anchor_text,
             url: s.url,
           }));
@@ -397,7 +397,7 @@ export function useBulkGeneration() {
   const startGeneration = useCallback(async (
     projectId?: string, 
     bulkConfig?: BulkGenerationConfig,
-    delayMs = 5000 // Increased delay to avoid rate limits
+    _delayMs = 0
   ) => {
     setState(prev => ({ ...prev, isRunning: true }));
 
@@ -421,16 +421,7 @@ export function useBulkGeneration() {
       return;
     }
 
-    // STEP 1: Fetch project data for projectConfig injection
-    let projectData: Record<string, any> | null = null;
-    if (projectId && projectId !== 'none') {
-      try {
-        const { data } = await supabase.from('projects').select('*').eq('id', projectId).single();
-        projectData = data;
-      } catch { /* continue without project data */ }
-    }
-
-    // STEP 2: Create all articles in database as 'draft' (queue)
+    // STEP 1: Create all articles in database as durable queue placeholders.
     // This makes them visible in the articles list immediately
     const articleIdMap = new Map<string, string>(); // job.id -> article.id
     
@@ -461,7 +452,8 @@ export function useBulkGeneration() {
       }
     }
     
-    // STEP 2: Process each job sequentially
+    // STEP 2: Enqueue quickly. The Zica Brain owns provider retries, persistence
+    // and image generation, so closing this browser no longer loses the batch.
     for (let i = 0; i < pendingJobs.length; i++) {
       const job = pendingJobs[i];
       const articleId = articleIdMap.get(job.id);
@@ -499,53 +491,42 @@ export function useBulkGeneration() {
       }));
 
       try {
-        const { content, articleId: generatedArticleId, imageUrl } = await generateArticleWithStreaming(
-          { ...job, articleId },
-          projectId && projectId !== 'none' ? projectId : undefined,
-          bulkConfig,
-          (streamContent, progress, step) => {
-            // Update job progress in real-time
-            setState(prev => ({
-              ...prev,
-              jobs: prev.jobs.map(j => 
-                j.id === job.id 
-                  ? { 
-                      ...j, 
-                      progress, 
-                      content: streamContent,
-                      currentStep: step
-                    } 
-                  : j
-              )
-            }));
-          },
-          0,
-          projectData,
-        );
-        
-        // Update article in database with content and set to 'ready'
-        const finalArticleId = articleId || generatedArticleId;
-        if (finalArticleId) {
-          const titleMatch = content.match(/^#\s*(.+)$/m) || content.match(/TITLE_SEO:\s*(.+?)-->/);
-          const extractedTitle = titleMatch?.[1]?.trim().slice(0, 60) || job.keyword.keyword;
-          const wordCount = content.split(/\s+/).filter(Boolean).length;
-          
-          // Extract meta-description from HTML comment
-          const metaMatch = content.match(/<!--\s*META_DESCRIPTION:\s*(.+?)\s*-->/i);
-          const extractedExcerpt = metaMatch?.[1]?.trim().slice(0, 160) || null;
-          
-          await supabase
-            .from('articles')
-            .update({ 
-              status: 'ready',
-              content,
-              title: extractedTitle,
-              excerpt: extractedExcerpt,
-              word_count: wordCount,
-              featured_image_url: imageUrl,
-            })
-            .eq('id', finalArticleId);
-        }
+        if (!articleId) throw new Error('Não foi possível criar o artigo na fila');
+        const config = {
+          keyword: job.keyword.keyword,
+          articleId,
+          projectId: projectId && projectId !== 'none' ? projectId : undefined,
+          type: 'blog',
+          language: bulkConfig?.language || 'pt-BR',
+          tone: bulkConfig?.tone || 'profissional',
+          wordCount: bulkConfig?.contentLength || job.keyword.comprimentoSugerido || 'long',
+          pointOfView: bulkConfig?.pointOfView || 'terceira-singular',
+          segment: bulkConfig?.segment || 'general',
+          contentType: bulkConfig?.contentType || 'how-to',
+          goal: bulkConfig?.goal || 'inform',
+          intentType: bulkConfig?.intentType || 'informational',
+          includeFaq: bulkConfig?.faq ?? true,
+          faqCount: bulkConfig?.faqCount || 5,
+          includeTable: bulkConfig?.tables ?? true,
+          includeList: bulkConfig?.lists ?? true,
+          includeConclusion: bulkConfig?.conclusion ?? true,
+          companyName: bulkConfig?.companyName || '',
+          companyPhone: bulkConfig?.companyPhone || '',
+          companyAddress: bulkConfig?.companyAddress || '',
+          targetAudience: bulkConfig?.targetAudience || '',
+          painPoints: bulkConfig?.painPoints || '',
+          ctaObjective: bulkConfig?.ctaObjective || '',
+          additionalInfo: bulkConfig?.additionalInfo || '',
+        };
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-article`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ enqueueOnly: true, config }),
+          signal: abortControllerRef.current?.signal,
+        });
+        const queued = await response.json().catch(() => ({}));
+        if (!response.ok || queued?.success === false) throw new Error(queued?.error || `Erro ${response.status} ao enfileirar`);
+        const finalArticleId = articleId;
         
         completedCount++;
         const completedJob = { 
@@ -554,9 +535,7 @@ export function useBulkGeneration() {
           articleId: finalArticleId || undefined, 
           completedAt: new Date(),
           progress: 100,
-          currentStep: imageUrl ? 'Completo com imagem!' : 'Completo!',
-          content,
-          imageUrl: imageUrl || undefined,
+          currentStep: 'Enfileirado no Zica Brain',
         };
         jobsRef.current = jobsRef.current.map(j => j.id === job.id ? completedJob : j);
         setState(prev => ({
@@ -625,27 +604,14 @@ export function useBulkGeneration() {
         }
       }
 
-      // Delay between generations to avoid rate limiting
-      if (i < pendingJobs.length - 1) {
-        setState(prev => ({
-          ...prev,
-          jobs: prev.jobs.map(j => 
-            j.id === pendingJobs[i + 1]?.id 
-              ? { ...j, currentStep: `Aguardando ${Math.ceil(delayMs / 1000)}s...` } 
-              : j
-          )
-        }));
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      }
     }
 
     setState(prev => ({ ...prev, isRunning: false }));
     abortControllerRef.current = null;
     
-    const imageCount = jobsRef.current.filter(j => j.imageUrl).length;
     toast({
-      title: 'Geração em massa concluída',
-      description: `${completedCount} artigos gerados (${imageCount} com imagem), ${errorCount} erros`
+      title: 'Lote entregue ao Zica Brain',
+      description: `${completedCount} artigos enfileirados para texto e imagem, ${errorCount} erros de inclusão`
     });
   }, [toast]);
 

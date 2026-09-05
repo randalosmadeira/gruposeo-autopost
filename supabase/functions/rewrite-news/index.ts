@@ -256,6 +256,22 @@ Deno.serve(async (req: Request) => {
     const { data: article, error } = await admin.from("articles").insert(payload).select().single();
     if (error || !article) return json({ success: false, error: error?.message || "Falha ao salvar artigo", request_id: requestId }, 500);
 
+    if (input.autoPilot !== false && draft.image_prompt) {
+      const { error: imageQueueError } = await admin.from("zica_brain_jobs").upsert({
+        user_id: userId,
+        project_id: input.projectId,
+        article_id: article.id,
+        job_type: "image_generate",
+        status: "queued",
+        priority: 75,
+        max_attempts: 3,
+        idempotency_key: `image-generate:${article.id}:news-v1`,
+        payload: { articleId: article.id, projectId: input.projectId, moduleKey: "news" },
+        next_attempt_at: new Date().toISOString(),
+      }, { onConflict: "user_id,idempotency_key", ignoreDuplicates: true });
+      if (imageQueueError) console.warn(`[rewrite-news] image queue failed: ${imageQueueError.message}`);
+    }
+
     return json({
       success: true,
       article,

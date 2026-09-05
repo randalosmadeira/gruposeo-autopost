@@ -5,8 +5,8 @@ import { useCallback } from 'react';
 const routeModules: Record<string, () => Promise<unknown>> = {
   '/': () => import('@/pages/DashboardNew'),
   '/articles': () => import('@/pages/ArticlesList'),
-  '/articles/new': () => import('@/pages/ArticleTypeSelection'),
-  '/articles/bulk': () => import('@/pages/ArticleTypeSelection'),
+  '/articles/new': () => import('@/pages/ArticleGeneratorV2'),
+  '/articles/bulk': () => import('@/pages/BulkArticleGenerator'),
   '/authority-planner': () => import('@/pages/AuthorityPlanner'),
   '/news-agents': () => import('@/pages/NewsAgents'),
   '/news-agents/new': () => import('@/pages/CreateNewsAgent'),
