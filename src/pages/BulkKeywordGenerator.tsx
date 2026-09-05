@@ -1,639 +1,203 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
+import { AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, Play, RotateCcw, Sparkles, Upload } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import {
-  Layers,
-  Upload,
-  FileSpreadsheet,
-  Sparkles,
-  Play,
-  Pause,
-  RotateCcw,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  Loader2,
-  Target,
-  FileText,
-  BarChart3,
-  Filter,
-  Trash2,
-  Settings2,
-} from 'lucide-react';
-import { 
-  KeywordData, 
-  AnalyzedKeyword, 
-  analyzeKeywords, 
-  filterPriorityKeywords,
-  generateSummary 
-} from '@/lib/keyword-analyzer';
+import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
 import { useBulkGeneration } from '@/hooks/useBulkGeneration';
 import { useProjects } from '@/hooks/useProjects';
-import { BulkAdvancedConfig } from '@/components/bulk-generator';
-import { BulkGenerationConfig, defaultBulkConfig } from '@/types/bulk-generation';
+import { analyzeKeywords, type AnalyzedKeyword, type KeywordData } from '@/lib/keyword-analyzer';
+import { defaultBulkConfig } from '@/types/bulk-generation';
+
+type Stage = 'input' | 'review';
+type SpreadsheetRow = Record<string, unknown>;
+
+const ACCEPTED_EXTENSIONS = ['xlsx', 'xls', 'csv', 'tsv', 'ods'];
+const HEADER_ALIASES = {
+  keyword: ['keyword', 'palavra-chave', 'palavra chave', 'termo', 'query', 'search term'],
+  volume: ['volume', 'search volume', 'vol', 'buscas mensais'],
+  dificuldade: ['difficulty', 'kd', 'dificuldade'],
+  intencao: ['intent', 'intenção', 'intencao'],
+  prioridade: ['priority', 'prioridade'],
+  categoria: ['category', 'categoria', 'grupo', 'cluster'],
+} as const;
+
+const normalizeHeader = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+const asText = (value: unknown) => value == null ? '' : String(value).trim();
+
+function findColumn(headers: string[], aliases: readonly string[]) {
+  const normalizedAliases = aliases.map(normalizeHeader);
+  return headers.find((header) => normalizedAliases.includes(normalizeHeader(header)));
+}
+
+function rowsToKeywords(rows: SpreadsheetRow[]): KeywordData[] {
+  if (!rows.length) return [];
+  const headers = Object.keys(rows[0]);
+  const keywordColumn = findColumn(headers, HEADER_ALIASES.keyword) || headers.find((header) => rows.some((row) => asText(row[header]))) || headers[0];
+  const volumeColumn = findColumn(headers, HEADER_ALIASES.volume);
+  const difficultyColumn = findColumn(headers, HEADER_ALIASES.dificuldade);
+  const intentColumn = findColumn(headers, HEADER_ALIASES.intencao);
+  const priorityColumn = findColumn(headers, HEADER_ALIASES.prioridade);
+  const categoryColumn = findColumn(headers, HEADER_ALIASES.categoria);
+
+  return rows.map((row) => ({
+    keyword: asText(row[keywordColumn]),
+    volume: volumeColumn ? asText(row[volumeColumn]) : undefined,
+    dificuldade: difficultyColumn ? asText(row[difficultyColumn]) : undefined,
+    intencao: intentColumn ? asText(row[intentColumn]) : undefined,
+    prioridade: priorityColumn ? asText(row[priorityColumn]) : undefined,
+    categoria: categoryColumn ? asText(row[categoryColumn]) : undefined,
+  })).filter((row) => row.keyword);
+}
+
+function parsePastedKeywords(text: string): KeywordData[] {
+  const parsed = Papa.parse<string[]>(text.trim(), { skipEmptyLines: true });
+  return parsed.data.map((parts) => ({
+    keyword: asText(parts[0]),
+    categoria: asText(parts[1]) || undefined,
+    volume: asText(parts[2]) || undefined,
+    dificuldade: asText(parts[3]) || undefined,
+    prioridade: asText(parts[4]) || undefined,
+    intencao: asText(parts[5]) || undefined,
+  })).filter((row) => row.keyword);
+}
 
 export default function BulkKeywordGenerator() {
-  const [activeTab, setActiveTab] = useState<'input' | 'config' | 'analysis' | 'generation'>('input');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [stage, setStage] = useState<Stage>('input');
+  const [projectId, setProjectId] = useState('');
   const [rawKeywords, setRawKeywords] = useState('');
-  const [analyzedKeywords, setAnalyzedKeywords] = useState<AnalyzedKeyword[]>([]);
-  const [selectedKeywords, setSelectedKeywords] = useState<Set<string>>(new Set());
-  const [projectId, setProjectId] = useState<string>('');
-  const [filterType, setFilterType] = useState<string>('all');
-  const [bulkConfig, setBulkConfig] = useState<BulkGenerationConfig>(defaultBulkConfig);
-  
+  const [fileName, setFileName] = useState('');
+  const [isParsing, setIsParsing] = useState(false);
+  const [error, setError] = useState('');
+  const [keywords, setKeywords] = useState<AnalyzedKeyword[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const { projects } = useProjects();
-  const bulkGen = useBulkGeneration();
-  
-  const connectedProjects = projects?.filter(p => p.is_connected) || [];
+  const bulk = useBulkGeneration();
 
-  // Parse keywords from textarea (one per line or CSV format)
-  const parseKeywords = useCallback((text: string): KeywordData[] => {
-    const lines = text.trim().split('\n').filter(Boolean);
-    
-    return lines.map(line => {
-      const parts = line.split(/[,\t;]/).map(p => p.trim());
-      
-      // Simple format: just keyword
-      if (parts.length === 1) {
-        return { keyword: parts[0] };
-      }
-      
-      // Extended format: keyword, categoria, volume, dificuldade, prioridade
-      return {
-        keyword: parts[0],
-        categoria: parts[1] || undefined,
-        volume: parts[2] || undefined,
-        dificuldade: parts[3] || undefined,
-        prioridade: parts[4] || undefined,
-        intencao: parts[5] || undefined
-      };
-    });
+  const project = useMemo(() => projects.find((item) => item.id === projectId), [projectId, projects]);
+  const selectedKeywords = useMemo(() => keywords.filter((item) => selected.has(item.keyword)), [keywords, selected]);
+  const pendingCount = bulk.jobs.filter((job) => job.status === 'pending' || job.status === 'generating').length;
+  const queueProgress = bulk.jobs.length ? Math.round((bulk.completedCount / bulk.jobs.length) * 100) : 0;
+
+  const applyKeywords = useCallback((items: KeywordData[]) => {
+    const unique = Array.from(new Map(items.map((item) => [item.keyword.toLowerCase(), item])).values());
+    const analyzed = analyzeKeywords(unique);
+    setKeywords(analyzed);
+    setSelected(new Set(analyzed.map((item) => item.keyword)));
+    setStage('review');
+    setError('');
   }, []);
 
-  const handleAnalyze = () => {
-    const keywords = parseKeywords(rawKeywords);
-    const analyzed = analyzeKeywords(keywords);
-    setAnalyzedKeywords(analyzed);
-    setSelectedKeywords(new Set(analyzed.map(k => k.keyword)));
-    setActiveTab('config');
-  };
-
-  const handleProceedToAnalysis = () => {
-    setActiveTab('analysis');
-  };
-
-  const handleToggleKeyword = (keyword: string) => {
-    setSelectedKeywords(prev => {
-      const next = new Set(prev);
-      if (next.has(keyword)) {
-        next.delete(keyword);
+  const parseFile = useCallback(async (file: File) => {
+    const extension = file.name.split('.').pop()?.toLowerCase() || '';
+    if (!ACCEPTED_EXTENSIONS.includes(extension)) {
+      setError('Formato não aceito. Use XLSX, XLS, CSV, TSV ou ODS.');
+      return;
+    }
+    setIsParsing(true);
+    setError('');
+    try {
+      const buffer = await file.arrayBuffer();
+      let rows: SpreadsheetRow[];
+      if (extension === 'csv' || extension === 'tsv') {
+        const text = new TextDecoder().decode(buffer);
+        const parsed = Papa.parse<SpreadsheetRow>(text, { header: true, skipEmptyLines: true, delimiter: extension === 'tsv' ? '\t' : '' });
+        if (parsed.errors.length && !parsed.data.length) throw new Error(parsed.errors[0].message);
+        rows = parsed.data;
       } else {
-        next.add(keyword);
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        if (!firstSheet) throw new Error('A planilha não contém uma aba legível.');
+        rows = XLSX.utils.sheet_to_json<SpreadsheetRow>(firstSheet, { defval: '' });
       }
-      return next;
-    });
-  };
-
-  const handleSelectAll = () => {
-    const filtered = getFilteredKeywords();
-    setSelectedKeywords(new Set(filtered.map(k => k.keyword)));
-  };
-
-  const handleDeselectAll = () => {
-    setSelectedKeywords(new Set());
-  };
-
-  const getFilteredKeywords = () => {
-    if (filterType === 'all') return analyzedKeywords;
-    return analyzedKeywords.filter(k => k.tipoConteudo === filterType);
-  };
-
-  const handleStartGeneration = () => {
-    const selected = analyzedKeywords.filter(k => selectedKeywords.has(k.keyword));
-    bulkGen.initializeJobs(selected);
-    setActiveTab('generation');
-    const finalProjectId = bulkConfig.projectId || projectId;
-    bulkGen.startGeneration(
-      finalProjectId && finalProjectId !== 'none' ? finalProjectId : undefined,
-      bulkConfig
-    );
-  };
-
-  const summary = analyzedKeywords.length > 0 ? generateSummary(analyzedKeywords) : null;
-  const filteredKeywords = getFilteredKeywords();
-  const selectedCount = selectedKeywords.size;
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed': return <CheckCircle2 className="w-4 h-4 text-success" />;
-      case 'error': return <AlertCircle className="w-4 h-4 text-destructive" />;
-      case 'generating': return <Loader2 className="w-4 h-4 animate-spin text-primary" />;
-      default: return <Clock className="w-4 h-4 text-muted-foreground" />;
+      const parsedKeywords = rowsToKeywords(rows);
+      if (!parsedKeywords.length) throw new Error('Nenhuma palavra-chave foi encontrada.');
+      setFileName(file.name);
+      applyKeywords(parsedKeywords);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Falha ao ler a planilha.');
+    } finally {
+      setIsParsing(false);
     }
+  }, [applyKeywords]);
+
+  const analyzePasted = () => {
+    const parsed = parsePastedKeywords(rawKeywords);
+    if (!parsed.length) { setError('Cole ao menos uma palavra-chave.'); return; }
+    applyKeywords(parsed);
   };
 
-  const getTypeIcon = (tipo: string) => {
-    switch (tipo) {
-      case 'landing_page': return <Target className="w-4 h-4" />;
-      case 'conteudo_misto': return <BarChart3 className="w-4 h-4" />;
-      default: return <FileText className="w-4 h-4" />;
-    }
+  const toggleKeyword = (keyword: string) => setSelected((current) => {
+    const next = new Set(current);
+    if (next.has(keyword)) next.delete(keyword); else next.add(keyword);
+    return next;
+  });
+
+  const startGeneration = () => {
+    if (!projectId || !selectedKeywords.length) return;
+    const config = {
+      ...defaultBulkConfig,
+      projectId,
+      internalLinking: true,
+      generateImages: true,
+      companyName: project?.name || '',
+    };
+    bulk.initializeJobs(selectedKeywords);
+    bulk.startGeneration(projectId, config);
   };
 
-  const getTypeBadge = (tipo: string) => {
-    const variants: Record<string, string> = {
-      landing_page: 'bg-primary/10 text-primary',
-      conteudo_misto: 'bg-warning/10 text-warning',
-      artigo_blog: 'bg-info/10 text-info'
-    };
-    const labels: Record<string, string> = {
-      landing_page: 'Landing',
-      conteudo_misto: 'Misto',
-      artigo_blog: 'Blog'
-    };
-    return (
-      <Badge variant="outline" className={variants[tipo]}>
-        {getTypeIcon(tipo)}
-        <span className="ml-1">{labels[tipo]}</span>
-      </Badge>
-    );
+  const reset = () => {
+    setStage('input'); setKeywords([]); setSelected(new Set()); setRawKeywords(''); setFileName(''); setError('');
   };
 
   return (
-    <div className="container max-w-6xl py-6 space-y-6">
-      {/* Header */}
+    <div className="container max-w-6xl space-y-6 py-6">
       <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-          <Layers className="w-6 h-6 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold">Geração em Massa</h1>
-          <p className="text-muted-foreground">
-            Analise keywords e gere conteúdo automaticamente com IA
-          </p>
-        </div>
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10"><FileSpreadsheet className="h-6 w-6 text-primary" /></div>
+        <div><h1 className="text-2xl font-bold">Palavras-chave em massa</h1><p className="text-muted-foreground">Projeto, planilha, triagem e fila em duas etapas.</p></div>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="input" className="gap-2">
-            <Upload className="w-4 h-4" />
-            Importar
-          </TabsTrigger>
-          <TabsTrigger value="config" disabled={analyzedKeywords.length === 0} className="gap-2">
-            <Settings2 className="w-4 h-4" />
-            Configurar
-          </TabsTrigger>
-          <TabsTrigger value="analysis" disabled={analyzedKeywords.length === 0} className="gap-2">
-            <BarChart3 className="w-4 h-4" />
-            Análise ({analyzedKeywords.length})
-          </TabsTrigger>
-          <TabsTrigger value="generation" disabled={bulkGen.jobs.length === 0} className="gap-2">
-            <Sparkles className="w-4 h-4" />
-            Geração
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Input Tab */}
-        <TabsContent value="input" className="space-y-6">
-          <div className="grid lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileSpreadsheet className="w-5 h-5" />
-                    Importar Keywords
-                  </CardTitle>
-                  <CardDescription>
-                    Cole suas keywords (uma por linha) ou no formato CSV
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Keywords</Label>
-                    <Textarea
-                      placeholder={`Formato simples (uma por linha):
-marketing jurídico
-agência advogados
-seo para escritório
-
-Formato CSV (keyword, categoria, volume, dificuldade, prioridade):
-marketing jurídico, Marketing, Alto, Média, ALTA
-agência advogados, Serviços, Médio, Baixa, MÉDIA`}
-                      className="min-h-[300px] font-mono text-sm"
-                      value={rawKeywords}
-                      onChange={(e) => setRawKeywords(e.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {rawKeywords.trim().split('\n').filter(Boolean).length} keywords detectadas
-                    </p>
-                  </div>
-
-                  <Button 
-                    className="w-full gap-2" 
-                    onClick={handleAnalyze}
-                    disabled={!rawKeywords.trim()}
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    Analisar Keywords
-                  </Button>
-                </CardContent>
-              </Card>
+      {stage === 'input' ? (
+        <Card>
+          <CardHeader><CardTitle>1. Projeto e importação</CardTitle><CardDescription>O projeto fornece persona, geografia, CTA, links, política visual e conexão WordPress.</CardDescription></CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label>Projeto obrigatório</Label>
+              <Select value={projectId} onValueChange={setProjectId}><SelectTrigger><SelectValue placeholder="Selecionar projeto" /></SelectTrigger><SelectContent>{projects.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select>
             </div>
-
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Formato Aceito</CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm space-y-3">
-                  <div>
-                    <p className="font-medium">Simples:</p>
-                    <code className="text-xs bg-muted p-1 rounded">uma keyword por linha</code>
-                  </div>
-                  <div>
-                    <p className="font-medium">CSV/TSV:</p>
-                    <code className="text-xs bg-muted p-1 rounded block">
-                      keyword, categoria, volume, dificuldade, prioridade
-                    </code>
-                  </div>
-                  <div>
-                    <p className="font-medium">Volume:</p>
-                    <span className="text-muted-foreground">Alto, Médio, Baixo</span>
-                  </div>
-                  <div>
-                    <p className="font-medium">Prioridade:</p>
-                    <span className="text-muted-foreground">ALTA, MÉDIA, BAIXA</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-muted/50">
-                <CardContent className="pt-4">
-                  <h4 className="font-medium text-sm mb-2">Análise Automática:</h4>
-                  <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
-                    <li>Detecta intenção de busca</li>
-                    <li>Calcula score de conversão</li>
-                    <li>Define tipo de conteúdo ideal</li>
-                    <li>Identifica foco local</li>
-                    <li>Sugere estratégias de persuasão</li>
-                  </ul>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* Config Tab */}
-        <TabsContent value="config" className="space-y-6">
-          <div className="grid lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <ScrollArea className="h-[calc(100vh-280px)]">
-                <BulkAdvancedConfig
-                  config={bulkConfig}
-                  onChange={setBulkConfig}
-                  connectedProjects={connectedProjects}
-                />
-              </ScrollArea>
-            </div>
-            <div className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Resumo da Configuração</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Keywords</span>
-                    <Badge variant="secondary">{analyzedKeywords.length}</Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Tamanho</span>
-                    <Badge>{bulkConfig.contentLength}</Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">IA Auto</span>
-                    <Badge variant={bulkConfig.aiAutoOptimization ? 'default' : 'outline'} className={bulkConfig.aiAutoOptimization ? 'bg-primary' : ''}>
-                      {bulkConfig.aiAutoOptimization ? 'Ativo' : 'Desativado'}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">SEO Avançado</span>
-                    <Badge variant={bulkConfig.seoOptimization ? 'default' : 'outline'}>
-                      {bulkConfig.seoOptimization ? 'Sim' : 'Não'}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Humanizar</span>
-                    <Badge variant={bulkConfig.humanizeContent ? 'default' : 'outline'}>
-                      {bulkConfig.humanizeContent ? 'Sim' : 'Não'}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Imagens</span>
-                    <Badge variant={bulkConfig.generateImages ? 'default' : 'outline'}>
-                      {bulkConfig.generateImages ? `${bulkConfig.imageCount}x` : 'Não'}
-                    </Badge>
-                  </div>
-                  {bulkConfig.companyName && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Empresa</span>
-                      <Badge variant="outline" className="truncate max-w-[120px]">
-                        {bulkConfig.companyName}
-                      </Badge>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Button 
-                className="w-full gap-2" 
-                size="lg"
-                onClick={handleProceedToAnalysis}
-              >
-                <BarChart3 className="w-4 h-4" />
-                Ver Análise de Keywords
-              </Button>
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* Analysis Tab */}
-        <TabsContent value="analysis" className="space-y-6">
-          {summary && (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              <Card>
-                <CardContent className="pt-4 text-center">
-                  <p className="text-2xl font-bold">{summary.total}</p>
-                  <p className="text-xs text-muted-foreground">Total</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 text-center">
-                  <p className="text-2xl font-bold text-primary">{summary.landingPages}</p>
-                  <p className="text-xs text-muted-foreground">Landing Pages</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 text-center">
-                  <p className="text-2xl font-bold text-warning">{summary.conteudoMisto}</p>
-                  <p className="text-xs text-muted-foreground">Conteúdo Misto</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 text-center">
-                  <p className="text-2xl font-bold text-info">{summary.artigosBlog}</p>
-                  <p className="text-xs text-muted-foreground">Artigos Blog</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 text-center">
-                  <p className="text-2xl font-bold text-success">{summary.avgScore}</p>
-                  <p className="text-xs text-muted-foreground">Score Médio</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 text-center">
-                  <p className="text-2xl font-bold">{summary.highPriority}</p>
-                  <p className="text-xs text-muted-foreground">Alta Prioridade</p>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
+            <button type="button" className="flex min-h-44 w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-muted-foreground/30 p-6 text-center transition hover:border-primary" onClick={() => inputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void parseFile(file); }} disabled={isParsing}>
+              {isParsing ? <Loader2 className="h-8 w-8 animate-spin text-primary" /> : <Upload className="h-8 w-8 text-primary" />}
+              <span className="font-semibold">Arraste a planilha ou clique para selecionar</span>
+              <span className="text-sm text-muted-foreground">XLSX, XLS, CSV, TSV e ODS. Compatível com exportações comuns de ferramentas SEO.</span>
+              {fileName && <Badge variant="secondary">{fileName}</Badge>}
+            </button>
+            <input ref={inputRef} type="file" className="hidden" accept=".xlsx,.xls,.csv,.tsv,.ods" onChange={(event) => { const file = event.target.files?.[0]; if (file) void parseFile(file); }} />
+            <div className="space-y-2"><Label>Ou cole uma lista</Label><Textarea className="min-h-36 font-mono text-sm" value={rawKeywords} onChange={(event) => setRawKeywords(event.target.value)} placeholder="Uma palavra-chave por linha ou CSV/TSV" /></div>
+            {error && <p className="flex items-center gap-2 text-sm text-destructive"><AlertCircle className="h-4 w-4" />{error}</p>}
+            <Button className="w-full gap-2" size="lg" disabled={!projectId || !rawKeywords.trim() || isParsing} onClick={analyzePasted}><Sparkles className="h-5 w-5" />Analisar lista</Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-6">
           <Card>
-            <CardHeader className="flex-row items-center justify-between space-y-0">
-              <div>
-                <CardTitle className="text-base">Keywords Analisadas</CardTitle>
-                <CardDescription>{selectedCount} de {filteredKeywords.length} selecionadas</CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Select value={filterType} onValueChange={setFilterType}>
-                  <SelectTrigger className="w-[150px]">
-                    <Filter className="w-4 h-4 mr-2" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="landing_page">Landing Pages</SelectItem>
-                    <SelectItem value="conteudo_misto">Conteúdo Misto</SelectItem>
-                    <SelectItem value="artigo_blog">Artigos Blog</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" size="sm" onClick={handleSelectAll}>
-                  Selecionar Todos
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleDeselectAll}>
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </CardHeader>
+            <CardHeader className="flex-row items-start justify-between gap-4"><div><CardTitle>2. Revisão da fila</CardTitle><CardDescription>{selectedKeywords.length} de {keywords.length} palavras-chave selecionadas para {project?.name}.</CardDescription></div><Button variant="outline" onClick={reset}><RotateCcw className="mr-2 h-4 w-4" />Reimportar</Button></CardHeader>
             <CardContent>
-              <ScrollArea className="h-[400px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-10"></TableHead>
-                      <TableHead>Keyword</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead className="text-center">Score</TableHead>
-                      <TableHead>Intenção</TableHead>
-                      <TableHead>Prioridade</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredKeywords.map((kw) => (
-                      <TableRow key={kw.keyword}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedKeywords.has(kw.keyword)}
-                            onCheckedChange={() => handleToggleKeyword(kw.keyword)}
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {kw.keyword}
-                          {kw.ehLocal && (
-                            <Badge variant="outline" className="ml-2 text-xs">Local</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>{getTypeBadge(kw.tipoConteudo)}</TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant={kw.scoreConversao >= 70 ? 'default' : 'secondary'}>
-                            {kw.scoreConversao}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {kw.intencao}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={
-                            (kw.prioridade || '').toUpperCase() === 'ALTA' 
-                              ? 'border-destructive text-destructive' 
-                              : ''
-                          }>
-                            {kw.prioridade || 'N/A'}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
+              <div className="max-h-[520px] overflow-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead className="w-12" /><TableHead>Palavra-chave</TableHead><TableHead>Tipo sugerido</TableHead><TableHead>Intenção</TableHead><TableHead>CTA/Destino</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{keywords.map((item) => <TableRow key={item.keyword}><TableCell><Checkbox checked={selected.has(item.keyword)} onCheckedChange={() => toggleKeyword(item.keyword)} /></TableCell><TableCell className="font-medium">{item.keyword}</TableCell><TableCell><Badge variant="outline">{item.tipoConteudoLabel}</Badge></TableCell><TableCell>{item.intencao}</TableCell><TableCell>{project?.name || 'Projeto'}</TableCell><TableCell><span className="flex items-center gap-1 text-xs text-success"><CheckCircle2 className="h-3.5 w-3.5" />Pronto para fila</span></TableCell></TableRow>)}</TableBody></Table></div>
+              <Button className="mt-6 w-full gap-2" size="lg" disabled={!selectedKeywords.length || bulk.isRunning} onClick={startGeneration}>{bulk.isRunning ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5" />}{bulk.isRunning ? 'Gerando artigos...' : `Iniciar geração em massa (${selectedKeywords.length})`}</Button>
             </CardContent>
           </Card>
 
-          <div className="flex items-center gap-4">
-            {projects && projects.length > 0 && (
-              <Select value={projectId} onValueChange={setProjectId}>
-                <SelectTrigger className="w-[250px]">
-                  <SelectValue placeholder="Selecionar projeto (opcional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhum projeto</SelectItem>
-                  {projects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <Button 
-              className="gap-2 flex-1" 
-              size="lg"
-              onClick={handleStartGeneration}
-              disabled={selectedCount === 0}
-            >
-              <Play className="w-4 h-4" />
-              Gerar {selectedCount} Artigos
-            </Button>
-          </div>
-        </TabsContent>
-
-        {/* Generation Tab */}
-        <TabsContent value="generation" className="space-y-6">
-          <Card>
-            <CardHeader className="flex-row items-center justify-between space-y-0">
-              <div>
-                <CardTitle className="text-base">Progresso da Geração</CardTitle>
-                <CardDescription>
-                  {bulkGen.completedCount + bulkGen.errorCount} de {bulkGen.jobs.length} processados
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                {bulkGen.isRunning ? (
-                  <Button variant="outline" onClick={bulkGen.stopGeneration}>
-                    <Pause className="w-4 h-4 mr-2" />
-                    Pausar
-                  </Button>
-                ) : (
-                  <Button 
-                    variant="outline" 
-                    onClick={() => bulkGen.startGeneration(projectId || undefined)}
-                    disabled={bulkGen.jobs.every(j => j.status !== 'pending')}
-                  >
-                    <Play className="w-4 h-4 mr-2" />
-                    Continuar
-                  </Button>
-                )}
-                <Button variant="ghost" onClick={bulkGen.resetJobs}>
-                  <RotateCcw className="w-4 h-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Progress 
-                value={(bulkGen.completedCount + bulkGen.errorCount) / bulkGen.jobs.length * 100} 
-              />
-              
-              <div className="flex gap-4 text-sm">
-                <span className="flex items-center gap-1">
-                  <CheckCircle2 className="w-4 h-4 text-success" />
-                  {bulkGen.completedCount} concluídos
-                </span>
-                <span className="flex items-center gap-1">
-                  <AlertCircle className="w-4 h-4 text-destructive" />
-                  {bulkGen.errorCount} erros
-                </span>
-                <span className="flex items-center gap-1">
-                  <Clock className="w-4 h-4 text-muted-foreground" />
-                  {bulkGen.jobs.filter(j => j.status === 'pending').length} pendentes
-                </span>
-              </div>
-
-              <ScrollArea className="h-[400px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-10">Status</TableHead>
-                      <TableHead>Keyword</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead className="w-[200px]">Progresso</TableHead>
-                      <TableHead>Resultado</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {bulkGen.jobs.map((job) => (
-                      <TableRow key={job.id}>
-                        <TableCell>{getStatusIcon(job.status)}</TableCell>
-                        <TableCell className="font-medium">{job.keyword.keyword}</TableCell>
-                        <TableCell>{getTypeBadge(job.keyword.tipoConteudo)}</TableCell>
-                        <TableCell>
-                          {job.status === 'generating' && (
-                            <div className="space-y-1">
-                              <Progress value={job.progress || 0} className="h-2" />
-                              <span className="text-xs text-muted-foreground">
-                                {job.currentStep || 'Iniciando...'} ({Math.round(job.progress || 0)}%)
-                              </span>
-                            </div>
-                          )}
-                          {job.status === 'completed' && (
-                            <div className="flex items-center gap-1 text-success text-xs">
-                              <CheckCircle2 className="w-3 h-3" />
-                              100%
-                            </div>
-                          )}
-                          {job.status === 'pending' && (
-                            <span className="text-xs text-muted-foreground">Aguardando</span>
-                          )}
-                          {job.status === 'error' && (
-                            <span className="text-xs text-destructive">Falhou</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {job.status === 'completed' && job.articleId && (
-                            <a 
-                              href={`/articles/${job.articleId}/edit`}
-                              className="text-primary hover:underline"
-                            >
-                              Editar artigo
-                            </a>
-                          )}
-                          {job.status === 'error' && (
-                            <span className="text-destructive text-xs">{job.error}</span>
-                          )}
-                          {job.status === 'generating' && job.content && (
-                            <span className="text-muted-foreground text-xs">
-                              {job.content.split(/\s+/).length} palavras
-                            </span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+          {bulk.jobs.length > 0 && <Card><CardHeader><CardTitle>Progresso da fila</CardTitle><CardDescription>{bulk.completedCount} concluídos, {bulk.errorCount} erros, {pendingCount} pendentes.</CardDescription></CardHeader><CardContent className="space-y-3"><Progress value={queueProgress} /><div className="grid gap-2 text-sm md:grid-cols-2">{bulk.jobs.map((job) => <div key={job.id} className="flex items-center justify-between rounded border p-3"><span className="truncate">{job.keyword.keyword}</span><Badge variant={job.status === 'error' ? 'destructive' : 'secondary'}>{job.status}</Badge></div>)}</div></CardContent></Card>}
+        </div>
+      )}
     </div>
   );
 }
