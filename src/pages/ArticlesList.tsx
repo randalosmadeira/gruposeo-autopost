@@ -18,6 +18,7 @@ import {
   ImageIcon,
   Inbox,
   Link as LinkIcon,
+  ListPlus,
   Loader2,
   MoreVertical,
   Pencil,
@@ -303,7 +304,12 @@ export default function ArticlesList() {
             <h1 className="text-2xl font-semibold">Artigos</h1>
             <Badge variant="secondary" className="bg-primary/10 text-primary">Total: {statusCounts.all}</Badge>
           </div>
-          <Button asChild><Link to="/articles/new"><Plus className="mr-2 h-4 w-4" />Gerar Onda</Link></Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button variant="outline" asChild>
+              <Link to="/keywords/bulk"><ListPlus className="mr-2 h-4 w-4" />Gerar em massa</Link>
+            </Button>
+            <Button asChild><Link to="/articles/new"><Plus className="mr-2 h-4 w-4" />Gerar Onda</Link></Button>
+          </div>
         </div>
       </header>
 
@@ -333,7 +339,7 @@ export default function ArticlesList() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" disabled={!selectedArticles.size} onClick={() => setShowPublishModal(true)}><Upload className="mr-2 h-4 w-4" />Publicar em massa</Button>
+          <Button size="sm" disabled={!selectedArticles.size} onClick={() => setShowPublishModal(true)}><Upload className="mr-2 h-4 w-4" />Publicar selecionados</Button>
           <Button size="sm" variant="outline" disabled={!selectedArticles.size || isBulkAnalyzing} onClick={handleBulkSEOAnalysis}>
             {isBulkAnalyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
             {isBulkAnalyzing ? `Otimizando... (${bulkAnalysisProgress}/${selectedArticles.size})` : `Análise SEO IA (${selectedArticles.size})`}
