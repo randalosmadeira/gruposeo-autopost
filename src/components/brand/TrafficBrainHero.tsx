@@ -43,7 +43,7 @@ export function TrafficBrainHero({ totalWaves, activeWaves, indexingSubmitted, i
           </div>
         </div>
         <div className="relative min-h-[410px] overflow-hidden rounded-[24px] border border-[#20313b]/55 bg-[radial-gradient(circle_at_50%_50%,rgba(0,240,255,.055),transparent_45%)] sm:min-h-[465px] xl:min-h-[520px]">
-          <div className="absolute left-4 top-4 z-30 inline-flex items-center gap-2 rounded-full border border-[#D4FF00]/25 bg-[#071018]/80 px-3 py-1.5 text-[9px] font-black uppercase tracking-[.16em] text-[#D4FF00] backdrop-blur"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#D4FF00] shadow-[0_0_10px_#D4FF00]" /> Central Cortex ativa</div>
+          <div className="absolute left-4 top-4 z-30 inline-flex items-center gap-2 rounded-full border border-[#D4FF00]/25 bg-[#071018]/80 px-3 py-1.5 text-[9px] font-black uppercase tracking-[.16em] text-[#D4FF00] backdrop-blur"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#D4FF00] shadow-[0_0_10px_#D4FF00]" /> Zica.IA Posts ativo</div>
           <CentralCortex variant="dashboard" className="absolute inset-0" />
         </div>
         <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
