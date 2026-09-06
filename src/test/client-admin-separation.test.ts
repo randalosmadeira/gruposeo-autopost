@@ -62,5 +62,12 @@ describe('client and admin surface separation', () => {
 
     expect(visibleSurfaces).not.toContain('Central Cortex');
     expect(visibleSurfaces).toContain('Zica.IA Posts');
+    expect(app).not.toContain('córtex');
+    expect(app).toContain('Sincronizando o Zica.IA Posts');
+  });
+
+  it('replaces the technical agent counter with connected blogs for clients', () => {
+    expect(dashboard).toContain("isAdmin ? 'Agentes ativos' : 'Blogs conectados'");
+    expect(dashboard).toContain('isAdmin ? activeAgentsCount : projects?.length || 0');
   });
 });
