@@ -519,10 +519,10 @@ export default function DashboardNew() {
               
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Agentes ativos</span>
-                  <span className="font-semibold">{activeAgentsCount}</span>
+                  <span className="text-muted-foreground">{isAdmin ? 'Agentes ativos' : 'Blogs conectados'}</span>
+                  <span className="font-semibold">{isAdmin ? activeAgentsCount : projects?.length || 0}</span>
                 </div>
-                <Progress value={activeAgentsCount * 20} className="h-2" />
+                <Progress value={(isAdmin ? activeAgentsCount : projects?.length || 0) * 20} className="h-2" />
               </div>
             </div>
           </CardContent>
