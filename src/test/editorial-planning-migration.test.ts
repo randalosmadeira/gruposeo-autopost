@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const migration = readFileSync(resolve(process.cwd(), 'supabase/migrations/20260906190000_editorial_mass_planning.sql'), 'utf8');
+const hardening = readFileSync(resolve(process.cwd(), 'supabase/migrations/20260906213000_editorial_mass_planning_hardening.sql'), 'utf8');
 const page = readFileSync(resolve(process.cwd(), 'src/pages/BulkKeywordGenerator.tsx'), 'utf8');
 
 describe('editorial planning migration safeguards', () => {
@@ -42,5 +43,46 @@ describe('editorial planning migration safeguards', () => {
     expect(page).not.toContain("functions.invoke('generate");
     expect(page).not.toContain('publish-to-wordpress');
     expect(page).toContain('Salvar fila para revisão');
+  });
+});
+
+describe('editorial planning hardening (CORE-002)', () => {
+  it('keeps the same security preconditions as the original RPC', () => {
+    expect(hardening).toContain("if auth.uid() is null then raise exception 'authentication_required'");
+    expect(hardening).toContain("public.has_organization_role(v_org, array['owner','admin','editor','campaign_manager'])");
+    expect(hardening).toContain('security definer set search_path = public, extensions');
+    expect(hardening).not.toMatch(/status in \([^)]*published/);
+    expect(hardening).not.toMatch(/publication_enabled\s*=\s*true/);
+  });
+
+  it('turns a concurrent unique_violation on the idempotency key into a replay', () => {
+    expect(hardening).toContain('exception when unique_violation then');
+    expect(hardening).toContain('if not found then raise; end if;');
+    expect(hardening).toContain('v_replay := true;');
+  });
+
+  it('returns the persisted counters on idempotent replays', () => {
+    expect(hardening).toMatch(/count\(\*\) filter \(where not i\.duplicate\), count\(\*\) filter \(where i\.duplicate\)/);
+    expect(hardening).toContain("'idempotent_replay',true");
+    expect(hardening).toContain("'idempotent_replay',false");
+  });
+
+  it('labels repeats inside the same batch as within_import before checking other plans', () => {
+    const within = hardening.indexOf("v_duplicate_reason := 'within_import'");
+    const existing = hardening.indexOf("v_duplicate_reason := 'existing_plan'");
+    expect(within).toBeGreaterThan(-1);
+    expect(existing).toBeGreaterThan(within);
+    expect(hardening).toContain('i.plan_id=v_plan.id and i.keyword_sha256=v_hash');
+  });
+
+  it('adds a tenant-scoped delete policy so the upload compensation works under RLS', () => {
+    expect(migration).not.toMatch(/on storage\.objects for delete/);
+    expect(hardening).toContain('drop policy if exists editorial_plan_assets_storage_delete on storage.objects');
+    expect(hardening).toMatch(/editorial_plan_assets_storage_delete on storage\.objects for delete to authenticated using \(\s*bucket_id='editorial-plan-assets'/);
+    expect(hardening).toContain("(storage.foldername(name))[1] and m.user_id=(select auth.uid()) and m.status='active' and m.role in ('owner','admin','editor','campaign_manager')");
+  });
+
+  it('does not touch tables, grants or buckets beyond the function and the delete policy', () => {
+    expect(hardening).not.toMatch(/create table|alter table|drop table|grant |revoke |storage\.buckets/i);
   });
 });

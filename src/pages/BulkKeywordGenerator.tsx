@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useProjects } from '@/hooks/useProjects';
 import { createPlanningIdempotencyKey, estimateEditorialConsumption, prepareEditorialItems, sanitizeRequestedQuantity, type EditorialFrequency, type EditorialKeywordInput } from '@/lib/editorial-planning';
-import { createEditorialPlan, type RssSourceInput } from '@/services/editorialPlanning';
+import { createEditorialPlan, type CreateEditorialPlanResult, type RssSourceInput } from '@/services/editorialPlanning';
 
 type Stage = 'input' | 'preview' | 'saved';
 type SpreadsheetRow = Record<string, unknown>;
@@ -60,7 +60,7 @@ export default function BulkKeywordGenerator() {
   const [quantity, setQuantity] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [saved, setSaved] = useState<{planId:string;ready:number;duplicates:number;uploadedImages:number;failedImages:string[]}|null>(null);
+  const [saved, setSaved] = useState<CreateEditorialPlanResult|null>(null);
   const project = useMemo(() => projects.find((item) => item.id === projectId), [projects, projectId]);
   const selectedItems = useMemo(() => items.filter((item) => selected.has(item.fingerprint) && !item.duplicate), [items, selected]);
   const effectiveQuantity = sanitizeRequestedQuantity(quantity, selectedItems.length);
@@ -110,7 +110,7 @@ export default function BulkKeywordGenerator() {
 
   const reset = () => { nonce.current=crypto.randomUUID(); setStage('input'); setItems([]); setSelected(new Set()); setRawKeywords(''); setSourceFileName(''); setImages([]); setSaved(null); setError(''); };
 
-  if (stage === 'saved' && saved) return <div className="container max-w-5xl py-6"><Card><CardHeader><CardTitle className="flex items-center gap-2"><CheckCircle2 className="text-success"/>Planejamento salvo para revisão</CardTitle><CardDescription>Nenhum conteúdo foi gerado ou publicado.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="flex flex-wrap gap-2"><Badge>Fila: {saved.ready}</Badge><Badge variant="outline">Duplicados: {saved.duplicates}</Badge><Badge variant="outline">Imagens: {saved.uploadedImages}</Badge><Badge variant="secondary">Revisão</Badge></div><p className="font-mono text-xs">Plano: {saved.planId}</p>{saved.failedImages.length>0&&<p className="text-destructive">Imagens com falha: {saved.failedImages.join(', ')}</p>}<Button onClick={reset}><RotateCcw className="mr-2 h-4 w-4"/>Novo planejamento</Button></CardContent></Card></div>;
+  if (stage === 'saved' && saved) return <div className="container max-w-5xl py-6"><Card><CardHeader><CardTitle className="flex items-center gap-2"><CheckCircle2 className="text-success"/>Planejamento salvo para revisão</CardTitle><CardDescription>Nenhum conteúdo foi gerado ou publicado.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="flex flex-wrap gap-2"><Badge>Fila: {saved.ready}</Badge><Badge variant="outline">Duplicados: {saved.duplicates}</Badge><Badge variant="outline">Imagens: {saved.uploadedImages}</Badge><Badge variant="secondary">Revisão</Badge>{saved.idempotentReplay&&<Badge variant="outline">Reenvio idempotente</Badge>}</div><p className="font-mono text-xs">Plano: {saved.planId}</p>{saved.failedImages.length>0&&<p className="text-destructive">Imagens com falha: {saved.failedImages.join(', ')}</p>}{saved.compensationFailures.length>0&&<p role="alert" className="text-destructive">Objetos não removidos após falha de registro (reconciliar manualmente): {saved.compensationFailures.join(', ')}</p>}<Button onClick={reset}><RotateCcw className="mr-2 h-4 w-4"/>Novo planejamento</Button></CardContent></Card></div>;
 
   return <div className="container max-w-6xl space-y-6 py-6">
     <div><h1 className="text-2xl font-bold">Planejamento editorial em massa</h1><p className="text-muted-foreground">Importe, revise e grave uma fila segura. Publicação permanece bloqueada.</p></div>

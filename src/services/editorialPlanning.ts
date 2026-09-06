@@ -32,7 +32,12 @@ export interface CreateEditorialPlanResult {
   idempotentReplay: boolean;
   uploadedImages: number;
   failedImages: string[];
+  // Objects that were uploaded, could not be registered, and whose removal
+  // also failed. They must be reported so an operator can reconcile them.
+  compensationFailures: string[];
 }
+
+const ASSET_BUCKET = 'editorial-plan-assets';
 
 function asRecord(value: Json): Record<string, Json | undefined> {
   if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error('Resposta inválida ao criar planejamento.');
@@ -79,10 +84,13 @@ export async function createEditorialPlan(input: CreateEditorialPlanInput): Prom
   if (!planId) throw new Error('O banco não retornou o identificador do planejamento.');
 
   const failedImages: string[] = [];
+  const compensationFailures: string[] = [];
   let uploadedImages = 0;
   for (const [index, image] of input.images.entries()) {
+    // Deterministic path: an idempotent replay re-uploads to the same key
+    // (upsert) and re-registers the same row instead of duplicating assets.
     const storagePath = `${input.organizationId}/${planId}/${index + 1}-${safeFileName(image.name)}`;
-    const { error: uploadError } = await supabase.storage.from('editorial-plan-assets').upload(storagePath, image, {
+    const { error: uploadError } = await supabase.storage.from(ASSET_BUCKET).upload(storagePath, image, {
       cacheControl: '3600',
       contentType: image.type,
       upsert: true,
@@ -97,7 +105,10 @@ export async function createEditorialPlan(input: CreateEditorialPlanInput): Prom
     });
     if (registerError) {
       failedImages.push(image.name);
-      await supabase.storage.from('editorial-plan-assets').remove([storagePath]);
+      // Compensation: the object exists in Storage but has no registered row.
+      // Remove it; if the removal itself fails, record the orphan explicitly.
+      const { error: removeError } = await supabase.storage.from(ASSET_BUCKET).remove([storagePath]);
+      if (removeError) compensationFailures.push(storagePath);
       continue;
     }
     uploadedImages += 1;
@@ -111,5 +122,6 @@ export async function createEditorialPlan(input: CreateEditorialPlanInput): Prom
     idempotentReplay: Boolean(response.idempotent_replay),
     uploadedImages,
     failedImages,
+    compensationFailures,
   };
 }
