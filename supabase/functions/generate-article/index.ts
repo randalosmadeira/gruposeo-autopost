@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
+import { distributeProjectCtas } from "../_shared/editorial-cta.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -176,6 +177,7 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, queued: true, articleId: article.id, request_id: requestId }, 202);
     }
     let preferredProvider: "openai" | "anthropic" | undefined;
+    let resolvedProject: Record<string, unknown> | null = null;
     let systemPrompt = "Você é o redator editorial principal do Zica.ai. Entregue somente conteúdo publicável ou o sinal ZICA_NEEDS_PRIMARY_SOURCE quando uma fonte primária for indispensável.";
     let promptVersion = 0;
     if (admin) {
@@ -183,8 +185,9 @@ Deno.serve(async (req: Request) => {
       const provider = String(settings?.ai_provider || "").toLowerCase();
       if (provider === "openai" || provider === "anthropic") preferredProvider = provider;
       if (config.projectId) {
-        const { data: project } = await admin.from("projects").select("id,name,description,commercial_info,social_links,editorial_identity").eq("id", config.projectId).eq("user_id", userId).maybeSingle();
+        const { data: project } = await admin.from("projects").select("id,name,description,commercial_info,social_links,editorial_identity,social_instagram,social_linkedin,social_youtube,social_twitter,social_tiktok,social_google_maps,cta_leads,cta_conclusao").eq("id", config.projectId).eq("user_id", userId).maybeSingle();
         if (!project) return json({ error: "Projeto não encontrado ou acesso negado", request_id: requestId }, 403);
+        resolvedProject = project as Record<string, unknown>;
         config.projectConfig = {
           ...(config.projectConfig || {}),
           project_name: String(project.name || ""),
@@ -252,6 +255,8 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    content = distributeProjectCtas(content, resolvedProject || {});
+    words = countWords(content);
     console.log(`[generate-article] request=${requestId} provider=${generation.provider} model=${generation.model} words=${words} band=${band.min}-${band.max}`);
     if (body?.responseFormat === "json") {
       return json({ success: true, content, provider: generation.provider, model: generation.model, words, promptVersion, request_id: requestId });

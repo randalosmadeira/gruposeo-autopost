@@ -85,7 +85,7 @@ export default function WordPressPluginPage() {
                 <Button asChild variant="outline" className="border-[#00F0FF]/30 text-[#00F0FF] hover:bg-[#00F0FF]/5 hover:text-[#00F0FF]"><Link to="/electoral-campaign/portal-network"><Globe2 className="mr-2 h-4 w-4" /> Configurar Rede Eleitoral</Link></Button>
                 <Button asChild variant="outline" className="border-white/15 text-slate-200 hover:bg-white/[.04]"><Link to="/electoral-campaign/editorial-console"><History className="mr-2 h-4 w-4" /> Abrir Central Editorial</Link></Button>
               </div>
-              <div className="rounded-lg border border-amber-400/20 bg-amber-400/[.05] p-3 text-xs leading-5 text-amber-100">No WordPress: Plugins → Adicionar plugin → Enviar plugin → selecione o ZIP → Instalar → Substituir o atual pelo enviado. Confirme que a coluna “Enviado” mostra 3.10.2 para Zica Posts e 1.2.1 para Zica Electoral Analytics.</div>
+              <div className="rounded-lg border border-amber-400/20 bg-amber-400/[.05] p-3 text-xs leading-5 text-amber-100">No WordPress: Plugins → Adicionar plugin → Enviar plugin → selecione o ZIP → Instalar → Substituir o atual pelo enviado. Confirme que a coluna “Enviado” mostra 3.11.0 para Zica Posts e 1.2.1 para Zica Electoral Analytics.</div>
             </CardContent>
           </Card>
         </section>

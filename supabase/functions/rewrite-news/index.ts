@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 import { normalizeEditorialHtml } from "../_shared/editorial-html.ts";
+import { distributeProjectCtas } from "../_shared/editorial-cta.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -56,6 +57,7 @@ type ProjectContext = {
   commercial_info?: Record<string, unknown> | null;
   social_links?: Record<string, unknown> | null;
   editorial_identity?: Record<string, unknown> | null;
+  [key: string]: unknown;
 };
 
 function json(body: unknown, status = 200) {
@@ -173,7 +175,7 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
     const { data: project } = await admin.from("projects")
-      .select("id,name,description,commercial_info,social_links,editorial_identity")
+      .select("id,name,description,commercial_info,social_links,editorial_identity,social_instagram,social_linkedin,social_youtube,social_twitter,social_tiktok,social_google_maps,cta_leads,cta_conclusao")
       .eq("id", input.projectId).eq("user_id", userId).maybeSingle();
     if (!project) return json({ success: false, error: "Projeto não encontrado ou acesso negado", request_id: requestId }, 403);
 
@@ -203,7 +205,7 @@ Deno.serve(async (req: Request) => {
     const review = parseJson<Review>(reviewCall.content) || { pass: false, needs_primary_source: true, issues: ["Resposta de revisão inválida"] };
 
     const audit = normalizeEditorialHtml(String(review.corrected_content || draft.content_html || draft.content || "").trim());
-    const content = audit.html;
+    const content = distributeProjectCtas(audit.html, project as Record<string, unknown>);
     const title = String(review.corrected_title || draft.title).trim().slice(0, 240);
     const excerpt = String(review.corrected_excerpt || draft.excerpt || draft.meta_description || content.replace(/<[^>]+>/g, " ").slice(0, 260)).trim();
     const keyword = String(review.corrected_keyword || draft.keyword || title).trim();

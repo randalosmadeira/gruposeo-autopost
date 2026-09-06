@@ -1,11 +1,11 @@
-name: Zica Posts 3.10.2 Package
+name: Zica Posts 3.11.0 Package
 on:
   workflow_dispatch:
   push:
-    branches: [main, release/zica-posts-3.10.2]
-    paths: ['public/wordpress-plugin/zica-posts-3.10.2/**','public/wordpress-theme/zica-neural/**','src/lib/plugin-version.ts','src/pages/WordPressPlugin.tsx','supabase/functions/_shared/plugin-version.ts','.github/workflows/zica-posts-package.yml']
+    branches: [main, release/zica-posts-3.11.0]
+    paths: ['public/wordpress-plugin/zica-posts-3.11.0/**','public/wordpress-theme/zica-neural/**','src/lib/plugin-version.ts','src/pages/WordPressPlugin.tsx','supabase/functions/_shared/plugin-version.ts','.github/workflows/zica-posts-package.yml']
   pull_request:
-    paths: ['public/wordpress-plugin/zica-posts-3.10.2/**','src/lib/plugin-version.ts','src/pages/WordPressPlugin.tsx','supabase/functions/_shared/plugin-version.ts','.github/workflows/zica-posts-package.yml']
+    paths: ['public/wordpress-plugin/zica-posts-3.11.0/**','src/lib/plugin-version.ts','src/pages/WordPressPlugin.tsx','supabase/functions/_shared/plugin-version.ts','.github/workflows/zica-posts-package.yml']
 permissions:
   contents: read
 jobs:
@@ -15,35 +15,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate PHP syntax
-        run: find public/wordpress-plugin/zica-posts-3.10.2 public/wordpress-theme/zica-neural -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+        run: find public/wordpress-plugin/zica-posts-3.11.0 public/wordpress-theme/zica-neural -type f -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Validate identity and hardening
         run: |
           set -euo pipefail
-          grep -q 'Version: 3.10.2' public/wordpress-plugin/zica-posts-3.10.2/zica-posts.php
-          grep -q "define('ZICA_POSTS_SOFTWARE_ID', 'zica-posts')" public/wordpress-plugin/zica-posts-3.10.2/zica-posts.php
-          grep -q 'anti-eco' public/wordpress-plugin/zica-posts-3.10.2/readme.txt
-          grep -q 'delegated_indexing' public/wordpress-plugin/zica-posts-3.10.2/version.json
-          grep -q 'OAI-SearchBot' public/wordpress-plugin/zica-posts-3.10.2/includes/class-zica-posts-discovery.php
-          grep -q 'echo_suppressed' public/wordpress-plugin/zica-posts-3.10.2/includes/class-zica-posts-rest.php
-          grep -q 'frontend.css' public/wordpress-plugin/zica-posts-3.10.2/includes/class-zica-posts-cards.php
+          grep -q 'Version: 3.11.0' public/wordpress-plugin/zica-posts-3.11.0/zica-posts.php
+          grep -q "define('ZICA_POSTS_SOFTWARE_ID', 'zica-posts')" public/wordpress-plugin/zica-posts-3.11.0/zica-posts.php
+          grep -q 'anti-eco' public/wordpress-plugin/zica-posts-3.11.0/readme.txt
+          grep -q 'delegated_indexing' public/wordpress-plugin/zica-posts-3.11.0/version.json
+          grep -q 'OAI-SearchBot' public/wordpress-plugin/zica-posts-3.11.0/includes/class-zica-posts-discovery.php
+          grep -q 'echo_suppressed' public/wordpress-plugin/zica-posts-3.11.0/includes/class-zica-posts-rest.php
+          grep -q 'frontend.css' public/wordpress-plugin/zica-posts-3.11.0/includes/class-zica-posts-cards.php
+          grep -q 'possible_duplicate' public/wordpress-plugin/zica-posts-3.11.0/includes/class-zica-posts-curator.php
       - name: Validate JSON manifests
         run: |
-          python -m json.tool public/wordpress-plugin/zica-posts-3.10.2/version.json >/dev/null
+          python -m json.tool public/wordpress-plugin/zica-posts-3.11.0/version.json >/dev/null
           python -m json.tool public/wordpress-theme/zica-neural/theme.json >/dev/null
       - name: Build installable ZIPs
         run: |
           set -euo pipefail
           rm -rf dist-wordpress package-stage
           mkdir -p dist-wordpress package-stage/zica-posts
-          cp -R public/wordpress-plugin/zica-posts-3.10.2/. package-stage/zica-posts/
-          (cd package-stage && zip -rq ../dist-wordpress/zica-posts-3.10.2.zip zica-posts -x '*.DS_Store' '*/.git/*')
+          cp -R public/wordpress-plugin/zica-posts-3.11.0/. package-stage/zica-posts/
+          (cd package-stage && zip -rq ../dist-wordpress/zica-posts-3.11.0.zip zica-posts -x '*.DS_Store' '*/.git/*')
           (cd public/wordpress-theme && zip -rq ../../dist-wordpress/zica-neural-theme-1.0.0.zip zica-neural -x '*.DS_Store' '*/.git/*')
-          unzip -t dist-wordpress/zica-posts-3.10.2.zip
+          unzip -t dist-wordpress/zica-posts-3.11.0.zip
           unzip -t dist-wordpress/zica-neural-theme-1.0.0.zip
-          unzip -p dist-wordpress/zica-posts-3.10.2.zip zica-posts/zica-posts.php | grep -q 'Version: 3.10.2'
+          unzip -p dist-wordpress/zica-posts-3.11.0.zip zica-posts/zica-posts.php | grep -q 'Version: 3.11.0'
       - uses: actions/upload-artifact@v4
         with:
-          name: zica-wordpress-3.10.2
+          name: zica-wordpress-3.11.0
           path: dist-wordpress/*.zip
           if-no-files-found: error
           retention-days: 30
