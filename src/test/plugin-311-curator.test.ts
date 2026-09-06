@@ -5,9 +5,9 @@ import { resolve } from 'node:path';
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
 describe('Zica Posts 3.11.0', () => {
-  it('exposes bulk publishing in the client sidebar', () => {
+  it('exposes safe bulk planning in the client sidebar', () => {
     const sidebar = read('src/components/layout/Sidebar.tsx');
-    expect(sidebar).toContain("label: 'Publicar em massa'");
+    expect(sidebar).toContain("label: 'Planejar em massa'");
     expect(sidebar).toContain("href: '/keywords/bulk'");
   });
   it('ships guarded post-publication curation', () => {

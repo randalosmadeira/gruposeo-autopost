@@ -11,7 +11,7 @@ interface NavItem { label: string; icon: React.ElementType; href: string; }
 const clientItems: NavItem[] = [
   { label: 'Visão Geral', icon: LayoutDashboard, href: '/dashboard' },
   { label: 'Conteúdo & Notícias', icon: FileText, href: '/articles' },
-  { label: 'Publicar em massa', icon: Layers3, href: '/keywords/bulk' },
+  { label: 'Planejar em massa', icon: Layers3, href: '/keywords/bulk' },
   { label: 'Calendário Editorial', icon: Calendar, href: '/calendar' },
   { label: 'Meus Blogs', icon: Globe2, href: '/integrations' },
   { label: 'Minha Conta', icon: UserRound, href: '/account' },
