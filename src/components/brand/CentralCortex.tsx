@@ -28,7 +28,7 @@ const circuitPaths = [
 export function CentralCortex({ variant = 'dashboard', className }: CentralCortexProps) {
   const compact = variant === 'compact';
   return (
-    <div className={cn('zica-cortex-stage relative', `zica-cortex-stage--${variant}`, className)} aria-label="Zica.ai Central Cortex">
+    <div className={cn('zica-cortex-stage relative', `zica-cortex-stage--${variant}`, className)} aria-label="Núcleo visual do Zica.IA Posts">
       <svg className="zica-cortex-svg absolute inset-0 h-full w-full" viewBox="0 0 640 460" role="img" aria-hidden="true">
         <defs>
           <radialGradient id="cortexGlow" cx="50%" cy="50%" r="50%">
@@ -80,7 +80,7 @@ export function CentralCortex({ variant = 'dashboard', className }: CentralCorte
       <div className="zica-cortex-core absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-[52%] flex-col items-center justify-center text-center">
         <BrainCircuit className={cn('text-[#00F0FF] drop-shadow-[0_0_22px_rgba(0,240,255,.65)]', compact ? 'h-12 w-12' : 'h-16 w-16 sm:h-20 sm:w-20')} strokeWidth={1.5} />
         <strong className="mt-2 text-xl font-black tracking-[-.04em] text-[#D4FF00] sm:text-2xl">ZICA.AI</strong>
-        <span className="text-[8px] font-black uppercase tracking-[.18em] text-white sm:text-[9px]">Central Cortex</span>
+        <span className="text-[8px] font-black uppercase tracking-[.18em] text-white sm:text-[9px]">Zica Posts</span>
       </div>
       {!compact && nodes.map(({ label, Icon, cls }) => (
         <div key={label} className={cn('zica-cortex-node absolute z-30', cls)}>

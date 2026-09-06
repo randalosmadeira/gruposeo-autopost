@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useArticles } from '@/hooks/useArticles';
 import { useProjects } from '@/hooks/useProjects';
 import { useNewsAgents } from '@/hooks/useNewsAgents';
+import { useAdminAccess } from '@/hooks/useAdminAccess';
 import { useZicaTrafficKpis } from '@/hooks/useZicaTrafficKpis';
 import { 
   LayoutDashboard,
@@ -179,7 +180,8 @@ export default function DashboardNew() {
   const { user } = useAuth();
   const { articles, stats, isLoading: articlesLoading, error: articlesError } = useArticles();
   const { projects, isLoading: projectsLoading, error: projectsError } = useProjects();
-  const { agents, activeAgentsCount, totalArticles: agentArticles } = useNewsAgents();
+  const { isAdmin } = useAdminAccess();
+  const { activeAgentsCount, totalArticles: agentArticles } = useNewsAgents({ enabled: isAdmin });
   const { data: zicaKpis } = useZicaTrafficKpis();
 
   const hasConnectionError = !!(articlesError || projectsError);
@@ -316,14 +318,25 @@ export default function DashboardNew() {
             icon={FolderKanban}
             iconColor="bg-amber-500"
           />
-          <StatCard
-            title="Agentes Autônomos de Notícias"
-            value={activeAgentsCount}
-            change={`${agentArticles} artigos gerados`}
-            changeType="neutral"
-            icon={Newspaper}
-            iconColor="bg-purple-500"
-          />
+          {isAdmin ? (
+            <StatCard
+              title="Agentes Autônomos de Notícias"
+              value={activeAgentsCount}
+              change={`${agentArticles} artigos gerados`}
+              changeType="neutral"
+              icon={Newspaper}
+              iconColor="bg-purple-500"
+            />
+          ) : (
+            <StatCard
+              title="Artigos Criados no Mês"
+              value={dashboardStats.thisMonth}
+              change={`${dashboardStats.thisWeek} esta semana`}
+              changeType="neutral"
+              icon={BarChart3}
+              iconColor="bg-purple-500"
+            />
+          )}
         </div>
 
         {/* Quick Actions */}
@@ -343,13 +356,15 @@ export default function DashboardNew() {
                 href="/articles/new"
                 color="bg-primary"
               />
-              <QuickActionCard
-                icon={Newspaper}
-                title="Novo Agente Autônomo 24/7"
-                description="Monitorar e publicar notícias continuamente"
-                href="/news-agents/new"
-                color="bg-purple-500"
-              />
+              {isAdmin && (
+                <QuickActionCard
+                  icon={Newspaper}
+                  title="Novo Agente Autônomo 24/7"
+                  description="Monitorar e publicar notícias continuamente"
+                  href="/news-agents/new"
+                  color="bg-purple-500"
+                />
+              )}
               <QuickActionCard
                 icon={Calendar}
                 title="Calendário de Ondas Editoriais"
@@ -362,20 +377,18 @@ export default function DashboardNew() {
         </Card>
 
         {/* SEO Agent Panel + Audit Report */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <SEOAgentPanel />
-          <AuditReportPanel />
-        </div>
-
-        {/* Audit Score History */}
-        <AuditScoreHistoryChart />
-
-        {/* Cron Notifications */}
-        <CronNotificationsPanel />
-
-        {/* WordPress Health Status */}
-        {projects && projects.some(p => p.wordpress_url) && (
-          <WordPressHealthCard projects={projects} compact />
+        {isAdmin && (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <SEOAgentPanel />
+              <AuditReportPanel />
+            </div>
+            <AuditScoreHistoryChart />
+            <CronNotificationsPanel />
+            {projects && projects.some(p => p.wordpress_url) && (
+              <WordPressHealthCard projects={projects} compact />
+            )}
+          </>
         )}
 
         {/* Main Content Grid */}

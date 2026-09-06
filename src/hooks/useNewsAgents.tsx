@@ -45,7 +45,7 @@ export interface UpdateNewsAgentInput extends Partial<CreateNewsAgentInput> {
   is_active?: boolean;
 }
 
-export function useNewsAgents() {
+export function useNewsAgents(options: { enabled?: boolean } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -64,7 +64,7 @@ export function useNewsAgents() {
       if (error) throw error;
       return data as NewsAgent[];
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && (options.enabled ?? true),
   });
 
   const createAgent = useMutation({

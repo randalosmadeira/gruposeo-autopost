@@ -10,6 +10,7 @@ describe('client and admin surface separation', () => {
   const settings = read('src/pages/SettingsPage.tsx');
   const wordpress = read('src/components/settings/WordPressSitesCard.tsx');
   const adminRoute = read('src/components/AdminRoute.tsx');
+  const dashboard = read('src/pages/DashboardNew.tsx');
 
   it('exposes only the five commercial destinations in the client menu', () => {
     for (const label of ['Visão Geral', 'Conteúdo & Notícias', 'Calendário Editorial', 'Meus Blogs', 'Minha Conta']) {
@@ -40,5 +41,26 @@ describe('client and admin surface separation', () => {
     expect(wordpress).toContain("defaultValue={isAdmin ? 'standard' : 'plugin'}");
     expect(wordpress).toContain('Código de Ativação do Plugin');
     expect(wordpress).toContain("{isAdmin ? <TabsContent value=\"standard\"");
+  });
+
+  it('keeps autonomous agents and technical monitoring off the client dashboard', () => {
+    expect(dashboard).toContain('useAdminAccess');
+    expect(dashboard).toContain('useNewsAgents({ enabled: isAdmin })');
+    expect(dashboard).toContain('{isAdmin && (');
+    expect(dashboard).toContain('<SEOAgentPanel />');
+    expect(dashboard).toContain('<AuditReportPanel />');
+    expect(dashboard).toContain('<CronNotificationsPanel />');
+    expect(dashboard).toContain('<WordPressHealthCard projects={projects} compact />');
+  });
+
+  it('does not expose ZicaCortex branding inside Zica.IA Posts screens', () => {
+    const visibleSurfaces = [
+      read('src/pages/Auth.tsx'),
+      read('src/components/brand/TrafficBrainHero.tsx'),
+      read('src/components/brand/CentralCortex.tsx'),
+    ].join('\n');
+
+    expect(visibleSurfaces).not.toContain('Central Cortex');
+    expect(visibleSurfaces).toContain('Zica.IA Posts');
   });
 });
