@@ -1,6 +1,4 @@
 import { useMemo, useRef, useState } from 'react';
-import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
 import { AlertCircle, CheckCircle2, FileImage, Loader2, RotateCcw, Save, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,35 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useProjects } from '@/hooks/useProjects';
 import { createPlanningIdempotencyKey, estimateEditorialConsumption, prepareEditorialItems, sanitizeRequestedQuantity, type EditorialFrequency, type EditorialKeywordInput } from '@/lib/editorial-planning';
-import { createEditorialPlan, type CreateEditorialPlanResult, type RssSourceInput } from '@/services/editorialPlanning';
+import { createEditorialPlan, type CreateEditorialPlanResult } from '@/services/editorialPlanning';
+import { isValidRssUrl, parseEditorialText, parseRssSources, parseSpreadsheetBuffer, selectPlanImages, spreadsheetExtension } from '@/lib/editorial-import';
 
 type Stage = 'input' | 'preview' | 'saved';
-type SpreadsheetRow = Record<string, unknown>;
-const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_IMAGE_SIZE = 15 * 1024 * 1024;
-const ALIASES = {
-  keyword: ['keyword', 'palavra-chave', 'palavra chave', 'termo', 'query'], category: ['category', 'categoria', 'grupo', 'cluster'],
-  intent: ['intent', 'intenção', 'intencao'], volume: ['volume', 'search volume', 'buscas mensais'], difficulty: ['difficulty', 'kd', 'dificuldade'], priority: ['priority', 'prioridade'],
-} as const;
-const norm = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-const text = (value: unknown) => value == null ? '' : String(value).trim();
-const column = (headers: string[], aliases: readonly string[]) => headers.find((header) => aliases.map(norm).includes(norm(header)));
-
-function rowsToEditorialKeywords(rows: SpreadsheetRow[]): EditorialKeywordInput[] {
-  if (!rows.length) return [];
-  const headers = Object.keys(rows[0]);
-  const key = column(headers, ALIASES.keyword) || headers[0];
-  const read = (row: SpreadsheetRow, field: keyof typeof ALIASES) => text(row[column(headers, ALIASES[field]) || '']) || undefined;
-  return rows.map((row) => ({ keyword: text(row[key]), category: read(row, 'category'), intent: read(row, 'intent'), volume: read(row, 'volume'), difficulty: read(row, 'difficulty'), priority: read(row, 'priority') })).filter((row) => row.keyword);
-}
-
-function parseEditorialText(value: string): EditorialKeywordInput[] {
-  return Papa.parse<string[]>(value.trim(), { skipEmptyLines: true }).data.map((parts) => ({ keyword: text(parts[0]), category: text(parts[1]) || undefined, intent: text(parts[2]) || undefined, volume: text(parts[3]) || undefined, difficulty: text(parts[4]) || undefined, priority: text(parts[5]) || undefined })).filter((row) => row.keyword);
-}
-
-function parseRssSources(value: string): RssSourceInput[] {
-  return value.split('\n').map((line) => line.trim()).filter(Boolean).map((line) => { const comma = line.indexOf(','); return comma > 0 ? { label: line.slice(0, comma).trim(), url: line.slice(comma + 1).trim() } : { label: 'Fonte RSS', url: line }; });
-}
 
 export default function BulkKeywordGenerator() {
   const sheetRef = useRef<HTMLInputElement>(null);
@@ -76,28 +49,25 @@ export default function BulkKeywordGenerator() {
   };
 
   const parseFile = async (file: File) => {
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    if (!['xlsx', 'xls', 'csv'].includes(extension || '')) { setError('Formato não aceito. Use XLSX, XLS ou CSV.'); return; }
+    if (!spreadsheetExtension(file.name)) { setError('Formato não aceito. Use XLSX, XLS ou CSV.'); return; }
     setBusy(true); setError('');
     try {
-      const buffer = await file.arrayBuffer();
-      let rows: SpreadsheetRow[];
-      if (extension === 'csv') rows = Papa.parse<SpreadsheetRow>(new TextDecoder().decode(buffer), { header: true, skipEmptyLines: true }).data;
-      else { const workbook = XLSX.read(buffer, { type: 'array' }); const sheet = workbook.Sheets[workbook.SheetNames[0]]; if (!sheet) throw new Error('Planilha sem aba legível.'); rows = XLSX.utils.sheet_to_json<SpreadsheetRow>(sheet, { defval: '' }); }
-      setSourceFileName(file.name); applyInputs(rowsToEditorialKeywords(rows));
+      const inputs = parseSpreadsheetBuffer(await file.arrayBuffer(), file.name);
+      setSourceFileName(file.name); applyInputs(inputs);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Falha ao ler a planilha.'); }
     finally { setBusy(false); }
   };
 
   const chooseImages = (files: FileList | null) => {
-    const all = Array.from(files || []); const valid = all.filter((file) => IMAGE_TYPES.includes(file.type) && file.size <= MAX_IMAGE_SIZE).slice(0, 100);
-    setImages(valid); if (valid.length !== all.length) setError('Arquivos incompatíveis foram ignorados. Use JPG, PNG ou WebP de até 15 MB.');
+    const { accepted, rejected } = selectPlanImages(Array.from(files || []));
+    setImages(accepted);
+    if (rejected.length) setError(`${rejected.length} arquivo(s) ignorado(s): use JPG, PNG ou WebP de até 15 MB, máximo 100 imagens.`);
   };
 
   const savePlan = async () => {
     if (!projectId || !project?.organization_id) { setError('Selecione um projeto vinculado a uma organização.'); return; }
     if (Object.values(config).some((value) => value.trim().length < 2)) { setError('Preencha todos os dados editoriais.'); return; }
-    const invalidRss = rssSources.find((source) => !/^https?:\/\/\S+$/i.test(source.url));
+    const invalidRss = rssSources.find((source) => !isValidRssUrl(source.url));
     if (invalidRss) { setError(`RSS inválido: ${invalidRss.url}`); return; }
     if (!selectedItems.length) { setError('Selecione ao menos uma palavra-chave não duplicada.'); return; }
     setBusy(true); setError('');
