@@ -66,6 +66,7 @@ export default function SettingsPage({ mode = 'account' }: { mode?: SettingsMode
             isSaving={updateSettings.isPending}
           />
           <TokenUsageCard />
+          <PressCitationsCard />
         </> : null}
         {mode === 'prompts' ? <>
           <ArticleTemplatesCard />
@@ -82,7 +83,6 @@ export default function SettingsPage({ mode = 'account' }: { mode?: SettingsMode
           <WordPressSitesCard />
           <ProjectCtaCard />
           <BrandAssetsCard />
-          <PressCitationsCard />
         </> : null}
         {mode === 'ai' ? <IndexNowConfigCard /> : null}
       </div>

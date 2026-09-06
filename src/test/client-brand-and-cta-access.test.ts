@@ -13,6 +13,11 @@ describe('client bulk, brand media and CTA controls', () => {
     expect(settings).toContain('Abrir gerador em massa');
   });
 
+  it('keeps internal citation entities out of the client integrations block', () => {
+    const clientBlock = settings.slice(settings.indexOf("mode === 'integrations'"), settings.indexOf("mode === 'ai' ? <IndexNowConfigCard"));
+    expect(clientBlock).not.toContain('<PressCitationsCard />');
+  });
+
   it('keeps exactly six reusable image slots behind explicit approval', () => {
     expect(media).toContain('const SLOT_COUNT = 6');
     expect(media).toContain("status: 'preview_ready'");
