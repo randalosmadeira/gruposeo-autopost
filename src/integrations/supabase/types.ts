@@ -1376,6 +1376,57 @@ export type Database = {
         }
         Relationships: []
       }
+      organization_brand_assets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          height: number | null
+          id: string
+          master_storage_path: string | null
+          metadata: Json
+          mime_type: string
+          organization_id: string
+          original_storage_path: string
+          sha256: string | null
+          slot: number
+          status: string
+          updated_at: string
+          width: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          height?: number | null
+          id?: string
+          master_storage_path?: string | null
+          metadata?: Json
+          mime_type: string
+          organization_id: string
+          original_storage_path: string
+          sha256?: string | null
+          slot: number
+          status?: string
+          updated_at?: string
+          width?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          height?: number | null
+          id?: string
+          master_storage_path?: string | null
+          metadata?: Json
+          mime_type?: string
+          organization_id?: string
+          original_storage_path?: string
+          sha256?: string | null
+          slot?: number
+          status?: string
+          updated_at?: string
+          width?: number | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1405,6 +1456,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          commercial_info: Json
           compliance_rules: string | null
           created_at: string
           cta_comunidade: string | null
@@ -1421,6 +1473,7 @@ export type Database = {
           links_prioritarios: string[] | null
           marca: string | null
           name: string
+          organization_id: string | null
           nicho: string | null
           palavras_secundarias: string[] | null
           pov_padrao: string | null
@@ -1432,6 +1485,7 @@ export type Database = {
           social_tiktok: string | null
           social_twitter: string | null
           social_youtube: string | null
+          social_links: Json
           tom_padrao: string | null
           updated_at: string
           user_id: string
@@ -1440,6 +1494,7 @@ export type Database = {
           wordpress_username: string | null
         }
         Insert: {
+          commercial_info?: Json
           compliance_rules?: string | null
           created_at?: string
           cta_comunidade?: string | null
@@ -1456,6 +1511,7 @@ export type Database = {
           links_prioritarios?: string[] | null
           marca?: string | null
           name: string
+          organization_id?: string | null
           nicho?: string | null
           palavras_secundarias?: string[] | null
           pov_padrao?: string | null
@@ -1467,6 +1523,7 @@ export type Database = {
           social_tiktok?: string | null
           social_twitter?: string | null
           social_youtube?: string | null
+          social_links?: Json
           tom_padrao?: string | null
           updated_at?: string
           user_id: string
@@ -1475,6 +1532,7 @@ export type Database = {
           wordpress_username?: string | null
         }
         Update: {
+          commercial_info?: Json
           compliance_rules?: string | null
           created_at?: string
           cta_comunidade?: string | null
@@ -1491,6 +1549,7 @@ export type Database = {
           links_prioritarios?: string[] | null
           marca?: string | null
           name?: string
+          organization_id?: string | null
           nicho?: string | null
           palavras_secundarias?: string[] | null
           pov_padrao?: string | null
@@ -1502,6 +1561,7 @@ export type Database = {
           social_tiktok?: string | null
           social_twitter?: string | null
           social_youtube?: string | null
+          social_links?: Json
           tom_padrao?: string | null
           updated_at?: string
           user_id?: string
