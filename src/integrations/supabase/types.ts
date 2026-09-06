@@ -2248,7 +2248,41 @@ export type Database = {
       }
     }
     Functions: {
+      create_editorial_plan: {
+        Args: {
+          p_project_id: string
+          p_name: string
+          p_portal: string
+          p_category: string
+          p_audience: string
+          p_city: string
+          p_frequency: string
+          p_requested_quantity: number
+          p_idempotency_key: string
+          p_items: Json
+          p_rss_sources?: Json
+          p_source_file_name?: string | null
+          p_estimated_input_tokens?: number
+          p_estimated_output_tokens?: number
+          p_estimated_credits?: number
+        }
+        Returns: Json
+      }
       exec_sql: { Args: { sql_query: string }; Returns: Json }
+      register_editorial_plan_asset: {
+        Args: {
+          p_plan_id: string
+          p_storage_path: string
+          p_original_name: string
+          p_mime_type: string
+          p_byte_size: number
+        }
+        Returns: string
+      }
+      reprocess_editorial_plan_item: {
+        Args: { p_item_id: string; p_expected_step: string }
+        Returns: Json
+      }
     }
     Enums: {
       article_status: "draft" | "generating" | "ready" | "published" | "error"

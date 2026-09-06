@@ -1,203 +1,102 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
-import { AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, Play, RotateCcw, Sparkles, Upload } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { AlertCircle, CheckCircle2, FileImage, Loader2, RotateCcw, Save, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { useBulkGeneration } from '@/hooks/useBulkGeneration';
 import { useProjects } from '@/hooks/useProjects';
-import { analyzeKeywords, type AnalyzedKeyword, type KeywordData } from '@/lib/keyword-analyzer';
-import { defaultBulkConfig } from '@/types/bulk-generation';
+import { createPlanningIdempotencyKey, estimateEditorialConsumption, prepareEditorialItems, sanitizeRequestedQuantity, type EditorialFrequency, type EditorialKeywordInput } from '@/lib/editorial-planning';
+import { createEditorialPlan, type CreateEditorialPlanResult } from '@/services/editorialPlanning';
+import { isValidRssUrl, parseEditorialText, parseRssSources, parseSpreadsheetBuffer, selectPlanImages, spreadsheetExtension } from '@/lib/editorial-import';
 
-type Stage = 'input' | 'review';
-type SpreadsheetRow = Record<string, unknown>;
-
-const ACCEPTED_EXTENSIONS = ['xlsx', 'xls', 'csv', 'tsv', 'ods'];
-const HEADER_ALIASES = {
-  keyword: ['keyword', 'palavra-chave', 'palavra chave', 'termo', 'query', 'search term'],
-  volume: ['volume', 'search volume', 'vol', 'buscas mensais'],
-  dificuldade: ['difficulty', 'kd', 'dificuldade'],
-  intencao: ['intent', 'intenção', 'intencao'],
-  prioridade: ['priority', 'prioridade'],
-  categoria: ['category', 'categoria', 'grupo', 'cluster'],
-} as const;
-
-const normalizeHeader = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-const asText = (value: unknown) => value == null ? '' : String(value).trim();
-
-function findColumn(headers: string[], aliases: readonly string[]) {
-  const normalizedAliases = aliases.map(normalizeHeader);
-  return headers.find((header) => normalizedAliases.includes(normalizeHeader(header)));
-}
-
-function rowsToKeywords(rows: SpreadsheetRow[]): KeywordData[] {
-  if (!rows.length) return [];
-  const headers = Object.keys(rows[0]);
-  const keywordColumn = findColumn(headers, HEADER_ALIASES.keyword) || headers.find((header) => rows.some((row) => asText(row[header]))) || headers[0];
-  const volumeColumn = findColumn(headers, HEADER_ALIASES.volume);
-  const difficultyColumn = findColumn(headers, HEADER_ALIASES.dificuldade);
-  const intentColumn = findColumn(headers, HEADER_ALIASES.intencao);
-  const priorityColumn = findColumn(headers, HEADER_ALIASES.prioridade);
-  const categoryColumn = findColumn(headers, HEADER_ALIASES.categoria);
-
-  return rows.map((row) => ({
-    keyword: asText(row[keywordColumn]),
-    volume: volumeColumn ? asText(row[volumeColumn]) : undefined,
-    dificuldade: difficultyColumn ? asText(row[difficultyColumn]) : undefined,
-    intencao: intentColumn ? asText(row[intentColumn]) : undefined,
-    prioridade: priorityColumn ? asText(row[priorityColumn]) : undefined,
-    categoria: categoryColumn ? asText(row[categoryColumn]) : undefined,
-  })).filter((row) => row.keyword);
-}
-
-function parsePastedKeywords(text: string): KeywordData[] {
-  const parsed = Papa.parse<string[]>(text.trim(), { skipEmptyLines: true });
-  return parsed.data.map((parts) => ({
-    keyword: asText(parts[0]),
-    categoria: asText(parts[1]) || undefined,
-    volume: asText(parts[2]) || undefined,
-    dificuldade: asText(parts[3]) || undefined,
-    prioridade: asText(parts[4]) || undefined,
-    intencao: asText(parts[5]) || undefined,
-  })).filter((row) => row.keyword);
-}
+type Stage = 'input' | 'preview' | 'saved';
 
 export default function BulkKeywordGenerator() {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const sheetRef = useRef<HTMLInputElement>(null);
+  const imageRef = useRef<HTMLInputElement>(null);
+  const nonce = useRef(crypto.randomUUID());
+  const { projects } = useProjects();
   const [stage, setStage] = useState<Stage>('input');
   const [projectId, setProjectId] = useState('');
+  const [config, setConfig] = useState({ name: 'Planejamento editorial em massa', portal: 'Blog institucional', category: 'Conteúdo informativo', audience: 'Público geral', city: 'São Paulo', frequency: 'once' as EditorialFrequency });
   const [rawKeywords, setRawKeywords] = useState('');
-  const [fileName, setFileName] = useState('');
-  const [isParsing, setIsParsing] = useState(false);
-  const [error, setError] = useState('');
-  const [keywords, setKeywords] = useState<AnalyzedKeyword[]>([]);
+  const [rssText, setRssText] = useState('');
+  const [sourceFileName, setSourceFileName] = useState('');
+  const [images, setImages] = useState<File[]>([]);
+  const [items, setItems] = useState(() => prepareEditorialItems([]));
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const { projects } = useProjects();
-  const bulk = useBulkGeneration();
+  const [quantity, setQuantity] = useState(1);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState<CreateEditorialPlanResult|null>(null);
+  const project = useMemo(() => projects.find((item) => item.id === projectId), [projects, projectId]);
+  const selectedItems = useMemo(() => items.filter((item) => selected.has(item.fingerprint) && !item.duplicate), [items, selected]);
+  const effectiveQuantity = sanitizeRequestedQuantity(quantity, selectedItems.length);
+  const estimate = useMemo(() => estimateEditorialConsumption(effectiveQuantity), [effectiveQuantity]);
+  const rssSources = useMemo(() => parseRssSources(rssText), [rssText]);
+  const setField = (field: keyof typeof config, value: string) => setConfig((current) => ({ ...current, [field]: value }));
 
-  const project = useMemo(() => projects.find((item) => item.id === projectId), [projectId, projects]);
-  const selectedKeywords = useMemo(() => keywords.filter((item) => selected.has(item.keyword)), [keywords, selected]);
-  const pendingCount = bulk.jobs.filter((job) => job.status === 'pending' || job.status === 'generating').length;
-  const queueProgress = bulk.jobs.length ? Math.round((bulk.completedCount / bulk.jobs.length) * 100) : 0;
+  const applyInputs = (inputs: EditorialKeywordInput[]) => {
+    const prepared = prepareEditorialItems(inputs);
+    if (!prepared.length) { setError('Nenhuma palavra-chave válida foi encontrada.'); return; }
+    setItems(prepared); setSelected(new Set(prepared.filter((item) => !item.duplicate).map((item) => item.fingerprint)));
+    setQuantity(prepared.filter((item) => !item.duplicate).length); setStage('preview'); setError('');
+  };
 
-  const applyKeywords = useCallback((items: KeywordData[]) => {
-    const unique = Array.from(new Map(items.map((item) => [item.keyword.toLowerCase(), item])).values());
-    const analyzed = analyzeKeywords(unique);
-    setKeywords(analyzed);
-    setSelected(new Set(analyzed.map((item) => item.keyword)));
-    setStage('review');
-    setError('');
-  }, []);
-
-  const parseFile = useCallback(async (file: File) => {
-    const extension = file.name.split('.').pop()?.toLowerCase() || '';
-    if (!ACCEPTED_EXTENSIONS.includes(extension)) {
-      setError('Formato não aceito. Use XLSX, XLS, CSV, TSV ou ODS.');
-      return;
-    }
-    setIsParsing(true);
-    setError('');
+  const parseFile = async (file: File) => {
+    if (!spreadsheetExtension(file.name)) { setError('Formato não aceito. Use XLSX, XLS ou CSV.'); return; }
+    setBusy(true); setError('');
     try {
-      const buffer = await file.arrayBuffer();
-      let rows: SpreadsheetRow[];
-      if (extension === 'csv' || extension === 'tsv') {
-        const text = new TextDecoder().decode(buffer);
-        const parsed = Papa.parse<SpreadsheetRow>(text, { header: true, skipEmptyLines: true, delimiter: extension === 'tsv' ? '\t' : '' });
-        if (parsed.errors.length && !parsed.data.length) throw new Error(parsed.errors[0].message);
-        rows = parsed.data;
-      } else {
-        const workbook = XLSX.read(buffer, { type: 'array' });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        if (!firstSheet) throw new Error('A planilha não contém uma aba legível.');
-        rows = XLSX.utils.sheet_to_json<SpreadsheetRow>(firstSheet, { defval: '' });
-      }
-      const parsedKeywords = rowsToKeywords(rows);
-      if (!parsedKeywords.length) throw new Error('Nenhuma palavra-chave foi encontrada.');
-      setFileName(file.name);
-      applyKeywords(parsedKeywords);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Falha ao ler a planilha.');
-    } finally {
-      setIsParsing(false);
-    }
-  }, [applyKeywords]);
-
-  const analyzePasted = () => {
-    const parsed = parsePastedKeywords(rawKeywords);
-    if (!parsed.length) { setError('Cole ao menos uma palavra-chave.'); return; }
-    applyKeywords(parsed);
+      const inputs = parseSpreadsheetBuffer(await file.arrayBuffer(), file.name);
+      setSourceFileName(file.name); applyInputs(inputs);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Falha ao ler a planilha.'); }
+    finally { setBusy(false); }
   };
 
-  const toggleKeyword = (keyword: string) => setSelected((current) => {
-    const next = new Set(current);
-    if (next.has(keyword)) next.delete(keyword); else next.add(keyword);
-    return next;
-  });
-
-  const startGeneration = () => {
-    if (!projectId || !selectedKeywords.length) return;
-    const config = {
-      ...defaultBulkConfig,
-      projectId,
-      internalLinking: true,
-      generateImages: true,
-      companyName: project?.name || '',
-    };
-    bulk.initializeJobs(selectedKeywords);
-    bulk.startGeneration(projectId, config);
+  const chooseImages = (files: FileList | null) => {
+    const { accepted, rejected } = selectPlanImages(Array.from(files || []));
+    setImages(accepted);
+    if (rejected.length) setError(`${rejected.length} arquivo(s) ignorado(s): use JPG, PNG ou WebP de até 15 MB, máximo 100 imagens.`);
   };
 
-  const reset = () => {
-    setStage('input'); setKeywords([]); setSelected(new Set()); setRawKeywords(''); setFileName(''); setError('');
+  const savePlan = async () => {
+    if (!projectId || !project?.organization_id) { setError('Selecione um projeto vinculado a uma organização.'); return; }
+    if (Object.values(config).some((value) => value.trim().length < 2)) { setError('Preencha todos os dados editoriais.'); return; }
+    const invalidRss = rssSources.find((source) => !isValidRssUrl(source.url));
+    if (invalidRss) { setError(`RSS inválido: ${invalidRss.url}`); return; }
+    if (!selectedItems.length) { setError('Selecione ao menos uma palavra-chave não duplicada.'); return; }
+    setBusy(true); setError('');
+    try {
+      const result = await createEditorialPlan({ organizationId: project.organization_id, projectId, ...config, quantity: effectiveQuantity, idempotencyKey: createPlanningIdempotencyKey(projectId, selectedItems.map((item) => item.normalizedKeyword), nonce.current), items: selectedItems, rssSources, sourceFileName, ...estimate, images });
+      setSaved(result); setStage('saved');
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Falha ao salvar o planejamento.'); }
+    finally { setBusy(false); }
   };
 
-  return (
-    <div className="container max-w-6xl space-y-6 py-6">
-      <div className="flex items-center gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10"><FileSpreadsheet className="h-6 w-6 text-primary" /></div>
-        <div><h1 className="text-2xl font-bold">Palavras-chave em massa</h1><p className="text-muted-foreground">Projeto, planilha, triagem e fila em duas etapas.</p></div>
-      </div>
+  const reset = () => { nonce.current=crypto.randomUUID(); setStage('input'); setItems([]); setSelected(new Set()); setRawKeywords(''); setSourceFileName(''); setImages([]); setSaved(null); setError(''); };
 
-      {stage === 'input' ? (
-        <Card>
-          <CardHeader><CardTitle>1. Projeto e importação</CardTitle><CardDescription>O projeto fornece persona, geografia, CTA, links, política visual e conexão WordPress.</CardDescription></CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label>Projeto obrigatório</Label>
-              <Select value={projectId} onValueChange={setProjectId}><SelectTrigger><SelectValue placeholder="Selecionar projeto" /></SelectTrigger><SelectContent>{projects.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select>
-            </div>
-            <button type="button" className="flex min-h-44 w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-muted-foreground/30 p-6 text-center transition hover:border-primary" onClick={() => inputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void parseFile(file); }} disabled={isParsing}>
-              {isParsing ? <Loader2 className="h-8 w-8 animate-spin text-primary" /> : <Upload className="h-8 w-8 text-primary" />}
-              <span className="font-semibold">Arraste a planilha ou clique para selecionar</span>
-              <span className="text-sm text-muted-foreground">XLSX, XLS, CSV, TSV e ODS. Compatível com exportações comuns de ferramentas SEO.</span>
-              {fileName && <Badge variant="secondary">{fileName}</Badge>}
-            </button>
-            <input ref={inputRef} type="file" className="hidden" accept=".xlsx,.xls,.csv,.tsv,.ods" onChange={(event) => { const file = event.target.files?.[0]; if (file) void parseFile(file); }} />
-            <div className="space-y-2"><Label>Ou cole uma lista</Label><Textarea className="min-h-36 font-mono text-sm" value={rawKeywords} onChange={(event) => setRawKeywords(event.target.value)} placeholder="Uma palavra-chave por linha ou CSV/TSV" /></div>
-            {error && <p className="flex items-center gap-2 text-sm text-destructive"><AlertCircle className="h-4 w-4" />{error}</p>}
-            <Button className="w-full gap-2" size="lg" disabled={!projectId || !rawKeywords.trim() || isParsing} onClick={analyzePasted}><Sparkles className="h-5 w-5" />Analisar lista</Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader className="flex-row items-start justify-between gap-4"><div><CardTitle>2. Revisão da fila</CardTitle><CardDescription>{selectedKeywords.length} de {keywords.length} palavras-chave selecionadas para {project?.name}.</CardDescription></div><Button variant="outline" onClick={reset}><RotateCcw className="mr-2 h-4 w-4" />Reimportar</Button></CardHeader>
-            <CardContent>
-              <div className="max-h-[520px] overflow-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead className="w-12" /><TableHead>Palavra-chave</TableHead><TableHead>Tipo sugerido</TableHead><TableHead>Intenção</TableHead><TableHead>CTA/Destino</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{keywords.map((item) => <TableRow key={item.keyword}><TableCell><Checkbox checked={selected.has(item.keyword)} onCheckedChange={() => toggleKeyword(item.keyword)} /></TableCell><TableCell className="font-medium">{item.keyword}</TableCell><TableCell><Badge variant="outline">{item.tipoConteudoLabel}</Badge></TableCell><TableCell>{item.intencao}</TableCell><TableCell>{project?.name || 'Projeto'}</TableCell><TableCell><span className="flex items-center gap-1 text-xs text-success"><CheckCircle2 className="h-3.5 w-3.5" />Pronto para fila</span></TableCell></TableRow>)}</TableBody></Table></div>
-              <Button className="mt-6 w-full gap-2" size="lg" disabled={!selectedKeywords.length || bulk.isRunning} onClick={startGeneration}>{bulk.isRunning ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5" />}{bulk.isRunning ? 'Gerando artigos...' : `Iniciar geração em massa (${selectedKeywords.length})`}</Button>
-            </CardContent>
-          </Card>
+  if (stage === 'saved' && saved) return <div className="container max-w-5xl py-6"><Card><CardHeader><CardTitle className="flex items-center gap-2"><CheckCircle2 className="text-success"/>Planejamento salvo para revisão</CardTitle><CardDescription>Nenhum conteúdo foi gerado ou publicado.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="flex flex-wrap gap-2"><Badge>Fila: {saved.ready}</Badge><Badge variant="outline">Duplicados: {saved.duplicates}</Badge><Badge variant="outline">Imagens: {saved.uploadedImages}</Badge><Badge variant="secondary">Revisão</Badge>{saved.idempotentReplay&&<Badge variant="outline">Reenvio idempotente</Badge>}</div><p className="font-mono text-xs">Plano: {saved.planId}</p>{saved.failedImages.length>0&&<p className="text-destructive">Imagens com falha: {saved.failedImages.join(', ')}</p>}{saved.compensationFailures.length>0&&<p role="alert" className="text-destructive">Objetos não removidos após falha de registro (reconciliar manualmente): {saved.compensationFailures.join(', ')}</p>}<Button onClick={reset}><RotateCcw className="mr-2 h-4 w-4"/>Novo planejamento</Button></CardContent></Card></div>;
 
-          {bulk.jobs.length > 0 && <Card><CardHeader><CardTitle>Progresso da fila</CardTitle><CardDescription>{bulk.completedCount} concluídos, {bulk.errorCount} erros, {pendingCount} pendentes.</CardDescription></CardHeader><CardContent className="space-y-3"><Progress value={queueProgress} /><div className="grid gap-2 text-sm md:grid-cols-2">{bulk.jobs.map((job) => <div key={job.id} className="flex items-center justify-between rounded border p-3"><span className="truncate">{job.keyword.keyword}</span><Badge variant={job.status === 'error' ? 'destructive' : 'secondary'}>{job.status}</Badge></div>)}</div></CardContent></Card>}
-        </div>
-      )}
-    </div>
-  );
+  return <div className="container max-w-6xl space-y-6 py-6">
+    <div><h1 className="text-2xl font-bold">Planejamento editorial em massa</h1><p className="text-muted-foreground">Importe, revise e grave uma fila segura. Publicação permanece bloqueada.</p></div>
+    {stage === 'input' ? <>
+      <Card><CardHeader><CardTitle>1. Destino editorial</CardTitle><CardDescription>Configuração persistida e isolada pela organização do projeto.</CardDescription></CardHeader><CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Field label="Projeto"><Select value={projectId} onValueChange={setProjectId}><SelectTrigger><SelectValue placeholder="Selecionar"/></SelectTrigger><SelectContent>{projects.map((item)=><SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></Field>
+        <Field label="Nome"><Input value={config.name} onChange={(e)=>setField('name',e.target.value)}/></Field><Field label="Portal"><Input value={config.portal} onChange={(e)=>setField('portal',e.target.value)}/></Field>
+        <Field label="Categoria"><Input value={config.category} onChange={(e)=>setField('category',e.target.value)}/></Field><Field label="Público"><Input value={config.audience} onChange={(e)=>setField('audience',e.target.value)}/></Field><Field label="Cidade"><Input value={config.city} onChange={(e)=>setField('city',e.target.value)}/></Field>
+        <Field label="Frequência"><Select value={config.frequency} onValueChange={(value)=>setField('frequency',value)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="once">Uma vez</SelectItem><SelectItem value="daily">Diária</SelectItem><SelectItem value="weekdays">Dias úteis</SelectItem><SelectItem value="weekly">Semanal</SelectItem><SelectItem value="monthly">Mensal</SelectItem></SelectContent></Select></Field>
+      </CardContent></Card>
+      <Card><CardHeader><CardTitle>2. Palavras-chave</CardTitle><CardDescription>Texto, CSV, XLS ou XLSX. Aceita categoria, intenção, volume, dificuldade e prioridade.</CardDescription></CardHeader><CardContent className="space-y-4"><Button variant="outline" className="w-full" onClick={()=>sheetRef.current?.click()} disabled={busy}>{busy?<Loader2 className="mr-2 animate-spin"/>:<Upload className="mr-2"/>}{sourceFileName||'Selecionar planilha'}</Button><input ref={sheetRef} className="hidden" type="file" accept=".xlsx,.xls,.csv" onChange={(e)=>{const file=e.target.files?.[0];if(file)void parseFile(file);}}/><Textarea className="min-h-32 font-mono" value={rawKeywords} onChange={(e)=>setRawKeywords(e.target.value)} placeholder="palavra-chave,categoria,intenção,volume,dificuldade,prioridade"/><Button className="w-full" disabled={!projectId||!rawKeywords.trim()} onClick={()=>applyInputs(parseEditorialText(rawKeywords))}>Preparar prévia</Button></CardContent></Card>
+      <Card><CardHeader><CardTitle>3. Fontes e imagens</CardTitle><CardDescription>RSS entra como pendente de validação. Imagens são privadas e vinculadas ao plano.</CardDescription></CardHeader><CardContent className="space-y-4"><Field label="RSS, uma fonte por linha"><Textarea value={rssText} onChange={(e)=>setRssText(e.target.value)} placeholder="Nome,https://exemplo.com/feed.xml"/></Field><Button variant="outline" onClick={()=>imageRef.current?.click()}><FileImage className="mr-2 h-4 w-4"/>Selecionar imagens em lote</Button><input ref={imageRef} className="hidden" type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(e)=>chooseImages(e.target.files)}/>{images.length>0&&<p className="text-sm text-muted-foreground">{images.length} imagens selecionadas.</p>}</CardContent></Card>
+    </> : <Card><CardHeader className="flex-row items-start justify-between"><div><CardTitle>Prévia e consumo</CardTitle><CardDescription>{selectedItems.length} válidas, {items.filter((item)=>item.duplicate).length} duplicadas na importação.</CardDescription></div><Button variant="outline" onClick={()=>setStage('input')}><RotateCcw className="mr-2 h-4 w-4"/>Editar</Button></CardHeader><CardContent className="space-y-5"><div className="flex flex-wrap gap-2"><Badge>Tokens: {estimate.estimatedTotalTokens.toLocaleString('pt-BR')}</Badge><Badge variant="outline">Créditos: {estimate.estimatedCredits}</Badge><Badge variant="outline">RSS: {rssSources.length}</Badge><Badge variant="outline">Imagens: {images.length}</Badge></div><Field label="Quantidade"><Input type="number" min={1} max={selectedItems.length} value={quantity} onChange={(e)=>setQuantity(Number(e.target.value))}/></Field><div className="max-h-[500px] overflow-auto rounded border"><Table><TableHeader><TableRow><TableHead/><TableHead>Palavra-chave</TableHead><TableHead>Categoria</TableHead><TableHead>Intenção</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{items.map((item)=><TableRow key={`${item.fingerprint}-${item.keyword}`}><TableCell><Checkbox disabled={item.duplicate} checked={selected.has(item.fingerprint)&&!item.duplicate} onCheckedChange={()=>setSelected((current)=>{const next=new Set(current);if(next.has(item.fingerprint)) next.delete(item.fingerprint); else next.add(item.fingerprint);return next;})}/></TableCell><TableCell>{item.keyword}</TableCell><TableCell>{item.category||config.category}</TableCell><TableCell>{item.intent||'A classificar'}</TableCell><TableCell><Badge variant={item.duplicate?'destructive':'outline'}>{item.duplicate?'Duplicada':'Pronta'}</Badge></TableCell></TableRow>)}</TableBody></Table></div><Button size="lg" className="w-full" disabled={busy||effectiveQuantity===0} onClick={()=>void savePlan()}>{busy?<Loader2 className="mr-2 animate-spin"/>:<Save className="mr-2"/>}{busy?'Salvando...':'Salvar fila para revisão'}</Button></CardContent></Card>}
+    {error&&<p role="alert" className="flex items-center gap-2 rounded border border-destructive/30 p-3 text-sm text-destructive"><AlertCircle className="h-4 w-4"/>{error}</p>}
+    <Card className="border-amber-500/30 bg-amber-500/5"><CardContent className="pt-5 text-sm"><strong>Trava de segurança:</strong> este módulo não chama geração, WordPress, agendamento ou publicação.</CardContent></Card>
+  </div>;
 }
+
+function Field({label,children}:{label:string;children:React.ReactNode}) { return <div className="space-y-2"><Label>{label}</Label>{children}</div>; }
