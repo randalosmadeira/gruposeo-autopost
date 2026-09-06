@@ -7,6 +7,8 @@ const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 const listHook = read('src/hooks/useArticlesList.tsx');
 const generator = read('supabase/functions/generate-article/index.ts');
 const bulkModal = read('src/components/articles/BulkPublishModal.tsx');
+const articlesList = read('src/pages/ArticlesList.tsx');
+const app = read('src/App.tsx');
 
 describe('bulk publication readiness invariants', () => {
   it('does not treat word_count alone as publishable content', () => {
@@ -31,5 +33,13 @@ describe('bulk publication readiness invariants', () => {
   it('keeps the publisher as the last fail-closed barrier', () => {
     expect(bulkModal).toContain('publish-to-wordpress');
     expect(bulkModal).toContain('allowCrossProject: true');
+  });
+
+  it('exposes bulk generation from the commercial content screen', () => {
+    expect(articlesList).toContain('<Link to="/keywords/bulk">');
+    expect(articlesList).toContain('Gerar em massa');
+    expect(articlesList).toContain('Publicar selecionados');
+    expect(app).toContain('<Route path="/keywords/bulk" element={<BulkKeywordGenerator />} />');
+    expect(app).toContain('<Route path="/bulk-generator" element={<Navigate to="/keywords/bulk" replace />} />');
   });
 });
