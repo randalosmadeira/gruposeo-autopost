@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest';
 
 const migration = readFileSync(resolve(process.cwd(), 'supabase/migrations/20260906190000_editorial_mass_planning.sql'), 'utf8');
 const hardening = readFileSync(resolve(process.cwd(), 'supabase/migrations/20260906213000_editorial_mass_planning_hardening.sql'), 'utf8');
+const privileges = readFileSync(resolve(process.cwd(), 'supabase/migrations/20260906230000_editorial_mass_planning_privileges.sql'), 'utf8');
 const page = readFileSync(resolve(process.cwd(), 'src/pages/BulkKeywordGenerator.tsx'), 'utf8');
+const PLANNING_TABLES = ['editorial_plans', 'editorial_plan_items', 'editorial_rss_sources', 'editorial_plan_assets', 'editorial_plan_audit_events'];
 
 describe('editorial planning migration safeguards', () => {
   it('enforces tenant RLS across every planning table', () => {
@@ -84,5 +86,30 @@ describe('editorial planning hardening (CORE-002)', () => {
 
   it('does not touch tables, grants or buckets beyond the function and the delete policy', () => {
     expect(hardening).not.toMatch(/create table|alter table|drop table|grant |revoke |storage\.buckets/i);
+  });
+});
+
+describe('editorial planning least privilege (CORE-002b)', () => {
+  it('revokes the implicit default privileges from anon and authenticated on every planning table', () => {
+    for (const table of PLANNING_TABLES) {
+      expect(privileges).toContain(`revoke all on table public.${table} from anon, authenticated;`);
+    }
+    expect(privileges).toContain('revoke all on sequence public.editorial_plan_audit_events_id_seq from anon, authenticated;');
+  });
+
+  it('grants back only SELECT, only to authenticated', () => {
+    const grants = privileges.match(/^grant .*$/gim) ?? [];
+    expect(grants).toHaveLength(1);
+    expect(grants[0]).toMatch(/^grant select on table /);
+    expect(grants[0]).toMatch(/ to authenticated;$/);
+    expect(grants[0]).not.toContain('anon');
+    for (const table of PLANNING_TABLES) expect(grants[0]).toContain(`public.${table}`);
+  });
+
+  it('adds covering indexes for the foreign keys flagged by the advisor without other DDL', () => {
+    const statements = privileges.split('\n').filter((line) => !line.trimStart().startsWith('--')).join('\n');
+    const indexes = statements.match(/^create index if not exists /gim) ?? [];
+    expect(indexes).toHaveLength(13);
+    expect(statements).not.toMatch(/create table|alter table|drop |create policy|create or replace function/i);
   });
 });
