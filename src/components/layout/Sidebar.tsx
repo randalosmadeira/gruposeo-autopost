@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { cn } from '@/lib/utils';
-import { Activity, Building2, Calendar, Cpu, FileCode2, FileText, Globe2, LayoutDashboard, ListChecks, UserRound } from 'lucide-react';
+import { Activity, Building2, Calendar, Cpu, FileCode2, FileText, Globe2, Layers3, LayoutDashboard, ListChecks, UserRound } from 'lucide-react';
 import { ZicaLogo } from '@/components/brand/ZicaLogo';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
 
@@ -11,6 +11,7 @@ interface NavItem { label: string; icon: React.ElementType; href: string; }
 const clientItems: NavItem[] = [
   { label: 'Visão Geral', icon: LayoutDashboard, href: '/dashboard' },
   { label: 'Conteúdo & Notícias', icon: FileText, href: '/articles' },
+  { label: 'Publicar em massa', icon: Layers3, href: '/keywords/bulk' },
   { label: 'Calendário Editorial', icon: Calendar, href: '/calendar' },
   { label: 'Meus Blogs', icon: Globe2, href: '/integrations' },
   { label: 'Minha Conta', icon: UserRound, href: '/account' },
