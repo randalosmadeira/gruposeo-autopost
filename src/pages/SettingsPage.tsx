@@ -4,6 +4,9 @@ import { InstitutionalInfo } from '@/components/shared/InstitutionalInfo';
 import { ProfileIdentityCard } from '@/components/settings/ProfileIdentityCard';
 
 import { Settings, UserRound, Globe, Cpu, FileCode2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const AIConfigCard = lazy(() => import('@/components/settings/AIConfigCard').then((module) => ({ default: module.AIConfigCard })));
 const WordPressSitesCard = lazy(() => import('@/components/settings/WordPressSitesCard').then((module) => ({ default: module.WordPressSitesCard })));
@@ -13,6 +16,8 @@ const ArticleTemplatesCard = lazy(() => import('@/components/settings/ArticleTem
 const IndexNowConfigCard = lazy(() => import('@/components/settings/IndexNowConfigCard').then((module) => ({ default: module.IndexNowConfigCard })));
 const PressCitationsCard = lazy(() => import('@/components/settings/PressCitationsCard').then((module) => ({ default: module.PressCitationsCard })));
 const SubscriptionOverviewCard = lazy(() => import('@/components/settings/SubscriptionOverviewCard').then((module) => ({ default: module.SubscriptionOverviewCard })));
+const BrandAssetsCard = lazy(() => import('@/components/settings/BrandAssetsCard').then((module) => ({ default: module.BrandAssetsCard })));
+const ProjectCtaCard = lazy(() => import('@/components/settings/ProjectCtaCard').then((module) => ({ default: module.ProjectCtaCard })));
 
 type SettingsMode = 'account' | 'integrations' | 'ai' | 'prompts';
 
@@ -67,7 +72,16 @@ export default function SettingsPage({ mode = 'account' }: { mode?: SettingsMode
           <PromptTemplatesCard />
         </> : null}
         {mode === 'integrations' ? <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Geração em massa</CardTitle>
+              <CardDescription>Importe planilhas ou listas de palavras-chave e controle a distribuição dos artigos por projeto.</CardDescription>
+            </CardHeader>
+            <CardContent><Button asChild><Link to="/keywords/bulk">Abrir gerador em massa</Link></Button></CardContent>
+          </Card>
           <WordPressSitesCard />
+          <ProjectCtaCard />
+          <BrandAssetsCard />
           <PressCitationsCard />
         </> : null}
         {mode === 'ai' ? <IndexNowConfigCard /> : null}
