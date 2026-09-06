@@ -59,8 +59,8 @@ const PageLoader = () => (
     <div className="neural-state flex flex-col items-center gap-4 px-8 py-7 text-center">
       <div className="neural-loader-ring" />
       <div>
-        <p className="text-sm font-black text-white">Sincronizando o córtex Zica.ai</p>
-        <p className="mt-1 text-xs text-slate-500">Carregando sinais, ondas e agentes...</p>
+        <p className="text-sm font-black text-white">Sincronizando o Zica.IA Posts</p>
+        <p className="mt-1 text-xs text-slate-500">Carregando conteúdo e projetos...</p>
       </div>
     </div>
   </div>
