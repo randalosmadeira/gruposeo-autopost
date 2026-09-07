@@ -38,4 +38,10 @@ describe('provider health security contract', () => {
     expect(validation).toContain('"functional_generation"');
     expect(validation).not.toContain('api.openai.com/v1/models');
   });
+
+  it('confirms the validated credential was persisted before reporting success', () => {
+    expect(validation).toContain('.select("updated_at")');
+    expect(validation).toContain('if (persistError || !persisted)');
+    expect(validation).toContain('saved,');
+  });
 });
