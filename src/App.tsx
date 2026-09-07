@@ -27,6 +27,7 @@ const Auth = lazy(() => import("./pages/Auth"));
 const HelpPage = lazy(() => import("./pages/HelpPage"));
 const NewsRewriter = lazy(() => import("./pages/NewsRewriter"));
 const BulkKeywordGenerator = lazy(() => import("./pages/BulkKeywordGenerator"));
+const EditorialPlansMonitor = lazy(() => import("./pages/EditorialPlansMonitor"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const QueueMonitor = lazy(() => import("./pages/QueueMonitor"));
 const Academy = lazy(() => import("./pages/Academy"));
@@ -116,6 +117,7 @@ const App = () => (
                 <Route path="/help" element={<HelpPage />} />
                 <Route path="/news-rewriter" element={<NewsRewriter />} />
                 <Route path="/keywords/bulk" element={<BulkKeywordGenerator />} />
+                <Route path="/keywords/plans" element={<EditorialPlansMonitor />} />
                 <Route path="/bulk-generator" element={<Navigate to="/keywords/bulk" replace />} />
                 <Route path="/ai-chat" element={<AIChat />} />
                 <Route path="/electoral-campaign" element={<ElectoralCampaign />} />

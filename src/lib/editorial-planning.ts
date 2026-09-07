@@ -91,3 +91,44 @@ export function sanitizeRequestedQuantity(value: number, availableItems: number)
 export function createPlanningIdempotencyKey(projectId: string, normalizedKeywords: string[], nonce: string): string {
   return `editorial-plan:${projectId}:${fingerprintKeyword(normalizedKeywords.slice().sort().join('|'))}:${nonce}`;
 }
+
+// ---------------------------------------------------------------------------
+// Queue states (mirror of the CHECK constraints in the CORE-001 migration).
+// No state here ever means "published": publication is structurally locked.
+// ---------------------------------------------------------------------------
+
+export type EditorialPlanStatus = 'review' | 'queued' | 'processing' | 'completed' | 'partial' | 'failed' | 'cancelled';
+export type EditorialItemStatus = 'duplicate' | 'queued' | 'processing' | 'draft_ready' | 'failed' | 'cancelled';
+export type EditorialStep = 'planning' | 'research' | 'outline' | 'draft' | 'review' | 'completed';
+
+export const EDITORIAL_ITEM_STATUSES: readonly EditorialItemStatus[] = ['queued', 'processing', 'draft_ready', 'failed', 'duplicate', 'cancelled'];
+export const MAX_ITEM_RETRIES = 10;
+
+export const PLAN_STATUS_LABELS: Record<EditorialPlanStatus, string> = {
+  review: 'Em revisão', queued: 'Na fila', processing: 'Processando', completed: 'Concluído', partial: 'Parcial', failed: 'Falhou', cancelled: 'Cancelado',
+};
+export const ITEM_STATUS_LABELS: Record<EditorialItemStatus, string> = {
+  duplicate: 'Duplicada', queued: 'Na fila', processing: 'Processando', draft_ready: 'Rascunho pronto', failed: 'Falhou', cancelled: 'Cancelada',
+};
+export const STEP_LABELS: Record<EditorialStep, string> = {
+  planning: 'Planejamento', research: 'Pesquisa', outline: 'Estrutura', draft: 'Rascunho', review: 'Revisão', completed: 'Concluída',
+};
+
+export interface EditorialQueueSummary extends Record<EditorialItemStatus, number> { total: number }
+
+export function summarizeEditorialItems(items: ReadonlyArray<{ status: string }>): EditorialQueueSummary {
+  const summary: EditorialQueueSummary = { total: items.length, queued: 0, processing: 0, draft_ready: 0, failed: 0, duplicate: 0, cancelled: 0 };
+  for (const item of items) {
+    if ((EDITORIAL_ITEM_STATUSES as readonly string[]).includes(item.status)) summary[item.status as EditorialItemStatus] += 1;
+  }
+  return summary;
+}
+
+/** Only a failed item below the retry ceiling can be re-queued, and only from its current step. */
+export function canReprocessEditorialItem(item: { status: string; retry_count: number }): boolean {
+  return item.status === 'failed' && item.retry_count < MAX_ITEM_RETRIES;
+}
+
+export function isStepLabel(value: string): value is EditorialStep {
+  return value in STEP_LABELS;
+}
