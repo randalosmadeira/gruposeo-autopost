@@ -3,7 +3,7 @@
  * Plugin Name: Zica Posts — Conector WordPress Oficial Zica.ai
  * Plugin URI: https://zica.ai
  * Description: Agente WordPress leve da Zica.ai com outbox persistente, HMAC, idempotência, GEO/Schema, discovery LLM, IndexNow em lote, cards e integração com Zica Orchestrator.
- * Version: 3.11.0
+ * Version: 3.12.0
  * Author: Equipe Zica.ai
  * Author URI: https://zica.ai
  * License: GPL v2 or later
@@ -14,7 +14,8 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('ZICA_POSTS_VERSION', '3.11.0');
+define('ZICA_POSTS_VERSION', '3.12.0');
+define('ZICA_POSTS_PAIRING_URL', 'https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1/pair-wordpress-site');
 define('ZICA_POSTS_SOFTWARE_ID', 'zica-posts');
 define('ZICA_POSTS_FILE', __FILE__);
 define('ZICA_POSTS_DIR', plugin_dir_path(__FILE__));
@@ -71,9 +72,26 @@ final class Zica_Posts_3110 {
 
     public function ensure_runtime() {
         $this->auth->ensure_secrets();
+        $this->register_pairing();
         $this->outbox->ensure_table();
         $this->outbox->ensure_schedules();
         $this->curator->ensure_schedule();
+    }
+
+    public function register_pairing() {
+        if (get_option('zica_posts_pairing_registered_version') === ZICA_POSTS_VERSION || get_transient('zica_posts_pairing_registration_lock')) return;
+        set_transient('zica_posts_pairing_registration_lock', '1', 10 * MINUTE_IN_SECONDS);
+        $key = (string) get_option('zica_posts_api_key', '');
+        if (!$key) return;
+        $response = wp_remote_post(ZICA_POSTS_PAIRING_URL, array(
+            'timeout' => 20,
+            'headers' => array('Content-Type' => 'application/json'),
+            'body' => wp_json_encode(array('action'=>'register','api_key'=>$key,'site_url'=>home_url('/'),'site_name'=>get_bloginfo('name'),'plugin_version'=>ZICA_POSTS_VERSION)),
+        ));
+        if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) >= 200 && wp_remote_retrieve_response_code($response) < 300) {
+            update_option('zica_posts_pairing_registered_version', ZICA_POSTS_VERSION, false);
+            delete_transient('zica_posts_pairing_registration_lock');
+        }
     }
 
     public static function activate() {

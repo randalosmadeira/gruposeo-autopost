@@ -46,7 +46,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Tables, TablesUpdate } from '@/integrations/supabase/types';
+import { PLUGIN_VERSION } from '@/lib/plugin-version';
 
 type Project = Tables<'projects'>;
 type ProjectUpdate = TablesUpdate<'projects'> & { id: string };
@@ -63,7 +65,7 @@ function errorMessage(error: unknown) {
 }
 
 function isPluginProject(project: Pick<Project, 'wordpress_username'>) {
-  return project.wordpress_username === '__ZICA_AI_PLUGIN__' || project.wordpress_username === '__CFRDM_PLUGIN__';
+  return project.wordpress_username === '__ZICA_POSTS_PLUGIN__' || project.wordpress_username === '__ZICA_AI_PLUGIN__' || project.wordpress_username === '__CFRDM_PLUGIN__';
 }
 
 const SEO_PLUGINS = [
@@ -88,6 +90,7 @@ interface ConnectionHealth {
 export function WordPressSitesCard() {
   const { isAdmin } = useAdminAccess();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { projects, createProject, updateProject, deleteProject } = useProjects();
   
   // Standard connection (Application Password)
@@ -98,8 +101,8 @@ export function WordPressSitesCard() {
   
   // Plugin connection (API Key)
   const [pluginSiteName, setPluginSiteName] = useState('');
-  const [pluginSiteUrl, setPluginSiteUrl] = useState('');
   const [pluginApiKey, setPluginApiKey] = useState('');
+  const [showAddSite, setShowAddSite] = useState(false);
   
   const [isCreating, setIsCreating] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -120,7 +123,7 @@ export function WordPressSitesCard() {
   // Auto-test connection health on mount
   const checkConnectionHealth = useCallback(async (projectId: string, silent = false) => {
     const project = projects.find(p => p.id === projectId);
-    if (!project?.wordpress_url || !project?.wordpress_app_password) return;
+    if (!project?.wordpress_url || (!project.wordpress_app_password && !project.wordpress_credential_ref)) return;
 
     const startTime = Date.now();
     setConnectionHealth(prev => ({
@@ -131,17 +134,7 @@ export function WordPressSitesCard() {
     const isPluginAuth = isPluginProject(project);
 
     try {
-      const { data, error } = await supabase.functions.invoke('test-wordpress-connection', {
-        body: isPluginAuth ? {
-          wordpress_url: project.wordpress_url,
-          use_plugin: true,
-          api_key: project.wordpress_app_password,
-        } : {
-          wordpress_url: project.wordpress_url,
-          wordpress_username: project.wordpress_username,
-          wordpress_app_password: project.wordpress_app_password,
-        },
-      });
+      const { data, error } = await supabase.functions.invoke('test-wordpress-connection', { body: { project_id: project.id } });
 
       const responseTime = Date.now() - startTime;
 
@@ -312,22 +305,10 @@ export function WordPressSitesCard() {
   };
 
   const handleAddPluginSite = async () => {
-    if (!pluginSiteName || !pluginSiteUrl || !pluginApiKey) {
+    if (!pluginApiKey.trim()) {
       toast({
-        title: 'Campos obrigatórios',
-        description: 'Preencha todos os campos para adicionar o site.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(pluginSiteUrl);
-    } catch {
-      toast({
-        title: 'URL inválida',
-        description: 'Insira uma URL válida (ex: https://meusite.com.br).',
+        title: 'Chave obrigatória',
+        description: 'Cole a chave de conexão exibida no plugin WordPress.',
         variant: 'destructive',
       });
       return;
@@ -335,17 +316,11 @@ export function WordPressSitesCard() {
 
     setIsCreating(true);
     try {
-      // Clean URL: remove wp-json, cfrdm paths, and trailing slashes
-      let cleanUrl = pluginSiteUrl.replace(/\/$/, '');
-      cleanUrl = cleanUrl.replace(/\/wp-json(\/.*)?$/, '');
-      cleanUrl = cleanUrl.replace(/\/(cfrdm|wp)(\/.*)?$/, '');
-
-      // Step 1: Test connection BEFORE saving
-      const { data: testData, error: testError } = await supabase.functions.invoke('test-wordpress-connection', {
+      const { data: testData, error: testError } = await supabase.functions.invoke('pair-wordpress-site', {
         body: {
-          wordpress_url: cleanUrl,
-          use_plugin: true,
-          api_key: pluginApiKey,
+          action: 'connect',
+          api_key: pluginApiKey.trim(),
+          site_name: pluginSiteName.trim() || undefined,
         },
       });
 
@@ -359,26 +334,14 @@ export function WordPressSitesCard() {
         throw new Error(`${errorMsg}${hint ? ` ${hint}` : ''}`);
       }
 
-      // Step 2: Save to database only after successful connection test
-      const finalUrl = testData.correctedUrl || pluginSiteUrl;
-      const domain = new URL(finalUrl).hostname;
-
-      await createProject.mutateAsync({
-        name: pluginSiteName,
-        domain,
-        wordpress_url: finalUrl,
-        wordpress_username: '__ZICA_AI_PLUGIN__',
-        wordpress_app_password: pluginApiKey,
-        is_connected: true,
-      });
-
       setPluginSiteName('');
-      setPluginSiteUrl('');
       setPluginApiKey('');
+      setShowAddSite(false);
+      await queryClient.invalidateQueries({ queryKey: ['projects'] });
 
       toast({
         title: 'Site adicionado e conectado! ✓',
-        description: `Conectado a: ${testData.site?.name || finalUrl}${testData.pluginVersion ? ` (Plugin v${testData.pluginVersion})` : ''}`,
+        description: `Conectado a: ${testData.site?.name || testData.correctedUrl}${testData.pluginVersion ? ` (Plugin v${testData.pluginVersion})` : ''}`,
       });
     } catch (error: unknown) {
       const message = errorMessage(error);
@@ -402,7 +365,7 @@ export function WordPressSitesCard() {
     setTestingId(projectId);
     const project = projects.find(p => p.id === projectId);
     
-    if (!project?.wordpress_url || !project?.wordpress_app_password) {
+    if (!project?.wordpress_url || (!project.wordpress_app_password && !project.wordpress_credential_ref)) {
       toast({
         title: 'Dados incompletos',
         description: 'Configure a URL e credenciais do WordPress.',
@@ -417,13 +380,7 @@ export function WordPressSitesCard() {
     try {
       if (isPluginAuth) {
         // Test via Zica.ai Plugin API
-        const { data, error } = await supabase.functions.invoke('test-wordpress-connection', {
-          body: {
-            wordpress_url: project.wordpress_url,
-            use_plugin: true,
-            api_key: project.wordpress_app_password,
-          },
-        });
+        const { data, error } = await supabase.functions.invoke('test-wordpress-connection', { body: { project_id: project.id } });
 
         if (error) throw new Error(error.message);
 
@@ -556,10 +513,13 @@ export function WordPressSitesCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Globe className="w-5 h-5 text-primary" />
-          Sites WordPress
-        </CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle className="flex items-center gap-2"><Globe className="w-5 h-5 text-primary" />Sites WordPress</CardTitle>
+          <Button type="button" onClick={() => setShowAddSite((value) => !value)}>
+            {showAddSite ? <XCircle className="w-4 h-4 mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+            {showAddSite ? 'Fechar' : '+ Mais sites'}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Sites List */}
@@ -593,7 +553,7 @@ export function WordPressSitesCard() {
                       >
                         <Link to="/plugin-wp">
                           <Download className="w-3 h-3 mr-1" />
-                          Baixar v3.2.7
+                          Baixar v{PLUGIN_VERSION}
                         </Link>
                       </Button>
                     </div>
@@ -737,7 +697,7 @@ export function WordPressSitesCard() {
         </div>
 
         {/* Add New Site Form with Tabs */}
-        <div className="p-4 border rounded-lg bg-muted/30 space-y-4">
+        {showAddSite ? <div className="p-4 border rounded-lg bg-muted/30 space-y-4">
           <Label className="text-sm font-medium uppercase text-muted-foreground">
             Novo Site
           </Label>
@@ -814,7 +774,7 @@ export function WordPressSitesCard() {
                   <Plug className="w-4 h-4 text-emerald-600 mt-0.5" />
                   <div className="text-xs space-y-1">
                     <p className="font-medium text-emerald-900 dark:text-emerald-100">
-                      Conexão em 3 passos:
+                      Conexão com uma chave:
                     </p>
                     <ol className="list-decimal list-inside space-y-0.5 text-emerald-800 dark:text-emerald-200">
                       <li>
@@ -822,9 +782,9 @@ export function WordPressSitesCard() {
                           Baixe e instale o plugin
                         </Link>
                       </li>
-                      <li>No WordPress: <strong>Zica.ai → Dashboard</strong></li>
-                      <li>Copie o Código de Ativação gerado pelo plugin</li>
-                      <li>Cole o código abaixo junto com a URL do site</li>
+                      <li>No WordPress: <strong>Zica Posts → Conexão rápida</strong></li>
+                      <li>Copie a chave exibida pelo plugin</li>
+                      <li>Cole abaixo. O nome e a URL completa serão localizados automaticamente</li>
                     </ol>
                   </div>
                 </div>
@@ -843,22 +803,12 @@ export function WordPressSitesCard() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
-                  placeholder="Nome do Site (ex: Meu Blog)"
+                  placeholder="Nome personalizado (opcional)"
                   value={pluginSiteName}
                   onChange={(e) => setPluginSiteName(e.target.value)}
                 />
-                <Input
-                  placeholder="URL base (ex: https://meusite.com)"
-                  value={pluginSiteUrl}
-                  onChange={(e) => setPluginSiteUrl(e.target.value)}
-                />
+                <Input placeholder="Chave de conexão do plugin" value={pluginApiKey} onChange={(e) => setPluginApiKey(e.target.value)} className="font-mono" autoComplete="off" />
               </div>
-              <Input
-                placeholder="Código de Ativação do Plugin"
-                value={pluginApiKey}
-                onChange={(e) => setPluginApiKey(e.target.value)}
-                className="font-mono"
-              />
               <div className="flex gap-2">
                 <Button 
                   onClick={handleAddPluginSite} 
@@ -881,7 +831,7 @@ export function WordPressSitesCard() {
               </div>
             </TabsContent>
           </Tabs>
-        </div>
+        </div> : null}
 
         {/* Troubleshooting Guide */}
         {isAdmin ? <div className="p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
