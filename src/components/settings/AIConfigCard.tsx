@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Sparkles, Eye, EyeOff, ExternalLink, Infinity as InfinityIcon, Loader2, Check, X, Search, Brain } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ProviderHealthPanel } from './ProviderHealthPanel';
+import type { ProviderHealth } from '@/lib/providerHealth';
 
 const VALIDATE_AI_KEY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-ai-key`;
 
@@ -88,6 +89,7 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
   const [isTesting, setIsTesting] = useState(false);
   const [isTestingAnthropic, setIsTestingAnthropic] = useState(false);
   const [isTestingSerper, setIsTestingSerper] = useState(false);
+  const [providerHealth, setProviderHealth] = useState<ProviderHealth[]>([]);
 
   // Sync local state when settings load/change from the server
   useEffect(() => {
@@ -109,6 +111,9 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
     : aiProvider === 'gemini'
     ? settings?.has_gemini_key 
     : settings?.has_openai_key;
+  const openaiOperational = providerHealth.some((item) => item.provider === 'openai' && item.status === 'operational');
+  const anthropicOperational = providerHealth.some((item) => item.provider === 'anthropic' && item.status === 'operational');
+  const dualOperationalCount = Number(openaiOperational) + Number(anthropicOperational);
 
   const handleProviderChange = (provider: string) => {
     setAiProvider(provider);
@@ -356,13 +361,18 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
 
             {/* API Key Status and Update */}
             <div className="space-y-3">
-              <ProviderHealthPanel />
+              <ProviderHealthPanel onHealthChange={setProviderHealth} />
 
               {/* Current key status */}
               <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">Status {aiProvider === 'dual' ? 'Dual OpenAI + Claude' : `da chave ${aiProvider === 'gemini' ? 'Gemini' : 'OpenAI'}`}:</span>
-                  {hasCurrentProviderKey ? (
+                  {aiProvider === 'dual' ? (
+                    <Badge className={`text-xs ${dualOperationalCount === 2 ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' : dualOperationalCount === 1 ? 'bg-amber-500/15 text-amber-600 border-amber-500/30' : 'bg-red-500/15 text-red-500 border-red-500/30'}`}>
+                      {dualOperationalCount === 2 ? <Check className="w-3 h-3 mr-1" /> : <X className="w-3 h-3 mr-1" />}
+                      {dualOperationalCount === 2 ? 'Ativo' : dualOperationalCount === 1 ? 'Parcial, fallback ativo' : 'Indisponível'}
+                    </Badge>
+                  ) : hasCurrentProviderKey ? (
                     <Badge className="text-xs bg-emerald-500/15 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20">
                       <Check className="w-3 h-3 mr-1" />
                       ✅ Ativa

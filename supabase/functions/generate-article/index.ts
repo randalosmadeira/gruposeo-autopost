@@ -63,6 +63,14 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function publicGenerationError(error: unknown) {
+  const code = error instanceof Error ? error.message : "";
+  if (code.includes("invalid_key")) return "Uma credencial de IA é inválida. Atualize a chave em Motor de IA & Chaves.";
+  if (code.includes("insufficient_credit")) return "A geração está bloqueada por falta de crédito no provedor de IA.";
+  if (code.includes("rate_limited")) return "O provedor atingiu o limite temporário. Tente novamente em instantes.";
+  return "Não foi possível concluir a geração. Verifique o status dos provedores e tente novamente.";
+}
+
 function sse(content: string, provider: string, model: string, promptVersion?: number) {
   const payload = `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\ndata: [DONE]\n\n`;
   return new Response(payload, {
@@ -279,6 +287,7 @@ Deno.serve(async (req: Request) => {
     return sse(content, generation.provider, generation.model, promptVersion);
   } catch (error) {
     if (error instanceof RequestAuthError) return json({ error: error.message, code: error.code, request_id: requestId }, error.status);
-    return json({ error: error instanceof Error ? error.message : "Erro interno", request_id: requestId }, 500);
+    console.error(`[generate-article] request=${requestId} error=${error instanceof Error ? error.message : "generation_failed"}`);
+    return json({ error: publicGenerationError(error), code: "generation_failed", request_id: requestId }, 503);
   }
 });
