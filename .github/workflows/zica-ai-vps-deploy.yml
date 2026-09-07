@@ -35,6 +35,7 @@ jobs:
       ZICA_AI_VPS_SSH_PRIVATE_KEY_B64: ${{ secrets.ZICA_AI_VPS_SSH_PRIVATE_KEY_B64 }}
       ZICA_AI_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.ZICA_AI_SUPABASE_SERVICE_ROLE_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       ZICA_AI_SUPABASE_URL: https://ubahrbgaxrkjxklytobl.supabase.co
       VITE_SUPABASE_URL: https://ubahrbgaxrkjxklytobl.supabase.co
       VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_8XzHfqXP8o3XOcGwRY35zw_P-jg1kiE
@@ -90,6 +91,28 @@ jobs:
             exit 1
           fi
           jq -e '.ok == true and .provider == "openai" and .configured == true' /tmp/vault-sync.json >/dev/null
+      - name: Synchronize Anthropic secret with Supabase Vault (optional)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Anthropic is optional: absent secret means the platform runs on OpenAI only.
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "::notice::ANTHROPIC_API_KEY ausente no environment; Vault não alterado para anthropic."
+            exit 0
+          fi
+          STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}'             -H "x-api-key: $ANTHROPIC_API_KEY" -H "anthropic-version: 2023-06-01"             https://api.anthropic.com/v1/models)"
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::ANTHROPIC_API_KEY rejeitada pela Anthropic (HTTP $STATUS). Vault não foi alterado."
+            exit 1
+          fi
+          PAYLOAD="$(jq -nc --arg provider anthropic --arg secret "$ANTHROPIC_API_KEY" '{p_provider:$provider,p_secret:$secret}')"
+          HTTP_CODE="$(curl --silent --show-error --output /tmp/vault-sync-anthropic.json --write-out '%{http_code}'             -H "apikey: $ZICA_AI_SUPABASE_SERVICE_ROLE_KEY"             -H "Authorization: Bearer $ZICA_AI_SUPABASE_SERVICE_ROLE_KEY"             -H "Content-Type: application/json"             --data "$PAYLOAD"             "$ZICA_AI_SUPABASE_URL/rest/v1/rpc/sync_zica_ai_provider_secret_from_ci")"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Supabase recusou a sincronização da chave Anthropic (HTTP $HTTP_CODE)."
+            exit 1
+          fi
+          jq -e '.ok == true and .provider == "anthropic" and .configured == true' /tmp/vault-sync-anthropic.json >/dev/null
+
       - name: Build Zica.ai frontend gate
         shell: bash
         run: |

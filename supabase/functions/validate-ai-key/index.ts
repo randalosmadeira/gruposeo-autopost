@@ -5,6 +5,12 @@ import { classifyProviderFailure, PROVIDER_CAPABILITIES, ProviderStatus, safeSta
 
 const FUNCTION_NAME = "validate-ai-key";
 
+// OpenAI and Anthropic credentials are managed exclusively by GitHub
+// (environment zica-ai-production) and synchronized into Supabase Vault by the
+// deploy workflow. This function still validates a pasted key so an operator
+// can check it before updating the GitHub secret, but it never persists it.
+const PLATFORM_MANAGED: ReadonlySet<string> = new Set(["openai", "anthropic"]);
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
@@ -147,10 +153,11 @@ Deno.serve(async (req) => {
     const result = await validators[provider](apiKey);
     const latencyMs = Date.now() - validationStarted;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || "";
+    const platformManaged = PLATFORM_MANAGED.has(provider);
     let saved = false;
     if (serviceRoleKey) {
       const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
-      if (result.valid) {
+      if (result.valid && !platformManaged) {
         const { data: persisted, error: persistError } = await admin.rpc("persist_validated_user_ai_key", {
           p_user_id: user.id,
           p_provider: provider,
@@ -159,13 +166,19 @@ Deno.serve(async (req) => {
         if (persistError || !persisted) throw new Error("Não foi possível confirmar a gravação da chave validada");
         saved = true;
       }
-      await admin.from("ai_provider_health").upsert({
-        user_id: user.id, provider, configured: true, status: result.status,
-        latency_ms: latencyMs, capabilities: PROVIDER_CAPABILITIES[provider], checked_at: new Date().toISOString(),
-      }, { onConflict: "user_id,provider" });
+      if (!platformManaged) {
+        await admin.from("ai_provider_health").upsert({
+          user_id: user.id, provider, configured: true, status: result.status,
+          latency_ms: latencyMs, capabilities: PROVIDER_CAPABILITIES[provider], checked_at: new Date().toISOString(),
+        }, { onConflict: "user_id,provider" });
+      }
     }
 
-    log.info("validation_result", { provider, valid: result.valid });
+    const message = platformManaged
+      ? `${result.message}. Esta chave é gerenciada pelo GitHub (secret ${provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY"} do environment zica-ai-production); ela não foi gravada aqui.`
+      : result.message;
+
+    log.info("validation_result", { provider, valid: result.valid, platform_managed: platformManaged });
     log.requestEnd(200, Date.now() - startTime);
 
     return new Response(
@@ -174,10 +187,11 @@ Deno.serve(async (req) => {
         provider,
         status: result.status,
         latency_ms: latencyMs,
-        message: result.message,
+        message,
         validation_mode: result.functional ? "functional_generation" : "connectivity",
         model: result.model,
         saved,
+        managed_by: platformManaged ? "github" : "user",
         request_id: requestId,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
