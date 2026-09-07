@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
-describe('Zica Posts 3.11.0', () => {
+describe('Zica Posts 3.12.0', () => {
   it('exposes bulk publishing in the client sidebar', () => {
     const sidebar = read('src/components/layout/Sidebar.tsx');
     expect(sidebar).toContain("label: 'Publicar em massa'");
@@ -24,5 +24,13 @@ describe('Zica Posts 3.11.0', () => {
     expect(helper).toContain('zica-cta:contact');
     expect(helper).toContain('zica-cta:social');
     expect(plugin).not.toContain('editorial-cta');
+  });
+  it('registers one-key pairing and discovers the complete site URL', () => {
+    const plugin = read('public/wordpress-plugin/zica-posts/zica-posts.php');
+    const pairing = read('supabase/functions/pair-wordpress-site/index.ts');
+    expect(plugin).toContain('ZICA_POSTS_PAIRING_URL');
+    expect(plugin).toContain("'site_url'=>home_url('/')");
+    expect(pairing).toContain('wordpress_pairing_registry');
+    expect(pairing).toContain('verifyPlugin');
   });
 });

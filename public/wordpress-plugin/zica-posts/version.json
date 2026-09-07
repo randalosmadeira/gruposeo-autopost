@@ -1,7 +1,7 @@
 {
   "software_id": "zica-posts",
   "name": "Zica Posts",
-  "version": "3.11.0",
+  "version": "3.12.0",
   "requires_php": "7.4",
   "requires_wp": "5.8",
   "tested": "6.9",

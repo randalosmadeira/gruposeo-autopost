@@ -39,7 +39,7 @@ describe('client and admin surface separation', () => {
 
   it('keeps legacy WordPress credentials restricted to administrators', () => {
     expect(wordpress).toContain("defaultValue={isAdmin ? 'standard' : 'plugin'}");
-    expect(wordpress).toContain('Código de Ativação do Plugin');
+    expect(wordpress).toContain('Chave de conexão do plugin');
     expect(wordpress).toContain("{isAdmin ? <TabsContent value=\"standard\"");
   });
 

@@ -1,9 +1,9 @@
 /** Contrato central do conector WordPress Zica Posts. */
 export const PLUGIN_SOFTWARE_ID="zica-posts";
 export const PLUGIN_NAME="Zica Posts";
-export const PLUGIN_VERSION="3.11.0";
-export const PLUGIN_MINIMUM_VERSION="3.11.0";
-export const PLUGIN_RELEASED="2026-09-01";
+export const PLUGIN_VERSION="3.12.0";
+export const PLUGIN_MINIMUM_VERSION="3.12.0";
+export const PLUGIN_RELEASED="2026-09-07";
 export const PLUGIN_API_NAMESPACE="zica-posts/v1";
 export const PLUGIN_COMPAT_NAMESPACES=["zica-ai/v1","cfrdm/v1"] as const;
 export const PLUGIN_FEATURES=["authenticated_endpoints","article_publish","media_upload","modular_light_agent","persistent_outbox","hmac_sha256","nonce_replay_protection","content_hash_idempotency","correlation_ids","anti_echo_hub_sync","async_hub_webhook","exponential_retry","delegated_indexing","indexnow_batch_500","llms_txt","llms_full_txt","ai_txt","dynamic_sitemap","schema_jsonld","automatic_related_cards","frontend_card_styles","daily_1500_sao_paulo","physical_file_atomic_write","virtual_file_fallback","ai_crawler_robots_rules","legacy_api_compatibility","orchestrator_supabase_registry","bullmq_backpressure","sftp_atomic_dispatch","credential_refs","cdn_purge_optional","geo_semantic_discovery","structured_logs"] as const;
