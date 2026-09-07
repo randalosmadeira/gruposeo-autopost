@@ -10,7 +10,8 @@ describe('regeneração e modo dual', () => {
     const orchestrator = read('supabase/functions/_shared/ai-orchestrator.ts');
     expect(orchestrator).toContain("const OPENAI_TEXT = 'gpt-5'");
     expect(orchestrator).toContain("['gpt-5', 'gpt-5-mini']");
-    expect(orchestrator).toContain('Math.min(options?.maxTokens || 16384, 16384)');
+    expect(orchestrator).toContain("fetch(`${OPENAI_API_BASE}/responses`");
+    expect(orchestrator).toContain('max_output_tokens: Math.min(options?.maxTokens || 16384, 16384)');
     expect(orchestrator).not.toContain('HTTP ${response.status}: ${text.slice');
     expect(orchestrator).toContain("safeProviderError('anthropic', response.status, text)");
   });

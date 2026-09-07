@@ -246,13 +246,13 @@ export class AIOrchestrator {
     const candidates = model === 'gpt-5' ? ['gpt-5', 'gpt-5-mini'] : [model];
     let lastError: Error | null = null;
     for (const candidate of candidates) {
-      const response = await fetch(`${OPENAI_API_BASE}/chat/completions`, {
+      const response = await fetch(`${OPENAI_API_BASE}/responses`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: candidate,
-          messages: messages.map((m) => ({ role: m.role === 'model' ? 'assistant' : m.role, content: m.content })),
-          max_completion_tokens: Math.min(options?.maxTokens || 16384, 16384),
+          input: messages.map((m) => ({ role: m.role === 'model' ? 'assistant' : m.role, content: m.content })),
+          max_output_tokens: Math.min(options?.maxTokens || 16384, 16384),
         }),
         signal: AbortSignal.timeout(90000),
       });
@@ -263,9 +263,12 @@ export class AIOrchestrator {
         continue;
       }
       const data = JSON.parse(text);
-      const content = data?.choices?.[0]?.message?.content || '';
+      const content = String(data?.output_text || data?.output
+        ?.flatMap((item: { content?: Array<{ text?: string }> }) => item.content || [])
+        ?.map((item: { text?: string }) => item.text || '')
+        ?.join('') || '');
       if (!content) throw new Error('OpenAI retornou resposta vazia.');
-      return { content, model: candidate, usage: { inputTokens: Number(data?.usage?.prompt_tokens || data?.usage?.input_tokens || 0), outputTokens: Number(data?.usage?.completion_tokens || data?.usage?.output_tokens || 0) } };
+      return { content, model: candidate, usage: { inputTokens: Number(data?.usage?.input_tokens || 0), outputTokens: Number(data?.usage?.output_tokens || 0) } };
     }
     throw lastError || new Error('openai_unavailable');
   }
