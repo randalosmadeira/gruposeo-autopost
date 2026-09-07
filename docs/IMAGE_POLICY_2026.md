@@ -33,3 +33,19 @@ Implementação: `supabase/functions/_shared/image-policy.ts` (runtime), `module
 - Transformação de imagem do Storage ativa: foto do banco visual (63,9 KB original) → WebP 1200×675 de 51,3 KB.
 - Blogs Direitos News, Quem Votar e Votar Deputado Federal já emitem `max-image-preview:large` e `srcset`;
   o Blog RDM (Rank Math) emite nas páginas de post. O filtro do plugin cobre qualquer tema ou plugin de SEO.
+
+## Reprocessamento de imagens anteriores à política
+
+Função `reprocess-article-images` (chamada interna: bearer service-role ou `x-zica-automation-key` do
+`zica-brain`). Para cada artigo com imagem destacada fora do padrão (URL do master, URL externa ou sem
+`image_policy.compliance = compliant`):
+
+1. Localiza o master (`config.image_geo.master_path`, caminho do bucket na URL ou importação da URL externa
+   para `<user>/reprocessed/<hash>.<ext>`).
+2. Deriva `<master>-1200x675.webp` (≤ 150 KB) e a cópia JPEG quando possível.
+3. Atualiza `featured_image_url` e `config.image_geo` (`previous_featured_image_url` fica guardado para rollback).
+4. Com `pushToWordpress: true`, artigos `published` são reenviados pelo `publish-to-wordpress`, que agora
+   baixa a imagem do Storage, converte em Data URL e a envia ao plugin como imagem destacada (antes, URLs
+   `https` eram ignoradas e os posts saíam sem imagem destacada).
+
+Parâmetros: `userId`, `articleIds[]`, `maxRows` (≤ 40), `pushToWordpress`, `dryRun`.

@@ -76,7 +76,41 @@ function extensionForDataUrl(dataUrl: string) {
   return "png";
 }
 
-async function uploadPluginImage(baseUrl: string, apiKey: string, dataUrl: string, article: Record<string, any>) {
+const FEATURED_IMAGE_MAX_BYTES = 8 * 1024 * 1024; // plugin media() limit
+
+function bytesToBase64(bytes: Uint8Array) {
+  const chunks: string[] = [];
+  for (let i = 0; i < bytes.length; i += 0x8000) chunks.push(String.fromCharCode(...bytes.subarray(i, Math.min(i + 0x8000, bytes.length))));
+  return btoa(chunks.join(""));
+}
+
+/**
+ * The plugin media endpoint only accepts Data URLs. Featured images live in
+ * Supabase Storage as https URLs since the legacy externalization, so they are
+ * downloaded here and re-encoded. Returns "" when the image cannot be fetched;
+ * publication proceeds without a featured image instead of failing.
+ */
+async function resolveFeaturedDataUrl(featured: string) {
+  const value = String(featured || "").trim();
+  if (!value) return "";
+  if (value.startsWith("data:image")) return value;
+  if (!/^https?:\/\//i.test(value)) return "";
+  try {
+    const response = await fetch(value, { redirect: "follow", headers: { Accept: "image/webp,image/*" }, signal: AbortSignal.timeout(30000) });
+    if (!response.ok) throw new Error(`featured_image_http_${response.status}`);
+    const mime = String(response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    if (!mime.startsWith("image/")) throw new Error("featured_image_not_image");
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (!bytes.length || bytes.length > FEATURED_IMAGE_MAX_BYTES) throw new Error("featured_image_size");
+    return `data:${mime};base64,${bytesToBase64(bytes)}`;
+  } catch (error) {
+    console.warn(`[publish-to-wordpress] featured image unavailable: ${error instanceof Error ? error.message : "unknown"}`);
+    return "";
+  }
+}
+
+async function uploadPluginImage(baseUrl: string, apiKey: string, featured: string, article: Record<string, any>) {
+  const dataUrl = await resolveFeaturedDataUrl(featured);
   if (!dataUrl.startsWith("data:image")) return undefined;
   const config = article.config && typeof article.config === "object" ? article.config as Record<string, any> : {};
   const imageGeo = config.image_geo && typeof config.image_geo === "object" ? config.image_geo as Record<string, any> : {};
