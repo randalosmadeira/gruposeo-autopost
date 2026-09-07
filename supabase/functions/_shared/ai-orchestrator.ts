@@ -93,7 +93,7 @@ function safeProviderError(provider: string, status: number, body: string): Erro
   if (status === 401 || status === 403 || normalized.includes('invalid api key') || normalized.includes('invalid x-api-key')) {
     return new Error(`${provider}_invalid_key`);
   }
-  if (status === 402 || normalized.includes('insufficient_quota') || normalized.includes('credit_balance_exhausted')) {
+  if (status === 402 || normalized.includes('insufficient_quota') || normalized.includes('credit_balance_exhausted') || normalized.includes('credit balance is too low') || normalized.includes('billing_hard_limit_reached')) {
     return new Error(`${provider}_insufficient_credit`);
   }
   if (status === 429) return new Error(`${provider}_rate_limited`);
