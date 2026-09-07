@@ -51,16 +51,17 @@ export const GEO_AEO_2026_RULES = `POLÍTICA INTERNA ZICA.AI PARA SEO, GEO, AEO 
 - A IA deve decidir a profundidade e a extensão pela intenção, concorrência semântica, complexidade e fontes. Se houver conflito entre quantidade e qualidade factual, preserve a qualidade factual e encerre o texto no ponto de cobertura suficiente.
 `.trim();
 
-export const IMAGE_GEO_2026_RULES = `POLÍTICA VISUAL ZICA.AI
-- Imagem destacada/hero: alvo editorial 1200x630 ou 1200x675, proporção próxima de 16:9.
-- Imagem de corpo: largura editorial alvo de 800px.
-- Imagem quadrada de produto: alvo 1000x1000 ou 1200x1200 quando o módulo for de produto.
-- Formato preferencial para entrega web: WebP, com AVIF como alternativa quando o destino suportar.
+export const IMAGE_GEO_2026_RULES = `POLÍTICA VISUAL ZICA.AI (2026-09)
+- Imagem destacada/hero: 1200x675 pixels (16:9). Alternativa 4:3: 1200x900. Nunca abaixo de 1200 px de largura nem de 300.000 pixels totais (exigência do Google Discover).
+- Entrega em WebP com cópia JPEG, peso final abaixo de 150 KB; 72 PPI é suficiente para tela.
+- Zona de segurança: deixar de 15% a 20% de margem em todas as bordas apenas com fundo e manter o assunto centralizado, porque Google e IAs recortam em 1:1 e em cartões menores.
+- Nunca inserir texto, número, logotipo, selo ou marca d'água dentro da imagem. A mensagem vai para o alt text, a legenda e o HTML ao redor.
 - Alt text deve descrever objetivamente o conteúdo visual e sua relação com a página, sem lista artificial de palavras-chave.
 - Nome de arquivo deve ser semântico, legível e separado por hífens.
 - Sempre que útil, forneça legenda e contexto textual próximo da imagem.
 - Se existir acervo fixo autorizado para o módulo, selecione desse acervo antes de considerar geração sintética.
 - Nunca substitua silenciosamente uma pessoa real por representação sintética.
+- No WordPress: meta robots max-image-preview:large e srcset gerados a partir da imagem destacada na biblioteca de mídia.
 `.trim();
 
 /**

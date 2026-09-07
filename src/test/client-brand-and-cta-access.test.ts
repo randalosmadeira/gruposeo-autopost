@@ -26,7 +26,9 @@ describe('client bulk, brand media and CTA controls', () => {
   });
 
   it('uses deterministic WebP chroma processing without paid AI providers', () => {
-    expect(media).toContain("'image/webp', 0.86");
+    expect(media).toContain("'image/webp', quality");
+    expect(media).toContain('const WEBP_QUALITY_STEPS = [0.86');
+    expect(media).toContain('const HERO_MAX_BYTES = 150 * 1024;');
     expect(media).toContain('green - Math.max(red, blue)');
     expect(media).not.toContain('supabase.functions.invoke');
     expect(media).not.toContain('generate-image');
