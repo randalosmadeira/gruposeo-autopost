@@ -183,7 +183,7 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
           gemini: 'gemini_api_key',
           openai: 'openai_api_key',
         };
-        await onSave({ [keyMap[aiProvider]]: newApiKey });
+        if (!data?.saved) await onSave({ [keyMap[aiProvider]]: newApiKey });
         setNewApiKey('');
         window.dispatchEvent(new Event('provider-health-refresh'));
 
@@ -230,7 +230,7 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
       }
       if (data?.valid) {
         const dbKey = provider === 'anthropic' ? 'anthropic_api_key' : 'serper_api_key';
-        await onSave({ [dbKey]: key });
+        if (!data?.saved) await onSave({ [dbKey]: key });
         clearKey();
         window.dispatchEvent(new Event('provider-health-refresh'));
         toast({ title: '✓ Chave validada e salva!', description: data.message });
