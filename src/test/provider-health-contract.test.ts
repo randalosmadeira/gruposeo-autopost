@@ -32,7 +32,7 @@ describe('provider health security contract', () => {
 
   it('validates OpenAI with a tiny real generation instead of a misleading model-list request', () => {
     expect(validation).toContain('api.openai.com/v1/responses');
-    expect(validation).toContain('model = "gpt-5-mini"');
+    expect(validation).toContain('model = "gpt-4.1-mini"');
     expect(validation).toContain('max_output_tokens: 32');
     expect(validation).toContain('AbortSignal.timeout(15000)');
     expect(validation).toContain('"functional_generation"');
