@@ -34,6 +34,8 @@ export interface AICallResult {
   provider: 'openai' | 'anthropic' | 'gemini';
   model: string;
   usage: AIUsage;
+  providerMode?: 'single' | 'dual';
+  providersUsed?: string[];
 }
 
 type UsageSink = (entry: { taskType: TaskType; provider: AIProvider['name']; model: string; usage: AIUsage; options?: AICallOptions }) => Promise<void>;
@@ -187,6 +189,33 @@ export class AIOrchestrator {
       }
     }
     throw lastError || new Error('Todos os provedores falharam.');
+  }
+
+  async callDualWithMeta(taskType: TaskType, messages: AIMessage[], options?: AICallOptions): Promise<AICallResult> {
+    const enriched = this.injectDirectives(taskType, messages);
+    let providers = (AI_PROVIDERS[taskType] || AI_PROVIDERS.article_generation)
+      .filter((provider) => ['openai', 'anthropic'].includes(provider.name))
+      .filter((provider) => this.getAvailableProviders().includes(provider.name) && !isCoolingDown(provider.name));
+    if (options?.preferredProvider) providers = [...providers].sort((a, b) => Number(b.name === options.preferredProvider) - Number(a.name === options.preferredProvider));
+    if (providers.length < 2) return this.callWithMeta(taskType, messages, options);
+
+    const selected = providers.slice(0, 2);
+    const settled = await Promise.allSettled(selected.map(async (provider) => {
+      const key = this.getKeysForProvider(provider.name)[0];
+      if (!key) throw new Error(`${provider.name}_key_missing`);
+      const result = await this.callProvider(provider, key, enriched, options);
+      if (this.usageSink) await this.usageSink({ taskType, provider: provider.name, model: provider.model, usage: result.usage, options });
+      return { ...result, provider };
+    }));
+    const successful = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
+    if (!successful.length) throw new Error('OpenAI e Claude falharam na execução simultânea.');
+    const score = (content: string) => content.trim().split(/\s+/).length + (content.match(/<h[2-4]\b|^#{2,4}\s/gim) || []).length * 25;
+    const winner = successful.sort((a, b) => score(b.content) - score(a.content))[0];
+    return {
+      content: winner.content, provider: winner.provider.name, model: winner.provider.model,
+      usage: winner.usage, providerMode: successful.length > 1 ? 'dual' : 'single',
+      providersUsed: successful.map((item) => item.provider.name),
+    };
   }
 
   private async callProvider(provider: AIProvider, key: string, messages: AIMessage[], options?: AICallOptions): Promise<{ content: string; usage: AIUsage }> {

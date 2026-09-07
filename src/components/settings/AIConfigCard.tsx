@@ -104,7 +104,9 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
   const models = aiProvider === 'gemini' ? GEMINI_MODELS : OPENAI_MODELS;
   const imageModels = aiProvider === 'gemini' ? GEMINI_IMAGE_MODELS : OPENAI_IMAGE_MODELS;
   
-  const hasCurrentProviderKey = aiProvider === 'gemini' 
+  const hasCurrentProviderKey = aiProvider === 'dual'
+    ? Boolean(settings?.has_openai_key && settings?.has_anthropic_key)
+    : aiProvider === 'gemini'
     ? settings?.has_gemini_key 
     : settings?.has_openai_key;
 
@@ -323,6 +325,11 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  <RadioGroupItem value="dual" id="dual" />
+                  <Label htmlFor="dual" className="cursor-pointer">Dual OpenAI + Claude</Label>
+                  <Badge className="text-xs bg-primary/15 text-primary border-primary/30">Simultâneo</Badge>
+                </div>
+                <div className="flex items-center gap-2">
                   <RadioGroupItem value="openai" id="openai" />
                   <Label htmlFor="openai" className="cursor-pointer">OpenAI</Label>
                   {settings?.has_openai_key ? (
@@ -339,7 +346,9 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
                 </div>
               </RadioGroup>
               <p className="text-xs text-muted-foreground">
-                {aiProvider === 'gemini' 
+                {aiProvider === 'dual'
+                  ? 'OpenAI e Claude geram simultaneamente. O melhor resultado estrutural segue para a revisão e o consumo dos dois provedores é auditado.'
+                  : aiProvider === 'gemini'
                   ? 'Usando modelos Google Gemini (Gemini 2.5 Flash, Imagen, etc.)'
                   : 'Usando modelos OpenAI (GPT-5, GPT-5-mini, etc.)'}
               </p>
@@ -352,7 +361,7 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
               {/* Current key status */}
               <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Status da chave {aiProvider === 'gemini' ? 'Gemini' : 'OpenAI'}:</span>
+                  <span className="text-sm font-medium">Status {aiProvider === 'dual' ? 'Dual OpenAI + Claude' : `da chave ${aiProvider === 'gemini' ? 'Gemini' : 'OpenAI'}`}:</span>
                   {hasCurrentProviderKey ? (
                     <Badge className="text-xs bg-emerald-500/15 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20">
                       <Check className="w-3 h-3 mr-1" />
@@ -365,7 +374,7 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
                     </Badge>
                   )}
                 </div>
-                {hasCurrentProviderKey && (
+                {hasCurrentProviderKey && aiProvider !== 'dual' && (
                   <Button 
                     variant="ghost" 
                     size="sm" 
@@ -378,7 +387,7 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
               </div>
 
               {/* New API Key Input */}
-              <div className="space-y-2">
+              {aiProvider !== 'dual' && <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>{hasCurrentProviderKey ? 'Atualizar Chave API' : 'Adicionar Chave API'}</Label>
                   <a 
@@ -427,7 +436,7 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
                 <p className="text-xs text-muted-foreground">
                   Ao testar com sucesso, salvamos a chave automaticamente e o status será atualizado.
                 </p>
-              </div>
+              </div>}
             </div>
 
             {/* Anthropic (Claude) Key */}

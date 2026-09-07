@@ -24,6 +24,7 @@ type PoolAsset = {
   alt_text: string; semantic_filename: string; caption: string; semantic_tags: string[];
   usage_count: number; last_used_at: string | null; background_mode: "preserve" | "chroma_replace";
   background_prompt: string | null;
+  origin: "module" | "organization";
 };
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" } });
@@ -120,6 +121,39 @@ async function chooseUsableAsset(admin: any, body: ImageRequest, assets: PoolAss
 }
 
 async function pool(admin: any, userId: string, moduleKey: string, projectId?: string | null) {
+  if (projectId) {
+    const { data: project } = await admin.from("projects").select("id,user_id,organization_id")
+      .eq("id", projectId).maybeSingle();
+    if (!project) throw new Error("project_not_found");
+    const ownsProject = project.user_id === userId;
+    const { data: membership } = project.organization_id ? await admin.from("organization_members")
+      .select("user_id").eq("organization_id", project.organization_id).eq("user_id", userId).eq("status", "active").maybeSingle() : { data: null };
+    if (!ownsProject && !membership) throw new Error("project_access_denied");
+
+    const { count: electoralLinks } = await admin.from("electoral_portal_resources")
+      .select("id", { count: "exact", head: true }).eq("project_id", projectId);
+    if (!electoralLinks && project.organization_id) {
+      const { data: approved, error: approvedError } = await admin.from("organization_brand_assets")
+        .select("id,slot,master_storage_path,original_storage_path,usage_count,last_used_at")
+        .eq("organization_id", project.organization_id).eq("status", "ready")
+        .order("slot", { ascending: true }).limit(6);
+      if (approvedError) throw approvedError;
+      const assets: PoolAsset[] = (approved || []).map((asset: any) => ({
+        id: asset.id, slot: asset.slot, label: `Banco visual aprovado ${asset.slot}`,
+        source_type: "storage", bucket_name: "organization-brand-assets",
+        storage_path: asset.master_storage_path || asset.original_storage_path, external_url: null,
+        alt_text: "Fotografia institucional aprovada pelo titular para uso editorial",
+        semantic_filename: `foto-institucional-aprovada-${asset.slot}.webp`,
+        caption: "Fotografia institucional aprovada no banco visual da conta.", semantic_tags: [],
+        usage_count: Number(asset.usage_count || 0), last_used_at: asset.last_used_at,
+        background_mode: "preserve", background_prompt: null, origin: "organization",
+      }));
+      return {
+        policy: { required_asset_count: 6, allow_ai_generation: false, allow_background_editing: false, auto_select: true, hero_width: 1200, hero_height: 675, preferred_format: "webp" },
+        assets, assetScope: "organization" as const,
+      };
+    }
+  }
   let scoped: any = null;
   if (projectId) { const { data } = await admin.from("module_image_policies").select("*").eq("user_id", userId).eq("module_key", moduleKey).eq("project_id", projectId).maybeSingle(); scoped = data; }
   const { data: globalPolicy } = await admin.from("module_image_policies").select("*").eq("user_id", userId).eq("module_key", moduleKey).is("project_id", null).maybeSingle();
@@ -149,7 +183,7 @@ async function pool(admin: any, userId: string, moduleKey: string, projectId?: s
       };
     }
   }
-  const assets = (data || []) as PoolAsset[];
+  const assets = (data || []).map((asset: any) => ({ ...asset, origin: "module" })) as PoolAsset[];
   return { policy, assets, assetScope };
 }
 
@@ -236,10 +270,14 @@ Deno.serve(async (req: Request) => {
         finalImage = await backgroundEdit(keys.openai, original, selected.asset, body); source = "fixed_pool_background_edited"; edited = true;
       }
       const now = new Date().toISOString();
-      await Promise.all([
-        admin.from("module_image_assets").update({ usage_count: Number(selected.asset.usage_count || 0) + 1, last_used_at: now, updated_at: now }).eq("id", selected.asset.id).eq("user_id", userId),
-        admin.from("module_image_selection_logs").insert({ user_id: userId, module_key: moduleKey, project_id: body.projectId || null, article_id: body.articleId || null, asset_id: selected.asset.id, selector_provider: selected.provider, selector_model: selected.model, selection_reason: selected.reason.slice(0, 1000) }),
-      ]);
+      if (selected.asset.origin === "organization") {
+        await admin.from("organization_brand_assets").update({ usage_count: Number(selected.asset.usage_count || 0) + 1, last_used_at: now, updated_at: now }).eq("id", selected.asset.id);
+      } else {
+        await Promise.all([
+          admin.from("module_image_assets").update({ usage_count: Number(selected.asset.usage_count || 0) + 1, last_used_at: now, updated_at: now }).eq("id", selected.asset.id).eq("user_id", userId),
+          admin.from("module_image_selection_logs").insert({ user_id: userId, module_key: moduleKey, project_id: body.projectId || null, article_id: body.articleId || null, asset_id: selected.asset.id, selector_provider: selected.provider, selector_model: selected.model, selection_reason: selected.reason.slice(0, 1000) }),
+        ]);
+      }
       const meta = { source, module_key: moduleKey, asset_id: selected.asset.id, asset_scope: assetScope, pool_asset_count: assets.length, pool_required_count: required, pool_complete: assets.length >= required, unavailable_assets_skipped: assetFailures.length, slot: selected.asset.slot, background_mode: selected.asset.background_mode, background_edited: edited, synthetic_person_generation: false, alt_text: selected.asset.alt_text, semantic_filename: selected.asset.semantic_filename, caption: selected.asset.caption, target_hero: `${policy.hero_width || 1200}x${policy.hero_height || 630}`, preferred_format: policy.preferred_format || "webp", selection_reason: selected.reason };
       const persisted = await persistImage(admin, userId, finalImage);
       const persistedMeta = { ...meta, storage_bucket: "article-images", storage_path: persisted.path, content_hash: persisted.hash };
