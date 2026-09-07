@@ -80,8 +80,8 @@ describe("provider-reported token ledger", () => {
       "utf8",
     );
     expect(orchestrator).toContain("setUsageSink");
-    expect(orchestrator).toContain("prompt_tokens");
     expect(orchestrator).toContain("input_tokens");
+    expect(orchestrator).toContain("output_tokens");
     expect(resolver).toContain('source: "provider_reported_usage"');
   });
 });
