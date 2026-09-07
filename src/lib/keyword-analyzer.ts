@@ -5,6 +5,7 @@
 
 export interface KeywordData {
   keyword: string;
+  title?: string;
   categoria?: string;
   tipo?: string;
   cauda?: string;

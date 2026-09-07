@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { AnalyzedKeyword } from '@/lib/keyword-analyzer';
 import { BulkGenerationConfig } from '@/types/bulk-generation';
+import { initialArticleTitle, isValidEditorialKeyword } from '@/lib/keyword-import';
 
 export interface GenerationJob {
   id: string;
@@ -246,6 +247,7 @@ export function useBulkGeneration() {
     // Build config from bulk settings + keyword analysis
     const config = {
       keyword: job.keyword.keyword,
+      title: job.keyword.title || initialArticleTitle(job.keyword.keyword),
       type: 'blog',
       language: bulkConfig?.language || 'pt-BR',
       tone: bulkConfig?.tone || 'profissional',
@@ -253,7 +255,7 @@ export function useBulkGeneration() {
       pointOfView: bulkConfig?.pointOfView || 'terceira-singular',
       secondaryKeywords: '',
       // Advanced SEO fields for new prompt system
-      segment: bulkConfig?.segment || 'general',
+      segment: job.keyword.categoria || bulkConfig?.segment || 'general',
       contentType: bulkConfig?.contentType || 'how-to',
       goal: bulkConfig?.goal || 'inform',
       intentType: bulkConfig?.intentType || 'informational',
@@ -413,6 +415,16 @@ export function useBulkGeneration() {
 
     // Use ref to get fresh jobs list (avoids stale closure)
     const pendingJobs = jobsRef.current.filter(j => j.status === 'pending');
+    const invalidJobs = pendingJobs.filter((job) => !isValidEditorialKeyword(job.keyword.keyword));
+    if (invalidJobs.length) {
+      toast({
+        title: 'Importação bloqueada',
+        description: `${invalidJobs.length} linha(s) não contêm palavra-chave textual. Verifique se uma coluna de índice foi selecionada.`,
+        variant: 'destructive',
+      });
+      setState((previous) => ({ ...previous, isRunning: false }));
+      return;
+    }
     const batchId = crypto.randomUUID();
     setState(prev => ({ ...prev, activeBatchId: batchId }));
     let completedCount = 0;
@@ -442,7 +454,7 @@ export function useBulkGeneration() {
         const rows = batch.map((job) => ({
           user_id: session.user.id,
           keyword: job.keyword.keyword,
-          title: `${job.keyword.keyword}: Guia Completo ${new Date().getFullYear()}`,
+          title: job.keyword.title || initialArticleTitle(job.keyword.keyword),
           status: 'draft' as const,
           type: 'blog' as const,
           project_id: projectId && projectId !== 'none' ? projectId : null,

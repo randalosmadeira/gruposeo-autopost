@@ -15,23 +15,23 @@ import { useBulkGeneration } from '@/hooks/useBulkGeneration';
 import { useProjects } from '@/hooks/useProjects';
 import { analyzeKeywords, type AnalyzedKeyword, type KeywordData } from '@/lib/keyword-analyzer';
 import { validateBulkGenerationSelection } from '@/lib/bulk-generation-validation';
+import { findKeywordColumn, importCellText, isValidEditorialKeyword, type SpreadsheetRow } from '@/lib/keyword-import';
 import { defaultBulkConfig } from '@/types/bulk-generation';
 
 type Stage = 'input' | 'review';
-type SpreadsheetRow = Record<string, unknown>;
 
 const ACCEPTED_EXTENSIONS = ['xlsx', 'xls', 'csv', 'tsv', 'ods'];
 const HEADER_ALIASES = {
-  keyword: ['keyword', 'palavra-chave', 'palavra chave', 'termo', 'query', 'search term'],
+  title: ['title', 'titulo', 'título', 'titulo seo', 'título seo', 'headline'],
   volume: ['volume', 'search volume', 'vol', 'buscas mensais'],
   dificuldade: ['difficulty', 'kd', 'dificuldade'],
   intencao: ['intent', 'intenção', 'intencao'],
   prioridade: ['priority', 'prioridade'],
-  categoria: ['category', 'categoria', 'grupo', 'cluster'],
+  categoria: ['category', 'categoria', 'grupo', 'cluster', 'segmento', 'segment'],
 } as const;
 
 const normalizeHeader = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-const asText = (value: unknown) => value == null ? '' : String(value).trim();
+const asText = importCellText;
 
 function findColumn(headers: string[], aliases: readonly string[]) {
   const normalizedAliases = aliases.map(normalizeHeader);
@@ -41,7 +41,9 @@ function findColumn(headers: string[], aliases: readonly string[]) {
 function rowsToKeywords(rows: SpreadsheetRow[]): KeywordData[] {
   if (!rows.length) return [];
   const headers = Object.keys(rows[0]);
-  const keywordColumn = findColumn(headers, HEADER_ALIASES.keyword) || headers.find((header) => rows.some((row) => asText(row[header]))) || headers[0];
+  const keywordColumn = findKeywordColumn(rows);
+  if (!keywordColumn) return [];
+  const titleColumn = findColumn(headers, HEADER_ALIASES.title);
   const volumeColumn = findColumn(headers, HEADER_ALIASES.volume);
   const difficultyColumn = findColumn(headers, HEADER_ALIASES.dificuldade);
   const intentColumn = findColumn(headers, HEADER_ALIASES.intencao);
@@ -50,12 +52,13 @@ function rowsToKeywords(rows: SpreadsheetRow[]): KeywordData[] {
 
   return rows.map((row) => ({
     keyword: asText(row[keywordColumn]),
+    title: titleColumn && titleColumn !== keywordColumn && isValidEditorialKeyword(row[titleColumn]) ? asText(row[titleColumn]) : undefined,
     volume: volumeColumn ? asText(row[volumeColumn]) : undefined,
     dificuldade: difficultyColumn ? asText(row[difficultyColumn]) : undefined,
     intencao: intentColumn ? asText(row[intentColumn]) : undefined,
     prioridade: priorityColumn ? asText(row[priorityColumn]) : undefined,
     categoria: categoryColumn ? asText(row[categoryColumn]) : undefined,
-  })).filter((row) => row.keyword);
+  })).filter((row) => isValidEditorialKeyword(row.keyword));
 }
 
 function parsePastedKeywords(text: string): KeywordData[] {
@@ -67,7 +70,7 @@ function parsePastedKeywords(text: string): KeywordData[] {
     dificuldade: asText(parts[3]) || undefined,
     prioridade: asText(parts[4]) || undefined,
     intencao: asText(parts[5]) || undefined,
-  })).filter((row) => row.keyword);
+  })).filter((row) => isValidEditorialKeyword(row.keyword));
 }
 
 export default function BulkKeywordGenerator() {
@@ -124,7 +127,7 @@ export default function BulkKeywordGenerator() {
         rows = XLSX.utils.sheet_to_json<SpreadsheetRow>(firstSheet, { defval: '' });
       }
       const parsedKeywords = rowsToKeywords(rows);
-      if (!parsedKeywords.length) throw new Error('Nenhuma palavra-chave foi encontrada.');
+      if (!parsedKeywords.length) throw new Error('Nenhuma palavra-chave textual foi encontrada. Use uma coluna Palavra-chave, Título, Pauta, Assunto ou Tema. Colunas de índice numérico são ignoradas.');
       setFileName(file.name);
       applyKeywords(parsedKeywords);
     } catch (cause) {

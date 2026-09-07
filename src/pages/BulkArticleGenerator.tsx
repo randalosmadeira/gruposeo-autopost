@@ -46,6 +46,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ToneVoiceConfig, AIModelSelector, ContentStructureConfig, ArticleListManager } from '@/components/shared';
 import { BulkGenerationHistory } from '@/components/bulk-generator';
 import type { ArticleItem } from '@/components/shared/ArticleListManager';
+import { initialArticleTitle, isValidEditorialKeyword } from '@/lib/keyword-import';
 
 // Extended article type for generation tracking
 interface ArticleRow extends ArticleItem {
@@ -195,6 +196,15 @@ export default function BulkArticleGenerator() {
       });
       return;
     }
+    const invalidArticles = toGenerate.filter((article) => !isValidEditorialKeyword(article.keyword));
+    if (invalidArticles.length) {
+      toast({
+        title: 'Palavra-chave inválida',
+        description: 'Remova índices numéricos e mantenha apenas palavras-chave ou pautas textuais.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsGenerating(true);
     
@@ -214,7 +224,7 @@ export default function BulkArticleGenerator() {
           .insert({
             user_id: session.user.id,
             keyword: article.keyword,
-            title: article.title || `${article.keyword}: Guia Completo ${new Date().getFullYear()}`,
+            title: article.title || initialArticleTitle(article.keyword),
             status: 'generating',
             type: 'blog',
             config: { 
@@ -232,23 +242,28 @@ export default function BulkArticleGenerator() {
         const selectedProject = globalConfig.projectId 
           ? projects.find(p => p.id === globalConfig.projectId) 
           : connectedProjects.length > 0 ? connectedProjects[0] : null;
+        const projectRecord = selectedProject as unknown as Record<string, unknown> | null;
+        const projectValue = (key: string) => {
+          const value = projectRecord?.[key];
+          return typeof value === 'string' && value.trim() ? value : undefined;
+        };
         const projectConfigData = selectedProject ? {
-          nicho: (selectedProject as any).nicho || undefined,
-          compliance_rules: (selectedProject as any).compliance_rules || undefined,
-          empresa_nome: (selectedProject as any).empresa_nome || undefined,
-          empresa_telefone: (selectedProject as any).empresa_telefone || undefined,
-          empresa_endereco: (selectedProject as any).empresa_endereco || undefined,
-          empresa_whatsapp: (selectedProject as any).empresa_whatsapp || undefined,
-          social_instagram: (selectedProject as any).social_instagram || undefined,
-          social_youtube: (selectedProject as any).social_youtube || undefined,
-          social_linkedin: (selectedProject as any).social_linkedin || undefined,
-          social_twitter: (selectedProject as any).social_twitter || undefined,
-          social_tiktok: (selectedProject as any).social_tiktok || undefined,
-          social_google_maps: (selectedProject as any).social_google_maps || undefined,
-          social_linktree: (selectedProject as any).social_linktree || undefined,
-          cta_comunidade: (selectedProject as any).cta_comunidade || undefined,
-          cta_conclusao: (selectedProject as any).cta_conclusao || undefined,
-          cta_leads: (selectedProject as any).cta_leads || undefined,
+          nicho: projectValue('nicho'),
+          compliance_rules: projectValue('compliance_rules'),
+          empresa_nome: projectValue('empresa_nome'),
+          empresa_telefone: projectValue('empresa_telefone'),
+          empresa_endereco: projectValue('empresa_endereco'),
+          empresa_whatsapp: projectValue('empresa_whatsapp'),
+          social_instagram: projectValue('social_instagram'),
+          social_youtube: projectValue('social_youtube'),
+          social_linkedin: projectValue('social_linkedin'),
+          social_twitter: projectValue('social_twitter'),
+          social_tiktok: projectValue('social_tiktok'),
+          social_google_maps: projectValue('social_google_maps'),
+          social_linktree: projectValue('social_linktree'),
+          cta_comunidade: projectValue('cta_comunidade'),
+          cta_conclusao: projectValue('cta_conclusao'),
+          cta_leads: projectValue('cta_leads'),
         } : undefined;
 
         // Call generation function with full globalConfig including tone/voice
@@ -258,7 +273,7 @@ export default function BulkArticleGenerator() {
             source: 'bulk',
             config: {
               keyword: article.keyword,
-              title: article.title || `${article.keyword}: Guia Completo ${new Date().getFullYear()}`,
+              title: article.title || initialArticleTitle(article.keyword),
               wordCount: article.size,
               type: 'blog',
               // Tone and voice settings from globalConfig
@@ -310,7 +325,7 @@ export default function BulkArticleGenerator() {
       title: 'Geração concluída!',
       description: `${toGenerate.length} artigos foram processados.`,
     });
-  }, [filledArticles, globalConfig, toast]);
+  }, [connectedProjects, filledArticles, globalConfig, projects, toast]);
 
   const getStatusBadge = (status: ArticleRow['status']) => {
     switch (status) {
@@ -538,7 +553,7 @@ export default function BulkArticleGenerator() {
                   </div>
                   <div>
                     <span className="text-muted-foreground">Título:</span>
-                    <p className="font-medium">{previewArticle.title || `${previewArticle.keyword}: Guia Completo`}</p>
+                    <p className="font-medium">{previewArticle.title || initialArticleTitle(previewArticle.keyword)}</p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Tamanho:</span>

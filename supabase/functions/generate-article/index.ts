@@ -54,6 +54,7 @@ type Band = { label: string; min: number; max: number; purpose: string };
 
 const REVIEW_MARKER = /\[(?:VERIFICAR|VALIDAR|CONFIRMAR|RECONSULTAR)\b[^\]\r\n]{0,300}\]/i;
 const SOURCE_SIGNAL = /^ZICA_NEEDS_PRIMARY_SOURCE\s*:\s*(.+)$/im;
+const NUMERIC_ONLY_KEYWORD = /^\s*\d+\s*$/;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -96,7 +97,7 @@ function buildPrompt(config: ArticleConfig, band: Band) {
   return `Produza somente conteúdo editorial final publicável, sem explicar o processo interno e sem inserir mensagens de revisão no corpo.
 
 ASSUNTO PRINCIPAL: ${config.keyword}
-TÍTULO SUGERIDO: ${config.title || "crie um título claro, específico e fiel ao assunto"}
+TÍTULO DE REFERÊNCIA: ${config.title || config.keyword}
 IDIOMA: ${config.language || "pt-BR"}
 TOM: ${config.tone || "profissional e acessível"}
 PONTO DE VISTA: ${config.pointOfView || "natural para a intenção"}
@@ -120,6 +121,10 @@ REGRAS GEO/AEO INTERNAS DO ZICA.AI:
 9. ${config.includeFaq === false ? "Não inclua FAQ." : `Inclua FAQ somente se houver perguntas úteis e respondíveis pelo conteúdo, com até ${config.faqCount || 5} itens.`}
 10. Não use keyword stuffing, alegações sem fonte ou texto genérico de preenchimento.
 11. Não escreva comentários técnicos TITLE_SEO, META_DESCRIPTION, JSON, prompts, TODOs ou qualquer metadado interno no corpo. Título SEO e meta description são produzidos por outra etapa do pipeline.
+12. Preserve integralmente o assunto, a intenção e o segmento informados. Não troque a pauta por tema adjacente.
+13. Se produzir título editorial em metadado ou texto auxiliar, ele deve conter a palavra-chave principal de forma natural e manter seu sentido.
+14. Não acrescente ano, número, percentual, quantidade ou estatística que não exista na palavra-chave ou nas fontes fornecidas.
+15. Não padronize títulos com “Guia Completo”, “Guia Definitivo” ou fórmulas genéricas semelhantes.
 
 REGRAS FACTUAIS E DE PUBLICAÇÃO:
 - Não invente fatos, números, decisões, estudos, citações, pessoas, leis ou fontes.
@@ -155,6 +160,9 @@ Deno.serve(async (req: Request) => {
     const userId = actor.userId;
     const config = (body?.config || body) as ArticleConfig;
     if (!config?.keyword?.trim()) return json({ error: "keyword é obrigatório", request_id: requestId }, 400);
+    if (NUMERIC_ONLY_KEYWORD.test(config.keyword) || !/\p{L}/u.test(config.keyword)) {
+      return json({ error: "Palavra-chave inválida: índices numéricos não podem gerar conteúdo.", code: "invalid_editorial_keyword", request_id: requestId }, 422);
+    }
 
     const serviceKey = String(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || "");
     if (!supabaseUrl || !serviceKey) return json({ error: "Backend incompleto", request_id: requestId }, 500);
