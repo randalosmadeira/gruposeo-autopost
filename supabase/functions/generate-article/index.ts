@@ -13,6 +13,7 @@ const corsHeaders = {
 type WordProfile = "short" | "medium" | "long" | "very-long";
 interface ArticleConfig {
   keyword: string;
+  batchId?: string;
   title?: string;
   secondaryKeywords?: string;
   wordCount?: WordProfile;
@@ -166,6 +167,7 @@ Deno.serve(async (req: Request) => {
       const projectId = config.projectId || article.project_id || null;
       const { error: queueError } = await admin.from("zica_brain_jobs").upsert({
         user_id: userId, project_id: projectId, article_id: article.id,
+        batch_id: config.batchId || null,
         job_type: "article_generate", status: "queued", priority: 85, max_attempts: 3,
         idempotency_key: `article-generate:${article.id}:v1`,
         payload: { config: { ...config, projectId, articleId: article.id } },

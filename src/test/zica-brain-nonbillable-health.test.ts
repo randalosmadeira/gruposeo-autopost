@@ -17,8 +17,29 @@ describe("zica brain provider health", () => {
     expect(providerHealth).not.toContain("api.anthropic.com/v1/messages");
     expect(providerHealth).toContain('billable_probe: false');
     expect(providerHealth).toContain('mode: "non_billable_configuration_check"');
+    expect(providerHealth).toContain('fetchUserKeys(userId)');
+    expect(providerHealth).not.toContain('.select("openai_api_key,anthropic_api_key")');
     expect(source).toContain("bucket(1440)");
     expect(source).toContain('Deno.env.get("SUPABASE_SECRET_KEY")');
+  });
+});
+
+describe("durable bulk article queue", () => {
+  it("accepts article generation jobs and carries a shared batch id", () => {
+    const migration = readFileSync(
+      resolve(process.cwd(), "supabase/migrations/20260907004000_reactivate_ceo_generation_providers.sql"),
+      "utf8",
+    );
+    const generator = readFileSync(
+      resolve(process.cwd(), "supabase/functions/generate-article/index.ts"),
+      "utf8",
+    );
+    expect(migration).toContain("'article_generate'");
+    expect(migration).toContain("control_zica_brain_batch");
+    expect(migration).toContain("'pause'");
+    expect(migration).toContain("'resume'");
+    expect(migration).toContain("'reprocess'");
+    expect(generator).toContain("batch_id: config.batchId || null");
   });
 });
 

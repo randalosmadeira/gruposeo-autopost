@@ -3,10 +3,13 @@ import { useSettings } from '@/hooks/useSettings';
 import { InstitutionalInfo } from '@/components/shared/InstitutionalInfo';
 import { ProfileIdentityCard } from '@/components/settings/ProfileIdentityCard';
 
-import { Settings, UserRound, Globe, Cpu, FileCode2 } from 'lucide-react';
+import { Settings, UserRound, Globe, Cpu, FileCode2, Download, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PLUGIN_VERSION } from '@/lib/plugin-version';
+
+const WORDPRESS_PLUGIN_DOWNLOAD = `/downloads/zica-posts-${PLUGIN_VERSION}.zip?v=${PLUGIN_VERSION}`;
 
 const AIConfigCard = lazy(() => import('@/components/settings/AIConfigCard').then((module) => ({ default: module.AIConfigCard })));
 const WordPressSitesCard = lazy(() => import('@/components/settings/WordPressSitesCard').then((module) => ({ default: module.WordPressSitesCard })));
@@ -73,6 +76,22 @@ export default function SettingsPage({ mode = 'account' }: { mode?: SettingsMode
           <PromptTemplatesCard />
         </> : null}
         {mode === 'integrations' ? <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Plugin WordPress</CardTitle>
+              <CardDescription>Baixe a versão atual do conector ou consulte os demais pacotes e instruções de instalação.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-3">
+              <Button asChild>
+                <a href={WORDPRESS_PLUGIN_DOWNLOAD} download={`zica-posts-${PLUGIN_VERSION}.zip`}>
+                  <Download className="mr-2 h-4 w-4" /> Baixar Zica Posts {PLUGIN_VERSION}
+                </a>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/wordpress-plugin"><ExternalLink className="mr-2 h-4 w-4" /> Ver todos os downloads</Link>
+              </Button>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle>Geração em massa</CardTitle>
