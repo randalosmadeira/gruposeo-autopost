@@ -151,18 +151,11 @@ Deno.serve(async (req) => {
     if (serviceRoleKey) {
       const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
       if (result.valid) {
-        const keyColumns: Record<Provider, string> = {
-          openai: "openai_api_key",
-          gemini: "gemini_api_key",
-          anthropic: "anthropic_api_key",
-          serper: "serper_api_key",
-        };
-        const { data: persisted, error: persistError } = await admin
-          .from("user_settings")
-          .update({ [keyColumns[provider]]: apiKey, updated_at: new Date().toISOString() })
-          .eq("user_id", user.id)
-          .select("updated_at")
-          .maybeSingle();
+        const { data: persisted, error: persistError } = await admin.rpc("persist_validated_user_ai_key", {
+          p_user_id: user.id,
+          p_provider: provider,
+          p_secret: apiKey,
+        });
         if (persistError || !persisted) throw new Error("Não foi possível confirmar a gravação da chave validada");
         saved = true;
       }

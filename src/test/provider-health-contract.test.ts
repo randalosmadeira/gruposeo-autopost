@@ -40,7 +40,7 @@ describe('provider health security contract', () => {
   });
 
   it('confirms the validated credential was persisted before reporting success', () => {
-    expect(validation).toContain('.select("updated_at")');
+    expect(validation).toContain('admin.rpc("persist_validated_user_ai_key"');
     expect(validation).toContain('if (persistError || !persisted)');
     expect(validation).toContain('saved,');
   });
