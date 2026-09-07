@@ -59,7 +59,7 @@ export type TaskType =
 
 // Public OpenAI API model. `gpt-5.6-sol` is an internal Codex runtime name and
 // is not a valid model identifier for customer API keys.
-const OPENAI_TEXT = 'gpt-5';
+const OPENAI_TEXT = 'gpt-4.1';
 const CLAUDE_TEXT = 'claude-sonnet-4-6';
 const OPENAI_IMAGE = 'gpt-image-2';
 
@@ -243,7 +243,7 @@ export class AIOrchestrator {
   }
 
   private async callOpenAI(model: string, key: string, messages: AIMessage[], options?: AICallOptions): Promise<{ content: string; usage: AIUsage; model: string }> {
-    const candidates = model === 'gpt-5' ? ['gpt-5', 'gpt-5-mini'] : [model];
+    const candidates = model === 'gpt-4.1' ? ['gpt-4.1', 'gpt-4o'] : [model];
     let lastError: Error | null = null;
     for (const candidate of candidates) {
       const response = await fetch(`${OPENAI_API_BASE}/responses`, {

@@ -46,9 +46,9 @@ const GEMINI_MODELS = [
 ];
 
 const OPENAI_MODELS = [
-  { value: 'gpt-5', label: 'gpt-5' },
-  { value: 'gpt-5-mini', label: 'gpt-5-mini' },
-  { value: 'gpt-5-nano', label: 'gpt-5-nano' },
+  { value: 'gpt-4.1', label: 'gpt-4.1' },
+  { value: 'gpt-4.1-mini', label: 'gpt-4.1-mini' },
+  { value: 'gpt-4o', label: 'gpt-4o' },
 ];
 
 const GEMINI_IMAGE_MODELS = [
@@ -124,8 +124,8 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
       setContentModel('gemini-3-pro-preview');
       setImageModel('gemini-3-pro-image-preview');
     } else {
-      setTitleModel('gpt-5');
-      setContentModel('gpt-5');
+      setTitleModel('gpt-4.1');
+      setContentModel('gpt-4.1');
       setImageModel('dall-e-3');
     }
   };

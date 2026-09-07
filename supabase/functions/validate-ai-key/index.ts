@@ -23,7 +23,7 @@ async function validateOpenAI(apiKey: string): Promise<ValidationResult> {
   // The model-list endpoint can succeed even when the credential cannot run the
   // endpoint/model used by production. This explicit user-triggered check makes
   // one tiny real generation and never returns or persists the provider body.
-  const model = "gpt-5-mini";
+  const model = "gpt-4.1-mini";
   const resp = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
