@@ -29,6 +29,13 @@ export interface BulkGenerationState {
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 5000;
+const PLACEHOLDER_BATCH_SIZE = 50;
+
+function chunkJobs<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
+  return chunks;
+}
 
 // Parse SSE stream and accumulate content
 async function parseSSEStream(
@@ -425,32 +432,48 @@ export function useBulkGeneration() {
     // This makes them visible in the articles list immediately
     const articleIdMap = new Map<string, string>(); // job.id -> article.id
     
-    for (const job of pendingJobs) {
-      try {
-        const { data: article, error } = await supabase
+    try {
+      for (const batch of chunkJobs(pendingJobs, PLACEHOLDER_BATCH_SIZE)) {
+        const rows = batch.map((job) => ({
+          user_id: session.user.id,
+          keyword: job.keyword.keyword,
+          title: `${job.keyword.keyword}: Guia Completo ${new Date().getFullYear()}`,
+          status: 'draft' as const,
+          type: 'blog' as const,
+          project_id: projectId && projectId !== 'none' ? projectId : null,
+          config: { bulkGenerated: true, bulkJobId: job.id, ...bulkConfig },
+        }));
+        const { data: articles, error } = await supabase
           .from('articles')
-          .insert({
-            user_id: session.user.id,
-            keyword: job.keyword.keyword,
-            title: `${job.keyword.keyword}: Guia Completo ${new Date().getFullYear()}`,
-            status: 'draft', // Start as draft (Na Fila)
-            type: 'blog',
-            project_id: projectId && projectId !== 'none' ? projectId : null,
-            config: { bulkGenerated: true, ...bulkConfig },
-          })
-          .select('id')
-          .single();
-
-        if (!error && article) {
-          articleIdMap.set(job.id, article.id);
-          // Update job with article ID
-          const updatedJob = { ...job, articleId: article.id };
-          jobsRef.current = jobsRef.current.map(j => j.id === job.id ? updatedJob : j);
+          .insert(rows)
+          .select('id,config');
+        if (error) throw error;
+        for (const article of articles || []) {
+          const config = article.config && typeof article.config === 'object' && !Array.isArray(article.config)
+            ? article.config as Record<string, unknown>
+            : null;
+          const bulkJobId = typeof config?.bulkJobId === 'string' ? config.bulkJobId : '';
+          if (bulkJobId) articleIdMap.set(bulkJobId, article.id);
         }
-      } catch (e) {
-        console.error('Failed to create article placeholder:', e);
       }
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Falha ao criar a fila de artigos';
+      jobsRef.current = jobsRef.current.map((job) => ({ ...job, status: 'error', error: message }));
+      setState((previous) => ({
+        ...previous,
+        isRunning: false,
+        errorCount: pendingJobs.length,
+        jobs: previous.jobs.map((job) => ({ ...job, status: 'error', error: message })),
+      }));
+      abortControllerRef.current = null;
+      toast({ title: 'Não foi possível criar a fila', description: message, variant: 'destructive' });
+      return;
     }
+
+    jobsRef.current = jobsRef.current.map((job) => {
+      const articleId = articleIdMap.get(job.id);
+      return articleId ? { ...job, articleId } : job;
+    });
     
     // STEP 2: Enqueue quickly. The Zica Brain owns provider retries, persistence
     // and image generation, so closing this browser no longer loses the batch.

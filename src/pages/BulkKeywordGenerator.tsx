@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useBulkGeneration } from '@/hooks/useBulkGeneration';
 import { useProjects } from '@/hooks/useProjects';
 import { analyzeKeywords, type AnalyzedKeyword, type KeywordData } from '@/lib/keyword-analyzer';
+import { validateBulkGenerationSelection } from '@/lib/bulk-generation-validation';
 import { defaultBulkConfig } from '@/types/bulk-generation';
 
 type Stage = 'input' | 'review';
@@ -97,6 +98,10 @@ export default function BulkKeywordGenerator() {
   }, []);
 
   const parseFile = useCallback(async (file: File) => {
+    if (!projectId) {
+      setError('Selecione um projeto antes de importar a planilha.');
+      return;
+    }
     const extension = file.name.split('.').pop()?.toLowerCase() || '';
     if (!ACCEPTED_EXTENSIONS.includes(extension)) {
       setError('Formato não aceito. Use XLSX, XLS, CSV, TSV ou ODS.');
@@ -127,9 +132,10 @@ export default function BulkKeywordGenerator() {
     } finally {
       setIsParsing(false);
     }
-  }, [applyKeywords]);
+  }, [applyKeywords, projectId]);
 
   const analyzePasted = () => {
+    if (!projectId) { setError('Selecione um projeto antes de analisar a lista.'); return; }
     const parsed = parsePastedKeywords(rawKeywords);
     if (!parsed.length) { setError('Cole ao menos uma palavra-chave.'); return; }
     applyKeywords(parsed);
@@ -142,7 +148,12 @@ export default function BulkKeywordGenerator() {
   });
 
   const startGeneration = () => {
-    if (!projectId || !selectedKeywords.length) return;
+    const validationError = validateBulkGenerationSelection(projectId, Boolean(project), selectedKeywords.length);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError('');
     const config = {
       ...defaultBulkConfig,
       projectId,
@@ -173,7 +184,7 @@ export default function BulkKeywordGenerator() {
               <Label>Projeto obrigatório</Label>
               <Select value={projectId} onValueChange={setProjectId}><SelectTrigger><SelectValue placeholder="Selecionar projeto" /></SelectTrigger><SelectContent>{projects.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select>
             </div>
-            <button type="button" className="flex min-h-44 w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-muted-foreground/30 p-6 text-center transition hover:border-primary" onClick={() => inputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void parseFile(file); }} disabled={isParsing}>
+            <button type="button" className="flex min-h-44 w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-muted-foreground/30 p-6 text-center transition hover:border-primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => inputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void parseFile(file); }} disabled={isParsing || !projectId}>
               {isParsing ? <Loader2 className="h-8 w-8 animate-spin text-primary" /> : <Upload className="h-8 w-8 text-primary" />}
               <span className="font-semibold">Arraste a planilha ou clique para selecionar</span>
               <span className="text-sm text-muted-foreground">XLSX, XLS, CSV, TSV e ODS. Compatível com exportações comuns de ferramentas SEO.</span>
@@ -190,8 +201,9 @@ export default function BulkKeywordGenerator() {
           <Card>
             <CardHeader className="flex-row items-start justify-between gap-4"><div><CardTitle>2. Revisão da fila</CardTitle><CardDescription>{selectedKeywords.length} de {keywords.length} palavras-chave selecionadas para {project?.name}.</CardDescription></div><Button variant="outline" onClick={reset}><RotateCcw className="mr-2 h-4 w-4" />Reimportar</Button></CardHeader>
             <CardContent>
+              {error && <p role="alert" className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"><AlertCircle className="h-4 w-4" />{error}</p>}
               <div className="max-h-[520px] overflow-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead className="w-12" /><TableHead>Palavra-chave</TableHead><TableHead>Tipo sugerido</TableHead><TableHead>Intenção</TableHead><TableHead>CTA/Destino</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{keywords.map((item) => <TableRow key={item.keyword}><TableCell><Checkbox checked={selected.has(item.keyword)} onCheckedChange={() => toggleKeyword(item.keyword)} /></TableCell><TableCell className="font-medium">{item.keyword}</TableCell><TableCell><Badge variant="outline">{item.tipoConteudoLabel}</Badge></TableCell><TableCell>{item.intencao}</TableCell><TableCell>{project?.name || 'Projeto'}</TableCell><TableCell><span className="flex items-center gap-1 text-xs text-success"><CheckCircle2 className="h-3.5 w-3.5" />Pronto para fila</span></TableCell></TableRow>)}</TableBody></Table></div>
-              <Button className="mt-6 w-full gap-2" size="lg" disabled={!selectedKeywords.length || bulk.isRunning} onClick={startGeneration}>{bulk.isRunning ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5" />}{bulk.isRunning ? 'Gerando artigos...' : `Iniciar geração em massa (${selectedKeywords.length})`}</Button>
+              <Button className="mt-6 w-full gap-2" size="lg" disabled={!projectId || !project || !selectedKeywords.length || bulk.isRunning} onClick={startGeneration}>{bulk.isRunning ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5" />}{bulk.isRunning ? 'Enviando artigos para a fila...' : `Iniciar geração em massa (${selectedKeywords.length})`}</Button>
             </CardContent>
           </Card>
 
