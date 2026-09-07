@@ -29,4 +29,13 @@ describe('provider health security contract', () => {
     expect(validation).toContain('PROVIDER_CAPABILITIES[provider]');
     expect(validation).not.toContain('text.slice');
   });
+
+  it('validates OpenAI with a tiny real generation instead of a misleading model-list request', () => {
+    expect(validation).toContain('api.openai.com/v1/responses');
+    expect(validation).toContain('model = "gpt-5-mini"');
+    expect(validation).toContain('max_output_tokens: 32');
+    expect(validation).toContain('AbortSignal.timeout(15000)');
+    expect(validation).toContain('"functional_generation"');
+    expect(validation).not.toContain('api.openai.com/v1/models');
+  });
 });
