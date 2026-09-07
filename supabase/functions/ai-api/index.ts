@@ -104,23 +104,25 @@ Deno.serve(async (req) => {
       // === GENERATE ARTICLE TITLE ===
       case "generate-title": {
         const selectedModel = model || "flash";
+        const editorialKeyword = String(prompt || "").trim();
+        if (!editorialKeyword || /^\d+$/.test(editorialKeyword) || !/\p{L}/u.test(editorialKeyword)) {
+          return new Response(JSON.stringify({ error: "Palavra-chave editorial inválida", code: "invalid_editorial_keyword", request_id: requestId }), {
+            status: 422,
+            headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+          });
+        }
         
-        const titlePrompt = `Você é um copywriter de elite especializado em SEO e CTR. Crie 8 títulos ÚNICOS e IRRESISTÍVEIS para um artigo sobre: "${prompt}"
+        const titlePrompt = `Crie 8 títulos editoriais claros e específicos para um artigo sobre: "${editorialKeyword}"
 
 REGRAS:
 1. PROIBIDO: "Guia Completo", "Guia Definitivo", "Tudo que Você Precisa Saber"
 2. PROIBIDO: Títulos genéricos que serviriam para qualquer tema
 3. Entre 45-65 caracteres cada
-4. Incluir "${prompt}" de forma natural
-5. Cada título deve usar uma técnica DIFERENTE dentre:
-   - Números ímpares: "7 Segredos", "11 Erros"
-   - Curiosidade: "O Método Que... (e Por Que Funciona)"
-   - Negativo: "Pare de...", "O Erro #1 em..."
-   - Prova social: "O Que 93% dos Especialistas Fazem"
-   - Benefício: "Como Triplicar...", "Reduza 40%"
-   - Ruptura: "Esqueça Tudo Sobre..."
-   - Autoridade: "Segundo Especialistas..."
-   - FOMO: "O Que Seus Concorrentes Já Sabem"
+4. Incluir "${editorialKeyword}" de forma natural e preservar integralmente seu sentido e segmento
+5. Não trocar a pauta por tema adjacente
+6. Não inventar ano, número, percentual, quantidade, estatística, autoridade ou promessa
+7. Se a palavra-chave contiver número legítimo, preservá-lo sem criar outros
+8. Variar a redação sem usar um molde repetitivo
 
 Retorne APENAS os 8 títulos, um por linha, numerados de 1 a 8. Sem explicações.`;
 
