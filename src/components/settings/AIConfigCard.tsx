@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Progress } from '@/components/ui/progress';
 import {
   Select,
   SelectContent,
@@ -15,8 +14,9 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { Sparkles, Eye, EyeOff, ExternalLink, Infinity, Loader2, Check, X, Search, Brain } from 'lucide-react';
+import { Sparkles, Eye, EyeOff, ExternalLink, Infinity as InfinityIcon, Loader2, Check, X, Search, Brain } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { ProviderHealthPanel } from './ProviderHealthPanel';
 
 const VALIDATE_AI_KEY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-ai-key`;
 
@@ -108,13 +108,6 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
     ? settings?.has_gemini_key 
     : settings?.has_openai_key;
 
-  const integrationsConfigured = 
-    (settings?.has_openai_key ? 1 : 0) + 
-    (settings?.has_gemini_key ? 1 : 0) + 
-    (settings?.has_anthropic_key ? 1 : 0) + 
-    (settings?.has_serper_key ? 1 : 0);
-  const integrationsProgress = (integrationsConfigured / 4) * 100;
-
   const handleProviderChange = (provider: string) => {
     setAiProvider(provider);
     setNewApiKey(''); // Clear the input when switching providers
@@ -185,6 +178,7 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
         };
         await onSave({ [keyMap[aiProvider]]: newApiKey });
         setNewApiKey('');
+        window.dispatchEvent(new Event('provider-health-refresh'));
 
         toast({ title: 'Chave salva!', description: 'Status atualizado com sucesso.' });
       } else {
@@ -231,6 +225,7 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
         const dbKey = provider === 'anthropic' ? 'anthropic_api_key' : 'serper_api_key';
         await onSave({ [dbKey]: key });
         clearKey();
+        window.dispatchEvent(new Event('provider-health-refresh'));
         toast({ title: '✓ Chave validada e salva!', description: data.message });
       } else {
         toast({ title: 'Chave inválida', description: data?.message, variant: 'destructive' });
@@ -299,7 +294,7 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
               </p>
             </div>
           </div>
-          <Infinity className="w-5 h-5 text-primary" />
+          <InfinityIcon className="w-5 h-5 text-primary" />
         </div>
 
         {byokEnabled && (
@@ -352,31 +347,7 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
 
             {/* API Key Status and Update */}
             <div className="space-y-3">
-              {/* Integrations health */}
-              <div className="p-3 bg-muted/30 rounded-lg border space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Saúde das integrações</span>
-                  <span className="text-xs text-muted-foreground">
-                    {integrationsConfigured}/4 configuradas
-                  </span>
-                </div>
-                <Progress value={integrationsProgress} />
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {[
-                    { label: 'Gemini', active: settings?.has_gemini_key },
-                    { label: 'OpenAI', active: settings?.has_openai_key },
-                    { label: 'Claude', active: settings?.has_anthropic_key },
-                    { label: 'Serper', active: settings?.has_serper_key },
-                  ].map(({ label, active }) => (
-                    <Badge key={label} className={`text-xs ${active 
-                      ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' 
-                      : 'bg-red-500/15 text-red-500 border-red-500/30'}`}>
-                      {active ? <Check className="w-3 h-3 mr-1" /> : <X className="w-3 h-3 mr-1" />}
-                      {label}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
+              <ProviderHealthPanel />
 
               {/* Current key status */}
               <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
