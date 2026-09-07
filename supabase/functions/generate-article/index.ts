@@ -179,6 +179,7 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, queued: true, articleId: article.id, request_id: requestId }, 202);
     }
     let preferredProvider: "openai" | "anthropic" | undefined;
+    let dualProvider = false;
     let resolvedProject: Record<string, unknown> | null = null;
     let systemPrompt = "Você é o redator editorial principal do Zica.ai. Entregue somente conteúdo publicável ou o sinal ZICA_NEEDS_PRIMARY_SOURCE quando uma fonte primária for indispensável.";
     let promptVersion = 0;
@@ -186,6 +187,7 @@ Deno.serve(async (req: Request) => {
       const { data: settings } = await admin.from("user_settings").select("ai_provider").eq("user_id", userId).maybeSingle();
       const provider = String(settings?.ai_provider || "").toLowerCase();
       if (provider === "openai" || provider === "anthropic") preferredProvider = provider;
+      dualProvider = provider === "dual";
       if (config.projectId) {
         const { data: project } = await admin.from("projects").select("id,name,description,commercial_info,social_links,editorial_identity,social_instagram,social_linkedin,social_youtube,social_twitter,social_tiktok,social_google_maps,cta_leads,cta_conclusao").eq("id", config.projectId).eq("user_id", userId).maybeSingle();
         if (!project) return json({ error: "Projeto não encontrado ou acesso negado", request_id: requestId }, 403);
@@ -216,10 +218,13 @@ Deno.serve(async (req: Request) => {
     const band = bandFor(config.wordCount);
     const prompt = buildPrompt(config, band);
     const orchestrator = await getOrchestratorForUser(userId);
-    let generation = await orchestrator.callWithMeta("article_generation", [
+    const generationMessages = [
       { role: "system", content: systemPrompt },
       { role: "user", content: prompt },
-    ], { preferredProvider, maxTokens: 32000, temperature: 0.35 });
+    ] as const;
+    let generation = dualProvider
+      ? await orchestrator.callDualWithMeta("article_generation", [...generationMessages], { maxTokens: 32000, temperature: 0.35, articleId: config.articleId, correlationId: requestId })
+      : await orchestrator.callWithMeta("article_generation", [...generationMessages], { preferredProvider, maxTokens: 32000, temperature: 0.35, articleId: config.articleId, correlationId: requestId });
 
     let content = generation.content.trim();
     const initialSourceSignal = content.match(SOURCE_SIGNAL);
@@ -261,7 +266,7 @@ Deno.serve(async (req: Request) => {
     words = countWords(content);
     console.log(`[generate-article] request=${requestId} provider=${generation.provider} model=${generation.model} words=${words} band=${band.min}-${band.max}`);
     if (body?.responseFormat === "json") {
-      return json({ success: true, content, provider: generation.provider, model: generation.model, words, promptVersion, request_id: requestId });
+      return json({ success: true, content, provider: generation.provider, model: generation.model, providerMode: generation.providerMode || 'single', providersUsed: generation.providersUsed || [generation.provider], words, promptVersion, request_id: requestId });
     }
     return sse(content, generation.provider, generation.model, promptVersion);
   } catch (error) {
