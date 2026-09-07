@@ -5,6 +5,7 @@ import JSZip from 'jszip';
 
 const ROOT = process.cwd();
 const OUT = path.join(ROOT, 'public', 'downloads');
+const ARCHIVE_DATE = new Date('2026-09-06T00:00:00.000Z');
 
 const packages = [
   {
@@ -79,7 +80,7 @@ for (const pkg of packages) {
   const zip = new JSZip();
   const folder = zip.folder(pkg.folderName);
   if (!folder) throw new Error(`${pkg.name}: falha ao criar pasta raiz`);
-  for (const file of files) folder.file(file.rel, await fs.readFile(file.abs));
+  for (const file of files) folder.file(file.rel, await fs.readFile(file.abs), { date: ARCHIVE_DATE });
 
   const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 9 } });
   const target = path.join(OUT, pkg.outputName);

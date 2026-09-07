@@ -261,6 +261,13 @@ jobs:
                   add_header Cache-Control "public, immutable";
               }
 
+              location /downloads/ {
+                  try_files \$uri =404;
+                  default_type application/octet-stream;
+                  add_header X-Content-Type-Options "nosniff" always;
+                  add_header Cache-Control "public, max-age=300";
+              }
+
               location / {
                   try_files \$uri \$uri/ /index.html;
               }
