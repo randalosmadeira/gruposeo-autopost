@@ -21,6 +21,16 @@ type RegenerateRequest = {
   userId?: string;
 };
 
+type ArticleContext = {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  title: string | null;
+  keyword: string | null;
+  content: string | null;
+  excerpt: string | null;
+};
+
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
   headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
@@ -52,6 +62,14 @@ function taskFor(type: RegenerateType) {
   if (type === "title") return "title_generation" as const;
   if (type === "excerpt") return "meta_description" as const;
   return "content_editing" as const;
+}
+
+function publicRegenerationError(error: unknown) {
+  const code = error instanceof Error ? error.message : "";
+  if (code.includes("invalid_key")) return "Uma credencial de IA é inválida. Atualize a chave em Motor de IA & Chaves.";
+  if (code.includes("insufficient_credit")) return "A geração está bloqueada por falta de crédito no provedor de IA.";
+  if (code.includes("rate_limited")) return "O provedor atingiu o limite temporário. Tente novamente em instantes.";
+  return "Os provedores de IA estão indisponíveis no momento. Verifique o status das chaves e tente novamente.";
 }
 
 function prompts(type: RegenerateType, input: { keyword: string; title: string; content: string; excerpt: string; language: string }) {
@@ -111,7 +129,7 @@ Deno.serve(async (req: Request) => {
     if (!supabaseUrl || !serviceKey) return json({ success: false, error: "Backend incompleto", request_id: requestId }, 500);
 
     const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-    let article: Record<string, any> | null = null;
+    let article: ArticleContext | null = null;
     if (body.articleId) {
       const { data, error } = await admin
         .from("articles")
@@ -138,7 +156,11 @@ Deno.serve(async (req: Request) => {
     }
 
     const orchestrator = await getOrchestratorForUser(userId);
-    const call = await orchestrator.callWithMeta(
+    const { data: userSettings } = await admin.from("user_settings").select("ai_provider").eq("user_id", userId).maybeSingle();
+    const callMethod = userSettings?.ai_provider === "dual"
+      ? orchestrator.callDualWithMeta.bind(orchestrator)
+      : orchestrator.callWithMeta.bind(orchestrator);
+    const call = await callMethod(
       taskFor(body.type),
       prompts(body.type, { keyword, title, content, excerpt, language }),
       {
@@ -160,6 +182,8 @@ Deno.serve(async (req: Request) => {
       type: body.type,
       provider: call.provider,
       model: call.model,
+      providerMode: call.providerMode || "single",
+      providersUsed: call.providersUsed || [call.provider],
       articleId: article?.id || body.articleId || null,
       request_id: requestId,
     });
@@ -167,8 +191,8 @@ Deno.serve(async (req: Request) => {
     if (error instanceof RequestAuthError) {
       return json({ success: false, error: error.message, code: error.code, request_id: requestId }, error.status);
     }
-    const message = error instanceof Error ? error.message : "Falha ao regenerar conteúdo";
-    console.error("[regenerate-content]", requestId, message);
-    return json({ success: false, error: message, code: "regeneration_failed", request_id: requestId }, 500);
+    const internalCode = error instanceof Error ? error.message : "regeneration_failed";
+    console.error("[regenerate-content]", requestId, internalCode);
+    return json({ success: false, error: publicRegenerationError(error), code: "regeneration_failed", request_id: requestId }, 503);
   }
 });

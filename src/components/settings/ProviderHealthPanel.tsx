@@ -8,7 +8,11 @@ import { ProviderHealth, providerLabels, statusLabels } from '@/lib/providerHeal
 
 const providers: ProviderHealth['provider'][] = ['gemini', 'openai', 'anthropic', 'serper'];
 
-export function ProviderHealthPanel() {
+interface ProviderHealthPanelProps {
+  onHealthChange?: (health: ProviderHealth[]) => void;
+}
+
+export function ProviderHealthPanel({ onHealthChange }: ProviderHealthPanelProps) {
   const [health, setHealth] = useState<ProviderHealth[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -44,6 +48,10 @@ export function ProviderHealthPanel() {
   }), [health]);
   const operational = ordered.filter((item) => item.status === 'operational').length;
   const creditBlocks = ordered.filter((item) => item.status === 'insufficient_credit');
+
+  useEffect(() => {
+    onHealthChange?.(ordered);
+  }, [onHealthChange, ordered]);
 
   return (
     <div className="space-y-3" aria-live="polite">

@@ -57,7 +57,9 @@ export type TaskType =
   | 'eeat_review'
   | 'share_of_model';
 
-const OPENAI_TEXT = 'gpt-5.6-sol';
+// Public OpenAI API model. `gpt-5.6-sol` is an internal Codex runtime name and
+// is not a valid model identifier for customer API keys.
+const OPENAI_TEXT = 'gpt-5';
 const CLAUDE_TEXT = 'claude-sonnet-4-6';
 const OPENAI_IMAGE = 'gpt-image-2';
 
@@ -86,18 +88,17 @@ const AI_PROVIDERS: Record<string, AIProvider[]> = {
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
 const ANTHROPIC_API_BASE = 'https://api.anthropic.com/v1';
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
-const providerCooldownUntil = new Map<string, number>();
-
-function errorCooldownMs(message: string): number {
-  const value = message.toLowerCase();
-  if (value.includes('credit_balance_exhausted') || value.includes('insufficient_quota')) return 30 * 60 * 1000;
-  if (value.includes('token_invalidated') || value.includes('invalid api key') || value.includes('401')) return 10 * 60 * 1000;
-  if (value.includes('429')) return 60 * 1000;
-  return 0;
-}
-
-function isCoolingDown(provider: string) {
-  return (providerCooldownUntil.get(provider) || 0) > Date.now();
+function safeProviderError(provider: string, status: number, body: string): Error {
+  const normalized = body.toLowerCase();
+  if (status === 401 || status === 403 || normalized.includes('invalid api key') || normalized.includes('invalid x-api-key')) {
+    return new Error(`${provider}_invalid_key`);
+  }
+  if (status === 402 || normalized.includes('insufficient_quota') || normalized.includes('credit_balance_exhausted')) {
+    return new Error(`${provider}_insufficient_credit`);
+  }
+  if (status === 429) return new Error(`${provider}_rate_limited`);
+  if (status >= 500) return new Error(`${provider}_unavailable`);
+  return new Error(`${provider}_request_failed_${status}`);
 }
 
 export class AIOrchestrator {
@@ -135,7 +136,7 @@ export class AIOrchestrator {
   selectProvider(taskType: TaskType, preferences?: Partial<AICallOptions>): AIProvider | null {
     const providers = AI_PROVIDERS[taskType] || AI_PROVIDERS.article_generation;
     const names = this.getAvailableProviders();
-    const available = providers.filter((provider) => names.includes(provider.name) && !isCoolingDown(provider.name));
+    const available = providers.filter((provider) => names.includes(provider.name));
     if (!available.length) return null;
     if (preferences?.preferredProvider) return available.find((provider) => provider.name === preferences.preferredProvider) || available[0];
     return available[0];
@@ -165,7 +166,7 @@ export class AIOrchestrator {
     const enriched = this.injectDirectives(taskType, messages);
     const names = this.getAvailableProviders();
     let providers = (AI_PROVIDERS[taskType] || AI_PROVIDERS.article_generation)
-      .filter((provider) => names.includes(provider.name) && !isCoolingDown(provider.name));
+      .filter((provider) => names.includes(provider.name));
     if (options?.preferredProvider) providers = [...providers].sort((a, b) => Number(b.name === options.preferredProvider) - Number(a.name === options.preferredProvider));
     if (!providers.length) throw new Error('Nenhum provedor OpenAI/Claude disponível para esta tarefa.');
 
@@ -182,9 +183,7 @@ export class AIOrchestrator {
           return { content: result.content, provider: provider.name, model: provider.model, usage: result.usage };
         } catch (error) {
           lastError = error instanceof Error ? error : new Error(String(error));
-          const cooldown = errorCooldownMs(lastError.message);
-          if (cooldown) providerCooldownUntil.set(provider.name, Date.now() + cooldown);
-          console.warn(`[AIOrchestrator] ${provider.name}/${provider.model} falhou: ${lastError.message.slice(0, 180)}`);
+          console.warn(`[AIOrchestrator] ${provider.name}/${provider.model} falhou: ${lastError.message}`);
         }
       }
     }
@@ -195,7 +194,7 @@ export class AIOrchestrator {
     const enriched = this.injectDirectives(taskType, messages);
     let providers = (AI_PROVIDERS[taskType] || AI_PROVIDERS.article_generation)
       .filter((provider) => ['openai', 'anthropic'].includes(provider.name))
-      .filter((provider) => this.getAvailableProviders().includes(provider.name) && !isCoolingDown(provider.name));
+      .filter((provider) => this.getAvailableProviders().includes(provider.name));
     if (options?.preferredProvider) providers = [...providers].sort((a, b) => Number(b.name === options.preferredProvider) - Number(a.name === options.preferredProvider));
     if (providers.length < 2) return this.callWithMeta(taskType, messages, options);
 
@@ -204,11 +203,21 @@ export class AIOrchestrator {
       const key = this.getKeysForProvider(provider.name)[0];
       if (!key) throw new Error(`${provider.name}_key_missing`);
       const result = await this.callProvider(provider, key, enriched, options);
-      if (this.usageSink) await this.usageSink({ taskType, provider: provider.name, model: provider.model, usage: result.usage, options });
+      if (this.usageSink) {
+        await this.usageSink({ taskType, provider: provider.name, model: provider.model, usage: result.usage, options }).catch((error) => {
+          console.error(`[AIOrchestrator] Falha não bloqueante ao registrar consumo: ${error instanceof Error ? error.message : String(error)}`);
+        });
+      }
       return { ...result, provider };
     }));
     const successful = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
-    if (!successful.length) throw new Error('OpenAI e Claude falharam na execução simultânea.');
+    if (!successful.length) {
+      const failureCodes = settled.flatMap((result) => result.status === 'rejected'
+        ? [result.reason instanceof Error ? result.reason.message : 'provider_failed']
+        : []);
+      console.warn(`[AIOrchestrator] Execução dual sem resultado: ${failureCodes.join(',')}`);
+      throw new Error('dual_providers_unavailable');
+    }
     const score = (content: string) => content.trim().split(/\s+/).length + (content.match(/<h[2-4]\b|^#{2,4}\s/gim) || []).length * 25;
     const winner = successful.sort((a, b) => score(b.content) - score(a.content))[0];
     return {
@@ -228,11 +237,11 @@ export class AIOrchestrator {
     const response = await fetch(`${OPENAI_API_BASE}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages: messages.map((m) => ({ role: m.role === 'model' ? 'assistant' : m.role, content: m.content })), max_tokens: options?.maxTokens || 16384, temperature: options?.temperature ?? 0.45 }),
+      body: JSON.stringify({ model, messages: messages.map((m) => ({ role: m.role === 'model' ? 'assistant' : m.role, content: m.content })), max_completion_tokens: options?.maxTokens || 16384 }),
       signal: AbortSignal.timeout(90000),
     });
     const text = await response.text();
-    if (!response.ok) throw new Error(`OpenAI HTTP ${response.status}: ${text.slice(0, 500)}`);
+    if (!response.ok) throw safeProviderError('openai', response.status, text);
     const data = JSON.parse(text);
     const content = data?.choices?.[0]?.message?.content || '';
     if (!content) throw new Error('OpenAI retornou resposta vazia.');
@@ -249,7 +258,7 @@ export class AIOrchestrator {
       signal: AbortSignal.timeout(90000),
     });
     const text = await response.text();
-    if (!response.ok) throw new Error(`Anthropic HTTP ${response.status}: ${text.slice(0, 500)}`);
+    if (!response.ok) throw safeProviderError('anthropic', response.status, text);
     const data = JSON.parse(text);
     const content = data?.content?.map((part: { text?: string }) => part.text || '').join('') || '';
     if (!content) throw new Error('Claude retornou resposta vazia.');
@@ -263,7 +272,7 @@ export class AIOrchestrator {
     if (system) body.systemInstruction = { parts: [{ text: system }] };
     const response = await fetch(`${GEMINI_API_BASE}/models/${model}:generateContent?key=${key}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(90000) });
     const text = await response.text();
-    if (!response.ok) throw new Error(`Gemini HTTP ${response.status}: ${text.slice(0, 500)}`);
+    if (!response.ok) throw safeProviderError('gemini', response.status, text);
     const data = JSON.parse(text);
     const content = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     if (!content) throw new Error('Gemini retornou resposta vazia.');

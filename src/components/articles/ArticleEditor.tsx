@@ -78,25 +78,32 @@ function safeFilename(value: string) {
   return clean.slice(0, 100) || 'artigo';
 }
 
-async function functionErrorMessage(error: unknown, data: any, fallback: string) {
-  if (data?.error) return String(data.error);
+async function functionErrorMessage(error: unknown, data: unknown, fallback: string) {
+  const safeServerMessage = (value: unknown) => {
+    const message = String(value || '').trim();
+    if (!message) return '';
+    if (/api.?key|authorization|bearer|request.?id|http\s*40[13]|\{\s*"?type"?/i.test(message)) return fallback;
+    return message.slice(0, 240);
+  };
+  const serverData = data && typeof data === 'object' ? data as { error?: unknown } : null;
+  if (serverData?.error) return safeServerMessage(serverData.error) || fallback;
   const maybe = error as { message?: string; context?: Response } | null;
   const response = maybe?.context;
   if (response && typeof response.clone === 'function') {
     try {
       const payload = await response.clone().json();
-      if (payload?.error) return String(payload.error);
-      if (payload?.message) return String(payload.message);
+      if (payload?.error) return safeServerMessage(payload.error) || fallback;
+      if (payload?.message) return safeServerMessage(payload.message) || fallback;
     } catch {
       try {
         const text = await response.clone().text();
-        if (text.trim()) return text.slice(0, 500);
+        if (text.trim()) return safeServerMessage(text) || fallback;
       } catch {
         // fallback abaixo
       }
     }
   }
-  return maybe?.message || fallback;
+  return safeServerMessage(maybe?.message) || fallback;
 }
 
 export function ArticleEditor({ article, onSave, onPublish, isPublishing }: ArticleEditorProps) {
@@ -395,6 +402,7 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
         <div className="flex items-center gap-2">
           <RecreateArticleButton
             articleId={editedArticle.id}
+            projectId={editedArticle.project_id}
             keyword={editedArticle.keyword}
             onRecreateComplete={handleRecreateComplete}
             hasError={hasError}

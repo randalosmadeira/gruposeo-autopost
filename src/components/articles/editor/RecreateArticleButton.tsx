@@ -26,6 +26,7 @@ interface ArticleConfig {
 
 interface RecreateArticleButtonProps {
   articleId: string;
+  projectId?: string | null;
   keyword: string;
   onRecreateComplete: (newContent: string, newTitle: string, newExcerpt: string) => void;
   hasError?: boolean;
@@ -35,6 +36,7 @@ interface RecreateArticleButtonProps {
 
 export function RecreateArticleButton({ 
   articleId, 
+  projectId,
   keyword, 
   onRecreateComplete,
   hasError = false,
@@ -177,7 +179,6 @@ export function RecreateArticleButton({
     setProgress(10);
     setStatusMessage('Conectando com IA...');
 
-    // Make direct fetch to handle SSE stream
     const response = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-article`,
       {
@@ -188,7 +189,10 @@ export function RecreateArticleButton({
           'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({
+          responseFormat: 'json',
           config: {
+            articleId,
+            projectId,
             keyword,
             wordCount: 'medium',
             tone: 'profissional',
@@ -204,7 +208,7 @@ export function RecreateArticleButton({
             seoOptimization: true,
             humanizeContent: true,
             contentType: 'how-to',
-            segment: 'general',
+            segment: articleConfig?.segment || articleConfig?.niche || 'general',
             goal: 'inform',
             intentType: 'informational',
           },
@@ -213,60 +217,15 @@ export function RecreateArticleButton({
     );
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Erro na geração');
+      await response.json().catch(() => ({}));
+      throw new Error('Não foi possível gerar o artigo. Verifique o status das chaves em Motor de IA & Chaves.');
     }
 
     setProgress(20);
     setStatusMessage('Gerando conteúdo...');
 
-    // Read the SSE stream
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error('Não foi possível ler a resposta');
-    }
-
-    const decoder = new TextDecoder();
-    let fullContent = '';
-    let chunksReceived = 0;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      
-      if (done) break;
-      
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
-      
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const jsonStr = line.slice(6);
-            if (jsonStr === '[DONE]') continue;
-            
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed?.choices?.[0]?.delta?.content;
-            
-            if (content) {
-              fullContent += content;
-              chunksReceived++;
-              
-              // Update progress based on content length
-              const estimatedProgress = Math.min(20 + (chunksReceived * 2), 90);
-              setProgress(estimatedProgress);
-              
-              // Update status message
-              if (chunksReceived % 10 === 0) {
-                const wordCount = fullContent.split(/\s+/).length;
-                setStatusMessage(`Gerando... ${wordCount} palavras`);
-              }
-            }
-          } catch {
-            // Ignore parsing errors for incomplete chunks
-          }
-        }
-      }
-    }
+    const generation = await response.json();
+    let fullContent = String(generation?.content || '');
 
     if (fullContent.length < 100) {
       throw new Error('Conteúdo gerado muito curto');
@@ -275,10 +234,9 @@ export function RecreateArticleButton({
     setProgress(95);
     setStatusMessage('Finalizando...');
 
-    // Extract title from content (first H1)
-    const titleMatch = fullContent.match(/<h1[^>]*>([^<]+)<\/h1>/i) || 
-                       fullContent.match(/^#\s+(.+)$/m);
-    const extractedTitle = titleMatch ? titleMatch[1].trim() : keyword;
+    // The imported keyword is the title contract. Generated prose must not
+    // replace it with generic suffixes or invented numbering.
+    const extractedTitle = keyword.trim();
     
     // Extract meta description if present
     const metaMatch = fullContent.match(/<!--\s*META_DESCRIPTION:\s*([^-]+)-->/i);
