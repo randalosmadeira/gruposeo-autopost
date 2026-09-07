@@ -201,15 +201,23 @@ export class AIOrchestrator {
 
     const selected = providers.slice(0, 2);
     const settled = await Promise.allSettled(selected.map(async (provider) => {
-      const key = this.getKeysForProvider(provider.name)[0];
-      if (!key) throw new Error(`${provider.name}_key_missing`);
-      const result = await this.callProvider(provider, key, enriched, options);
-      if (this.usageSink) {
-        await this.usageSink({ taskType, provider: provider.name, model: result.model || provider.model, usage: result.usage, options }).catch((error) => {
-          console.error(`[AIOrchestrator] Falha não bloqueante ao registrar consumo: ${error instanceof Error ? error.message : String(error)}`);
-        });
+      const keys = this.getKeysForProvider(provider.name);
+      if (!keys.length) throw new Error(`${provider.name}_key_missing`);
+      let lastError: Error | null = null;
+      for (const key of keys) {
+        try {
+          const result = await this.callProvider(provider, key, enriched, options);
+          if (this.usageSink) {
+            await this.usageSink({ taskType, provider: provider.name, model: result.model || provider.model, usage: result.usage, options }).catch((error) => {
+              console.error(`[AIOrchestrator] Falha não bloqueante ao registrar consumo: ${error instanceof Error ? error.message : String(error)}`);
+            });
+          }
+          return { ...result, provider };
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(`${provider.name}_failed`);
+        }
       }
-      return { ...result, provider };
+      throw lastError || new Error(`${provider.name}_failed`);
     }));
     const successful = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
     if (!successful.length) {
@@ -217,7 +225,7 @@ export class AIOrchestrator {
         ? [result.reason instanceof Error ? result.reason.message : 'provider_failed']
         : []);
       console.warn(`[AIOrchestrator] Execução dual sem resultado: ${failureCodes.join(',')}`);
-      throw new Error('dual_providers_unavailable');
+      throw new Error(`dual_providers_unavailable:${failureCodes.join(',')}`);
     }
     const score = (content: string) => content.trim().split(/\s+/).length + (content.match(/<h[2-4]\b|^#{2,4}\s/gim) || []).length * 25;
     const winner = successful.sort((a, b) => score(b.content) - score(a.content))[0];
