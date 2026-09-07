@@ -7,7 +7,9 @@ const read = (name: string) => readFileSync(resolve(dir, name), 'utf8');
 
 describe('service-role checks accept both PostgREST claim formats', () => {
   it('the rewrite migration targets the legacy GUC reads and keeps set_config writes', () => {
-    const migration = read('20260907200000_service_role_checks_use_auth_role.sql');
+    const migration = read('20260907200000_service_role_checks_use_auth_role.sql').split('
+').filter((line) => !line.trimStart().startsWith('--')).join('
+');
     expect(migration).toContain("'coalesce(auth.role(), '''')'");
     expect(migration).toContain("'auth.role()'");
     expect(migration).toContain('execute v_new;');
