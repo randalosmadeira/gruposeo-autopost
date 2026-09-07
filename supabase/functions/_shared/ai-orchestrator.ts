@@ -175,12 +175,13 @@ export class AIOrchestrator {
       for (const key of this.getKeysForProvider(provider.name)) {
         try {
           const result = await this.callProvider(provider, key, enriched, options);
+          const effectiveModel = result.model || provider.model;
           if (this.usageSink) {
-            await this.usageSink({ taskType, provider: provider.name, model: provider.model, usage: result.usage, options }).catch((error) => {
+            await this.usageSink({ taskType, provider: provider.name, model: effectiveModel, usage: result.usage, options }).catch((error) => {
               console.error(`[AIOrchestrator] Falha não bloqueante ao registrar consumo: ${error instanceof Error ? error.message : String(error)}`);
             });
           }
-          return { content: result.content, provider: provider.name, model: provider.model, usage: result.usage };
+          return { content: result.content, provider: provider.name, model: effectiveModel, usage: result.usage };
         } catch (error) {
           lastError = error instanceof Error ? error : new Error(String(error));
           console.warn(`[AIOrchestrator] ${provider.name}/${provider.model} falhou: ${lastError.message}`);
@@ -204,7 +205,7 @@ export class AIOrchestrator {
       if (!key) throw new Error(`${provider.name}_key_missing`);
       const result = await this.callProvider(provider, key, enriched, options);
       if (this.usageSink) {
-        await this.usageSink({ taskType, provider: provider.name, model: provider.model, usage: result.usage, options }).catch((error) => {
+        await this.usageSink({ taskType, provider: provider.name, model: result.model || provider.model, usage: result.usage, options }).catch((error) => {
           console.error(`[AIOrchestrator] Falha não bloqueante ao registrar consumo: ${error instanceof Error ? error.message : String(error)}`);
         });
       }
@@ -221,31 +222,44 @@ export class AIOrchestrator {
     const score = (content: string) => content.trim().split(/\s+/).length + (content.match(/<h[2-4]\b|^#{2,4}\s/gim) || []).length * 25;
     const winner = successful.sort((a, b) => score(b.content) - score(a.content))[0];
     return {
-      content: winner.content, provider: winner.provider.name, model: winner.provider.model,
+      content: winner.content, provider: winner.provider.name, model: winner.model || winner.provider.model,
       usage: winner.usage, providerMode: successful.length > 1 ? 'dual' : 'single',
       providersUsed: successful.map((item) => item.provider.name),
     };
   }
 
-  private async callProvider(provider: AIProvider, key: string, messages: AIMessage[], options?: AICallOptions): Promise<{ content: string; usage: AIUsage }> {
+  private async callProvider(provider: AIProvider, key: string, messages: AIMessage[], options?: AICallOptions): Promise<{ content: string; usage: AIUsage; model?: string }> {
     if (provider.name === 'openai') return this.callOpenAI(provider.model, key, messages, options);
     if (provider.name === 'anthropic') return this.callAnthropic(provider.model, key, messages, options);
     return this.callGemini(provider.model, key, messages, options);
   }
 
-  private async callOpenAI(model: string, key: string, messages: AIMessage[], options?: AICallOptions): Promise<{ content: string; usage: AIUsage }> {
-    const response = await fetch(`${OPENAI_API_BASE}/chat/completions`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages: messages.map((m) => ({ role: m.role === 'model' ? 'assistant' : m.role, content: m.content })), max_completion_tokens: options?.maxTokens || 16384 }),
-      signal: AbortSignal.timeout(90000),
-    });
-    const text = await response.text();
-    if (!response.ok) throw safeProviderError('openai', response.status, text);
-    const data = JSON.parse(text);
-    const content = data?.choices?.[0]?.message?.content || '';
-    if (!content) throw new Error('OpenAI retornou resposta vazia.');
-    return { content, usage: { inputTokens: Number(data?.usage?.prompt_tokens || data?.usage?.input_tokens || 0), outputTokens: Number(data?.usage?.completion_tokens || data?.usage?.output_tokens || 0) } };
+  private async callOpenAI(model: string, key: string, messages: AIMessage[], options?: AICallOptions): Promise<{ content: string; usage: AIUsage; model: string }> {
+    const candidates = model === 'gpt-5' ? ['gpt-5', 'gpt-5-mini'] : [model];
+    let lastError: Error | null = null;
+    for (const candidate of candidates) {
+      const response = await fetch(`${OPENAI_API_BASE}/chat/completions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: candidate,
+          messages: messages.map((m) => ({ role: m.role === 'model' ? 'assistant' : m.role, content: m.content })),
+          max_completion_tokens: Math.min(options?.maxTokens || 16384, 16384),
+        }),
+        signal: AbortSignal.timeout(90000),
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        lastError = safeProviderError('openai', response.status, text);
+        if (![400, 404].includes(response.status) || candidate === candidates[candidates.length - 1]) throw lastError;
+        continue;
+      }
+      const data = JSON.parse(text);
+      const content = data?.choices?.[0]?.message?.content || '';
+      if (!content) throw new Error('OpenAI retornou resposta vazia.');
+      return { content, model: candidate, usage: { inputTokens: Number(data?.usage?.prompt_tokens || data?.usage?.input_tokens || 0), outputTokens: Number(data?.usage?.completion_tokens || data?.usage?.output_tokens || 0) } };
+    }
+    throw lastError || new Error('openai_unavailable');
   }
 
   private async callAnthropic(model: string, key: string, messages: AIMessage[], options?: AICallOptions): Promise<{ content: string; usage: AIUsage }> {
