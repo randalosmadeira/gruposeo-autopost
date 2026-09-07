@@ -458,3 +458,181 @@ export function AIConfigCard({ settings, onSave, isSaving }: AIConfigCardProps) 
                   {settings?.has_anthropic_key ? (
                     <Badge className="text-xs bg-emerald-500/15 text-emerald-600 border-emerald-500/30">
                       <Check className="w-3 h-3 mr-1" /> Ativa
+                    </Badge>
+                  ) : (
+                    <Badge className="text-xs bg-red-500/15 text-red-500 border-red-500/30">
+                      <X className="w-3 h-3 mr-1" /> Não configurada
+                    </Badge>
+                  )}
+                </div>
+                {settings?.has_anthropic_key && (
+                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"
+                    onClick={() => handleRemoveExtraKey('anthropic')}>
+                    Remover
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Usado pelo pipeline de agentes para edição e conteúdo jurídico/saúde. Modelo: Claude 3.5 Sonnet.
+              </p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type={showAnthropicKey ? 'text' : 'password'}
+                    value={newAnthropicKey}
+                    onChange={(e) => setNewAnthropicKey(e.target.value)}
+                    placeholder="sk-ant-..."
+                    className="font-mono pr-10"
+                  />
+                  <Button type="button" variant="ghost" size="icon"
+                    className="absolute right-0 top-0 h-full"
+                    onClick={() => setShowAnthropicKey(!showAnthropicKey)}>
+                    {showAnthropicKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </Button>
+                </div>
+                <Button variant="outline" 
+                  onClick={() => handleTestExtraKey('anthropic', newAnthropicKey, setIsTestingAnthropic, () => setNewAnthropicKey(''))}
+                  disabled={isTestingAnthropic || !newAnthropicKey}>
+                  {isTestingAnthropic ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Testar'}
+                </Button>
+              </div>
+              <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer"
+                className="text-xs text-primary hover:underline flex items-center gap-1">
+                <ExternalLink className="w-3 h-3" /> Obter chave na Anthropic
+              </a>
+            </div>
+
+            {/* Serper Key */}
+            <div className="p-4 bg-muted/30 rounded-lg border space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Search className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium">Serper (Pesquisa Google)</span>
+                  {settings?.has_serper_key ? (
+                    <Badge className="text-xs bg-emerald-500/15 text-emerald-600 border-emerald-500/30">
+                      <Check className="w-3 h-3 mr-1" /> Ativa
+                    </Badge>
+                  ) : (
+                    <Badge className="text-xs bg-red-500/15 text-red-500 border-red-500/30">
+                      <X className="w-3 h-3 mr-1" /> Não configurada
+                    </Badge>
+                  )}
+                </div>
+                {settings?.has_serper_key && (
+                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"
+                    onClick={() => handleRemoveExtraKey('serper')}>
+                    Remover
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Pesquisa de palavras-chave, análise de concorrência e enriquecimento de conteúdo SEO.
+              </p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type={showSerperKey ? 'text' : 'password'}
+                    value={newSerperKey}
+                    onChange={(e) => setNewSerperKey(e.target.value)}
+                    placeholder="Sua chave Serper..."
+                    className="font-mono pr-10"
+                  />
+                  <Button type="button" variant="ghost" size="icon"
+                    className="absolute right-0 top-0 h-full"
+                    onClick={() => setShowSerperKey(!showSerperKey)}>
+                    {showSerperKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </Button>
+                </div>
+                <Button variant="outline"
+                  onClick={() => handleTestExtraKey('serper', newSerperKey, setIsTestingSerper, () => setNewSerperKey(''))}
+                  disabled={isTestingSerper || !newSerperKey}>
+                  {isTestingSerper ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Testar'}
+                </Button>
+              </div>
+              <a href="https://serper.dev/api-key" target="_blank" rel="noopener noreferrer"
+                className="text-xs text-primary hover:underline flex items-center gap-1">
+                <ExternalLink className="w-3 h-3" /> Obter chave no Serper
+              </a>
+            </div>
+
+            {/* Model Selection */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Modelo de Título</Label>
+                <Select value={titleModel} onValueChange={setTitleModel}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {models.map((model) => (
+                      <SelectItem key={model.value} value={model.value}>
+                        {model.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Modelo de Conteúdo</Label>
+                <Select value={contentModel} onValueChange={setContentModel}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {models.map((model) => (
+                      <SelectItem key={model.value} value={model.value}>
+                        {model.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Modelo de Imagem</Label>
+                <Select value={imageModel} onValueChange={setImageModel}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {imageModels.map((model) => (
+                      <SelectItem key={model.value} value={model.value}>
+                        {model.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Timezone */}
+        <div className="space-y-2">
+          <Label>Fuso Horário</Label>
+          <Select value={timezone} onValueChange={setTimezone}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TIMEZONES.map((tz) => (
+                <SelectItem key={tz.value} value={tz.value}>
+                  {tz.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Usado para agendamentos do News Agent e exibição de dados.
+          </p>
+        </div>
+
+        <Button onClick={handleSave} disabled={isSaving} className="bg-primary">
+          {isSaving ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : null}
+          Salvar configurações
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
