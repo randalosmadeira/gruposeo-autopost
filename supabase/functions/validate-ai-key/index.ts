@@ -17,19 +17,30 @@ interface Body {
   apiKey: string;
 }
 
-type ValidationResult = { valid: boolean; message: string; status: ProviderStatus };
+type ValidationResult = { valid: boolean; message: string; status: ProviderStatus; model?: string; functional?: boolean };
 
 async function validateOpenAI(apiKey: string): Promise<ValidationResult> {
-  const resp = await fetch("https://api.openai.com/v1/models", {
-    method: "GET",
+  // The model-list endpoint can succeed even when the credential cannot run the
+  // endpoint/model used by production. This explicit user-triggered check makes
+  // one tiny real generation and never returns or persists the provider body.
+  const model = "gpt-5-mini";
+  const resp = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({
+      model,
+      input: "Responda apenas OK.",
+      max_output_tokens: 32,
+    }),
+    signal: AbortSignal.timeout(15000),
   });
 
-  if (resp.ok) return { valid: true, message: "Conexão com OpenAI OK", status: "operational" };
+  if (resp.ok) return { valid: true, message: "Geração funcional da OpenAI validada", status: "operational", model, functional: true };
   const status = classifyProviderFailure(resp.status, await resp.text().catch(() => ""));
-  return { valid: false, message: safeStatusMessage(status), status };
+  return { valid: false, message: safeStatusMessage(status), status, model, functional: true };
 }
 
 async function validateGemini(apiKey: string): Promise<ValidationResult> {
@@ -148,7 +159,16 @@ Deno.serve(async (req) => {
     log.requestEnd(200, Date.now() - startTime);
 
     return new Response(
-      JSON.stringify({ valid: result.valid, provider, status: result.status, latency_ms: latencyMs, message: result.message, request_id: requestId }),
+      JSON.stringify({
+        valid: result.valid,
+        provider,
+        status: result.status,
+        latency_ms: latencyMs,
+        message: result.message,
+        validation_mode: result.functional ? "functional_generation" : "connectivity",
+        model: result.model,
+        request_id: requestId,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
