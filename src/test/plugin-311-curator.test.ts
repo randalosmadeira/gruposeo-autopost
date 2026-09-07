@@ -11,7 +11,7 @@ describe('Zica Posts 3.11.0', () => {
     expect(sidebar).toContain("href: '/keywords/bulk'");
   });
   it('ships guarded post-publication curation', () => {
-    const curator = read('public/wordpress-plugin/zica-posts-3.11.0/includes/class-zica-posts-curator.php');
+    const curator = read('public/wordpress-plugin/zica-posts/includes/class-zica-posts-curator.php');
     expect(curator).toContain("add_action('save_post_post'");
     expect(curator).toContain('possible_duplicate');
     expect(curator).toContain("check_admin_referer('zica_posts_curator_'");
@@ -20,7 +20,7 @@ describe('Zica Posts 3.11.0', () => {
   });
   it('keeps CTA composition in the application backend', () => {
     const helper = read('supabase/functions/_shared/editorial-cta.ts');
-    const plugin = read('public/wordpress-plugin/zica-posts-3.11.0/zica-posts.php');
+    const plugin = read('public/wordpress-plugin/zica-posts/zica-posts.php');
     expect(helper).toContain('zica-cta:contact');
     expect(helper).toContain('zica-cta:social');
     expect(plugin).not.toContain('editorial-cta');

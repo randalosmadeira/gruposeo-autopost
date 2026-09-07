@@ -9,6 +9,9 @@ describe('durable editorial pipeline', () => {
     const hook = read('src/hooks/useBulkGeneration.tsx');
     expect(hook).toContain('enqueueOnly: true');
     expect(hook).toContain('Enfileirado no Zica Brain');
+    expect(hook).toContain('PLACEHOLDER_BATCH_SIZE = 50');
+    expect(hook).toContain('.insert(rows)');
+    expect(hook).toContain("title: 'Não foi possível criar a fila'");
     expect(hook).not.toContain('await new Promise(resolve => setTimeout(resolve, delayMs))');
   });
 

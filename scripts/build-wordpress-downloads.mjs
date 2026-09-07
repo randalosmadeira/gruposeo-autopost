@@ -12,7 +12,7 @@ const packages = [
     folderName: 'zica-posts',
     version: '3.11.0',
     outputName: 'zica-posts-3.11.0.zip',
-    source: path.join(ROOT, 'public', 'wordpress-plugin', 'zica-posts-3.11.0'),
+    source: path.join(ROOT, 'public', 'wordpress-plugin', 'zica-posts'),
     entry: 'zica-posts.php',
     expected: ['Version: 3.11.0', "ZICA_POSTS_VERSION', '3.11.0"],
     required: [
