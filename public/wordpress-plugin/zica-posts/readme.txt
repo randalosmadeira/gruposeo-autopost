@@ -4,10 +4,16 @@ Tags: seo, geo, llms, indexnow, schema, wordpress, automation, queue
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.12.0
+Stable tag: 3.13.0
 License: GPLv2 or later
 
 Agente WordPress leve oficial da Zica.ai. Publica, registra eventos duráveis, serve discovery files e conversa com o Zica Orchestrator sem executar IA pesada durante save_post.
+
+== 3.13.0 ==
+
+* Política de imagens 2026: imagem destacada entregue em 1200x675 (16:9) WebP, até 150 KB, com cópia JPEG.
+* Filtro wp_robots força max-image-preview:large em todas as páginas, independentemente de tema ou plugin de SEO.
+* Upload de mídia grava alt text e legenda enviados pelo Zica.ai.
 
 == 3.12.0 ==
 

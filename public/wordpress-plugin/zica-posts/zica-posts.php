@@ -3,7 +3,7 @@
  * Plugin Name: Zica Posts — Conector WordPress Oficial Zica.ai
  * Plugin URI: https://zica.ai
  * Description: Agente WordPress leve da Zica.ai com outbox persistente, HMAC, idempotência, GEO/Schema, discovery LLM, IndexNow em lote, cards e integração com Zica Orchestrator.
- * Version: 3.12.0
+ * Version: 3.13.0
  * Author: Equipe Zica.ai
  * Author URI: https://zica.ai
  * License: GPL v2 or later
@@ -14,7 +14,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('ZICA_POSTS_VERSION', '3.12.0');
+define('ZICA_POSTS_VERSION', '3.13.0');
 define('ZICA_POSTS_PAIRING_URL', 'https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1/pair-wordpress-site');
 define('ZICA_POSTS_SOFTWARE_ID', 'zica-posts');
 define('ZICA_POSTS_FILE', __FILE__);
@@ -60,7 +60,19 @@ final class Zica_Posts_3110 {
         $this->admin = new Zica_Posts_Admin($this->auth, $this->discovery, $this->outbox, $this->curator);
 
         add_filter('cron_schedules', array($this, 'cron_schedules'));
+        add_filter('wp_robots', array($this, 'robots_max_image_preview'));
         add_action('init', array($this, 'ensure_runtime'));
+    }
+
+    /**
+     * Image policy 2026-09: Google may only show the large image preview when
+     * the page allows it. WordPress core adds this by default, but themes and
+     * SEO plugins can drop it. Forcing the directive keeps Discover eligibility.
+     */
+    public function robots_max_image_preview($robots) {
+        if (!is_array($robots)) $robots = array();
+        $robots['max-image-preview'] = 'large';
+        return $robots;
     }
 
     public function cron_schedules($schedules) {

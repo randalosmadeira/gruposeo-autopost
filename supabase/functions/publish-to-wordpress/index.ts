@@ -95,8 +95,8 @@ async function uploadPluginImage(baseUrl: string, apiKey: string, dataUrl: strin
       caption: String(imageGeo.caption || "").slice(0, 500),
       preferred_format: imageGeo.preferred_format || "webp",
       target_width: 1200,
-      target_height: 630,
-      max_kb: 200,
+      target_height: 675,
+      max_kb: 150,
     }),
     signal: AbortSignal.timeout(60000),
   });

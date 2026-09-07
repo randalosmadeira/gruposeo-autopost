@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { fetchUserKeys } from "../_shared/byok-resolver.ts";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 import { generateGeminiImage, setRuntimeKey } from "../_shared/gemini.ts";
+import { IMAGE_PROMPT_RULES, deriveHeroImage, deriveJpegCopy, heroDimensionsFor, imagePolicyMetadata, type StorageAdmin } from "../_shared/image-policy.ts";
 
 const OPENAI_IMAGE_MODEL = "gpt-image-2";
 const corsHeaders = {
@@ -52,6 +53,22 @@ async function persistImage(admin: any, userId: string, image: { bytes: Uint8Arr
   const { data } = admin.storage.from("article-images").getPublicUrl(path);
   if (!data?.publicUrl) throw new Error("article_image_public_url_missing");
   return { url: data.publicUrl, path, hash };
+}
+
+/**
+ * Applies the 2026-09 image policy to a persisted master: WebP hero 1200x675
+ * (or 1200x900) under 150 KB plus a JPEG copy. The master stays available for
+ * audit; the article always points to the derived hero.
+ */
+async function finalizeHero(admin: StorageAdmin, supabaseUrl: string, persisted: { url: string; path: string; hash: string }, master: { bytes: Uint8Array; mime: string }, body: ImageRequest) {
+  const dims = heroDimensionsFor(body.aspectRatio);
+  let hero = null; let jpeg = null;
+  try { hero = await deriveHeroImage(admin, supabaseUrl, "article-images", persisted.path, dims); }
+  catch (error) { console.warn(`[generate-image] hero derivation failed, keeping master: ${error instanceof Error ? error.message : "unknown"}`); }
+  try { jpeg = await deriveJpegCopy(admin, "article-images", persisted.path, master, dims); }
+  catch (error) { console.warn(`[generate-image] jpeg copy failed: ${error instanceof Error ? error.message : "unknown"}`); }
+  const policy = imagePolicyMetadata(hero, jpeg, persisted.url);
+  return { url: hero?.url || persisted.url, path: hero?.path || persisted.path, policy };
 }
 
 async function sourceAsset(admin: any, asset: PoolAsset) {
@@ -191,7 +208,7 @@ async function backgroundEdit(openaiKey: string, source: { bytes: Uint8Array; mi
   const form = new FormData();
   const context = [body.title, body.keywords, body.context].filter(Boolean).join(". ").slice(0, 1500);
   const prompt = `${asset.background_prompt || "Remover integralmente o chroma key verde e reconstruir somente o fundo."}\n
-REGRAS OBRIGATÓRIAS:\n- Esta é uma EDIÇÃO DE FUNDO de uma fotografia real autorizada, não geração de uma nova pessoa.\n- Preserve exatamente a mesma pessoa real, rosto, cabelo, barba, pele, anatomia, mãos, roupa, acessórios, taco e proporções.\n- Não alterar expressão, identidade visual, idade aparente, corpo ou vestimenta.\n- Remover todo o verde do chroma, inclusive vazamento verde nas bordas, cabelo, roupa e objeto.\n- Criar fundo editorial compatível com o contexto: ${context || "conteúdo institucional"}.\n- O fundo não pode inventar multidão, evento, apoio, documento, cenário factual ou terceiro identificável.\n- Sem texto, logotipo ou marca d'água.\n- Recorte natural de cabelo, roupa e taco, com iluminação coerente.`;
+REGRAS OBRIGATÓRIAS:\n- Esta é uma EDIÇÃO DE FUNDO de uma fotografia real autorizada, não geração de uma nova pessoa.\n- Preserve exatamente a mesma pessoa real, rosto, cabelo, barba, pele, anatomia, mãos, roupa, acessórios, taco e proporções.\n- Não alterar expressão, identidade visual, idade aparente, corpo ou vestimenta.\n- Remover todo o verde do chroma, inclusive vazamento verde nas bordas, cabelo, roupa e objeto.\n- Criar fundo editorial compatível com o contexto: ${context || "conteúdo institucional"}.\n- O fundo não pode inventar multidão, evento, apoio, documento, cenário factual ou terceiro identificável.\n- Sem texto, logotipo ou marca d'água.\n- Recorte natural de cabelo, roupa e taco, com iluminação coerente.\n- ${IMAGE_PROMPT_RULES}`;
   form.set("model", OPENAI_IMAGE_MODEL); form.set("prompt", prompt); form.set("size", size(body.aspectRatio)); form.set("quality", "high");
   form.append("image[]", new File([source.bytes], `fixed-reference.${extension(source.mime)}`, { type: source.mime }));
   const response = await fetch("https://api.openai.com/v1/images/edits", { method: "POST", headers: { Authorization: `Bearer ${openaiKey}` }, body: form, signal: AbortSignal.timeout(150000) });
@@ -204,10 +221,8 @@ REGRAS OBRIGATÓRIAS:\n- Esta é uma EDIÇÃO DE FUNDO de uma fotografia real au
 }
 
 async function synthetic(openaiKey: string, body: ImageRequest) {
-  const watermark = String(body.watermark || "").trim();
-  const brandRule = watermark
-    ? `Aplicar no rodapé uma marca d'água discreta, legível e exatamente com o texto: ${watermark}. Não inserir nenhum outro texto.`
-    : "Sem texto e sem marca d'água.";
+  // 2026-09 policy: nothing textual inside the pixels. Brand credit goes to alt text / caption.
+  const brandRule = `Sem texto, sem marca d'água e sem logotipo. ${IMAGE_PROMPT_RULES}`;
   const prompt = `Crie uma imagem editorial horizontal original para: ${body.title}. Contexto: ${[body.context, body.keywords].filter(Boolean).join(". ")}. ${brandRule} Sem pessoa pública identificável não fornecida como referência. Não copiar logotipos, assinaturas ou composição protegida da matéria de origem.`;
   const response = await fetch("https://api.openai.com/v1/images/generations", { method: "POST", headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: OPENAI_IMAGE_MODEL, prompt, n: 1, size: size(body.aspectRatio), quality: body.quality === "low" ? "low" : body.quality === "medium" || body.quality === "standard" ? "medium" : "high" }), signal: AbortSignal.timeout(150000) });
   const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(String(payload?.error?.message || `openai_image_http_${response.status}`));
@@ -228,9 +243,8 @@ async function syntheticWithFallback(keys: { openai: string; gemini: string }, b
   }
   if (keys.gemini) {
     setRuntimeKey("GEMINI_API_KEY", keys.gemini);
-    const watermark = String(body.watermark || "").trim();
     const result = await generateGeminiImage(
-      `Imagem editorial original para ${body.title}. Contexto: ${[body.context, body.keywords].filter(Boolean).join(". ")}. ${watermark ? `Marca d'água discreta: ${watermark}.` : "Sem texto."}`,
+      `Imagem editorial original para ${body.title}. Contexto: ${[body.context, body.keywords].filter(Boolean).join(". ")}. Sem texto, sem marca d'água e sem logotipo. ${IMAGE_PROMPT_RULES}`,
       { aspectRatio: body.aspectRatio === "4:5" ? "3:4" : body.aspectRatio || "16:9", provider: "gemini" },
     );
     if (result?.imageData) {
@@ -280,9 +294,10 @@ Deno.serve(async (req: Request) => {
       }
       const meta = { source, module_key: moduleKey, asset_id: selected.asset.id, asset_scope: assetScope, pool_asset_count: assets.length, pool_required_count: required, pool_complete: assets.length >= required, unavailable_assets_skipped: assetFailures.length, slot: selected.asset.slot, background_mode: selected.asset.background_mode, background_edited: edited, synthetic_person_generation: false, alt_text: selected.asset.alt_text, semantic_filename: selected.asset.semantic_filename, caption: selected.asset.caption, target_hero: `${policy.hero_width || 1200}x${policy.hero_height || 630}`, preferred_format: policy.preferred_format || "webp", selection_reason: selected.reason };
       const persisted = await persistImage(admin, userId, finalImage);
-      const persistedMeta = { ...meta, storage_bucket: "article-images", storage_path: persisted.path, content_hash: persisted.hash };
-      await saveArticle(admin, userId, body, persisted.url, source, persistedMeta);
-      return json({ success: true, image: persisted.url, source, generated: false, edited, syntheticPersonGeneration: false, moduleKey, selectedSlot: selected.asset.slot, alt: selected.asset.alt_text, filename: selected.asset.semantic_filename, caption: selected.asset.caption, geo: persistedMeta, request_id: requestId });
+      const hero = await finalizeHero(admin, supabaseUrl, persisted, finalImage, body);
+      const persistedMeta = { ...meta, storage_bucket: "article-images", storage_path: hero.path, master_path: persisted.path, content_hash: persisted.hash, image_policy: hero.policy };
+      await saveArticle(admin, userId, body, hero.url, source, persistedMeta);
+      return json({ success: true, image: hero.url, imagePolicy: hero.policy, source, generated: false, edited, syntheticPersonGeneration: false, moduleKey, selectedSlot: selected.asset.slot, alt: selected.asset.alt_text, filename: selected.asset.semantic_filename, caption: selected.asset.caption, geo: persistedMeta, request_id: requestId });
       }
     }
 
@@ -291,8 +306,9 @@ Deno.serve(async (req: Request) => {
     if (!keys.openai && !keys.gemini) return json({ success: false, error: "Nenhum provedor de imagem configurado", code: "image_provider_missing" }, 503);
     const generated = await syntheticWithFallback(keys, body);
     const persisted = await persistImage(admin, userId, generated.image);
-    const meta = { source: generated.provider, synthetic: true, model: generated.model, provider_fallback: generated.fallback, module_key: moduleKey, watermark_requested: String(body.watermark || "").trim() || null, storage_bucket: "article-images", storage_path: persisted.path, content_hash: persisted.hash };
-    await saveArticle(admin, userId, body, persisted.url, generated.provider, meta); return json({ success: true, image: persisted.url, source: generated.provider, generated: true, provider: generated.provider, model: generated.model, fallback: generated.fallback, geo: meta });
+    const hero = await finalizeHero(admin, supabaseUrl, persisted, generated.image, body);
+    const meta = { source: generated.provider, synthetic: true, model: generated.model, provider_fallback: generated.fallback, module_key: moduleKey, watermark_requested: String(body.watermark || "").trim() || null, watermark_rendered: false, storage_bucket: "article-images", storage_path: hero.path, master_path: persisted.path, content_hash: persisted.hash, image_policy: hero.policy };
+    await saveArticle(admin, userId, body, hero.url, generated.provider, meta); return json({ success: true, image: hero.url, imagePolicy: hero.policy, source: generated.provider, generated: true, provider: generated.provider, model: generated.model, fallback: generated.fallback, geo: meta });
   } catch (error) {
     if (error instanceof RequestAuthError) return json({ success: false, error: error.message, code: error.code }, error.status);
     const message = error instanceof Error ? error.message : "image_processing_failed"; return json({ success: false, error: message, code: "image_processing_failed", image_pending: true, retryable: true, request_id: requestId }, 500);

@@ -1,7 +1,7 @@
 /** Contrato central do conector WordPress Zica Posts. */
 export const PLUGIN_SOFTWARE_ID="zica-posts";
 export const PLUGIN_NAME="Zica Posts";
-export const PLUGIN_VERSION="3.12.0";
+export const PLUGIN_VERSION="3.13.0";
 export const PLUGIN_MINIMUM_VERSION="3.12.0";
 export const PLUGIN_RELEASED="2026-09-07";
 export const PLUGIN_API_NAMESPACE="zica-posts/v1";

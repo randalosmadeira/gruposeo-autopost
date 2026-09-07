@@ -65,9 +65,27 @@ async function createChromaPreview(file: File): Promise<Blob> {
   }
   context.putImageData(pixels, 0, 0);
 
+  return exportWebpWithinBudget(canvas);
+}
+
+// Image policy 2026-09: hero WebP must stay under 150 KB. Lower the quality in
+// steps until the export fits; the last step is kept even if it is still larger.
+const HERO_MAX_BYTES = 150 * 1024;
+const WEBP_QUALITY_STEPS = [0.86, 0.8, 0.74, 0.68, 0.62, 0.56];
+
+function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Falha ao exportar a prévia WebP.')), 'image/webp', 0.86);
+    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Falha ao exportar a prévia WebP.')), 'image/webp', quality);
   });
+}
+
+async function exportWebpWithinBudget(canvas: HTMLCanvasElement): Promise<Blob> {
+  let last: Blob | null = null;
+  for (const quality of WEBP_QUALITY_STEPS) {
+    last = await canvasToBlob(canvas, quality);
+    if (last.size <= HERO_MAX_BYTES) return last;
+  }
+  return last as Blob;
 }
 
 async function sha256(file: File) {

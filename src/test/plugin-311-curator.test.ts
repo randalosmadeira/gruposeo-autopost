@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
-describe('Zica Posts 3.12.0', () => {
+describe('Zica Posts 3.13.0', () => {
   it('exposes bulk publishing in the client sidebar', () => {
     const sidebar = read('src/components/layout/Sidebar.tsx');
     expect(sidebar).toContain("label: 'Publicar em massa'");
