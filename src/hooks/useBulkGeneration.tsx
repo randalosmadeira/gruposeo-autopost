@@ -4,6 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AnalyzedKeyword } from '@/lib/keyword-analyzer';
 import { BulkGenerationConfig } from '@/types/bulk-generation';
 import { initialArticleTitle, isValidEditorialKeyword } from '@/lib/keyword-import';
+import { expandKeywordsAcrossProjects, type BulkProjectTarget } from '@/lib/bulk-project-selection';
 
 export interface GenerationJob {
   id: string;
@@ -18,6 +19,9 @@ export interface GenerationJob {
   content?: string;
   imageUrl?: string;
   retryCount?: number;
+  /** Set when the batch targets several projects: each job generates for its own project. */
+  projectId?: string;
+  projectName?: string;
 }
 
 export interface BulkGenerationState {
@@ -179,12 +183,14 @@ export function useBulkGeneration() {
   // Use ref to store jobs to avoid stale closure issues
   const jobsRef = useRef<GenerationJob[]>([]);
 
-  const initializeJobs = useCallback((keywords: AnalyzedKeyword[]) => {
-    const jobs: GenerationJob[] = keywords.map((kw, index) => ({
-      id: `job-${index}-${Date.now()}`,
-      keyword: kw,
+  const initializeJobs = useCallback((keywords: AnalyzedKeyword[], projects: BulkProjectTarget[] = []) => {
+    const jobs: GenerationJob[] = expandKeywordsAcrossProjects(keywords, projects).map((seed) => ({
+      id: seed.id,
+      keyword: seed.keyword,
       status: 'pending',
       progress: 0,
+      projectId: seed.projectId,
+      projectName: seed.projectName,
     }));
 
     jobsRef.current = jobs;
@@ -427,6 +433,8 @@ export function useBulkGeneration() {
     }
     const batchId = crypto.randomUUID();
     setState(prev => ({ ...prev, activeBatchId: batchId }));
+    const fallbackProjectId = projectId && projectId !== 'none' ? projectId : undefined;
+    const projectFor = (job: GenerationJob) => job.projectId || fallbackProjectId;
     let completedCount = 0;
     let errorCount = 0;
     
@@ -457,8 +465,8 @@ export function useBulkGeneration() {
           title: job.keyword.title || initialArticleTitle(job.keyword.keyword),
           status: 'draft' as const,
           type: 'blog' as const,
-          project_id: projectId && projectId !== 'none' ? projectId : null,
-          config: { bulkGenerated: true, bulkJobId: job.id, batchId, ...bulkConfig },
+          project_id: projectFor(job) ?? null,
+          config: { bulkGenerated: true, bulkJobId: job.id, batchId, ...bulkConfig, projectId: projectFor(job) || '', companyName: job.projectName || bulkConfig?.companyName || '' },
         }));
         const { data: articles, error } = await supabase
           .from('articles')
@@ -536,7 +544,7 @@ export function useBulkGeneration() {
           keyword: job.keyword.keyword,
           articleId,
           batchId,
-          projectId: projectId && projectId !== 'none' ? projectId : undefined,
+          projectId: projectFor(job),
           type: 'blog',
           language: bulkConfig?.language || 'pt-BR',
           tone: bulkConfig?.tone || 'profissional',
@@ -551,7 +559,7 @@ export function useBulkGeneration() {
           includeTable: bulkConfig?.tables ?? true,
           includeList: bulkConfig?.lists ?? true,
           includeConclusion: bulkConfig?.conclusion ?? true,
-          companyName: bulkConfig?.companyName || '',
+          companyName: job.projectName || bulkConfig?.companyName || '',
           companyPhone: bulkConfig?.companyPhone || '',
           companyAddress: bulkConfig?.companyAddress || '',
           targetAudience: bulkConfig?.targetAudience || '',

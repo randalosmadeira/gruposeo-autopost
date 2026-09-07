@@ -8,13 +8,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { useBulkGeneration } from '@/hooks/useBulkGeneration';
 import { useProjects } from '@/hooks/useProjects';
 import { analyzeKeywords, type AnalyzedKeyword, type KeywordData } from '@/lib/keyword-analyzer';
 import { validateBulkGenerationSelection } from '@/lib/bulk-generation-validation';
+import { MAX_BULK_PROJECTS, describeBulkVolume, validateBulkProjectSelection } from '@/lib/bulk-project-selection';
 import { findKeywordColumn, importCellText, isValidEditorialKeyword, type SpreadsheetRow } from '@/lib/keyword-import';
 import { defaultBulkConfig } from '@/types/bulk-generation';
 
@@ -76,7 +76,9 @@ function parsePastedKeywords(text: string): KeywordData[] {
 export default function BulkKeywordGenerator() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [stage, setStage] = useState<Stage>('input');
-  const [projectId, setProjectId] = useState('');
+  // Several projects can be targeted at once: the same keyword list yields one article per project.
+  const [projectIds, setProjectIds] = useState<string[]>([]);
+  const projectId = projectIds[0] || '';
   const [rawKeywords, setRawKeywords] = useState('');
   const [fileName, setFileName] = useState('');
   const [isParsing, setIsParsing] = useState(false);
@@ -87,6 +89,8 @@ export default function BulkKeywordGenerator() {
   const bulk = useBulkGeneration();
 
   const project = useMemo(() => projects.find((item) => item.id === projectId), [projectId, projects]);
+  const selectedProjects = useMemo(() => projectIds.map((id) => projects.find((item) => item.id === id)).filter((item): item is NonNullable<typeof item> => Boolean(item)), [projectIds, projects]);
+  const toggleProject = (id: string) => setProjectIds((current) => current.includes(id) ? current.filter((item) => item !== id) : current.length >= MAX_BULK_PROJECTS ? current : [...current, id]);
   const selectedKeywords = useMemo(() => keywords.filter((item) => selected.has(item.keyword)), [keywords, selected]);
   const pendingCount = bulk.jobs.filter((job) => job.status === 'pending' || job.status === 'generating').length;
   const queueProgress = bulk.jobs.length ? Math.round((bulk.completedCount / bulk.jobs.length) * 100) : 0;
@@ -151,7 +155,8 @@ export default function BulkKeywordGenerator() {
   });
 
   const startGeneration = () => {
-    const validationError = validateBulkGenerationSelection(projectId, Boolean(project), selectedKeywords.length);
+    const validationError = validateBulkGenerationSelection(projectId, Boolean(project), selectedKeywords.length)
+      || validateBulkProjectSelection(projectIds, projects.map((item) => item.id), selectedKeywords.length);
     if (validationError) {
       setError(validationError);
       return;
@@ -164,7 +169,7 @@ export default function BulkKeywordGenerator() {
       generateImages: true,
       companyName: project?.name || '',
     };
-    bulk.initializeJobs(selectedKeywords);
+    bulk.initializeJobs(selectedKeywords, selectedProjects.map((item) => ({ id: item.id, name: item.name })));
     bulk.startGeneration(projectId, config);
   };
 
@@ -184,8 +189,18 @@ export default function BulkKeywordGenerator() {
           <CardHeader><CardTitle>1. Projeto e importação</CardTitle><CardDescription>O projeto fornece persona, geografia, CTA, links, política visual e conexão WordPress.</CardDescription></CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-              <Label>Projeto obrigatório</Label>
-              <Select value={projectId} onValueChange={setProjectId}><SelectTrigger><SelectValue placeholder="Selecionar projeto" /></SelectTrigger><SelectContent>{projects.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select>
+              <Label>Projetos (selecione um ou mais)</Label>
+              <p className="text-xs text-muted-foreground">Cada projeto recebe seus próprios artigos com a mesma lista de palavras-chave, usando persona, CTA, links e WordPress daquele projeto. Máximo de {MAX_BULK_PROJECTS} por lote.</p>
+              <div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2" role="group" aria-label="Projetos de destino">
+                {projects.length === 0 && <span className="text-sm text-muted-foreground">Nenhum projeto disponível.</span>}
+                {projects.map((item) => (
+                  <label key={item.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/60">
+                    <Checkbox checked={projectIds.includes(item.id)} onCheckedChange={() => toggleProject(item.id)} aria-label={item.name} />
+                    <span>{item.name}</span>
+                  </label>
+                ))}
+              </div>
+              {projectIds.length > 0 && <p className="text-xs text-muted-foreground">{projectIds.length} projeto(s) selecionado(s): {selectedProjects.map((item) => item.name).join(', ')}</p>}
             </div>
             <button type="button" className="flex min-h-44 w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-muted-foreground/30 p-6 text-center transition hover:border-primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => inputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void parseFile(file); }} disabled={isParsing || !projectId}>
               {isParsing ? <Loader2 className="h-8 w-8 animate-spin text-primary" /> : <Upload className="h-8 w-8 text-primary" />}
@@ -202,7 +217,7 @@ export default function BulkKeywordGenerator() {
       ) : (
         <div className="space-y-6">
           <Card>
-            <CardHeader className="flex-row items-start justify-between gap-4"><div><CardTitle>2. Revisão da fila</CardTitle><CardDescription>{selectedKeywords.length} de {keywords.length} palavras-chave selecionadas para {project?.name}.</CardDescription></div><Button variant="outline" onClick={reset}><RotateCcw className="mr-2 h-4 w-4" />Reimportar</Button></CardHeader>
+            <CardHeader className="flex-row items-start justify-between gap-4"><div><CardTitle>2. Revisão da fila</CardTitle><CardDescription>{selectedKeywords.length} de {keywords.length} palavras-chave selecionadas para {selectedProjects.map((item) => item.name).join(', ') || project?.name}. Volume: {describeBulkVolume(selectedKeywords.length, selectedProjects.length)}.</CardDescription></div><Button variant="outline" onClick={reset}><RotateCcw className="mr-2 h-4 w-4" />Reimportar</Button></CardHeader>
             <CardContent>
               {error && <p role="alert" className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"><AlertCircle className="h-4 w-4" />{error}</p>}
               <div className="max-h-[520px] overflow-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead className="w-12" /><TableHead>Palavra-chave</TableHead><TableHead>Tipo sugerido</TableHead><TableHead>Intenção</TableHead><TableHead>CTA/Destino</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{keywords.map((item) => <TableRow key={item.keyword}><TableCell><Checkbox checked={selected.has(item.keyword)} onCheckedChange={() => toggleKeyword(item.keyword)} /></TableCell><TableCell className="font-medium">{item.keyword}</TableCell><TableCell><Badge variant="outline">{item.tipoConteudoLabel}</Badge></TableCell><TableCell>{item.intencao}</TableCell><TableCell>{project?.name || 'Projeto'}</TableCell><TableCell><span className="flex items-center gap-1 text-xs text-success"><CheckCircle2 className="h-3.5 w-3.5" />Pronto para fila</span></TableCell></TableRow>)}</TableBody></Table></div>
