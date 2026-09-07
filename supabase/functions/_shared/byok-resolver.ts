@@ -3,7 +3,7 @@
  * User BYOK credentials take priority. Platform OpenAI/Claude credentials are
  * resolved from Supabase Vault through service-role-only RPCs.
  */
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 import { AIOrchestrator } from "./ai-orchestrator.ts";
 
 export interface UserAIKeys {
