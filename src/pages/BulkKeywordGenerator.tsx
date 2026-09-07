@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
-import { AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, Play, RotateCcw, Sparkles, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, PauseCircle, Play, RotateCcw, Sparkles, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -207,7 +207,7 @@ export default function BulkKeywordGenerator() {
             </CardContent>
           </Card>
 
-          {bulk.jobs.length > 0 && <Card><CardHeader><CardTitle>Progresso da fila</CardTitle><CardDescription>{bulk.completedCount} concluídos, {bulk.errorCount} erros, {pendingCount} pendentes.</CardDescription></CardHeader><CardContent className="space-y-3"><Progress value={queueProgress} /><div className="grid gap-2 text-sm md:grid-cols-2">{bulk.jobs.map((job) => <div key={job.id} className="flex items-center justify-between rounded border p-3"><span className="truncate">{job.keyword.keyword}</span><Badge variant={job.status === 'error' ? 'destructive' : 'secondary'}>{job.status}</Badge></div>)}</div></CardContent></Card>}
+          {bulk.jobs.length > 0 && <Card><CardHeader><CardTitle>Progresso da fila</CardTitle><CardDescription>{bulk.completedCount} concluídos, {bulk.errorCount} erros, {pendingCount} pendentes.</CardDescription></CardHeader><CardContent className="space-y-3"><Progress value={queueProgress} />{bulk.activeBatchId && <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void bulk.pauseBatch()}><PauseCircle className="mr-2 h-4 w-4" />Pausar pendentes</Button><Button variant="outline" onClick={() => void bulk.resumeBatch()}><Play className="mr-2 h-4 w-4" />Retomar lote</Button><Button variant="outline" onClick={() => void bulk.reprocessBatch()}><RotateCcw className="mr-2 h-4 w-4" />Reprocessar falhas</Button></div>}<div className="grid gap-2 text-sm md:grid-cols-2">{bulk.jobs.map((job) => <div key={job.id} className="flex items-center justify-between rounded border p-3"><span className="truncate">{job.keyword.keyword}</span><Badge variant={job.status === 'error' ? 'destructive' : 'secondary'}>{job.status}</Badge></div>)}</div></CardContent></Card>}
         </div>
       )}
     </div>

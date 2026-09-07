@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { fetchUserKeys } from "../_shared/byok-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -60,11 +61,12 @@ async function edgeCall(baseUrl: string, serviceKey: string, slug: string, body:
 }
 
 async function providerHealth(admin: any, userId: string) {
-  const { data: settings } = await admin.from("user_settings")
-    .select("openai_api_key,anthropic_api_key")
-    .eq("user_id", userId).maybeSingle();
-  const openaiConfigured = String(settings?.openai_api_key || "").trim().length > 0;
-  const anthropicConfigured = String(settings?.anthropic_api_key || "").trim().length > 0;
+  // Resolve the same BYOK, Vault and environment chain used by generation.
+  // Reading only user_settings made globally configured Vault providers appear
+  // offline and repeatedly sent healthy provider checks to dead letter.
+  const keys = await fetchUserKeys(userId);
+  const openaiConfigured = keys.openai.length > 0;
+  const anthropicConfigured = keys.anthropic.length > 0;
   const checkedAt = new Date().toISOString();
 
   // Automatic health checks must never consume tokens. Operational probes are

@@ -25,6 +25,7 @@ export interface BulkGenerationState {
   currentIndex: number;
   completedCount: number;
   errorCount: number;
+  activeBatchId: string | null;
 }
 
 const MAX_RETRIES = 3;
@@ -171,6 +172,7 @@ export function useBulkGeneration() {
     currentIndex: 0,
     completedCount: 0,
     errorCount: 0
+    ,activeBatchId: null
   });
 
   // Use ref to store jobs to avoid stale closure issues
@@ -191,6 +193,7 @@ export function useBulkGeneration() {
       currentIndex: 0,
       completedCount: 0,
       errorCount: 0
+      ,activeBatchId: null
     });
 
     return jobs;
@@ -410,6 +413,8 @@ export function useBulkGeneration() {
 
     // Use ref to get fresh jobs list (avoids stale closure)
     const pendingJobs = jobsRef.current.filter(j => j.status === 'pending');
+    const batchId = crypto.randomUUID();
+    setState(prev => ({ ...prev, activeBatchId: batchId }));
     let completedCount = 0;
     let errorCount = 0;
     
@@ -441,7 +446,7 @@ export function useBulkGeneration() {
           status: 'draft' as const,
           type: 'blog' as const,
           project_id: projectId && projectId !== 'none' ? projectId : null,
-          config: { bulkGenerated: true, bulkJobId: job.id, ...bulkConfig },
+          config: { bulkGenerated: true, bulkJobId: job.id, batchId, ...bulkConfig },
         }));
         const { data: articles, error } = await supabase
           .from('articles')
@@ -518,6 +523,7 @@ export function useBulkGeneration() {
         const config = {
           keyword: job.keyword.keyword,
           articleId,
+          batchId,
           projectId: projectId && projectId !== 'none' ? projectId : undefined,
           type: 'blog',
           language: bulkConfig?.language || 'pt-BR',
@@ -655,14 +661,31 @@ export function useBulkGeneration() {
       currentIndex: 0,
       completedCount: 0,
       errorCount: 0
+      ,activeBatchId: null
     });
   }, []);
+
+  const controlBatch = useCallback(async (action: 'pause' | 'resume' | 'reprocess') => {
+    if (!state.activeBatchId) throw new Error('Nenhum lote ativo para controlar');
+    const { data, error } = await supabase.rpc('control_zica_brain_batch', {
+      p_batch_id: state.activeBatchId,
+      p_action: action,
+    });
+    if (error) throw error;
+    const changed = Number((data as { changed?: number } | null)?.changed || 0);
+    const labels = { pause: 'pausado', resume: 'retomado', reprocess: 'reenfileirado' } as const;
+    toast({ title: `Lote ${labels[action]}`, description: `${changed} tarefa(s) alterada(s).` });
+    return data;
+  }, [state.activeBatchId, toast]);
 
   return {
     ...state,
     initializeJobs,
     startGeneration,
     stopGeneration,
-    resetJobs
+    resetJobs,
+    pauseBatch: () => controlBatch('pause'),
+    resumeBatch: () => controlBatch('resume'),
+    reprocessBatch: () => controlBatch('reprocess'),
   };
 }
