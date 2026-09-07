@@ -19,7 +19,9 @@ describe('regeneração e modo dual', () => {
     const orchestrator = read('supabase/functions/_shared/ai-orchestrator.ts');
     const dual = orchestrator.slice(orchestrator.indexOf('async callDualWithMeta'), orchestrator.indexOf('private async callProvider'));
     expect(dual).toContain('Promise.allSettled');
+    expect(dual).toContain('for (const key of keys)');
     expect(dual).toContain('Falha não bloqueante ao registrar consumo');
+    expect(dual).toContain('dual_providers_unavailable:${failureCodes.join');
     expect(dual).toContain("providerMode: successful.length > 1 ? 'dual' : 'single'");
   });
 

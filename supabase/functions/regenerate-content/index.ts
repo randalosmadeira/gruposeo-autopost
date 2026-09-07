@@ -66,8 +66,8 @@ function taskFor(type: RegenerateType) {
 
 function publicRegenerationError(error: unknown) {
   const code = error instanceof Error ? error.message : "";
-  if (code.includes("invalid_key")) return "Uma credencial de IA é inválida. Atualize a chave em Motor de IA & Chaves.";
   if (code.includes("insufficient_credit")) return "A geração está bloqueada por falta de crédito no provedor de IA.";
+  if (code.includes("invalid_key")) return "Uma credencial de IA é inválida. Atualize a chave em Motor de IA & Chaves.";
   if (code.includes("rate_limited")) return "O provedor atingiu o limite temporário. Tente novamente em instantes.";
   return "Os provedores de IA estão indisponíveis no momento. Verifique o status das chaves e tente novamente.";
 }

@@ -65,8 +65,8 @@ function json(body: unknown, status = 200) {
 
 function publicGenerationError(error: unknown) {
   const code = error instanceof Error ? error.message : "";
-  if (code.includes("invalid_key")) return "Uma credencial de IA é inválida. Atualize a chave em Motor de IA & Chaves.";
   if (code.includes("insufficient_credit")) return "A geração está bloqueada por falta de crédito no provedor de IA.";
+  if (code.includes("invalid_key")) return "Uma credencial de IA é inválida. Atualize a chave em Motor de IA & Chaves.";
   if (code.includes("rate_limited")) return "O provedor atingiu o limite temporário. Tente novamente em instantes.";
   return "Não foi possível concluir a geração. Verifique o status dos provedores e tente novamente.";
 }
