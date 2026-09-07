@@ -1,6 +1,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import { classifyProviderFailure, PROVIDER_CAPABILITIES, ProviderStatus, safeStatusMessage } from "../_shared/provider-health.ts";
 
 const FUNCTION_NAME = "validate-ai-key";
 
@@ -16,7 +17,9 @@ interface Body {
   apiKey: string;
 }
 
-async function validateOpenAI(apiKey: string): Promise<{ valid: boolean; message: string }> {
+type ValidationResult = { valid: boolean; message: string; status: ProviderStatus };
+
+async function validateOpenAI(apiKey: string): Promise<ValidationResult> {
   const resp = await fetch("https://api.openai.com/v1/models", {
     method: "GET",
     headers: {
@@ -24,25 +27,21 @@ async function validateOpenAI(apiKey: string): Promise<{ valid: boolean; message
     },
   });
 
-  if (resp.ok) return { valid: true, message: "Conexão com OpenAI OK" };
-  if (resp.status === 401) return { valid: false, message: "Chave OpenAI inválida/expirada" };
-
-  const text = await resp.text().catch(() => "");
-  return { valid: false, message: `OpenAI retornou ${resp.status}${text ? `: ${text.slice(0, 200)}` : ""}` };
+  if (resp.ok) return { valid: true, message: "Conexão com OpenAI OK", status: "operational" };
+  const status = classifyProviderFailure(resp.status, await resp.text().catch(() => ""));
+  return { valid: false, message: safeStatusMessage(status), status };
 }
 
-async function validateGemini(apiKey: string): Promise<{ valid: boolean; message: string }> {
+async function validateGemini(apiKey: string): Promise<ValidationResult> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
   const resp = await fetch(url, { method: "GET" });
 
-  if (resp.ok) return { valid: true, message: "Conexão com Gemini OK" };
-  if (resp.status === 400 || resp.status === 403) return { valid: false, message: "Chave Gemini inválida/sem permissão" };
-
-  const text = await resp.text().catch(() => "");
-  return { valid: false, message: `Gemini retornou ${resp.status}${text ? `: ${text.slice(0, 200)}` : ""}` };
+  if (resp.ok) return { valid: true, message: "Conexão com Gemini OK", status: "operational" };
+  const status = classifyProviderFailure(resp.status, await resp.text().catch(() => ""));
+  return { valid: false, message: safeStatusMessage(status), status };
 }
 
-async function validateAnthropic(apiKey: string): Promise<{ valid: boolean; message: string }> {
+async function validateAnthropic(apiKey: string): Promise<ValidationResult> {
   const resp = await fetch("https://api.anthropic.com/v1/models", {
     method: "GET",
     headers: {
@@ -51,14 +50,12 @@ async function validateAnthropic(apiKey: string): Promise<{ valid: boolean; mess
     },
   });
 
-  if (resp.ok) return { valid: true, message: "Conexão com Anthropic (Claude) OK" };
-  if (resp.status === 401) return { valid: false, message: "Chave Anthropic inválida/expirada" };
-
-  const text = await resp.text().catch(() => "");
-  return { valid: false, message: `Anthropic retornou ${resp.status}${text ? `: ${text.slice(0, 200)}` : ""}` };
+  if (resp.ok) return { valid: true, message: "Conexão com Anthropic (Claude) OK", status: "operational" };
+  const status = classifyProviderFailure(resp.status, await resp.text().catch(() => ""));
+  return { valid: false, message: safeStatusMessage(status), status };
 }
 
-async function validateSerper(apiKey: string): Promise<{ valid: boolean; message: string }> {
+async function validateSerper(apiKey: string): Promise<ValidationResult> {
   const resp = await fetch("https://google.serper.dev/search", {
     method: "POST",
     headers: {
@@ -68,11 +65,9 @@ async function validateSerper(apiKey: string): Promise<{ valid: boolean; message
     body: JSON.stringify({ q: "test", num: 1 }),
   });
 
-  if (resp.ok) return { valid: true, message: "Conexão com Serper OK" };
-  if (resp.status === 401 || resp.status === 403) return { valid: false, message: "Chave Serper inválida/sem permissão" };
-
-  const text = await resp.text().catch(() => "");
-  return { valid: false, message: `Serper retornou ${resp.status}${text ? `: ${text.slice(0, 200)}` : ""}` };
+  if (resp.ok) return { valid: true, message: "Conexão com Serper OK", status: "operational" };
+  const status = classifyProviderFailure(resp.status, await resp.text().catch(() => ""));
+  return { valid: false, message: safeStatusMessage(status), status };
 }
 
 Deno.serve(async (req) => {
@@ -131,19 +126,29 @@ Deno.serve(async (req) => {
       });
     }
 
-    const validators: Record<Provider, (k: string) => Promise<{ valid: boolean; message: string }>> = {
+    const validators: Record<Provider, (k: string) => Promise<ValidationResult>> = {
       openai: validateOpenAI,
       gemini: validateGemini,
       anthropic: validateAnthropic,
       serper: validateSerper,
     };
+    const validationStarted = Date.now();
     const result = await validators[provider](apiKey);
+    const latencyMs = Date.now() - validationStarted;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || "";
+    if (serviceRoleKey) {
+      const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+      await admin.from("ai_provider_health").upsert({
+        user_id: user.id, provider, configured: true, status: result.status,
+        latency_ms: latencyMs, capabilities: PROVIDER_CAPABILITIES[provider], checked_at: new Date().toISOString(),
+      }, { onConflict: "user_id,provider" });
+    }
 
     log.info("validation_result", { provider, valid: result.valid });
     log.requestEnd(200, Date.now() - startTime);
 
     return new Response(
-      JSON.stringify({ valid: result.valid, provider, message: result.message, request_id: requestId }),
+      JSON.stringify({ valid: result.valid, provider, status: result.status, latency_ms: latencyMs, message: result.message, request_id: requestId }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {

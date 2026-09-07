@@ -62,7 +62,15 @@ Deno.serve(async (req) => {
   const admin = createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false } });
   const keys = await fetchKeys(admin, user.id);
   const providers: ProviderName[] = ["gemini", "openai", "anthropic", "serper"];
-  const results = await Promise.all(providers.map(async (provider) => ({ provider, ...(await probe(provider, keys[provider])) })));
+  const { data: previousSerper } = await admin.from("ai_provider_health")
+    .select("status,latency_ms,checked_at").eq("user_id", user.id).eq("provider", "serper").maybeSingle();
+  const results = await Promise.all(providers.map(async (provider) => {
+    const result = await probe(provider, keys[provider]);
+    if (provider === "serper" && result.configured && previousSerper?.status && previousSerper.status !== "not_configured") {
+      return { provider, ...result, status: previousSerper.status as ProviderStatus, latency_ms: previousSerper.latency_ms, previous_checked_at: previousSerper.checked_at };
+    }
+    return { provider, ...result, previous_checked_at: null };
+  }));
   const checkedAt = new Date().toISOString();
   const rows = results.map((result) => ({
     user_id: user.id,
@@ -71,7 +79,7 @@ Deno.serve(async (req) => {
     status: result.status,
     latency_ms: result.latency_ms,
     capabilities: PROVIDER_CAPABILITIES[result.provider],
-    checked_at: checkedAt,
+    checked_at: result.previous_checked_at || checkedAt,
   }));
   const { error } = await admin.from("ai_provider_health").upsert(rows, { onConflict: "user_id,provider" });
   if (error) return Response.json({ error: "Não foi possível atualizar a telemetria" }, { status: 500, headers: corsHeaders });
