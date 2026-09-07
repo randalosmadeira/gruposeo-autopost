@@ -147,8 +147,25 @@ Deno.serve(async (req) => {
     const result = await validators[provider](apiKey);
     const latencyMs = Date.now() - validationStarted;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || "";
+    let saved = false;
     if (serviceRoleKey) {
       const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+      if (result.valid) {
+        const keyColumns: Record<Provider, string> = {
+          openai: "openai_api_key",
+          gemini: "gemini_api_key",
+          anthropic: "anthropic_api_key",
+          serper: "serper_api_key",
+        };
+        const { data: persisted, error: persistError } = await admin
+          .from("user_settings")
+          .update({ [keyColumns[provider]]: apiKey, updated_at: new Date().toISOString() })
+          .eq("user_id", user.id)
+          .select("updated_at")
+          .maybeSingle();
+        if (persistError || !persisted) throw new Error("Não foi possível confirmar a gravação da chave validada");
+        saved = true;
+      }
       await admin.from("ai_provider_health").upsert({
         user_id: user.id, provider, configured: true, status: result.status,
         latency_ms: latencyMs, capabilities: PROVIDER_CAPABILITIES[provider], checked_at: new Date().toISOString(),
@@ -167,6 +184,7 @@ Deno.serve(async (req) => {
         message: result.message,
         validation_mode: result.functional ? "functional_generation" : "connectivity",
         model: result.model,
+        saved,
         request_id: requestId,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
