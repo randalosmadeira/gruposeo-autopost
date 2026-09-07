@@ -8,8 +8,8 @@ const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 describe('regeneração e modo dual', () => {
   it('usa um modelo público da OpenAI e não devolve corpos brutos dos provedores', () => {
     const orchestrator = read('supabase/functions/_shared/ai-orchestrator.ts');
-    expect(orchestrator).toContain("const OPENAI_TEXT = 'gpt-5'");
-    expect(orchestrator).toContain("['gpt-5', 'gpt-5-mini']");
+    expect(orchestrator).toContain("const OPENAI_TEXT = 'gpt-4.1'");
+    expect(orchestrator).toContain("['gpt-4.1', 'gpt-4o']");
     expect(orchestrator).toContain("fetch(`${OPENAI_API_BASE}/responses`");
     expect(orchestrator).toContain('max_output_tokens: Math.min(options?.maxTokens || 16384, 16384)');
     expect(orchestrator).not.toContain('HTTP ${response.status}: ${text.slice');
