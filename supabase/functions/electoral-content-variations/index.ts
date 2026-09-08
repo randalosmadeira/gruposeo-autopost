@@ -1,11 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { resolveAnthropicModel } from '../_shared/anthropic-model-policy.ts';
 const SUPABASE_URL=Deno.env.get('SUPABASE_URL')||'';
 const SUPABASE_ANON_KEY=Deno.env.get('SUPABASE_ANON_KEY')||'';
 const SERVICE_ROLE=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||'';
 const PRESET='madeira-1470-sp-2026';
 const TEMPLATE_NAME='electoral_editorial_1470_v1';
 const OPENAI_MODEL='gpt-5.6-sol';
-const CLAUDE_MODEL='claude-sonnet-4-6';
+const CLAUDE_MODEL=resolveAnthropicModel(Deno.env.get('ANTHROPIC_MODEL'));
 const corsHeaders={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...corsHeaders,'Content-Type':'application/json','Cache-Control':'no-store'}});
 const admin=createClient(SUPABASE_URL,SERVICE_ROLE,{auth:{persistSession:false,autoRefreshToken:false}});

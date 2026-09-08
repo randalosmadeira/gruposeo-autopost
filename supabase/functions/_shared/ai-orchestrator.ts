@@ -1,4 +1,5 @@
 import { getDirectivesForTask } from './behavioral-directives.ts';
+import { ANTHROPIC_PRIMARY_MODEL } from './anthropic-model-policy.ts';
 
 export interface AIProvider {
   name: 'openai' | 'anthropic' | 'gemini';
@@ -60,7 +61,7 @@ export type TaskType =
 // Public OpenAI API model. `gpt-5.6-sol` is an internal Codex runtime name and
 // is not a valid model identifier for customer API keys.
 const OPENAI_TEXT = 'gpt-4.1';
-const CLAUDE_TEXT = 'claude-sonnet-4-6';
+const CLAUDE_TEXT = ANTHROPIC_PRIMARY_MODEL;
 const OPENAI_IMAGE = 'gpt-image-2';
 
 function p(name: AIProvider['name'], model: string, strengths: string[]): AIProvider {

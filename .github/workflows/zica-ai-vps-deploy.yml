@@ -118,6 +118,7 @@ jobs:
         run: |
           set -euo pipefail
           npm install --no-audit --no-fund
+          npm run check:claude-models
           npm run test:zica
           npm run build:zica
           test -f dist/index.html
@@ -162,7 +163,7 @@ jobs:
             printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
             printf 'OPENAI_MODEL=gpt-4.1\n'
             printf 'ANTHROPIC_API_KEY=\n'
-            printf 'ANTHROPIC_MODEL=claude-sonnet-4-5\n'
+            printf 'ANTHROPIC_MODEL=claude-sonnet-4-5-20250929\n'
           } > /tmp/zica-ai.env.partial
           chmod 600 /tmp/zica-ai.env.partial
 
