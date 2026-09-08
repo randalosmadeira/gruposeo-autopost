@@ -1,0 +1,15 @@
+{
+  "autoUpdatesChannel": "stable",
+  "minimumVersion": "2.1.175",
+  "model": "claude-sonnet-4-5-20250929",
+  "availableModels": [
+    "claude-sonnet-4-5-20250929",
+    "claude-haiku-4-5-20251001"
+  ],
+  "enforceAvailableModels": true,
+  "env": {
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-5-20250929",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-haiku-4-5-20251001"
+  }
+}

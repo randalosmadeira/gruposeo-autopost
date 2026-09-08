@@ -30,6 +30,9 @@ jobs:
       - name: Enforce private deployment boundaries
         run: node scripts/verify-private-deployment-boundaries.mjs
 
+      - name: Enforce Claude model policy
+        run: npm run check:claude-models
+
       - name: Validate runtime config
         if: github.event_name == 'push'
         shell: bash

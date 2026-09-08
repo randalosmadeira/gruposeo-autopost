@@ -10,5 +10,5 @@
 - prompt_template: `visual_content_master_v1`
 - target: `image_generator`
 - motor visual: OpenAI `gpt-image-2`
-- revisor de prompt: Claude `claude-sonnet-4-6`
+- revisor de prompt: Claude `claude-sonnet-4-5-20250929`
 - presets: legal, criminal, consumer, health, business, labor, electoral, news, fintech, education e general.

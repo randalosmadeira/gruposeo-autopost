@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run lint && npm run test && npm run build",
+    "check:claude-models": "node scripts/check-claude-model-policy.mjs",
+    "check": "npm run check:claude-models && npm run lint && npm run test && npm run build",
     "build:zica": "npm run build:wordpress-packages && vite build --mode production",
     "test:zica": "vitest run",
     "verify:zica": "npm run test && npm run build"
