@@ -698,7 +698,7 @@ serve(async (req) => {
       const existing = await existingPassedOutput(requestId, key);
       if (existing) {
         stored.push({ platform: key, width: existing.width, height: existing.height, qa_pass: true, resumed: true, output_id: existing.id });
-        continue;
+        return;
       }
 
       let currentSupporterIndex = initialSupporterIndex;

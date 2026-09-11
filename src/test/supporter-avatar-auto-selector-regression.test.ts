@@ -76,6 +76,7 @@ describe('Supporter Avatar 1470 autonomous auto-selector v3 regressions', () => 
     expect(generator).toContain('MAX_PIPELINE_ATTEMPTS = 5');
     expect(generator).toContain('MAX_QA_GENERATIONS = 1');
     expect(generator).toContain('Promise.all(packEntries.map');
+    expect(generator).not.toMatch(/Promise\.all\(packEntries\.map[\s\S]*?\bcontinue;/);
     expect(generator).toContain("status: 'retry'");
     expect(publicApi).toContain('dispatch_retry_');
   });
