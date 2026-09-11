@@ -25,6 +25,7 @@ describe('Supporter Avatar 1470 autonomous auto-selector v3 regressions', () => 
     expect(mainEntry).not.toContain('import("./pages/SupporterAvatar1470")');
     expect(app).toContain('import("./pages/SupporterAvatar1470V2")');
     expect(app).toContain('<Route path="/1470" element={<SupporterAvatar1470 />} />');
+    expect(app).toContain('<Route path="/apoiadores" element={<SupporterAvatar1470 />} />');
     expect(app).toContain('<Route path="/apoiadores/avatar" element={<SupporterAvatar1470 />} />');
     expect(existsSync(resolve(root, 'src/pages/SupporterAvatar1470.tsx'))).toBe(false);
     expect(indexHtml).toContain('name="zica-supporter-flow" content="supporter-avatar-public-v2"');
