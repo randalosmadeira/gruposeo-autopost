@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ExternalLink, Globe2, Link2, Plus, Save, ShieldCheck, Sparkles, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Copy, ExternalLink, Globe2, Link2, Plus, Save, ShieldCheck, Sparkles, ToggleLeft, ToggleRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 const PRESET = 'madeira-1470-sp-2026';
+const SUPPORTER_PATH = '/apoiadores';
 const PRIMARY_PORTALS = [
   'https://quemvotar.drmadeira1470.com.br/blog/',
   'https://votardeputadofederal.drmadeira1470.com.br/blog/',
@@ -92,6 +93,12 @@ export default function ElectoralPortalNetwork() {
   const [newTags, setNewTags] = useState('');
 
   const activeResources = useMemo(() => resources.filter((item) => item.active), [resources]);
+  const supporterUrl = `${window.location.origin}${SUPPORTER_PATH}`;
+
+  const copySupporterUrl = async () => {
+    await navigator.clipboard.writeText(supporterUrl);
+    toast({ title: 'Link de apoiadores copiado.', description: supporterUrl });
+  };
 
   const load = async () => {
     setLoading(true);
@@ -190,8 +197,18 @@ export default function ElectoralPortalNetwork() {
           <h1 className="flex items-center gap-2 text-2xl font-black"><Globe2 className="h-6 w-6" /> Rede de Portais Eleitorais</h1>
           <p className="mt-1 text-sm text-muted-foreground">Interlinking editorial, biblioteca administrável de referências, cadastro voluntário e telemetria agregada do conteúdo.</p>
         </div>
-        <Button asChild variant="outline"><a href="/1470" target="_blank" rel="noreferrer"><Sparkles className="mr-2 h-4 w-4" /> Abrir construtor /1470</a></Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={() => void copySupporterUrl()}><Copy className="mr-2 h-4 w-4" /> Copiar link de apoiadores</Button>
+          <Button asChild><a href={SUPPORTER_PATH} target="_blank" rel="noreferrer"><Sparkles className="mr-2 h-4 w-4" /> Abrir link de apoiadores</a></Button>
+        </div>
       </div>
+
+      <Card className="border-cyan-500/30 bg-cyan-500/5">
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
+          <div><strong>Link público oficial:</strong><div className="mt-1 break-all font-mono text-xs text-muted-foreground">{supporterUrl}</div></div>
+          <Badge variant="outline">Sem login</Badge>
+        </CardContent>
+      </Card>
 
       <Card className="border-emerald-500/30 bg-emerald-500/5">
         <CardContent className="flex gap-3 p-4 text-sm">

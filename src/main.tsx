@@ -3,7 +3,10 @@ import "./index.css";
 
 const root = createRoot(document.getElementById("root")!);
 const normalizedPath = window.location.pathname.replace(/\/+$/, "") || "/";
-const isPublicSupporterRoute = normalizedPath === "/1470" || normalizedPath === "/apoiadores/avatar";
+const isPublicSupporterRoute = normalizedPath === "/1470"
+  || normalizedPath === "/apoiadores"
+  || normalizedPath === "/apoiadores/avatar"
+  || normalizedPath.startsWith("/collab/");
 
 async function bootstrap() {
   if (isPublicSupporterRoute) {

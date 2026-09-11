@@ -25,6 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { ELECTORAL_EDITORIAL_SECTIONS, evaluateElectoralCompliance, type ElectoralComplianceProfile } from '@/lib/electoralCompliance';
 import { ELECTORAL_LONGFORM_TARGET, evaluateLongformDepth } from '@/lib/electoralEditorialStandards';
+import { Link } from 'react-router-dom';
 
 const ACTIVE_PRESET = MADEIRA_1470_PRESET;
 const ELECTION_DATE_2026 = '2026-10-04';
@@ -258,7 +259,7 @@ export default function ElectoralCampaign() {
             <p className="text-muted-foreground">Identidade fixa, compliance, mídia, GEO factual, Deep-SEO e revisão em uma única esteira.</p>
           </div>
         </div>
-        <div className="flex gap-2"><Badge variant="outline">{campaignPhase}</Badge><Badge variant={compliance.canPublish ? 'default' : 'destructive'}>{compliance.score}% compliance</Badge></div>
+        <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{campaignPhase}</Badge><Badge variant={compliance.canPublish ? 'default' : 'destructive'}>{compliance.score}% compliance</Badge><Button size="sm" variant="outline" asChild><Link to="/electoral-campaign/supporters"><Users className="mr-2 h-4 w-4" /> Base de apoiadores</Link></Button><Button size="sm" asChild><a href="/apoiadores" target="_blank" rel="noreferrer"><Share2 className="mr-2 h-4 w-4" /> Link público</a></Button></div>
       </div>
 
       <Card className="border-emerald-500/30 bg-emerald-500/5">

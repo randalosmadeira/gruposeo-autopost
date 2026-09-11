@@ -115,11 +115,11 @@ describe('Zica Posts stability regressions', () => {
     expect(api).toContain('supporter_whatsapp_invalid');
   });
 
-  it('exposes the supporter database only through a protected CEO endpoint', () => {
+  it('exposes the supporter database only through the protected electoral manager endpoint', () => {
     const app = read('src/App.tsx');
     const admin = read('supabase/functions/supporter-avatar-admin/index.ts');
     expect(app).toContain('/electoral-campaign/supporters');
-    expect(admin).toContain('rpc("is_ceo")');
+    expect(admin).toContain('rpc("can_manage_electoral_campaign")');
     expect(admin).not.toContain('public_token_hash');
     expect(admin).not.toContain('fingerprint_hash');
   });

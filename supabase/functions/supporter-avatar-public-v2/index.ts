@@ -12,6 +12,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || "";
 const RATE_LIMIT = Number(Deno.env.get("SUPPORTER_AVATAR_DAILY_LIMIT") || "5");
 const TURNSTILE_SECRET = Deno.env.get("TURNSTILE_SECRET_KEY") || "";
+const PIPELINE = "supporter-avatar-resumable-v5";
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false, autoRefreshToken: false } });
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
@@ -115,10 +116,12 @@ Deno.serve(async (req: Request) => {
     if (action === "capabilities") {
       return json({
         ok: true,
-        pipeline: "auto-selector-v2",
+        pipeline: PIPELINE,
         candidateSelection: "private-automatic",
         publicCandidateGallery: false,
         socialOutputs: ["1080x1080", "1080x1350", "1200x630"],
+        technicalRetriesFree: true,
+        resumable: true,
         abuseProtection: { turnstileConfigured: Boolean(TURNSTILE_SECRET) },
       });
     }
@@ -156,7 +159,7 @@ Deno.serve(async (req: Request) => {
         consent_public_gallery: body.consentPublicGallery === true,
         consent_at: new Date().toISOString(),
         status: "needs_input",
-        pipeline_version: "auto-selector-v2",
+        pipeline_version: PIPELINE,
         internal_selection: {},
       }).select("id,status,expires_at,max_generations").single();
       if (error) throw error;
@@ -251,8 +254,10 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "status") {
+      const { error: reconcileError } = await admin.rpc("reconcile_stale_supporter_avatar_jobs");
+      if (reconcileError) console.warn("supporter-avatar-public-v2 reconciliation:", reconcileError.code || "unknown");
       const { data: latest } = await admin.from("supporter_avatar_requests")
-        .select("status,supporter_name,city,state,source_count,generation_count,max_generations,updated_at,completed_at")
+        .select("status,supporter_name,city,state,source_count,generation_count,max_generations,pipeline_version,updated_at,completed_at")
         .eq("id", requestId).single();
       const { data: job } = await admin.from("supporter_avatar_jobs")
         .select("stage,status")
@@ -276,6 +281,7 @@ Deno.serve(async (req: Request) => {
         job: job ? { stage: job.stage, status: job.status } : null,
         outputs: signed,
         candidateSelection: "automatic-private",
+        pipeline: PIPELINE,
       });
     }
 

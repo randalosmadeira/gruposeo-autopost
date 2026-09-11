@@ -8,6 +8,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Layout } from "@/components/layout/Layout";
 import { AdminRoute } from "@/components/AdminRoute";
+import { ElectoralRoute } from "@/components/ElectoralRoute";
 
 const Dashboard = lazy(() => import("./pages/DashboardNew"));
 const ContentCalendar = lazy(() => import("./pages/ContentCalendar"));
@@ -118,12 +119,12 @@ const App = () => (
                 <Route path="/keywords/bulk" element={<BulkKeywordGenerator />} />
                 <Route path="/bulk-generator" element={<Navigate to="/keywords/bulk" replace />} />
                 <Route path="/ai-chat" element={<AIChat />} />
-                <Route path="/electoral-campaign" element={<ElectoralCampaign />} />
-                <Route path="/electoral-campaign/portal-network" element={<ElectoralPortalNetwork />} />
-                <Route path="/electoral-campaign/editorial-console" element={<ElectoralEditorialConsole />} />
-                <Route path="/electoral-campaign/history" element={<ElectoralEditorialConsole />} />
-                <Route path="/electoral-campaign/supporter-avatar-prompts" element={<SupporterAvatarPromptEditor />} />
-                <Route path="/electoral-campaign/supporters" element={<SupportersAdminPage />} />
+                <Route path="/electoral-campaign" element={<ElectoralRoute><ElectoralCampaign /></ElectoralRoute>} />
+                <Route path="/electoral-campaign/portal-network" element={<ElectoralRoute><ElectoralPortalNetwork /></ElectoralRoute>} />
+                <Route path="/electoral-campaign/editorial-console" element={<ElectoralRoute><ElectoralEditorialConsole /></ElectoralRoute>} />
+                <Route path="/electoral-campaign/history" element={<ElectoralRoute><ElectoralEditorialConsole /></ElectoralRoute>} />
+                <Route path="/electoral-campaign/supporter-avatar-prompts" element={<AdminRoute><SupporterAvatarPromptEditor /></AdminRoute>} />
+                <Route path="/electoral-campaign/supporters" element={<ElectoralRoute><SupportersAdminPage /></ElectoralRoute>} />
                 <Route path="/auditoria-gbp" element={<AuditoriaGBP />} />
                 <Route path="/hiperlocal" element={<Hiperlocal />} />
                 <Route path="/system-prompts" element={<AdminRoute><Navigate to="/admin/prompts" replace /></AdminRoute>} />

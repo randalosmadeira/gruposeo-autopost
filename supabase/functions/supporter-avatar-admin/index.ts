@@ -15,7 +15,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 function env(name: string) { return String(Deno.env.get(name) || "").trim(); }
 function normalizeQuery(value: unknown, max = 80) { return String(value ?? "").replace(/[%_,()]/g, " ").replace(/\s+/g, " ").trim().slice(0, max); }
 
-async function requireCeo(req: Request) {
+async function requireElectoralManager(req: Request) {
   const authHeader = req.headers.get("Authorization") || "";
   if (!authHeader.startsWith("Bearer ")) return { error: json({ error: "authorization_required" }, 401) };
   const supabaseUrl = env("SUPABASE_URL");
@@ -28,15 +28,15 @@ async function requireCeo(req: Request) {
   const token = authHeader.slice(7);
   const { data: authData, error: authError } = await userClient.auth.getUser(token);
   if (authError || !authData.user) return { error: json({ error: "invalid_session" }, 401) };
-  const { data: isCeo, error: roleError } = await userClient.rpc("is_ceo");
-  if (roleError || isCeo !== true) return { error: json({ error: "ceo_access_required" }, 403) };
+  const { data: canManage, error: roleError } = await userClient.rpc("can_manage_electoral_campaign");
+  if (roleError || canManage !== true) return { error: json({ error: "electoral_manager_access_required" }, 403) };
   return { user: authData.user };
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-  const access = await requireCeo(req);
+  const access = await requireElectoralManager(req);
   if ("error" in access) return access.error;
 
   const supabaseUrl = env("SUPABASE_URL");
@@ -45,6 +45,8 @@ Deno.serve(async (req: Request) => {
   const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
   try {
+    const { error: reconcileError } = await admin.rpc("reconcile_stale_supporter_avatar_jobs");
+    if (reconcileError) console.warn("supporter-avatar-admin reconciliation:", reconcileError.code || "unknown");
     const body = await req.json().catch(() => ({}));
     const page = Math.max(1, Number(body.page || 1));
     const pageSize = Math.min(100, Math.max(10, Number(body.pageSize || 50)));

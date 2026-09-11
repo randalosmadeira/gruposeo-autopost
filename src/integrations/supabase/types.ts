@@ -2248,6 +2248,7 @@ export type Database = {
       }
     }
     Functions: {
+      can_manage_electoral_campaign: { Args: never; Returns: boolean }
       exec_sql: { Args: { sql_query: string }; Returns: Json }
     }
     Enums: {

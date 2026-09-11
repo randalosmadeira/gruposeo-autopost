@@ -98,7 +98,7 @@ export default function SupportersAdminPage() {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Sessão administrativa ausente.');
+      if (!session?.access_token) throw new Error('Sessão de gestão ausente.');
       const response = await fetch(ADMIN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
@@ -132,7 +132,7 @@ export default function SupportersAdminPage() {
   ], [stats]);
 
   if (forbidden) {
-    return <div className="p-6"><Card className="border-red-500/20 bg-red-500/5"><CardContent className="flex min-h-[360px] flex-col items-center justify-center text-center"><ShieldCheck className="mb-4 h-10 w-10 text-red-300" /><h1 className="text-xl font-bold">Acesso restrito ao CEO</h1><p className="mt-2 max-w-lg text-sm text-muted-foreground">A base de apoiadores contém dados pessoais e somente perfis com papel CEO podem consultá-la.</p></CardContent></Card></div>;
+    return <div className="p-6"><Card className="border-red-500/20 bg-red-500/5"><CardContent className="flex min-h-[360px] flex-col items-center justify-center text-center"><ShieldCheck className="mb-4 h-10 w-10 text-red-300" /><h1 className="text-xl font-bold">Acesso restrito à gestão eleitoral</h1><p className="mt-2 max-w-lg text-sm text-muted-foreground">A base contém dados pessoais e exige perfil CEO ou Gestor eleitoral autorizado em plano interno.</p></CardContent></Card></div>;
   }
 
   return (
@@ -153,7 +153,7 @@ export default function SupportersAdminPage() {
         })}
       </tbody></table></div><div className="flex items-center justify-between border-t px-4 py-3 text-sm"><span className="text-muted-foreground">{pagination.total} registro(s) · página {pagination.page} de {pagination.pages}</span><div className="flex gap-2"><Button variant="outline" size="sm" disabled={pagination.page <= 1 || loading} onClick={() => void load(pagination.page - 1)}>Anterior</Button><Button variant="outline" size="sm" disabled={pagination.page >= pagination.pages || loading} onClick={() => void load(pagination.page + 1)}>Próxima</Button></div></div></CardContent></Card>
 
-      <div className="rounded-xl border border-border bg-muted/20 p-4 text-xs leading-5 text-muted-foreground">LGPD e segurança: esta tela exige sessão autenticada e papel CEO. A API administrativa não retorna hashes internos, tokens públicos, fingerprints nem fotografias privadas. Candidate selection continua auditável apenas no backend.</div>
+      <div className="rounded-xl border border-border bg-muted/20 p-4 text-xs leading-5 text-muted-foreground">LGPD e segurança: esta tela exige sessão autenticada e perfil de gestão eleitoral autorizado. A API administrativa não retorna hashes internos, tokens públicos, fingerprints nem fotografias privadas. A seleção da referência continua auditável apenas no backend.</div>
     </div>
   );
 }

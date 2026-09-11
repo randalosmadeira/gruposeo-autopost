@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom';
-import { CalendarDays, FileText, Globe2, Home, UserRound } from 'lucide-react';
+import { CalendarDays, FileText, Globe2, Home, UserRound, Vote } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useElectoralAccess } from '@/hooks/useElectoralAccess';
 
 const items = [
   { to: '/dashboard', label: 'Painel', icon: Home, end: true },
@@ -11,9 +12,19 @@ const items = [
 ];
 
 export function MobileDock() {
+  const { canManageElectoral } = useElectoralAccess();
+  const visibleItems = canManageElectoral
+    ? [
+        ...items.map((item) => item.to === '/calendar' ? { ...item, primary: false } : item),
+        { to: '/electoral-campaign', label: 'Eleitoral', icon: Vote, primary: true },
+      ]
+    : items;
   return (
-    <nav className="neural-mobile-dock fixed inset-x-3 bottom-3 z-50 grid grid-cols-5 items-end rounded-2xl border border-[#30363D]/90 bg-[#0D1117]/92 px-2 pb-[max(.45rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_18px_70px_rgba(0,0,0,.65)] backdrop-blur-2xl md:hidden">
-      {items.map(({ to, label, icon: Icon, primary, end }) => (
+    <nav className={cn(
+      'neural-mobile-dock fixed inset-x-3 bottom-3 z-50 grid items-end rounded-2xl border border-[#30363D]/90 bg-[#0D1117]/92 px-2 pb-[max(.45rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_18px_70px_rgba(0,0,0,.65)] backdrop-blur-2xl md:hidden',
+      canManageElectoral ? 'grid-cols-6' : 'grid-cols-5',
+    )}>
+      {visibleItems.map(({ to, label, icon: Icon, primary, end }) => (
         <NavLink
           key={to}
           to={to}
