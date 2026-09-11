@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check:claude-models": "node scripts/check-claude-model-policy.mjs",
+    "check:electoral-release": "node scripts/check-electoral-release-contract.mjs",
     "e2e:supporter-avatar": "node scripts/supporter-avatar-production-e2e.mjs",
     "check": "npm run check:claude-models && npm run lint && npm run test && npm run build",
     "build:zica": "npm run build:wordpress-packages && vite build --mode production",
