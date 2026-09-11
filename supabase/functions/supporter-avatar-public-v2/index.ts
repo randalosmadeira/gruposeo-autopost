@@ -11,6 +11,8 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || "";
 const RATE_LIMIT = Number(Deno.env.get("SUPPORTER_AVATAR_DAILY_LIMIT") || "5");
+const CONTACT_LIMIT = Number(Deno.env.get("SUPPORTER_AVATAR_CONTACT_WEEKLY_LIMIT") || "3");
+const GLOBAL_HOURLY_LIMIT = Number(Deno.env.get("SUPPORTER_AVATAR_GLOBAL_HOURLY_LIMIT") || "60");
 const TURNSTILE_SECRET = Deno.env.get("TURNSTILE_SECRET_KEY") || "";
 const PIPELINE = "supporter-avatar-resumable-v7";
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -40,9 +42,15 @@ function contact(body: Record<string, unknown>) {
   return { supporterName, email, whatsapp, city, state } as const;
 }
 
-function fingerprint(req: Request) {
-  const ip = req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  return `${ip}|${req.headers.get("user-agent") || "unknown"}|${SUPABASE_URL}`;
+function networkIdentity(req: Request) {
+  return clean(req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim(), 100);
+}
+
+function detectedImageMime(bytes: Uint8Array) {
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) return "image/png";
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes.length >= 12 && new TextDecoder().decode(bytes.subarray(0, 4)) === "RIFF" && new TextDecoder().decode(bytes.subarray(8, 12)) === "WEBP") return "image/webp";
+  return "";
 }
 
 async function captcha(value: string, req: Request) {
@@ -122,7 +130,7 @@ Deno.serve(async (req: Request) => {
         socialOutputs: ["1080x1080", "1080x1350", "1200x630"],
         technicalRetriesFree: true,
         resumable: true,
-        abuseProtection: { turnstileConfigured: Boolean(TURNSTILE_SECRET) },
+        abuseProtection: { turnstileConfigured: Boolean(TURNSTILE_SECRET), atomicRateLimits: true, uploadSignatureValidation: true },
       });
     }
 
@@ -132,16 +140,25 @@ Deno.serve(async (req: Request) => {
       if ("error" in c) return json({ error: c.error }, 422);
       if (body.consentImageUse !== true || body.consentTerms !== true) return json({ error: "required_consents_missing" }, 422);
 
-      const fp = await sha256(fingerprint(req));
-      const { count } = await admin.from("supporter_avatar_requests").select("id", { count: "exact", head: true }).eq("fingerprint_hash", fp).gte("created_at", new Date(Date.now() - 86400000).toISOString());
-      if ((count || 0) >= RATE_LIMIT) return json({ error: "daily_limit_reached" }, 429);
+      const network = networkIdentity(req);
+      const networkHash = network ? await sha256(`network:v1:${network}|${SUPABASE_URL}`) : null;
+      const contactHash = await sha256(`contact:v1:${c.email}|${c.whatsapp}`);
+      const { data: reservation, error: reservationError } = await admin.rpc("reserve_supporter_avatar_create", {
+        p_network_hash: networkHash,
+        p_contact_hash: contactHash,
+        p_network_daily_limit: Math.max(1, Math.min(50, RATE_LIMIT)),
+        p_contact_weekly_limit: Math.max(1, Math.min(20, CONTACT_LIMIT)),
+        p_global_hourly_limit: Math.max(10, Math.min(1000, GLOBAL_HOURLY_LIMIT)),
+      });
+      if (reservationError) throw reservationError;
+      if (reservation?.allowed !== true) return json({ error: "rate_limit_reached" }, 429);
 
       const publicToken = token();
       const style = SUPPORT_STYLES.includes(body.style as never) ? String(body.style) : "premium";
       const supportText = SUPPORT_TEXTS.includes(body.supportText as never) ? String(body.supportText) : "EU APOIO DR. MADEIRA 1470";
       const { data, error } = await admin.from("supporter_avatar_requests").insert({
         public_token_hash: await sha256(publicToken),
-        fingerprint_hash: fp,
+        fingerprint_hash: networkHash,
         supporter_name: c.supporterName,
         email: c.email,
         whatsapp: c.whatsapp,
@@ -221,6 +238,14 @@ Deno.serve(async (req: Request) => {
       const name = path.split("/").pop() || "";
       const { data: objects } = await admin.storage.from("supporter-avatar-uploads").list(requestId, { search: name, limit: 2 });
       if (!objects?.some((item) => item.name === name)) return json({ error: "uploaded_object_not_found" }, 422);
+      const { data: uploaded, error: downloadError } = await admin.storage.from("supporter-avatar-uploads").download(path);
+      if (downloadError || !uploaded) throw downloadError || new Error("uploaded_object_download_failed");
+      const bytes = new Uint8Array(await uploaded.arrayBuffer());
+      const detectedMime = detectedImageMime(bytes);
+      if (!detectedMime || detectedMime !== mimeType || bytes.length !== fileSize) {
+        await admin.storage.from("supporter-avatar-uploads").remove([path]);
+        return json({ error: "uploaded_image_integrity_invalid" }, 422);
+      }
       const { error } = await admin.from("supporter_avatar_sources").insert({ request_id: requestId, storage_path: path, mime_type: mimeType, file_size_bytes: fileSize });
       if (error && !String(error.message).toLowerCase().includes("duplicate")) throw error;
       const { count } = await admin.from("supporter_avatar_sources").select("id", { count: "exact", head: true }).eq("request_id", requestId);
