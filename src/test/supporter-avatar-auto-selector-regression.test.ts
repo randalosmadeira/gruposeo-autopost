@@ -72,9 +72,13 @@ describe('Supporter Avatar 1470 autonomous auto-selector v3 regressions', () => 
     expect(generator).toContain('candidate_reference_fidelity_score');
   });
 
-  it('7. has five bounded infrastructure retries plus three autonomous QA attempts per output', () => {
+  it('7. has five bounded infrastructure retries and one QA attempt per resumed output', () => {
     expect(generator).toContain('MAX_PIPELINE_ATTEMPTS = 5');
-    expect(generator).toContain('MAX_QA_GENERATIONS = 3');
+    expect(generator).toContain('MAX_QA_GENERATIONS = 1');
+    expect(generator).toContain('pendingIndex');
+    expect(generator).toContain('scheduleSelfRetry(requestId, jobId, dispatchToken, pipelineAttempt + 1)');
+    expect(generator).toContain('claim_supporter_avatar_generation_attempt');
+    expect(generator).toContain("status: 'superseded'");
     expect(generator).toContain("status: 'retry'");
     expect(publicApi).toContain('dispatch_retry_');
   });
@@ -90,7 +94,8 @@ describe('Supporter Avatar 1470 autonomous auto-selector v3 regressions', () => 
   it('9. technical failures do not consume a public generation before an output exists', () => {
     expect(autonomyMigration).toContain('technical_retries_are_free');
     expect(autonomyMigration).toContain('record_supporter_avatar_generation_result');
-    expect(generator).toContain('if (producedAnyOutput) await countGenerationResult');
+    expect(generator).toContain('if (stored.length < packEntries.length)');
+    expect(generator).toContain('await countGenerationResult(requestId, jobId)');
   });
 
   it('10. vision analysis uses short-lived URLs plus structured outputs instead of resizing all uploads inside Edge', () => {
@@ -106,9 +111,10 @@ describe('Supporter Avatar 1470 autonomous auto-selector v3 regressions', () => 
     expect(generator).toContain('rankedReferenceIndices');
   });
 
-  it('12. resumes already approved output formats after a retry instead of regenerating them', () => {
-    expect(generator).toContain('existingPassedOutput');
-    expect(generator).toContain('resumed: true');
+  it('12. resumes every finalized format within the same job, including QA-rejected output', () => {
+    expect(generator).toContain('existingJobOutput');
+    expect(generator).toContain('generation_job_id: jobId');
+    expect(generator).toContain('canResumeAnalysis');
     expect(generator).toContain("pipeline_version: PIPELINE_VERSION");
   });
 
