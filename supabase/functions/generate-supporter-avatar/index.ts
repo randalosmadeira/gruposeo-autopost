@@ -20,11 +20,11 @@ const OPENAI_VISION_MODEL = Deno.env.get('OPENAI_VISION_MODEL') || 'gpt-5.6-sol'
 const ANTHROPIC_MODEL = resolveAnthropicModel(Deno.env.get('ANTHROPIC_MODEL'));
 const FIXED_DRIVE_FOLDER = '1NB_yQBM_2bGA5UC6JyCEgC54sjCHSyO6';
 const AGENT = 'NEXUS PHOTO 1470';
-const PIPELINE_VERSION = 'supporter-avatar-parallel-v6';
+const PIPELINE_VERSION = 'supporter-avatar-resumable-v7';
 const MAX_PIPELINE_ATTEMPTS = 5;
-// Each Edge invocation performs one image edit per social format. Additional
-// quality attempts are explicit public regenerations, keeping a single run
-// inside the platform wall-clock budget instead of timing out mid-pack.
+// Each Edge invocation finalizes at most one social format. The persisted
+// analysis and per-job output markers let the next invocation resume without
+// repeating expensive vision work or duplicating a QA-rejected format.
 const MAX_QA_GENERATIONS = 1;
 const SIGNED_URL_TTL_SECONDS = 900;
 const MAX_ANTHROPIC_REMOTE_BYTES = 5 * 1024 * 1024;
@@ -543,12 +543,12 @@ async function qualityAuditorAgent(supporter: SourceImage, candidate: CandidateM
   return qa;
 }
 
-async function existingPassedOutput(requestId: string, platform: SupportSocialPackKey) {
+async function existingJobOutput(requestId: string, platform: SupportSocialPackKey, jobId: string) {
   const { data } = await admin.from('supporter_avatar_outputs')
     .select('id,platform,width,height,storage_path,qa_payload,created_at')
     .eq('request_id', requestId)
     .eq('platform', platform)
-    .contains('qa_payload', { pass: true, pipeline_version: PIPELINE_VERSION })
+    .contains('qa_payload', { pipeline_version: PIPELINE_VERSION, generation_job_id: jobId })
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -620,10 +620,11 @@ serve(async (req) => {
       return json({ error: 'openai_image_provider_not_configured' }, 503);
     }
 
-    await updateJob(jobId, {
-      status: 'running', stage: PIPELINE_VERSION, provider: 'openai', model: OPENAI_IMAGE_MODEL,
-      attempts: pipelineAttempt, started_at: job.started_at || new Date().toISOString(), error_message: null,
+    const { data: claimed, error: claimError } = await admin.rpc('claim_supporter_avatar_generation_attempt', {
+      p_request_id: requestId, p_job_id: jobId, p_attempt: pipelineAttempt,
     });
+    if (claimError) throw claimError;
+    if (claimed !== true) return json({ ok: true, status: 'superseded', pipeline: PIPELINE_VERSION }, 202);
     await updateRequest(requestId, { status: 'analyzing', pipeline_version: PIPELINE_VERSION, supporter_approved_at: null, completed_at: null });
 
     const sources = await sourceImages(requestId);
@@ -633,25 +634,67 @@ serve(async (req) => {
       return json({ error: 'no_source_images' }, 422);
     }
 
-    const intake = await photoIntakeAgent(sources, keys);
-    if (!intake.usable) {
-      await updateRequest(requestId, { status: 'needs_input', internal_selection: { photo_intake: intake.analysis } });
-      await updateJob(jobId, { status: 'needs_review', error_message: 'supporter_photo_not_usable', output_payload: { photo_intake: intake.analysis }, completed_at: new Date().toISOString() });
-      return json({ ok: false, status: 'needs_input', error: 'supporter_photo_not_usable' }, 422);
-    }
-
-    const initialSupporterIndex = intake.referenceIndex;
-    const supporterMeta = sources[initialSupporterIndex] || sources[0];
     const candidates = await candidateMetadata();
-    const selected = await candidateSelectorAgent(supporterMeta, intake.analysis, candidates, String(request.style || 'premium'), keys);
-    let candidateMeta = candidates[selected.selectedIndex] || candidates[0];
-    let runnerUpMeta = candidates[selected.runnerUpIndex] || candidateMeta;
-    const scene = await campaignSceneAgent(intake.analysis, candidateMeta, String(request.style || 'premium'), keys);
+    type IntakeResult = Awaited<ReturnType<typeof photoIntakeAgent>>;
+    type SelectionResult = Awaited<ReturnType<typeof candidateSelectorAgent>>;
+    type SceneResult = Awaited<ReturnType<typeof campaignSceneAgent>>;
+    const previousSelection = (request.internal_selection || {}) as {
+      photo_intake?: IntakeResult['analysis'];
+      photo_intake_degraded?: boolean;
+      supporter_source_index?: number;
+      ranked_supporter_indices?: number[];
+      candidate_selection?: SelectionResult['selection'];
+      candidate_selection_degraded?: boolean;
+      selected_candidate_slug?: string;
+      runner_up_candidate_slug?: string;
+      scene?: SceneResult;
+    };
+    const canResumeAnalysis = request.pipeline_version === PIPELINE_VERSION
+      && previousSelection.photo_intake
+      && previousSelection.candidate_selection
+      && previousSelection.selected_candidate_slug
+      && previousSelection.scene;
 
-    await updateRequest(requestId, {
-      status: 'candidate_selected',
-      candidate_preset_slug: candidateMeta.slug,
-      internal_selection: {
+    let intake: IntakeResult;
+    let selected: SelectionResult;
+    let initialSupporterIndex: number;
+    let candidateMeta: CandidateMeta;
+    let runnerUpMeta: CandidateMeta;
+    let scene: SceneResult;
+
+    if (canResumeAnalysis) {
+      initialSupporterIndex = Math.max(0, Number(previousSelection.supporter_source_index || 0));
+      intake = {
+        usable: true,
+        analysis: previousSelection.photo_intake,
+        degraded: Boolean(previousSelection.photo_intake_degraded),
+        referenceIndex: initialSupporterIndex,
+        rankedReferenceIndices: Array.isArray(previousSelection.ranked_supporter_indices)
+          ? previousSelection.ranked_supporter_indices
+          : [initialSupporterIndex],
+      };
+      selected = {
+        selection: previousSelection.candidate_selection,
+        degraded: Boolean(previousSelection.candidate_selection_degraded),
+      };
+      candidateMeta = candidates.find((candidate) => candidate.slug === previousSelection.selected_candidate_slug) || candidates[0];
+      runnerUpMeta = candidates.find((candidate) => candidate.slug === previousSelection.runner_up_candidate_slug) || candidateMeta;
+      scene = previousSelection.scene;
+    } else {
+      intake = await photoIntakeAgent(sources, keys);
+      if (!intake.usable) {
+        await updateRequest(requestId, { status: 'needs_input', internal_selection: { photo_intake: intake.analysis } });
+        await updateJob(jobId, { status: 'needs_review', error_message: 'supporter_photo_not_usable', output_payload: { photo_intake: intake.analysis }, completed_at: new Date().toISOString() });
+        return json({ ok: false, status: 'needs_input', error: 'supporter_photo_not_usable' }, 422);
+      }
+      initialSupporterIndex = intake.referenceIndex;
+      const supporterMeta = sources[initialSupporterIndex] || sources[0];
+      selected = await candidateSelectorAgent(supporterMeta, intake.analysis, candidates, String(request.style || 'premium'), keys);
+      candidateMeta = candidates[selected.selectedIndex] || candidates[0];
+      runnerUpMeta = candidates[selected.runnerUpIndex] || candidateMeta;
+      scene = await campaignSceneAgent(intake.analysis, candidateMeta, String(request.style || 'premium'), keys);
+
+      const internalSelection = {
         photo_intake: intake.analysis,
         photo_intake_degraded: intake.degraded,
         supporter_source_index: initialSupporterIndex,
@@ -662,9 +705,12 @@ serve(async (req) => {
         runner_up_candidate_slug: runnerUpMeta.slug,
         scene,
         autonomous_recovery: true,
-      },
-    });
-    await updateJob(jobId, { output_payload: { pipeline_version: PIPELINE_VERSION, photo_intake: intake.analysis, candidate_selection: selected.selection, scene, autonomous_recovery: true } });
+      };
+      await updateRequest(requestId, {
+        status: 'candidate_selected', candidate_preset_slug: candidateMeta.slug, internal_selection: internalSelection,
+      });
+      await updateJob(jobId, { output_payload: { pipeline_version: PIPELINE_VERSION, ...internalSelection } });
+    }
 
     const sourceCache = new Map<number, Promise<LoadedSource>>();
     const candidateCache = new Map<string, Promise<CandidateImage>>();
@@ -687,19 +733,11 @@ serve(async (req) => {
     }
 
     const packEntries = Object.entries(SUPPORT_SOCIAL_PACK) as Array<[SupportSocialPackKey, typeof SUPPORT_SOCIAL_PACK[SupportSocialPackKey]]>;
-    const stored: Array<Record<string, unknown>> = [];
-    let allPass = true;
-    let producedAnyOutput = false;
-
-    // The three independent image edits run concurrently. Sequential high
-    // quality edits exceeded the Edge wall-clock budget before the first pack
-    // could be finalized, leaving requests indefinitely in `generating`.
-    await Promise.all(packEntries.map(async ([key, spec]) => {
-      const existing = await existingPassedOutput(requestId, key);
-      if (existing) {
-        stored.push({ platform: key, width: existing.width, height: existing.height, qa_pass: true, resumed: true, output_id: existing.id });
-        return;
-      }
+    const existing = await Promise.all(packEntries.map(([key]) => existingJobOutput(requestId, key, jobId)));
+    const pendingIndex = existing.findIndex((output) => !output);
+    let storedCurrent: Record<string, unknown> | null = null;
+    if (pendingIndex >= 0) {
+    const [key, spec] = packEntries[pendingIndex];
 
       let currentSupporterIndex = initialSupporterIndex;
       let currentCandidateMeta = candidateMeta;
@@ -777,8 +815,10 @@ serve(async (req) => {
 
       if (!finalBytes) throw new Error(`variant_generation_missing:${key}`);
       const passed = finalQa?.pass === true;
-      allPass = allPass && passed;
-      producedAnyOutput = true;
+      const { data: currentAttempt } = await admin.from('supporter_avatar_jobs').select('attempts,status').eq('id', jobId).single();
+      if (Number(currentAttempt?.attempts || 0) !== pipelineAttempt || currentAttempt?.status !== 'running') {
+        return json({ ok: true, status: 'superseded', pipeline: PIPELINE_VERSION }, 202);
+      }
       const path = `${requestId}/${key}-${spec.exactWidth}x${spec.exactHeight}-${crypto.randomUUID()}.png`;
       const { error: uploadError } = await admin.storage.from('supporter-avatar-generated').upload(path, finalBytes, { contentType: 'image/png', upsert: false, cacheControl: '31536000' });
       if (uploadError) throw uploadError;
@@ -798,6 +838,7 @@ serve(async (req) => {
           pass: passed,
           agent: AGENT,
           pipeline_version: PIPELINE_VERSION,
+          generation_job_id: jobId,
           autonomous_recovery: true,
           social_crop_agent: true,
           exact_output: `${spec.exactWidth}x${spec.exactHeight}`,
@@ -809,11 +850,38 @@ serve(async (req) => {
           qa_provider_error: qaProviderError || null,
         },
       }).select('id').single();
-      if (outputError) throw outputError;
-      stored.push({ platform: key, width: spec.exactWidth, height: spec.exactHeight, qa_pass: passed, output_id: inserted?.id, qa_provider_error: qaProviderError || null });
-    }));
+      if (outputError) {
+        await admin.storage.from('supporter-avatar-generated').remove([path]);
+        if (!String(outputError.message || '').toLowerCase().includes('duplicate')) throw outputError;
+      }
+      storedCurrent = { platform: key, width: spec.exactWidth, height: spec.exactHeight, qa_pass: passed, output_id: inserted?.id || null, duplicate_guarded: Boolean(outputError), qa_provider_error: qaProviderError || null };
+    }
+    const { data: jobOutputs, error: jobOutputsError } = await admin.from('supporter_avatar_outputs')
+      .select('id,platform,width,height,qa_payload')
+      .eq('request_id', requestId)
+      .contains('qa_payload', { pipeline_version: PIPELINE_VERSION, generation_job_id: jobId })
+      .order('created_at', { ascending: false });
+    if (jobOutputsError) throw jobOutputsError;
+    const latestByPlatform = new Map<string, { id: string; platform: string; width: number; height: number; qa_payload?: { pass?: boolean } }>();
+    for (const output of jobOutputs || []) if (!latestByPlatform.has(output.platform)) latestByPlatform.set(output.platform, output);
+    const stored = packEntries.flatMap(([platform]) => {
+      const output = latestByPlatform.get(platform);
+      return output ? [{ platform, width: output.width, height: output.height, qa_pass: output.qa_payload?.pass === true, output_id: output.id }] : [];
+    });
 
-    if (producedAnyOutput) await countGenerationResult(requestId, jobId);
+    if (stored.length < packEntries.length) {
+      await updateRequest(requestId, { status: 'retry', pipeline_version: PIPELINE_VERSION });
+      await updateJob(jobId, {
+        status: 'retry', stage: PIPELINE_VERSION, attempts: pipelineAttempt,
+        error_message: null,
+        output_payload: { ...(job.output_payload || {}), pipeline_version: PIPELINE_VERSION, outputs: stored, ...(storedCurrent ? { last_output: storedCurrent } : {}), autonomous_recovery: true },
+      });
+      scheduleSelfRetry(requestId, jobId, dispatchToken, pipelineAttempt + 1);
+      return json({ ok: true, status: 'retry', continuing: true, pipeline: PIPELINE_VERSION, outputs: stored });
+    }
+
+    await countGenerationResult(requestId, jobId);
+    const allPass = stored.every((output) => output.qa_pass === true);
 
     const finalStatus = allPass ? 'completed' : 'needs_review';
     const completedAt = allPass ? new Date().toISOString() : null;
@@ -844,7 +912,9 @@ serve(async (req) => {
       outputs: stored.map((item) => ({ platform: item.platform, width: item.width, height: item.height, qaPass: item.qa_pass })),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'unknown_error';
+    const message = error instanceof Error
+      ? error.message
+      : safeDetail((error as { message?: unknown } | null)?.message || error, 500);
     console.error('generate-supporter-avatar:', requestId, safeDetail(message, 500));
     if (requestId && jobId) {
       if (transientError(message) && pipelineAttempt < MAX_PIPELINE_ATTEMPTS) {

@@ -12,7 +12,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || "";
 const RATE_LIMIT = Number(Deno.env.get("SUPPORTER_AVATAR_DAILY_LIMIT") || "5");
 const TURNSTILE_SECRET = Deno.env.get("TURNSTILE_SECRET_KEY") || "";
-const PIPELINE = "supporter-avatar-parallel-v6";
+const PIPELINE = "supporter-avatar-resumable-v7";
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false, autoRefreshToken: false } });
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {

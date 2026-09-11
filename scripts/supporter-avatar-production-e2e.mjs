@@ -8,7 +8,7 @@ const fixturePath = resolve(String(process.env.SUPPORTER_E2E_FIXTURE || ''));
 const timeoutMs = Number(process.env.SUPPORTER_E2E_TIMEOUT_MS || 12 * 60 * 1000);
 const pollMs = Number(process.env.SUPPORTER_E2E_POLL_MS || 5000);
 const testRegeneration = process.env.SUPPORTER_E2E_REGENERATE === 'true';
-const expectedPipeline = 'supporter-avatar-parallel-v6';
+const expectedPipeline = 'supporter-avatar-resumable-v7';
 const expectedDisclosure = 'Imagem gerada por IA - Campanha Oficial';
 const expectedOutputs = new Map([
   ['square', [1080, 1080]],
@@ -67,6 +67,7 @@ async function waitForTerminal(generation) {
       previous = signature;
     }
     if (status === 'completed') return payload;
+    if (status === 'needs_review' && Array.isArray(payload.outputs) && payload.outputs.length === expectedOutputs.size) return payload;
     if (status === 'failed' || status === 'needs_review') {
       throw new Error(`generation_${generation}_${status}:${stage}`);
     }
@@ -171,11 +172,20 @@ try {
   log('e2e_passed', { requestId: session.requestId, pipeline: expectedPipeline });
 } finally {
   if (session?.requestId && session?.token) {
-    try {
-      const deleted = await post(publicUrl, { action: 'delete', requestId: session.requestId, token: session.token });
-      log('cleanup_complete', { requestId: session.requestId, deleted: deleted.payload.deleted === true });
-    } catch (error) {
-      log('cleanup_failed', { requestId: session.requestId, error: error instanceof Error ? error.message : String(error) });
+    let cleanupError = null;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        const deleted = await post(publicUrl, { action: 'delete', requestId: session.requestId, token: session.token });
+        log('cleanup_complete', { requestId: session.requestId, deleted: deleted.payload.deleted === true, attempt });
+        cleanupError = null;
+        break;
+      } catch (error) {
+        cleanupError = error;
+        if (attempt < 3) await new Promise((resolveDelay) => setTimeout(resolveDelay, 1000 * attempt));
+      }
+    }
+    if (cleanupError) {
+      log('cleanup_failed', { requestId: session.requestId, error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError) });
       process.exitCode = 2;
     }
   }

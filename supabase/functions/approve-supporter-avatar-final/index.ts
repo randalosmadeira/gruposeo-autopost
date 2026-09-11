@@ -41,7 +41,7 @@ serve(async (req) => {
       .maybeSingle();
     if (requestError || !request) return json({ error: 'request_not_found_or_expired' }, 404);
     if (new Date(request.expires_at).getTime() < Date.now()) return json({ error: 'request_not_found_or_expired' }, 404);
-    if (request.status !== 'completed') return json({ error: 'final_not_ready_for_approval', status: request.status }, 409);
+    if (!['completed', 'needs_review'].includes(request.status)) return json({ error: 'final_not_ready_for_approval', status: request.status }, 409);
 
     const { data: rows, error: outputError } = await admin.from('supporter_avatar_outputs')
       .select('platform,storage_path,mime_type,width,height,qa_score,created_at')
@@ -53,10 +53,16 @@ serve(async (req) => {
     const latest = new Map<string, any>();
     for (const row of rows || []) if (!latest.has(row.platform)) latest.set(row.platform, row);
     if (PLATFORMS.some((platform) => !latest.has(platform))) return json({ error: 'social_pack_incomplete' }, 409);
+    const exactDimensions: Record<string, [number, number]> = { square: [1080, 1080], portrait: [1080, 1350], landscape: [1200, 630] };
+    if (PLATFORMS.some((platform) => {
+      const output = latest.get(platform);
+      const expected = exactDimensions[platform];
+      return output.width !== expected[0] || output.height !== expected[1];
+    })) return json({ error: 'social_pack_dimensions_invalid' }, 409);
 
     const approvedAt = new Date().toISOString();
     const { error: updateError } = await admin.from('supporter_avatar_requests')
-      .update({ supporter_approved_at: approvedAt, delivery_mode: 'social-pack-3', updated_at: approvedAt })
+      .update({ status: 'completed', completed_at: approvedAt, supporter_approved_at: approvedAt, delivery_mode: 'social-pack-3', updated_at: approvedAt })
       .eq('id', requestId);
     if (updateError) throw updateError;
 

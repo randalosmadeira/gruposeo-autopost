@@ -34,9 +34,10 @@ describe('supporter avatar autonomous vision runtime v3', () => {
     expect(source).toContain('autonomous_recovery');
   });
 
-  it('does not charge a public generation until at least one output is stored', () => {
+  it('does not charge a public generation until the complete social pack is stored', () => {
     expect(migration).not.toContain('generation_count = generation_count + 1,\n      supporter_approved_at');
     expect(migration).toContain('record_supporter_avatar_generation_result');
-    expect(source).toContain('if (producedAnyOutput) await countGenerationResult');
+    expect(source).toContain('if (stored.length < packEntries.length)');
+    expect(source).toContain('await countGenerationResult(requestId, jobId)');
   });
 });
