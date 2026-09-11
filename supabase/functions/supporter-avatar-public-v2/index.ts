@@ -17,6 +17,15 @@ const TURNSTILE_SECRET = Deno.env.get("TURNSTILE_SECRET_KEY") || "";
 const PIPELINE = "supporter-avatar-resumable-v7";
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false, autoRefreshToken: false } });
 
+function publicReason(errorMessage: unknown) {
+  const value = String(errorMessage || "").toLowerCase();
+  if (value.includes("stale_partial_pack")) return "generation_partial_review";
+  if (value.includes("stale_job")) return "generation_delayed_review";
+  if (value.includes("qa") || value.includes("review")) return "quality_review_required";
+  if (value.includes("provider") || value.includes("dispatch")) return "generation_temporarily_unavailable";
+  return null;
+}
+
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
   headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
@@ -285,7 +294,7 @@ Deno.serve(async (req: Request) => {
         .select("status,supporter_name,city,state,source_count,generation_count,max_generations,pipeline_version,updated_at,completed_at")
         .eq("id", requestId).single();
       const { data: job } = await admin.from("supporter_avatar_jobs")
-        .select("stage,status")
+        .select("stage,status,error_message")
         .eq("request_id", requestId).order("created_at", { ascending: false }).limit(1).maybeSingle();
       const { data: outputs } = await admin.from("supporter_avatar_outputs")
         .select("platform,width,height,storage_path,qa_score")
@@ -303,7 +312,7 @@ Deno.serve(async (req: Request) => {
       return json({
         ok: true,
         request: latest,
-        job: job ? { stage: job.stage, status: job.status } : null,
+        job: job ? { stage: job.stage, status: job.status, reasonCode: publicReason(job.error_message) } : null,
         outputs: signed,
         candidateSelection: "automatic-private",
         pipeline: PIPELINE,

@@ -48,6 +48,13 @@ Deno.serve(async (req: Request) => {
     const { error: reconcileError } = await admin.rpc("reconcile_stale_supporter_avatar_jobs");
     if (reconcileError) console.warn("supporter-avatar-admin reconciliation:", reconcileError.code || "unknown");
     const body = await req.json().catch(() => ({}));
+    if (body.action === "metrics") {
+      const hours = Math.max(1, Math.min(168, Number(body.hours || 24)));
+      const { data, error } = await admin.rpc("get_supporter_avatar_operational_metrics", { p_hours: hours });
+      if (error) throw error;
+      console.info(JSON.stringify({ event: "supporter_metrics_read", actorId: access.user.id, windowHours: hours }));
+      return json({ ok: true, metrics: data });
+    }
     const page = Math.max(1, Number(body.page || 1));
     const pageSize = Math.min(100, Math.max(10, Number(body.pageSize || 50)));
     const status = normalizeQuery(body.status, 40).toLowerCase();
@@ -90,7 +97,7 @@ Deno.serve(async (req: Request) => {
       },
     });
   } catch (error) {
-    console.error("supporter-avatar-admin:", error);
-    return json({ error: error instanceof Error ? error.message : "internal_error" }, 500);
+    console.error(JSON.stringify({ event: "supporter_admin_error", code: String((error as { code?: unknown })?.code || "internal_error") }));
+    return json({ error: "internal_error" }, 500);
   }
 });
