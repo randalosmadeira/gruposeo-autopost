@@ -72,9 +72,10 @@ describe('Supporter Avatar 1470 autonomous auto-selector v3 regressions', () => 
     expect(generator).toContain('candidate_reference_fidelity_score');
   });
 
-  it('7. has five bounded infrastructure retries plus three autonomous QA attempts per output', () => {
+  it('7. has five bounded infrastructure retries and one concurrent QA attempt per output', () => {
     expect(generator).toContain('MAX_PIPELINE_ATTEMPTS = 5');
-    expect(generator).toContain('MAX_QA_GENERATIONS = 3');
+    expect(generator).toContain('MAX_QA_GENERATIONS = 1');
+    expect(generator).toContain('Promise.all(packEntries.map');
     expect(generator).toContain("status: 'retry'");
     expect(publicApi).toContain('dispatch_retry_');
   });

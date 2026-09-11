@@ -20,9 +20,12 @@ const OPENAI_VISION_MODEL = Deno.env.get('OPENAI_VISION_MODEL') || 'gpt-5.6-sol'
 const ANTHROPIC_MODEL = resolveAnthropicModel(Deno.env.get('ANTHROPIC_MODEL'));
 const FIXED_DRIVE_FOLDER = '1NB_yQBM_2bGA5UC6JyCEgC54sjCHSyO6';
 const AGENT = 'NEXUS PHOTO 1470';
-const PIPELINE_VERSION = 'supporter-avatar-resumable-v5';
+const PIPELINE_VERSION = 'supporter-avatar-parallel-v6';
 const MAX_PIPELINE_ATTEMPTS = 5;
-const MAX_QA_GENERATIONS = 3;
+// Each Edge invocation performs one image edit per social format. Additional
+// quality attempts are explicit public regenerations, keeping a single run
+// inside the platform wall-clock budget instead of timing out mid-pack.
+const MAX_QA_GENERATIONS = 1;
 const SIGNED_URL_TTL_SECONDS = 900;
 const MAX_ANTHROPIC_REMOTE_BYTES = 5 * 1024 * 1024;
 const MAX_ANTHROPIC_TOTAL_BYTES = 10 * 1024 * 1024;
@@ -688,7 +691,10 @@ serve(async (req) => {
     let allPass = true;
     let producedAnyOutput = false;
 
-    for (const [key, spec] of packEntries) {
+    // The three independent image edits run concurrently. Sequential high
+    // quality edits exceeded the Edge wall-clock budget before the first pack
+    // could be finalized, leaving requests indefinitely in `generating`.
+    await Promise.all(packEntries.map(async ([key, spec]) => {
       const existing = await existingPassedOutput(requestId, key);
       if (existing) {
         stored.push({ platform: key, width: existing.width, height: existing.height, qa_pass: true, resumed: true, output_id: existing.id });
@@ -805,7 +811,7 @@ serve(async (req) => {
       }).select('id').single();
       if (outputError) throw outputError;
       stored.push({ platform: key, width: spec.exactWidth, height: spec.exactHeight, qa_pass: passed, output_id: inserted?.id, qa_provider_error: qaProviderError || null });
-    }
+    }));
 
     if (producedAnyOutput) await countGenerationResult(requestId, jobId);
 
