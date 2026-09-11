@@ -1,0 +1,60 @@
+name: Electoral Release Gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/electoral-release-gate.yml'
+      - '.github/workflows/supporter-avatar-smoke.yml'
+      - 'scripts/check-electoral-release-contract.mjs'
+      - 'src/**'
+      - 'supabase/functions/supporter-avatar-*/**'
+      - 'supabase/functions/generate-supporter-avatar/**'
+      - 'supabase/migrations/**supporter_avatar**'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: electoral-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check:electoral-release
+      - run: npx vitest run src/test/supporter-avatar-*.test.ts src/test/electoral-gestor-*.test.ts
+      - run: npm run build:zica
+
+  production-smoke:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Public link and Edge contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          app='https://app.zica.posts.zicajuris.com.br'
+          edge='https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1'
+          test "$(curl --retry 3 -L -sS -o /tmp/apoiadores.html -w '%{http_code}' "$app/apoiadores")" = '200'
+          curl --retry 3 -fsS -H 'Content-Type: application/json' --data '{"action":"capabilities"}' "$edge/supporter-avatar-public-v2" > /tmp/capabilities.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/capabilities.json', encoding='utf-8'))
+          assert p['pipeline']=='supporter-avatar-resumable-v7'
+          assert p['abuseProtection']['atomicRateLimits'] is True
+          assert p['abuseProtection']['uploadSignatureValidation'] is True
+          PY
+          test "$(curl -sS -o /tmp/admin.json -w '%{http_code}' -H 'Content-Type: application/json' --data '{"action":"metrics"}' "$edge/supporter-avatar-admin")" = '401'

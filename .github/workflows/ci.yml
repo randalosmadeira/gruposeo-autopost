@@ -33,6 +33,9 @@ jobs:
       - name: Enforce Claude model policy
         run: npm run check:claude-models
 
+      - name: Enforce electoral release contract
+        run: npm run check:electoral-release
+
       - name: Validate runtime config
         if: github.event_name == 'push'
         shell: bash
