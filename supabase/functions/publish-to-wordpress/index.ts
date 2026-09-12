@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 import { normalizeEditorialHtml } from "../_shared/editorial-html.ts";
 import { findPublicationResidues, resolveMetaDescription } from "../_shared/publication-safety.ts";
+import { evaluateTitleQuality, findBrokenContactCtas, findComplianceViolations, lookupPublishedSlug, normalizeSlugForLookup } from "../_shared/publication-quality.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -306,6 +307,64 @@ Deno.serve(async (req: Request) => {
     }
     if (status === "publish" && body.requireFeaturedImage && !article.featured_image_url) {
       return json({ success: false, error: "Publicação bloqueada: imagem destacada pendente", code: "featured_image_gate", retryable: false, request_id: requestId }, 409);
+    }
+
+    // Portões de qualidade editorial (fail-closed) — ver _shared/publication-quality.ts
+    const titleQuality = evaluateTitleQuality(article.title);
+    if (titleQuality.issues.length > 0) {
+      return json({
+        success: false,
+        error: "Publicação bloqueada: título inválido para pauta editorial (palavra-chave crua, grafia errada ou truncado).",
+        code: "title_quality_gate",
+        issues: titleQuality.issues,
+        retryable: false,
+        request_id: requestId,
+      }, 409);
+    }
+    if (titleQuality.normalizedTitle !== String(article.title || "")) {
+      article.title = titleQuality.normalizedTitle;
+      await admin.from("articles").update({ title: titleQuality.normalizedTitle, updated_at: new Date().toISOString() }).eq("id", article.id).eq("organization_id", article.organization_id);
+    }
+    const brokenCtas = findBrokenContactCtas(article.content);
+    if (brokenCtas.length > 0) {
+      return json({
+        success: false,
+        error: "Publicação bloqueada: chamada para contato quebrada (WhatsApp sem número ou link apontando para o Google Maps).",
+        code: "broken_cta_gate",
+        issues: brokenCtas,
+        retryable: false,
+        request_id: requestId,
+      }, 409);
+    }
+    const complianceViolations = findComplianceViolations({ title: article.title, content: article.content, excerpt: article.excerpt || config.seo_description });
+    if (complianceViolations.length > 0) {
+      return json({
+        success: false,
+        error: "Publicação bloqueada: texto viola o padrão de publicidade (promessa de resultado, superlativo, comparação, urgência comercial ou captação direta).",
+        code: "compliance_gate",
+        issues: complianceViolations,
+        retryable: false,
+        request_id: requestId,
+      }, 409);
+    }
+    if (status === "publish" && !article.published_url) {
+      const slugForLookup = normalizeSlugForLookup(article.slug, article.title);
+      const existing = await lookupPublishedSlug(String(project.wordpress_url), slugForLookup);
+      if (existing.exists) {
+        await admin.from("articles").update({
+          config: { ...config, duplicate_of_url: existing.link || null, duplicate_of_wp_post_id: existing.id || null, duplicate_detected_at: new Date().toISOString() },
+          updated_at: new Date().toISOString(),
+        }).eq("id", article.id).eq("organization_id", article.organization_id);
+        return json({
+          success: false,
+          error: "Publicação bloqueada: já existe um post publicado com este slug neste site. Publicar criaria uma duplicata (slug-2).",
+          code: "duplicate_slug_gate",
+          existing_url: existing.link || null,
+          existing_wp_post_id: existing.id || null,
+          retryable: false,
+          request_id: requestId,
+        }, 409);
+      }
     }
 
     const residues = findPublicationResidues({ title: article.title, content: article.content, excerpt: article.excerpt || config.seo_description });
