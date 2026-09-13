@@ -15,6 +15,12 @@ export type EditorialAudit = {
   };
 };
 
+export type EditorialStructureRepair = {
+  html: string;
+  repaired: boolean;
+  insertedHeadings: number;
+};
+
 const ALLOWED_TAGS = new Set([
   "p", "h2", "h3", "h4", "strong", "em", "b", "i", "u", "s", "ul", "ol", "li",
   "blockquote", "a", "table", "thead", "tbody", "tfoot", "tr", "th", "td", "figure",
@@ -186,6 +192,38 @@ function stripTags(value: string) {
 
 function countTag(html: string, tag: string) {
   return (html.match(new RegExp(`<${tag}\\b`, "gi")) || []).length;
+}
+
+/**
+ * Adds neutral section labels to legacy long-form articles that were generated
+ * as one or two large paragraphs. The operation is deliberately deterministic:
+ * it does not rewrite legal assertions, links, citations or user prose and is
+ * idempotent once an H2 exists.
+ */
+export function ensureEditorialHeadingStructure(input: string): EditorialStructureRepair {
+  const html = String(input || "").trim();
+  if (!html || countTag(html, "h2") > 0) return { html, repaired: false, insertedHeadings: 0 };
+
+  const wordCount = stripTags(html).split(/\s+/).filter(Boolean).length;
+  if (wordCount < 500) return { html, repaired: false, insertedHeadings: 0 };
+
+  const paragraphStarts = [...html.matchAll(/<p\b[^>]*>/gi)].map((match) => match.index || 0);
+  if (paragraphStarts.length < 2) {
+    return {
+      html: `<h2>Contexto e informações principais</h2>\n${html}`,
+      repaired: true,
+      insertedHeadings: 1,
+    };
+  }
+
+  const splitAt = paragraphStarts[Math.floor(paragraphStarts.length / 2)];
+  const repaired = [
+    "<h2>Contexto e informações principais</h2>",
+    html.slice(0, splitAt),
+    "<h2>Pontos de atenção</h2>",
+    html.slice(splitAt),
+  ].join("\n");
+  return { html: repaired, repaired: true, insertedHeadings: 2 };
 }
 
 function looksLikeJsonDocument(value: string) {
