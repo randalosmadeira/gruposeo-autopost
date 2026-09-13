@@ -6,6 +6,8 @@ import {
   findBrokenContactCtas,
   findComplianceViolations,
   normalizeSlugForLookup,
+  repairBrokenContactCtas,
+  repairCommonTitleTypos,
   sentenceCaseTitle,
 } from '../../supabase/functions/_shared/publication-quality';
 
@@ -35,6 +37,12 @@ describe('portão de qualidade de título (palavra-chave crua não vira título)
     expect(sentenceCaseTitle('provas importantes em casos de progressão de regime')).toBe('Provas importantes em casos de progressão de regime');
     expect(sentenceCaseTitle('Prisão em Flagrante: o que fazer')).toBe('Prisão em Flagrante: o que fazer');
     expect(evaluateTitleQuality('provas importantes em casos de progressão de regime').normalizedTitle.startsWith('P')).toBe(true);
+  });
+
+  it('corrige erros ortográficos conhecidos sem depender do provedor de IA', () => {
+    expect(repairCommonTitleTypos('tornozelera eletronica')).toBe('Tornozeleira eletrônica');
+    expect(repairCommonTitleTypos('Omo saber se fulano ta preso')).toBe('Como saber se fulano está preso');
+    expect(evaluateTitleQuality(repairCommonTitleTypos('tornozelera eletronica')).issues).toHaveLength(0);
   });
 });
 
@@ -71,6 +79,14 @@ describe('portão de CTA quebrada (WhatsApp sem número, link do Google Maps com
       'canal disponível é o WhatsApp de atendimento especializado: .',
     ];
     for (const sample of samples) expect(findBrokenContactCtas(sample), sample).not.toHaveLength(0);
+  });
+
+  it('troca o destino quebrado pelo WhatsApp institucional configurado', () => {
+    const maps = 'https://www.google.com/maps?daddr=Av.+Paulista,+1842';
+    const repair = repairBrokenContactCtas(`Fale pelo WhatsApp [aqui](${maps})`, '+55 (11) 95173-0074');
+    expect(repair.repaired).toBe(true);
+    expect(repair.content).toContain('https://wa.me/5511951730074');
+    expect(findBrokenContactCtas(repair.content)).toHaveLength(0);
   });
 
   it('aceita menção legítima a WhatsApp como meio de prova ou canal com link válido', () => {

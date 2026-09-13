@@ -36,6 +36,18 @@ export function sentenceCaseTitle(title: string) {
   return clean.charAt(0).toLocaleUpperCase('pt-BR') + clean.slice(1);
 }
 
+/** Correções ortográficas seguras observadas na fila histórica do Blog RDM. */
+export function repairCommonTitleTypos(rawTitle: string | null | undefined) {
+  return sentenceCaseTitle(String(rawTitle || "")
+    .replace(/\btornozelera\b/gi, "tornozeleira")
+    .replace(/\btornoseleira\b/gi, "tornozeleira")
+    .replace(/\beletronica\b/gi, "eletrônica")
+    .replace(/^omo\s+saber\b/i, "Como saber")
+    .replace(/\bta\s+preso\b/gi, "está preso")
+    .replace(/\s+/g, " ")
+    .trim());
+}
+
 export function evaluateTitleQuality(rawTitle: string | null | undefined): TitleQualityResult {
   const title = String(rawTitle || '').replace(/\s+/g, ' ').trim();
   const issues: QualityIssue[] = [];
@@ -49,7 +61,7 @@ export function evaluateTitleQuality(rawTitle: string | null | undefined): Title
   if (MARKUP_ARTIFACT.test(title)) push('title_artifact_markup', 'Título contém marcação técnica ou molde de prompt');
   if (PREPOSITION_TAIL.test(title)) push('title_truncated', 'Título termina em preposição ou artigo (pauta truncada)');
   if (LEGAL_MISSPELLINGS.test(fold(title))) push('title_misspelling', 'Título com grafia errada de termo jurídico (palavra-chave crua)');
-  if (title.split(' ').length < 3) push('title_keyword_only', 'Título com menos de três palavras');
+  if (title.split(' ').length < 3 && title.length < 18) push('title_keyword_only', 'Título curto demais e com menos de três palavras');
 
   return { issues, normalizedTitle: sentenceCaseTitle(title) };
 }
@@ -134,6 +146,26 @@ export function findBrokenContactCtas(content: string | null | undefined): Quali
     if (match) issues.push({ code: rule.code, label: rule.label, field: 'content', sample: match[0].slice(0, 160) });
   }
   return issues;
+}
+
+export function repairBrokenContactCtas(content: string | null | undefined, whatsappNumber: string | null | undefined) {
+  const original = String(content || '');
+  const digits = String(whatsappNumber || '').replace(/\D/g, '');
+  if (digits.length < 10 || digits.length > 15) return { content: original, repaired: false };
+
+  const whatsappUrl = `https://wa.me/${digits}`;
+  let repaired = original.replace(
+    /((?:whatsapp|telefone|contato|fale|ligue)[^\n\]]{0,80}\[[^\]]*\]\()(?:https?:\/\/)?(?:www\.)?google\.[a-z.]+\/maps[^)]*(\))/gi,
+    `$1${whatsappUrl}$2`,
+  );
+  repaired = repaired.replace(
+    /(<a[^>]+href=")(?:https?:\/\/)?(?:www\.)?google\.[a-z.]+\/maps[^"]*("[^>]*>[^<]*(?:whatsapp|clique aqui|fale conosco|contato)[^<]*<\/a>)/gi,
+    `$1${whatsappUrl}$2`,
+  );
+  repaired = repaired
+    .replace(/whatsapp\s*\(\s*\)/gi, `<a href="${whatsappUrl}">WhatsApp</a>`)
+    .replace(/whatsapp\s+para\s*\./gi, `WhatsApp: <a href="${whatsappUrl}">iniciar conversa</a>.`);
+  return { content: repaired, repaired: repaired !== original };
 }
 
 export function normalizeSlugForLookup(slug: string | null | undefined, title?: string | null) {

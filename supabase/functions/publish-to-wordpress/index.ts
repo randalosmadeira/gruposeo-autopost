@@ -1,9 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
-import { normalizeEditorialHtml } from "../_shared/editorial-html.ts";
+import { ensureEditorialHeadingStructure, normalizeEditorialHtml } from "../_shared/editorial-html.ts";
 import { findPublicationResidues, resolveMetaDescription } from "../_shared/publication-safety.ts";
-import { evaluateTitleQuality, findBrokenContactCtas, findComplianceViolations, lookupPublishedSlug, normalizeSlugForLookup } from "../_shared/publication-quality.ts";
+import { evaluateTitleQuality, findBrokenContactCtas, findComplianceViolations, lookupPublishedSlug, normalizeSlugForLookup, repairBrokenContactCtas, repairCommonTitleTypos } from "../_shared/publication-quality.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -310,7 +310,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // Portões de qualidade editorial (fail-closed) — ver _shared/publication-quality.ts
-    const titleQuality = evaluateTitleQuality(article.title);
+    const repairedTitle = repairCommonTitleTypos(article.title);
+    const titleQuality = evaluateTitleQuality(repairedTitle);
     if (titleQuality.issues.length > 0) {
       return json({
         success: false,
@@ -325,6 +326,8 @@ Deno.serve(async (req: Request) => {
       article.title = titleQuality.normalizedTitle;
       await admin.from("articles").update({ title: titleQuality.normalizedTitle, updated_at: new Date().toISOString() }).eq("id", article.id).eq("organization_id", article.organization_id);
     }
+    const ctaRepair = repairBrokenContactCtas(article.content, project.empresa_whatsapp);
+    if (ctaRepair.repaired) article.content = ctaRepair.content;
     const brokenCtas = findBrokenContactCtas(article.content);
     if (brokenCtas.length > 0) {
       return json({
@@ -379,7 +382,7 @@ Deno.serve(async (req: Request) => {
       }, 409);
     }
 
-    const audit = normalizeEditorialHtml(String(article.content || ""));
+    let audit = normalizeEditorialHtml(String(article.content || ""));
     if (!audit.pass) {
       return json({
         success: false,
@@ -393,6 +396,11 @@ Deno.serve(async (req: Request) => {
         request_id: requestId,
       }, 409);
     }
+
+    const structureRepair = audit.pass
+      ? ensureEditorialHeadingStructure(audit.html)
+      : { html: audit.html, repaired: false, insertedHeadings: 0 };
+    if (structureRepair.repaired) audit = normalizeEditorialHtml(structureRepair.html);
 
     const words = audit.metrics.wordCount;
     const minimum = Number(config?.geo_word_band?.min || 0) > 0 ? Number(config.geo_word_band.min) : 300;
@@ -432,6 +440,9 @@ Deno.serve(async (req: Request) => {
       editorial_quality_issues: audit.issues,
       editorial_metrics: audit.metrics,
       editorial_normalized_at: normalizedAt,
+      editorial_structure_auto_repaired: structureRepair.repaired,
+      editorial_structure_inserted_headings: structureRepair.insertedHeadings,
+      broken_contact_cta_auto_repaired: ctaRepair.repaired,
     };
     const normalizedArticle = {
       ...article,
