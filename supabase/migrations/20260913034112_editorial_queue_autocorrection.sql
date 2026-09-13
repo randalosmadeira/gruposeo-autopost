@@ -76,8 +76,8 @@ where organization_id = '04f16755-dedb-4f1b-a0a3-1a83054b36a0'::uuid
 -- already published WordPress records remain unchanged to preserve permalinks.
 update public.articles
 set title = case
-      when id = '31b6ae67-1ef3-4534-9057-a615bec837cc'::uuid then 'Tornozeleira eletrônica'
-      when id = '88a68fc2-bf5d-4664-96da-d03b159ada71'::uuid then 'Como saber se uma pessoa está presa'
+      when lower(btrim(title)) = 'tornozelera eletronica' then 'Tornozeleira eletrônica'
+      when lower(btrim(title)) = 'omo saber se fulano ta preso' then 'Como saber se uma pessoa está presa'
       else title
     end,
     config = coalesce(config, '{}'::jsonb) || jsonb_build_object(
@@ -86,21 +86,18 @@ set title = case
     ),
     updated_at = now()
 where organization_id = '04f16755-dedb-4f1b-a0a3-1a83054b36a0'::uuid
-  and id in (
-    '31b6ae67-1ef3-4534-9057-a615bec837cc'::uuid,
-    '88a68fc2-bf5d-4664-96da-d03b159ada71'::uuid
-  );
+  and lower(btrim(title)) in ('tornozelera eletronica', 'omo saber se fulano ta preso');
 
 -- Six queue records already have an exact published slug in the target site.
 -- Reconcile them with the existing post instead of creating WordPress slug-2.
-with existing(article_id, wordpress_post_id, wordpress_url) as (
+with existing(article_slug, wordpress_url) as (
   values
-    ('62890ea3-fd8c-45d9-8513-a10562c58e5a'::uuid, 3891, 'https://rdmadvogados.com.br/blog/como-conseguir-tornozeleira-eletronica/'),
-    ('31b6ae67-1ef3-4534-9057-a615bec837cc'::uuid, 2360, 'https://rdmadvogados.com.br/blog/tornozelera-eletronica/'),
-    ('03444a4a-ee71-4cf3-af1c-638d8ef09e08'::uuid, 2370, 'https://rdmadvogados.com.br/blog/diferenca-entre-liberdade-provisoria-e-revogacao-de-prisao/'),
-    ('d0a25d49-7fa2-4db9-ac6b-df1b861aa47a'::uuid, 3907, 'https://rdmadvogados.com.br/blog/modelo-de-habeas-corpus/'),
-    ('88a68fc2-bf5d-4664-96da-d03b159ada71'::uuid, 2274, 'https://rdmadvogados.com.br/blog/omo-saber-se-fulano-ta-preso/'),
-    ('46e3081d-7c02-4829-9d45-4d150259c0b5'::uuid, 2234, 'https://rdmadvogados.com.br/blog/documentos-para-visitar-preso/')
+    ('como-conseguir-tornozeleira-eletronica', 'https://rdmadvogados.com.br/blog/como-conseguir-tornozeleira-eletronica/'),
+    ('tornozeleira-eletronica', 'https://rdmadvogados.com.br/blog/tornozelera-eletronica/'),
+    ('diferenca-entre-liberdade-provisoria-e-revogacao-de-prisao', 'https://rdmadvogados.com.br/blog/diferenca-entre-liberdade-provisoria-e-revogacao-de-prisao/'),
+    ('modelo-de-habeas-corpus', 'https://rdmadvogados.com.br/blog/modelo-de-habeas-corpus/'),
+    ('como-saber-se-uma-pessoa-esta-presa', 'https://rdmadvogados.com.br/blog/omo-saber-se-fulano-ta-preso/'),
+    ('documentos-para-visitar-preso', 'https://rdmadvogados.com.br/blog/documentos-para-visitar-preso/')
 )
 update public.articles a
 set status = 'published',
@@ -109,14 +106,19 @@ set status = 'published',
     error_message = null,
     config = coalesce(a.config, '{}'::jsonb) || jsonb_build_object(
       'duplicate_of_url', e.wordpress_url,
-      'duplicate_of_wp_post_id', e.wordpress_post_id,
       'duplicate_resolution', 'linked_existing_wordpress_post',
       'duplicate_reconciled_at', now(),
       'editorial_queue_revalidation_version', '2026-09-13.1'
     ),
     updated_at = now()
 from existing e
-where a.id = e.article_id
+where coalesce(
+        nullif(a.slug, ''),
+        trim(both '-' from regexp_replace(
+          lower(translate(a.title, 'áàãâéêíóôõúüç', 'aaaaeeiooouuc')),
+          '[^a-z0-9]+', '-', 'g'
+        ))
+      ) = e.article_slug
   and a.organization_id = '04f16755-dedb-4f1b-a0a3-1a83054b36a0'::uuid
   and a.project_id = 'fab1032d-56a4-4e59-b3d4-4a68d3d4bf0a'::uuid
   and a.status = 'ready';
