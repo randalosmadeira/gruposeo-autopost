@@ -76,6 +76,11 @@ export async function getOrchestratorForUser(userId: string): Promise<AIOrchestr
   if (supabaseUrl && serviceRoleKey) {
     const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
     orchestrator.setUsageSink(async ({ taskType, provider, model, usage, options }) => {
+      // estimated_cost_usd and organization_id are resolved by the
+      // trg_price_token_usage_log / trg_ledger_token_usage_log triggers
+      // (migration 20260917010000_token_cost_governance.sql) from
+      // model_pricing_catalog, not computed here - this keeps pricing in one
+      // place instead of duplicated across every caller of this sink.
       const { error } = await admin.from("token_usage_logs").insert({
         user_id: userId,
         article_id: options?.articleId || null,
@@ -84,11 +89,9 @@ export async function getOrchestratorForUser(userId: string): Promise<AIOrchestr
         operation: taskType,
         input_tokens: usage.inputTokens,
         output_tokens: usage.outputTokens,
-        estimated_cost_usd: 0,
         metadata: {
           source: "provider_reported_usage",
           correlation_id: options?.correlationId || null,
-          cost_pending_pricing_resolution: true,
         },
       });
       if (error) throw error;
