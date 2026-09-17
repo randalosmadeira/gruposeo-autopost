@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { fetchUserKeys } from "../_shared/byok-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,13 +21,11 @@ async function sha256(value: string | Uint8Array) {
   return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function resolveOpenAIKey(admin: ReturnType<typeof createClient>, userId: string) {
-  const { data: settings } = await admin.from("user_settings").select("openai_api_key").eq("user_id", userId).maybeSingle();
-  const userKey = String(settings?.openai_api_key || "").trim();
-  if (userKey) return userKey;
-  const { data: vaultKey, error } = await admin.rpc("get_zica_ai_provider_secret", { p_provider: "openai" });
-  if (error) throw error;
-  return String(vaultKey || env("OPENAI_API_KEY")).trim();
+async function resolveOpenAIKey(_admin: ReturnType<typeof createClient>, userId: string) {
+  // Delegates to the central resolver (BYOK -> platform Vault -> env), the same
+  // order every other function uses, instead of re-implementing it locally.
+  const keys = await fetchUserKeys(userId);
+  return keys.openai;
 }
 
 async function downloadSource(admin: ReturnType<typeof createClient>, asset: Record<string, unknown>) {

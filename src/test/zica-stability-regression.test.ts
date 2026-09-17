@@ -167,6 +167,46 @@ describe('Zica Posts stability regressions', () => {
     expect(regenerate).not.toContain('Regeneração regida por instrucoes.md');
   });
 
+  it('keeps ai-chat and gbp-audit wired to real AI instead of the 2026-08-22 wipe stub', () => {
+    const chat = read('supabase/functions/ai-chat/index.ts');
+    const gbp = read('supabase/functions/gbp-audit/index.ts');
+    expect(chat).toContain('getOrchestratorForUser');
+    expect(chat).toContain('callWithMeta');
+    expect(chat).not.toContain('instrucoes.md');
+    expect(gbp).toContain('fetchUserKeys');
+    expect(gbp).not.toContain('instrucoes.md');
+  });
+
+  it('returns a clear 410 instead of a fake success for retired IA stub endpoints', () => {
+    const retired = [
+      'supabase/functions/generate-secondary-keywords/index.ts',
+      'supabase/functions/generate-authority-plan/index.ts',
+      'supabase/functions/news-agent/index.ts',
+      'supabase/functions/auto-publish-article/index.ts',
+    ];
+    for (const path of retired) {
+      const content = read(path);
+      expect(content).toContain('endpoint_retired');
+      expect(content).toContain('status: 410');
+      expect(content).not.toContain('instrucoes.md');
+    }
+  });
+
+  it('never hardcodes a non-existent OpenAI model identifier', () => {
+    // ai-orchestrator.ts is intentionally excluded: it keeps a one-line comment
+    // documenting *why* these ids are invalid, which is not the bug.
+    const files = [
+      'supabase/functions/electoral-content-variations/index.ts',
+      'supabase/functions/electoral-editorial-action/index.ts',
+      'supabase/functions/generate-supporter-avatar/index.ts',
+    ];
+    for (const path of files) {
+      const content = read(path);
+      expect(content).not.toContain('gpt-5.6-sol');
+      expect(content).not.toContain('gpt-5.4-mini');
+    }
+  });
+
   it('captures complete article version history with concurrency protection', () => {
     const migration = read('supabase/migrations/20260902141000_fix_article_version_history.sql');
     expect(migration).toContain('pg_advisory_xact_lock');

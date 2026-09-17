@@ -23,7 +23,7 @@ export const Header = memo(function Header() {
           <span className="grid h-9 w-9 place-items-center rounded-xl border border-[#D4FF00]/35 bg-[#D4FF00]/8 shadow-[0_0_24px_rgba(212,255,0,.1)]">
             <BrainCircuit className="h-5 w-5 text-[#D4FF00]" />
           </span>
-          <span className="text-sm font-black tracking-tight text-white">Zica<span className="text-[#D4FF00]">.</span><span className="text-[#00F0FF]">ai</span></span>
+          <span className="text-sm font-black tracking-tight text-white">Zica<span className="text-[#D4FF00]">.</span><span className="text-[#00F0FF]">IA</span></span>
         </Link>
 
         <div className="hidden flex-1 items-center gap-4 sm:flex sm:max-w-lg">

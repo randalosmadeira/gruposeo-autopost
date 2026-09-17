@@ -87,6 +87,44 @@ export function isPublicationSafe(input: PublicationSafetyInput) {
   return findPublicationResidues(input).length === 0;
 }
 
+// Auto-repairs only the residue classes that are pure formatting leakage
+// (markdown code fences and technical placeholder tags), the same way
+// repairCommonTitleTypos/repairBrokenContactCtas already fix trivial
+// problems before the fail-closed gate runs (see publication-quality.ts).
+// Content-safety markers (RASCUNHO ELEITORAL, [VERIFICAR], "revisão humana",
+// system-prompt residue, internal error tokens, etc.) are deliberately left
+// alone: silently stripping those would hide a real "this claim needs a
+// source" flag instead of fixing anything.
+const CODE_FENCE_PATTERN = /```(?:json|html|markdown|text|typescript|javascript|tsx|jsx|sql)?\s*\n?/gi;
+const PLACEHOLDER_TAG_PATTERN = /\[(?:PLACEHOLDER|TODO|FIXME)\]/gi;
+
+export function repairPublicationResidues(input: PublicationSafetyInput): {
+  title: string;
+  content: string;
+  excerpt: string;
+  repaired: string[];
+} {
+  const repaired = new Set<string>();
+  const clean = (value: string) => {
+    let next = value.replace(CODE_FENCE_PATTERN, (match) => {
+      repaired.add('code_fence_residue');
+      return '';
+    });
+    next = next.replace(PLACEHOLDER_TAG_PATTERN, (match) => {
+      repaired.add('placeholder_token');
+      return '';
+    });
+    return next;
+  };
+
+  return {
+    title: clean(String(input.title || '')),
+    content: clean(String(input.content || '')),
+    excerpt: clean(String(input.excerpt || '')),
+    repaired: [...repaired],
+  };
+}
+
 function truncateAtWord(value: string, max = 158) {
   const compact = value.replace(/\s+/g, ' ').trim();
   if (compact.length <= max) return compact;
