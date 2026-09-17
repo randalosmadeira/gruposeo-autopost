@@ -16,7 +16,9 @@ import { resolveAnthropicModel } from '../_shared/anthropic-model-policy.ts';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SECRET_KEY') || '';
 const OPENAI_IMAGE_MODEL = Deno.env.get('OPENAI_IMAGE_MODEL') || 'gpt-image-2';
-const OPENAI_VISION_MODEL = Deno.env.get('OPENAI_VISION_MODEL') || 'gpt-5.6-sol';
+// Public OpenAI API model (the previous default here was an internal Codex
+// runtime name, not a valid customer-facing model id — see ai-orchestrator.ts).
+const OPENAI_VISION_MODEL = Deno.env.get('OPENAI_VISION_MODEL') || 'gpt-4o';
 const ANTHROPIC_MODEL = resolveAnthropicModel(Deno.env.get('ANTHROPIC_MODEL'));
 const FIXED_DRIVE_FOLDER = '1NB_yQBM_2bGA5UC6JyCEgC54sjCHSyO6';
 const AGENT = 'NEXUS PHOTO 1470';

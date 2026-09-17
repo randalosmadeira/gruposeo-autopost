@@ -3,7 +3,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const MODEL = Deno.env.get('OPENAI_ELECTORAL_TEXT_MODEL') || 'gpt-5.4-mini';
+// Public OpenAI API model (the previous default here was not a valid
+// customer-facing model id — see ai-orchestrator.ts for the same class of bug).
+const MODEL = Deno.env.get('OPENAI_ELECTORAL_TEXT_MODEL') || 'gpt-4o-mini';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
