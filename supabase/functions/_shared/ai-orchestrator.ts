@@ -1,5 +1,5 @@
 import { getDirectivesForTask } from './behavioral-directives.ts';
-import { ANTHROPIC_PRIMARY_MODEL } from './anthropic-model-policy.ts';
+import { ANTHROPIC_PRIMARY_MODEL, ANTHROPIC_ECONOMY_MODEL } from './anthropic-model-policy.ts';
 
 export interface AIProvider {
   name: 'openai' | 'anthropic' | 'gemini';
@@ -63,6 +63,10 @@ export type TaskType =
 const OPENAI_TEXT = 'gpt-4.1';
 const CLAUDE_TEXT = ANTHROPIC_PRIMARY_MODEL;
 const OPENAI_IMAGE = 'gpt-image-2';
+// Cheaper tier for short, low-stakes tasks (title/meta description) that were
+// previously routed through the same full-price models as long-form content.
+const OPENAI_ECONOMY = 'gpt-4o-mini';
+const CLAUDE_ECONOMY = ANTHROPIC_ECONOMY_MODEL;
 
 function p(name: AIProvider['name'], model: string, strengths: string[]): AIProvider {
   return { name, model, strengths, costPer1kTokens: 0, maxTokens: 128000 };
@@ -78,8 +82,8 @@ const AI_PROVIDERS: Record<string, AIProvider[]> = {
   seo_analysis: [p('openai', OPENAI_TEXT, ['seo', 'structured']), p('anthropic', CLAUDE_TEXT, ['semantic'])],
   geo_optimization: [p('openai', OPENAI_TEXT, ['geo', 'structured']), p('anthropic', CLAUDE_TEXT, ['semantic'])],
   aeo_analysis: [p('openai', OPENAI_TEXT, ['aeo', 'structured']), p('anthropic', CLAUDE_TEXT, ['qa'])],
-  title_generation: [p('openai', OPENAI_TEXT, ['creative']), p('anthropic', CLAUDE_TEXT, ['creative'])],
-  meta_description: [p('openai', OPENAI_TEXT, ['precise']), p('anthropic', CLAUDE_TEXT, ['concise'])],
+  title_generation: [p('openai', OPENAI_ECONOMY, ['creative']), p('anthropic', CLAUDE_ECONOMY, ['creative'])],
+  meta_description: [p('openai', OPENAI_ECONOMY, ['precise']), p('anthropic', CLAUDE_ECONOMY, ['concise'])],
   conversion_content: [p('openai', OPENAI_TEXT, ['instruction-following']), p('anthropic', CLAUDE_TEXT, ['nuanced'])],
   strategy_planning: [p('anthropic', CLAUDE_TEXT, ['reasoning']), p('openai', OPENAI_TEXT, ['planning'])],
   share_of_model: [p('openai', OPENAI_TEXT, ['analysis']), p('anthropic', CLAUDE_TEXT, ['analysis'])],

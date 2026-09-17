@@ -98,9 +98,18 @@ function countWords(value: string) {
   return value.replace(/<[^>]+>/g, " ").replace(/<!--[\s\S]*?-->/g, " ").trim().split(/\s+/).filter(Boolean).length;
 }
 
+// Same order of magnitude as the truncation already used by rewrite-news
+// (60000) and analyze-url-content (8000) for equivalent free-text inputs —
+// generate-article had no limit at all, letting a very long pasted source or
+// instruction block blow up the request cost/size unbounded.
+const MAX_SOURCES_CONTEXT_CHARS = 8000;
+const MAX_CUSTOM_INSTRUCTIONS_CHARS = 4000;
+
 function buildPrompt(config: ArticleConfig, band: Band) {
   const links = (config.internalLinks || []).slice(0, 12).map((item) => `${item.anchor}: ${item.url}`).join("\n");
   const projectContext = Object.entries(config.projectConfig || {}).filter(([, value]) => Boolean(value)).map(([key, value]) => `${key}: ${value}`).join("\n");
+  const sourcesContext = (config.sourcesContext || "").slice(0, MAX_SOURCES_CONTEXT_CHARS);
+  const customInstructions = (config.customInstructions || config.additionalInfo || "").slice(0, MAX_CUSTOM_INSTRUCTIONS_CHARS);
 
   return `Produza somente conteúdo editorial final publicável, sem explicar o processo interno e sem inserir mensagens de revisão no corpo.
 
@@ -150,10 +159,10 @@ LINKS INTERNOS DISPONÍVEIS:
 ${links || "Nenhum informado."}
 
 FONTES/CONTEXTO FORNECIDO:
-${config.sourcesContext || "Nenhuma fonte adicional fornecida."}
+${sourcesContext || "Nenhuma fonte adicional fornecida."}
 
 INSTRUÇÕES ADICIONAIS:
-${config.customInstructions || config.additionalInfo || "Nenhuma."}`;
+${customInstructions || "Nenhuma."}`;
 }
 
 Deno.serve(async (req: Request) => {
