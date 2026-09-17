@@ -8,7 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SYSTEM_PROMPT = `Você é o **Assistente IA Premium do ContentFactory**, uma plataforma completa de automação de conteúdo SEO e marketing digital integrada com WordPress.
+const SYSTEM_PROMPT = `Você é o **Assistente IA Premium do Zica.IA**, uma plataforma completa de automação de conteúdo SEO e marketing digital integrada com WordPress.
 
 Você é um especialista sênior em SEO, marketing digital e automação de conteúdo. Suas respostas devem ser profundas, analíticas e estratégicas — nunca superficiais.
 
@@ -860,19 +860,20 @@ Deno.serve(async (req) => {
     ];
 
     try {
-      const streamResponse = await orchestrator.callStream("strategy_planning", aiMessages, {
+      // ai-orchestrator.ts has no callStream (removed upstream); the frontend
+      // (src/pages/AIChat.tsx) still consumes an OpenAI-style SSE stream, so we
+      // synthesize a single-chunk stream carrying the full response instead of
+      // reintroducing token-by-token streaming into the shared orchestrator.
+      const result = await orchestrator.callWithMeta("strategy_planning", aiMessages, {
         maxTokens: 4096,
         temperature: 0.7,
-        preferredProvider: "gemini",
+        articleId: undefined,
+        correlationId: crypto.randomUUID(),
       });
-
-      // Merge CORS headers with stream response
-      const responseHeaders = new Headers(streamResponse.headers);
-      for (const [key, value] of Object.entries(corsHeaders)) {
-        responseHeaders.set(key, value);
-      }
-
-      return new Response(streamResponse.body, { headers: responseHeaders });
+      const sse = `data: ${JSON.stringify({ choices: [{ delta: { content: result.content } }] })}\n\ndata: [DONE]\n\n`;
+      return new Response(sse, {
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+      });
     } catch (aiError) {
       console.error("AI streaming error:", aiError);
       return new Response(

@@ -1,5 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { fetchUserKeys } from "../_shared/byok-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -129,9 +130,14 @@ Deno.serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey);
     const { data: settings } = await admin
       .from("user_settings")
-      .select("openai_api_key, gemini_api_key, serper_api_key")
+      .select("gemini_api_key, serper_api_key")
       .eq("user_id", userId)
       .maybeSingle();
+    // OpenAI/Anthropic keys are platform-managed (GitHub -> Vault) since 2026-09-07;
+    // reading user_settings.openai_api_key directly always returns null (see
+    // enforce_platform_managed_provider_keys trigger), so this goes through the
+    // central resolver, which already knows to fall back to the Vault.
+    const aiKeys = await fetchUserKeys(userId);
 
     const serperKey = settings?.serper_api_key || Deno.env.get("SERPER_API_KEY") || "";
     if (!serperKey) {
@@ -230,8 +236,8 @@ ${JSON.stringify(serp?.peopleAlsoAsk || [], null, 2)}
 Faça engenharia reversa dos concorrentes, analise padrão de respostas a avaliações (com base no que os dados mostram), estime frequência de publicação e produza recomendações acionáveis.`;
 
       const ai = await callAI(aiSystem, aiUser, {
-        openai: settings?.openai_api_key || undefined,
-        gemini: settings?.gemini_api_key || undefined,
+        openai: aiKeys.openai || undefined,
+        gemini: aiKeys.gemini || settings?.gemini_api_key || undefined,
       });
 
       let insights: any = {};
