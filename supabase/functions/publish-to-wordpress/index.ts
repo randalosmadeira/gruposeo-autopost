@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 import { ensureEditorialHeadingStructure, normalizeEditorialHtml } from "../_shared/editorial-html.ts";
-import { findPublicationResidues, resolveMetaDescription } from "../_shared/publication-safety.ts";
+import { findPublicationResidues, repairPublicationResidues, resolveMetaDescription } from "../_shared/publication-safety.ts";
 import { evaluateTitleQuality, findBrokenContactCtas, findComplianceViolations, lookupPublishedSlug, normalizeSlugForLookup, repairBrokenContactCtas, repairCommonTitleTypos } from "../_shared/publication-quality.ts";
 
 const corsHeaders = {
@@ -370,6 +370,14 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    const residueRepair = repairPublicationResidues({ title: article.title, content: article.content, excerpt: article.excerpt || config.seo_description });
+    if (residueRepair.repaired.length > 0) {
+      article.title = residueRepair.title;
+      article.content = residueRepair.content;
+      if (article.excerpt) article.excerpt = residueRepair.excerpt;
+      await admin.from("articles").update({ title: article.title, content: article.content, excerpt: article.excerpt, updated_at: new Date().toISOString() })
+        .eq("id", article.id).eq("organization_id", article.organization_id);
+    }
     const residues = findPublicationResidues({ title: article.title, content: article.content, excerpt: article.excerpt || config.seo_description });
     if (residues.length > 0) {
       return json({

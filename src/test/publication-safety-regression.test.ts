@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { findPublicationResidues, repairPublicationResidues } from '../../supabase/functions/_shared/publication-safety';
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
@@ -64,5 +65,24 @@ describe('fail-closed publication safety', () => {
     expect(readyPreflight).toContain('needs_primary_source');
     expect(readyPreflight).toContain('review_pass');
     expect(readyPreflight).toContain('verification_marker');
+  });
+
+  it('auto-repairs pure formatting residue (code fences, technical placeholders) instead of blocking on it', () => {
+    const dirty = '```html\n<p>Conteúdo real sobre o tema.</p>\n```\n<p>[TODO] revisar</p>';
+    const result = repairPublicationResidues({ content: dirty });
+    expect(result.content).not.toContain('```');
+    expect(result.content).not.toContain('[TODO]');
+    expect(result.content).toContain('Conteúdo real sobre o tema.');
+    expect(result.repaired).toContain('code_fence_residue');
+    expect(result.repaired).toContain('placeholder_token');
+    expect(findPublicationResidues({ content: result.content }).length).toBe(0);
+  });
+
+  it('never auto-repairs content-safety markers that signal a real missing source or review flag', () => {
+    const unresolved = '<p>Fato relevante [VERIFICAR: fonte oficial].</p>';
+    const result = repairPublicationResidues({ content: unresolved });
+    expect(result.content).toContain('[VERIFICAR: fonte oficial]');
+    expect(result.repaired).not.toContain('verification_marker');
+    expect(findPublicationResidues({ content: result.content }).length).toBeGreaterThan(0);
   });
 });
