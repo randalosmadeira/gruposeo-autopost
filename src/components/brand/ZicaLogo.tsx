@@ -18,7 +18,7 @@ export function ZicaLogo({ compact = false, className, showSubtitle = false }: Z
       {!compact && (
         <span className="min-w-0">
           <span className="block whitespace-nowrap text-2xl font-black tracking-[-.055em] text-white">
-            ZICA<span className="text-[#D4FF00]">.</span><span className="text-[#D4FF00]">AI</span>
+            ZICA<span className="text-[#D4FF00]">.</span><span className="text-[#D4FF00]">IA</span>
           </span>
           {showSubtitle && (
             <span className="block whitespace-nowrap text-[9px] font-bold uppercase tracking-[.2em] text-slate-500">
