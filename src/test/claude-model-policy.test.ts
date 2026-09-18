@@ -25,8 +25,24 @@ describe('política de modelos Claude', () => {
 
   it('aplica o resolvedor nos consumidores Supabase configuráveis', () => {
     const avatar = readFileSync('supabase/functions/generate-supporter-avatar/index.ts', 'utf8');
-    const electoral = readFileSync('supabase/functions/electoral-content-variations/index.ts', 'utf8');
     expect(avatar).toContain("resolveAnthropicModel(Deno.env.get('ANTHROPIC_MODEL'))");
-    expect(electoral).toContain("resolveAnthropicModel(Deno.env.get('ANTHROPIC_MODEL'))");
+  });
+
+  it('electoral-content-variations delega ao orchestrator compartilhado em vez de resolver o modelo por conta própria', () => {
+    // Since 2026-09-19 this function no longer calls Claude/OpenAI directly (and so
+    // no longer needs its own resolveAnthropicModel call) — it routes through
+    // ai-orchestrator.ts's shared callWithMeta, which the next assertion confirms
+    // is itself pinned to the policy-approved constants below.
+    const electoral = readFileSync('supabase/functions/electoral-content-variations/index.ts', 'utf8');
+    expect(electoral).toContain('getOrchestratorForUser');
+    expect(electoral).toContain("orchestrator.callWithMeta('electoral_content'");
+    expect(electoral).not.toContain('api.anthropic.com');
+    expect(electoral).not.toContain('resolveAnthropicModel');
+  });
+
+  it('o orchestrator compartilhado só usa os modelos Claude aprovados', () => {
+    const orchestrator = readFileSync('supabase/functions/_shared/ai-orchestrator.ts', 'utf8');
+    expect(orchestrator).toContain("import { ANTHROPIC_PRIMARY_MODEL, ANTHROPIC_ECONOMY_MODEL } from './anthropic-model-policy.ts'");
+    expect(orchestrator).toContain('const CLAUDE_TEXT = ANTHROPIC_PRIMARY_MODEL;');
   });
 });
