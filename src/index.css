@@ -735,3 +735,293 @@
 [class*="sidebar"]::-webkit-scrollbar-track {
   background: hsl(var(--sidebar-accent));
 }
+
+/* =========================================
+   Consolidado de src/neural.css (2026-09-18)
+   Zica.ai Neural Design System -------------------------------------------------
+   Product-wide visual layer: Dark Graphite + Volt + Electric Cyan.
+   This file deliberately styles shared surfaces inside .neural-shell so every
+   module inherits the same visual language without changing business logic.
+   ========================================= */
+
+:root {
+  --zica-bg: #0D1117;
+  --zica-surface: #161B22;
+  --zica-border: #30363D;
+  --zica-volt: #D4FF00;
+  --zica-cyan: #00F0FF;
+  --zica-ink: #F8FAFC;
+}
+
+html { background: var(--zica-bg); }
+body { background: var(--zica-bg); }
+::selection { background: rgba(212, 255, 0, .28); color: #fff; }
+
+.neural-shell,
+.neural-auth-shell {
+  color-scheme: dark;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(0,240,255,.055), transparent 28%),
+    radial-gradient(circle at 90% 100%, rgba(212,255,0,.05), transparent 32%),
+    var(--zica-bg);
+}
+
+.neural-shell::before,
+.neural-auth-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .24;
+  background-image:
+    linear-gradient(rgba(0,240,255,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(212,255,0,.035) 1px, transparent 1px);
+  background-size: 54px 54px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,.9), transparent 92%);
+}
+
+.neural-shell main { position: relative; isolation: isolate; }
+.neural-shell main::before {
+  content: '';
+  position: fixed;
+  inset: 64px 0 0 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(0,240,255,.07), transparent 34%),
+    radial-gradient(circle at 60% 110%, rgba(212,255,0,.045), transparent 36%);
+}
+
+/* Shared cards, panels and popovers */
+.neural-shell .bg-card,
+.neural-shell [class*='shadow-card'],
+.neural-shell [role='dialog'],
+.neural-shell [data-radix-menu-content],
+.neural-shell [data-radix-popper-content-wrapper] > div {
+  border-color: rgba(48,54,61,.84) !important;
+  background-color: rgba(22,27,34,.9) !important;
+  backdrop-filter: blur(20px);
+}
+
+.neural-shell [class*='shadow-card'] {
+  box-shadow: 0 18px 60px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.025) !important;
+}
+
+.neural-shell [class*='shadow-card']:hover {
+  border-color: rgba(0,240,255,.2) !important;
+  box-shadow: 0 20px 70px rgba(0,0,0,.35), 0 0 26px rgba(0,240,255,.045) !important;
+}
+
+/* Inputs, selects and textareas */
+.neural-shell input,
+.neural-shell textarea,
+.neural-shell select,
+.neural-auth-shell input,
+.neural-auth-shell textarea,
+.neural-auth-shell select {
+  border-color: rgba(48,54,61,.9) !important;
+  background-color: rgba(13,17,23,.88) !important;
+}
+.neural-shell input:focus,
+.neural-shell textarea:focus,
+.neural-shell select:focus,
+.neural-auth-shell input:focus,
+.neural-auth-shell textarea:focus,
+.neural-auth-shell select:focus {
+  border-color: rgba(212,255,0,.7) !important;
+  box-shadow: 0 0 0 3px rgba(212,255,0,.075), 0 0 24px rgba(212,255,0,.055) !important;
+}
+
+/* Tabs and tables */
+.neural-shell [role='tablist'] {
+  border: 1px solid rgba(48,54,61,.7);
+  background: rgba(13,17,23,.72) !important;
+  backdrop-filter: blur(16px);
+}
+.neural-shell [role='tab'][data-state='active'] {
+  color: var(--zica-volt) !important;
+  background: rgba(212,255,0,.07) !important;
+  box-shadow: inset 0 -1px 0 rgba(212,255,0,.55);
+}
+.neural-shell table { border-collapse: separate; border-spacing: 0; }
+.neural-shell thead { background: rgba(0,240,255,.025); }
+.neural-shell tbody tr { transition: background .18s ease, box-shadow .18s ease; }
+.neural-shell tbody tr:hover { background: rgba(0,240,255,.025); }
+
+/* Scrollbars */
+.neural-shell * { scrollbar-width: thin; scrollbar-color: #30363D #0D1117; }
+.neural-shell *::-webkit-scrollbar { width: 9px; height: 9px; }
+.neural-shell *::-webkit-scrollbar-track { background: #0D1117; }
+.neural-shell *::-webkit-scrollbar-thumb { border: 2px solid #0D1117; border-radius: 999px; background: #30363D; }
+.neural-shell *::-webkit-scrollbar-thumb:hover { background: #3f4955; }
+
+/* Neural current SVG layer */
+.neural-energy { z-index: 0; opacity: .48; mix-blend-mode: screen; }
+.neural-energy--hero { opacity: .92; }
+.neural-energy--compact { opacity: .3; }
+.neural-current {
+  stroke-dasharray: .075 .055;
+  stroke-dashoffset: 0;
+  animation: zica-current 11s linear infinite;
+  vector-effect: non-scaling-stroke;
+}
+.neural-current-reverse { animation-direction: reverse; animation-duration: 14s; }
+.neural-current-2 { animation-duration: 15s; opacity: .72; }
+.neural-current-3 { animation-duration: 19s; opacity: .58; }
+.neural-current-4 { animation-duration: 23s; opacity: .45; }
+.neural-nodes circle { transform-box: fill-box; transform-origin: center; animation: zica-node-pulse 2.8s ease-in-out infinite; }
+.neural-nodes circle:nth-child(2n) { animation-delay: -1.3s; }
+.neural-nodes circle:nth-child(3n) { animation-delay: -.7s; }
+
+/* Traffic brain hero */
+.neural-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 0 42%, rgba(255,255,255,.022) 49%, transparent 56%);
+  transform: translateX(-70%);
+  animation: zica-scan 10s ease-in-out infinite;
+}
+.neural-mini-stat {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  min-height: 52px;
+  border: 1px solid rgba(48,54,61,.72);
+  border-radius: 13px;
+  background: rgba(13,17,23,.7);
+  padding: .65rem .75rem;
+  color: #94A3B8;
+  backdrop-filter: blur(12px);
+}
+.neural-mini-stat strong { color: #fff; font-size: 1rem; margin-right: .2rem; }
+.neural-orbit {
+  position: absolute;
+  left: 50%; top: 50%;
+  border-radius: 999px;
+  transform: translate(-50%,-50%);
+  border: 1px solid rgba(0,240,255,.3);
+  box-shadow: 0 0 35px rgba(0,240,255,.05), inset 0 0 35px rgba(0,240,255,.025);
+}
+.neural-orbit::after {
+  content: '';
+  position: absolute;
+  width: 8px; height: 8px;
+  left: 50%; top: -4px;
+  border-radius: 50%;
+  background: var(--zica-volt);
+  box-shadow: 0 0 16px rgba(212,255,0,.9);
+}
+.neural-orbit-1 { width: 76%; height: 48%; animation: zica-orbit 13s linear infinite; }
+.neural-orbit-2 { width: 94%; height: 62%; border-color: rgba(212,255,0,.23); animation: zica-orbit-reverse 18s linear infinite; }
+.neural-orbit-3 { width: 112%; height: 76%; opacity: .55; animation: zica-orbit 25s linear infinite; }
+.neural-core { animation: zica-core-breathe 4.4s ease-in-out infinite; }
+.neural-node {
+  display: grid;
+  place-items: center;
+  width: 42px; height: 42px;
+  border: 1px solid rgba(0,240,255,.28);
+  border-radius: 50%;
+  color: var(--zica-cyan);
+  background: rgba(7,19,26,.9);
+  box-shadow: 0 0 28px rgba(0,240,255,.1);
+  animation: zica-node-float 5s ease-in-out infinite;
+}
+.neural-node svg { width: 18px; height: 18px; }
+.neural-node:nth-of-type(even) { color: var(--zica-volt); border-color: rgba(212,255,0,.25); animation-delay: -2s; }
+.neural-outcome-card {
+  border: 1px solid rgba(48,54,61,.8);
+  border-radius: 15px;
+  background: linear-gradient(135deg, rgba(22,27,34,.9), rgba(13,17,23,.78));
+  padding: .85rem 1rem;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+  backdrop-filter: blur(18px);
+}
+.neural-outcome-card p { margin-bottom: .15rem; color: #94A3B8; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .12em; }
+.neural-outcome-card span:last-child { display: block; margin-top: .35rem; color: #64748B; font-size: 10px; }
+
+/* Global top shell */
+.neural-topbar {
+  border-bottom: 1px solid rgba(48,54,61,.72);
+  background: rgba(13,17,23,.78);
+  box-shadow: 0 12px 40px rgba(0,0,0,.2);
+  backdrop-filter: blur(22px) saturate(130%);
+}
+.neural-sidebar {
+  border-right-color: rgba(48,54,61,.75) !important;
+  background:
+    radial-gradient(circle at 40% 0%, rgba(0,240,255,.07), transparent 30%),
+    linear-gradient(180deg, rgba(13,17,23,.98), rgba(10,14,19,.99)) !important;
+  box-shadow: 18px 0 55px rgba(0,0,0,.24);
+}
+.neural-mobile-dock::before {
+  content: '';
+  position: absolute;
+  left: 15%; right: 15%; top: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #00F0FF, #D4FF00, transparent);
+  opacity: .65;
+}
+
+/* Product states */
+.neural-state {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(48,54,61,.75);
+  border-radius: 22px;
+  background: rgba(22,27,34,.72);
+  box-shadow: 0 25px 80px rgba(0,0,0,.35);
+  backdrop-filter: blur(22px);
+}
+.neural-loader-ring {
+  width: 58px; height: 58px;
+  border-radius: 50%;
+  border: 1px solid rgba(48,54,61,.8);
+  border-top-color: var(--zica-volt);
+  border-right-color: var(--zica-cyan);
+  box-shadow: 0 0 32px rgba(0,240,255,.11);
+  animation: zica-spin 1.1s linear infinite;
+}
+
+@keyframes zica-current { to { stroke-dashoffset: -1; } }
+@keyframes zica-node-pulse { 0%,100% { opacity:.32; transform:scale(.8); } 50% { opacity:1; transform:scale(1.35); } }
+@keyframes zica-scan { 0%,18% { transform:translateX(-85%); } 60%,100% { transform:translateX(95%); } }
+@keyframes zica-orbit { to { transform:translate(-50%,-50%) rotate(360deg); } }
+@keyframes zica-orbit-reverse { to { transform:translate(-50%,-50%) rotate(-360deg); } }
+@keyframes zica-core-breathe { 0%,100% { transform:scale(.97); box-shadow:0 0 58px rgba(0,240,255,.16); } 50% { transform:scale(1.03); box-shadow:0 0 86px rgba(0,240,255,.28),0 0 54px rgba(212,255,0,.09); } }
+@keyframes zica-node-float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-9px); } }
+@keyframes zica-spin { to { transform:rotate(360deg); } }
+
+@media (max-width: 767px) {
+  .neural-shell main { padding-bottom: 5.4rem; }
+  .neural-shell::before { background-size: 36px 36px; opacity: .16; }
+  .neural-energy { opacity: .34; }
+  .neural-energy--hero { opacity: .65; }
+  .neural-hero { border-radius: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neural-current,
+  .neural-nodes circle,
+  .neural-hero::after,
+  .neural-orbit,
+  .neural-core,
+  .neural-node,
+  .neural-loader-ring { animation: none !important; }
+}
+
+/* =========================================
+   Consolidado de src/approved-concept.css (2026-09-18)
+   Zica.ai Approved Neural Cortex Product Language
+   ========================================= */
+:root{--zica-bg:#0D1117;--zica-graphite:#0D1117;--zica-surface:#101820;--zica-card:#111a23;--zica-border:#2a3945;--zica-volt:#D4FF00;--zica-cyan:#00F0FF}
+@keyframes zica-orbit-spin{to{transform:rotate(360deg)}}@keyframes zica-orbit-spin-reverse{to{transform:rotate(-360deg)}}@keyframes zica-electric-flow{to{stroke-dashoffset:-180}}@keyframes zica-pulse-glow{0%,100%{opacity:.42;transform:scale(.98)}50%{opacity:.95;transform:scale(1.025)}}@keyframes zica-scan-line{0%{transform:translateY(-100%);opacity:0}10%,85%{opacity:.22}100%{transform:translateY(650%);opacity:0}}@keyframes zica-signal{0%,100%{filter:drop-shadow(0 0 3px rgba(0,240,255,.2));opacity:.55}50%{filter:drop-shadow(0 0 10px rgba(212,255,0,.55));opacity:1}}@keyframes zica-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.zica-brand-mark{background:radial-gradient(circle at 45% 42%,rgba(212,255,0,.14),rgba(7,16,24,.96) 62%);border:1px solid rgba(212,255,0,.45)}.zica-command-hero,.zica-auth-v2{font-feature-settings:"ss01" 1,"cv02" 1}.zica-command-grid,.zica-auth-grid{background-image:linear-gradient(rgba(0,240,255,.026) 1px,transparent 1px),linear-gradient(90deg,rgba(0,240,255,.026) 1px,transparent 1px);background-size:44px 44px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.85),transparent 96%)}.zica-command-scan::after{content:"";position:absolute;inset:0 0 auto;height:18%;background:linear-gradient(to bottom,transparent,rgba(0,240,255,.055),transparent);animation:zica-scan-line 10s linear infinite}
+.zica-live-stat,.zica-auth-stat{display:flex;align-items:center;gap:.75rem;min-width:0;border:1px solid rgba(47,64,77,.86);background:linear-gradient(145deg,rgba(15,25,34,.95),rgba(7,16,24,.9));border-radius:14px;padding:.8rem .9rem;box-shadow:inset 0 1px rgba(255,255,255,.018)}.zica-live-stat strong,.zica-auth-stat strong{display:block;color:#fff;font-size:1.15rem;font-weight:900;line-height:1.1}.zica-live-stat span,.zica-auth-stat span{display:block;margin-top:.16rem;color:#7d8c9d;font-size:.65rem}.zica-auth-stat svg{width:1.15rem;height:1.15rem}.zica-primary-cta{box-shadow:0 0 20px rgba(212,255,0,.17),inset 0 -10px 24px rgba(111,150,0,.08)}.zica-primary-cta:hover{transform:translateY(-1px);box-shadow:0 0 34px rgba(212,255,0,.27),inset 0 -10px 24px rgba(111,150,0,.08)}
+.zica-kpi-panel{display:flex;min-height:132px;flex-direction:column;justify-content:space-between;border:1px solid rgba(45,61,73,.92);background:linear-gradient(145deg,rgba(16,25,34,.94),rgba(8,16,24,.96));border-radius:18px;padding:1rem;overflow:hidden;box-shadow:inset 0 1px rgba(255,255,255,.018),0 14px 35px rgba(0,0,0,.12)}.zica-kpi-panel p{font-size:.66rem;font-weight:900;text-transform:uppercase;letter-spacing:.13em;color:#9aa7b8}.zica-kpi-panel>span{color:#64748b;font-size:.65rem}.zica-kpi-panel strong{color:#fff;font-size:1.8rem;font-weight:900}.zica-sparkline{position:relative;height:18px;opacity:.75;overflow:hidden}.zica-sparkline:before,.zica-sparkline:after{content:"";position:absolute;left:-4%;width:108%;height:1px;transform-origin:left}.zica-sparkline:before{top:9px;transform:skewY(-5deg)}.zica-sparkline:after{top:12px;transform:skewY(3deg);opacity:.38}.zica-sparkline--cyan:before,.zica-sparkline--cyan:after{background:#00F0FF;box-shadow:0 0 6px rgba(0,240,255,.45)}.zica-sparkline--volt:before,.zica-sparkline--volt:after{background:#D4FF00;box-shadow:0 0 6px rgba(212,255,0,.42)}
+.zica-cortex-stage{min-height:100%;width:100%;isolation:isolate;overflow:visible}.zica-cortex-stage:before{content:"";position:absolute;inset:12% 12% 10%;border-radius:50%;background:radial-gradient(circle,rgba(0,240,255,.09),rgba(0,240,255,.015) 38%,transparent 68%);filter:blur(7px);animation:zica-pulse-glow 4.6s ease-in-out infinite}.zica-cortex-svg{overflow:visible}.zica-cortex-orbit{transform-box:fill-box;transform-origin:center}.zica-cortex-orbit--a{animation:zica-orbit-spin 26s linear infinite}.zica-cortex-orbit--b{animation:zica-orbit-spin-reverse 20s linear infinite}.zica-cortex-orbit--c{animation:zica-orbit-spin 34s linear infinite}.zica-shock{stroke-dasharray:7 6 1 7;animation:zica-electric-flow 2.8s linear infinite;filter:drop-shadow(0 0 4px currentColor)}.zica-shock--2{animation-duration:2.3s;animation-direction:reverse}.zica-shock--3{animation-duration:3.4s}.zica-shock--4{animation-duration:2.65s;animation-direction:reverse}.zica-signal-wave{stroke-dasharray:18 8 2 8;animation:zica-electric-flow 4.3s linear infinite,zica-signal 2.7s ease-in-out infinite}.zica-signal-wave--reverse{animation-direction:reverse,normal}.zica-brain path{stroke-dasharray:180;stroke-dashoffset:180;animation:zica-electric-flow 8s linear infinite}.zica-brain path:nth-child(2n){animation-direction:reverse;animation-duration:9.5s}.zica-cortex-data circle{animation:zica-pulse-glow 2s ease-in-out infinite}.zica-cortex-core{width:128px;height:128px;border-radius:50%;background:radial-gradient(circle,rgba(10,29,39,.98),rgba(4,12,18,.98));border:1px solid rgba(0,240,255,.42);box-shadow:0 0 55px rgba(0,240,255,.14),inset 0 0 35px rgba(0,240,255,.055)}.zica-cortex-core:before{content:"";position:absolute;inset:9px;border-radius:50%;border:1px solid rgba(212,255,0,.21)}.zica-cortex-node{display:flex;flex-direction:column;align-items:center;gap:.35rem;width:96px;text-align:center;animation:zica-float 4.5s ease-in-out infinite}.zica-cortex-node-icon{display:grid;place-items:center;width:43px;height:43px;border-radius:999px;background:rgba(6,16,24,.95);border:1px solid rgba(0,240,255,.5);box-shadow:0 0 22px rgba(0,240,255,.11);color:#00F0FF}.zica-cortex-node:nth-of-type(even) .zica-cortex-node-icon{border-color:rgba(212,255,0,.55);color:#D4FF00;box-shadow:0 0 22px rgba(212,255,0,.1)}.zica-cortex-node-icon svg{width:19px;height:19px}.zica-cortex-node-label{color:#e8eef5;font-size:8px;line-height:1.22;font-weight:900;text-transform:uppercase;letter-spacing:.055em}.zica-cortex-node--geo{left:23%;top:13%}.zica-cortex-node--blog{left:12%;top:44%}.zica-cortex-node--social{left:25%;bottom:9%}.zica-cortex-node--authority{right:21%;top:13%;animation-delay:-.8s}.zica-cortex-node--viral{right:13%;bottom:11%;animation-delay:-1.6s}.zica-viral-pulse{border-radius:50%;background:radial-gradient(ellipse at center,transparent 40%,rgba(0,240,255,.02) 41%,transparent 43%);animation:zica-pulse-glow 5s ease-in-out infinite}
+.zica-auth-v2:before{content:"";pointer-events:none;position:absolute;inset:0;background:radial-gradient(circle at 42% 45%,rgba(0,240,255,.065),transparent 30%),radial-gradient(circle at 35% 46%,rgba(212,255,0,.045),transparent 43%)}.zica-auth-energy{height:130px;opacity:.55;background-repeat:no-repeat;background-size:100% 100%}.zica-auth-energy--top{background-image:linear-gradient(176deg,transparent 48%,rgba(0,240,255,.42) 49%,transparent 50%),linear-gradient(184deg,transparent 50%,rgba(212,255,0,.38) 51%,transparent 52%)}.zica-auth-energy--bottom{transform:scaleY(-1);background-image:linear-gradient(176deg,transparent 48%,rgba(0,240,255,.34) 49%,transparent 50%),linear-gradient(184deg,transparent 50%,rgba(212,255,0,.28) 51%,transparent 52%)}.zica-login-panel:after{content:"";pointer-events:none;position:absolute;right:-80px;bottom:-110px;width:220px;height:220px;border-radius:50%;background:rgba(0,240,255,.035);filter:blur(32px)}.zica-footer-wave{position:relative;height:14px;background:linear-gradient(180deg,transparent 48%,rgba(0,240,255,.72) 50%,transparent 52%);clip-path:polygon(0 48%,8% 50%,12% 26%,16% 72%,23% 43%,30% 54%,36% 41%,42% 61%,50% 48%,60% 51%,67% 24%,73% 69%,80% 44%,87% 57%,100% 47%,100% 53%,87% 63%,80% 50%,73% 75%,67% 30%,60% 57%,50% 54%,42% 67%,36% 47%,30% 60%,23% 49%,16% 78%,12% 32%,8% 56%,0 54%);filter:drop-shadow(0 0 6px rgba(0,240,255,.5));animation:zica-signal 2.3s ease-in-out infinite}
+.neural-shell main{background:radial-gradient(circle at 48% -8%,rgba(0,240,255,.028),transparent 28%),transparent}.neural-shell main :where(.bg-card,[data-radix-popper-content-wrapper]>div){border-color:rgba(43,57,69,.88)}.neural-shell main .bg-card{background-color:rgba(16,24,32,.92)!important;box-shadow:inset 0 1px rgba(255,255,255,.018),0 14px 35px rgba(0,0,0,.10)}.neural-shell main .bg-card:hover{border-color:rgba(0,240,255,.2)}.neural-shell main input:not([type=checkbox]):not([type=radio]),.neural-shell main textarea,.neural-shell main select{background-color:rgba(7,16,24,.86);border-color:rgba(48,63,75,.9)}.neural-shell main table{background:rgba(8,16,24,.5)}.neural-shell main thead{background:rgba(0,240,255,.018)}.zica-sidebar-wide{background:linear-gradient(180deg,rgba(6,14,21,.99),rgba(8,17,25,.99));box-shadow:20px 0 55px rgba(0,0,0,.18)}.zica-sidebar-logo-band{background:radial-gradient(circle at 25% 50%,rgba(212,255,0,.055),transparent 60%)}.zica-sidebar-status{background:linear-gradient(145deg,rgba(13,24,31,.98),rgba(7,15,22,.96))}
+@media(max-width:1279px){.zica-cortex-node-label{display:none}.zica-cortex-node{width:46px}}@media(max-width:1023px){.zica-auth-v2 main{padding-top:1rem}.zica-cortex-stage--auth{min-height:360px}.zica-cortex-node-label{display:block}}@media(max-width:767px){.zica-cortex-stage--dashboard{min-height:390px}.zica-cortex-stage--auth{min-height:300px}.zica-cortex-node-label{display:none}.zica-cortex-node{width:42px}.zica-cortex-node-icon{width:36px;height:36px}.zica-cortex-core{width:108px;height:108px}.zica-cortex-node--blog{left:9%}.zica-cortex-node--viral{right:8%}}@media(max-width:520px){.zica-cortex-node--geo{left:20%;top:14%}.zica-cortex-node--authority{right:19%;top:14%}.zica-cortex-node--social{left:21%;bottom:10%}.zica-command-hero{border-radius:22px}}@media(prefers-reduced-motion:reduce){.zica-cortex-orbit,.zica-shock,.zica-signal-wave,.zica-brain path,.zica-cortex-data circle,.zica-cortex-node,.zica-command-scan:after,.zica-footer-wave{animation:none!important}}
