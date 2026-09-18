@@ -3,7 +3,7 @@
  * Plugin Name: Zica Posts — Conector WordPress Oficial Zica.ai
  * Plugin URI: https://zica.ai
  * Description: Agente WordPress leve da Zica.ai com outbox persistente, HMAC, idempotência, GEO/Schema, discovery LLM, IndexNow em lote, cards e integração com Zica Orchestrator.
- * Version: 3.13.0
+ * Version: 3.14.0
  * Author: Equipe Zica.ai
  * Author URI: https://zica.ai
  * License: GPL v2 or later
@@ -14,7 +14,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('ZICA_POSTS_VERSION', '3.13.0');
+define('ZICA_POSTS_VERSION', '3.14.0');
 define('ZICA_POSTS_PAIRING_URL', 'https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1/pair-wordpress-site');
 define('ZICA_POSTS_SOFTWARE_ID', 'zica-posts');
 define('ZICA_POSTS_FILE', __FILE__);
@@ -32,6 +32,8 @@ require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-discovery.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-outbox.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-cards.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-curator.php';
+require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-ai-auditor.php';
+require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-schema-validator.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-rest.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-admin.php';
 
@@ -42,6 +44,8 @@ final class Zica_Posts_3110 {
     public $outbox;
     public $cards;
     public $curator;
+    public $ai_auditor;
+    public $schema_validator;
     public $rest;
     public $admin;
 
@@ -56,8 +60,10 @@ final class Zica_Posts_3110 {
         $this->outbox = new Zica_Posts_Outbox($this->auth, $this->discovery);
         $this->cards = new Zica_Posts_Cards();
         $this->curator = new Zica_Posts_Curator();
-        $this->rest = new Zica_Posts_REST($this->auth, $this->discovery, $this->outbox, $this->cards);
-        $this->admin = new Zica_Posts_Admin($this->auth, $this->discovery, $this->outbox, $this->curator);
+        $this->ai_auditor = new Zica_Posts_AI_Auditor($this->discovery);
+        $this->schema_validator = new Zica_Posts_Schema_Validator();
+        $this->rest = new Zica_Posts_REST($this->auth, $this->discovery, $this->outbox, $this->cards, $this->ai_auditor, $this->schema_validator);
+        $this->admin = new Zica_Posts_Admin($this->auth, $this->discovery, $this->outbox, $this->curator, $this->ai_auditor);
 
         add_filter('cron_schedules', array($this, 'cron_schedules'));
         add_filter('wp_robots', array($this, 'robots_max_image_preview'));
