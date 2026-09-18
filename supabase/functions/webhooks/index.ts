@@ -9,8 +9,38 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-webhook-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Webhook secret for validation (should be set as environment variable)
-const WEBHOOK_SECRET = Deno.env.get("WEBHOOK_SECRET") || "default-secret";
+// Webhook secret for validation. No fallback: an unset env var must fail
+// closed, never accept a known literal as a valid secret (auditoria 2026-09-18, CRÍTICO 2).
+const WEBHOOK_SECRET = Deno.env.get("WEBHOOK_SECRET") || "";
+
+function hostnameOf(value: string | null | undefined): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    return new URL(raw.startsWith("http") ? raw : `https://${raw}`).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return raw.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0].toLowerCase();
+  }
+}
+
+/**
+ * The webhook secret is a single value shared across every organization's
+ * WordPress site, so it cannot by itself prove which organization a payload
+ * belongs to. When the payload carries a site/post URL, this cross-checks it
+ * against the project that owns the target article before any write is
+ * applied, so a manipulated payload cannot reach another organization's data.
+ * Returns true when there is no URL to check (e.g. a bare cfrdm_id lookup),
+ * since that path is already scoped to one specific, unguessable article id.
+ */
+async function articleBelongsToSite(supabase: any, projectId: string | null | undefined, candidateUrl: string | null | undefined): Promise<boolean> {
+  const candidateHost = hostnameOf(candidateUrl);
+  if (!candidateHost) return true;
+  if (!projectId) return false;
+  const { data: project } = await supabase.from("projects").select("wordpress_url, domain").eq("id", projectId).maybeSingle();
+  if (!project) return false;
+  const projectHosts = [hostnameOf(project.wordpress_url), hostnameOf(project.domain)].filter(Boolean);
+  return projectHosts.includes(candidateHost);
+}
 
 Deno.serve(async (req) => {
   const requestId = createRequestId();
@@ -27,6 +57,16 @@ Deno.serve(async (req) => {
     const event = url.searchParams.get("event");
 
     log.requestStart(req.method, `${source}/${event}`);
+
+    // Fail closed: without a configured secret, no payload can be trusted.
+    if (!WEBHOOK_SECRET) {
+      log.error("webhook_secret_not_configured", {});
+      log.requestEnd(500, Date.now() - startTime);
+      return new Response(
+        JSON.stringify({ success: false, error: "Webhook não configurado no servidor" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Validate webhook secret for security
     const providedSecret = req.headers.get("x-webhook-secret");
@@ -57,23 +97,39 @@ Deno.serve(async (req) => {
             
             // Find matching article by cfrdm_id (article UUID) or title
             let article = null;
-            
+
             if (cfrdm_id) {
               const { data: articleData } = await supabase
                 .from("articles")
-                .select("id, config")
+                .select("id, config, project_id")
                 .eq("id", cfrdm_id)
                 .single();
               article = articleData;
             }
-            
-            if (!article) {
-              const { data: articleData } = await supabase
-                .from("articles")
-                .select("id, config")
-                .eq("title", post_title)
-                .single();
-              article = articleData;
+
+            if (!article && site_url) {
+              // No cfrdm_id: only search by title inside the project whose
+              // wordpress_url/domain matches the caller's own site_url, never
+              // a global title search across every organization's articles.
+              const candidateHost = hostnameOf(site_url);
+              const { data: candidateProjects } = await supabase.from("projects").select("id, wordpress_url, domain");
+              const matchingProjectIds = (candidateProjects || [])
+                .filter((p: any) => [hostnameOf(p.wordpress_url), hostnameOf(p.domain)].includes(candidateHost))
+                .map((p: any) => p.id);
+              if (matchingProjectIds.length > 0) {
+                const { data: articleData } = await supabase
+                  .from("articles")
+                  .select("id, config, project_id")
+                  .eq("title", post_title)
+                  .in("project_id", matchingProjectIds)
+                  .maybeSingle();
+                article = articleData;
+              }
+            }
+
+            if (article && !(await articleBelongsToSite(supabase, article.project_id, site_url || post_url))) {
+              log.warn("post_published_organization_mismatch", { article_id: article.id });
+              article = null;
             }
 
             if (article) {
@@ -112,14 +168,30 @@ Deno.serve(async (req) => {
             const { post_id, post_url, cfrdm_id } = data || body;
             
             let articleId = cfrdm_id;
-            
+            let articleProjectId: string | null = null;
+
+            if (articleId) {
+              const { data: articleData } = await supabase
+                .from("articles")
+                .select("id, project_id")
+                .eq("id", articleId)
+                .maybeSingle();
+              articleProjectId = articleData?.project_id ?? null;
+            }
+
             if (!articleId && post_url) {
               const { data: articleData } = await supabase
                 .from("articles")
-                .select("id")
+                .select("id, project_id")
                 .eq("published_url", post_url)
                 .single();
               articleId = articleData?.id;
+              articleProjectId = articleData?.project_id ?? null;
+            }
+
+            if (articleId && !(await articleBelongsToSite(supabase, articleProjectId, post_url))) {
+              log.warn("post_deleted_organization_mismatch", { article_id: articleId });
+              articleId = null;
             }
 
             if (articleId) {
@@ -178,11 +250,13 @@ Deno.serve(async (req) => {
             if (cfrdm_id && schema_validation) {
               const { data: article } = await supabase
                 .from("articles")
-                .select("id, config")
+                .select("id, config, project_id")
                 .eq("id", cfrdm_id)
                 .single();
 
-              if (article) {
+              if (article && !(await articleBelongsToSite(supabase, article.project_id, post_url))) {
+                log.warn("schema_validation_organization_mismatch", { article_id: article.id });
+              } else if (article) {
                 const updatedConfig = {
                   ...(article.config || {}),
                   schema_validation: schema_validation,
@@ -262,8 +336,23 @@ Deno.serve(async (req) => {
         switch (event) {
           case "news_found": {
             const { agent_id, user_id, news_items } = body;
-            
+
             if (agent_id && user_id && Array.isArray(news_items)) {
+              // The webhook secret alone cannot prove which organization this
+              // payload belongs to, so the agent_id/user_id pair is verified
+              // against the real ownership row before any insert is applied —
+              // a forged payload cannot attribute news to another user's agent.
+              const { data: agent } = await supabase
+                .from("news_agents")
+                .select("id, user_id")
+                .eq("id", agent_id)
+                .maybeSingle();
+
+              if (!agent || agent.user_id !== user_id) {
+                log.warn("news_found_organization_mismatch", { agent_id, provided_user_id: user_id });
+                break;
+              }
+
               const inserts = news_items.map((item: any) => ({
                 agent_id,
                 user_id,
