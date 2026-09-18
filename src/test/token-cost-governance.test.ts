@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
-const migration = read('supabase/migrations/20260917010000_token_cost_governance.sql');
+// Renomeado em 2c2c369 (fix(db): higiene de governança pós-auditoria
+// 2026-09-18) para bater com o timestamp realmente aplicado em produção.
+const migration = read('supabase/migrations/20260917094128_token_cost_governance.sql');
 
 describe('token cost governance (2026-09-16 audit remediation)', () => {
   it('recreates the token_usage_logs access policies dropped by the admin-only hardening migration', () => {
