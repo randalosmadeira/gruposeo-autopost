@@ -1,4 +1,5 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { fetchUserKeys } from "../_shared/byok-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -277,15 +278,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get user's API keys
-    const { data: settings } = await supabase
-      .from("user_settings")
-      .select("gemini_api_key, openai_api_key")
-      .eq("user_id", user.id)
-      .single();
-
-    const geminiKey = settings?.gemini_api_key || Deno.env.get("GEMINI_API_KEY");
-    const openaiKey = settings?.openai_api_key || Deno.env.get("OPENAI_API_KEY");
+    // Get user's API keys via the shared BYOK resolver (same pattern as
+    // ai-chat/gbp-audit) instead of reading user_settings directly — this
+    // keeps platform OpenAI/Anthropic credentials on the governed Vault path
+    // instead of a raw env var, matching token-cost governance.
+    const keys = await fetchUserKeys(user.id);
+    const geminiKey = keys.gemini;
+    const openaiKey = keys.openai;
 
     if (!geminiKey && !openaiKey) {
       return new Response(

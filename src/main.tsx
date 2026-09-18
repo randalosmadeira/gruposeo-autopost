@@ -24,10 +24,6 @@ async function bootstrap() {
     return;
   }
 
-  await Promise.all([
-    import("./neural.css"),
-    import("./approved-concept.css"),
-  ]);
   const { default: App } = await import("./App.tsx");
   root.render(<App />);
 }

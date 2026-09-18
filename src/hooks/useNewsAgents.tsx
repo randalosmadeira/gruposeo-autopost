@@ -67,6 +67,28 @@ export function useNewsAgents(options: { enabled?: boolean } = {}) {
     enabled: !!user?.id && (options.enabled ?? true),
   });
 
+  // Real count of news items the user's agents found today (agent_news is
+  // RLS-scoped to auth.uid() = user_id), instead of a hardcoded "0" in the UI.
+  const { data: newsFoundToday, isLoading: isLoadingNewsToday } = useQuery({
+    queryKey: ['news-agents-news-today', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return 0;
+
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const { count, error } = await supabase
+        .from('agent_news')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .gte('created_at', startOfDay.toISOString());
+
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!user?.id && (options.enabled ?? true),
+  });
+
   const createAgent = useMutation({
     mutationFn: async (input: CreateNewsAgentInput) => {
       if (!user?.id) throw new Error('Usuário não autenticado');
@@ -196,5 +218,7 @@ export function useNewsAgents(options: { enabled?: boolean } = {}) {
     toggleAgent,
     activeAgentsCount,
     totalArticles,
+    newsFoundToday,
+    isLoadingNewsToday,
   };
 }

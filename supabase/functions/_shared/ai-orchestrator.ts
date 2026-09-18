@@ -12,6 +12,10 @@ export interface AIProvider {
 export interface AIMessage {
   role: 'user' | 'system' | 'assistant' | 'model';
   content: string;
+  // Marks a static, verbatim-repeated system block (today: the behavioral
+  // directives injected per taskType) as eligible for an Anthropic prompt
+  // cache breakpoint. Ignored by the OpenAI/Gemini adapters.
+  cacheable?: boolean;
 }
 
 export interface AICallOptions {
@@ -32,10 +36,13 @@ export interface AIUsage {
 
 export interface AICallResult {
   content: string;
-  provider: 'openai' | 'anthropic' | 'gemini';
+  // A single real call always sets one of AIProvider['name']. 'multi-agent' is
+  // reserved for the 4-agent pipeline result assembled in generate-article,
+  // which is not a single provider call — see agents/agent-pipeline.ts.
+  provider: AIProvider['name'] | 'multi-agent';
   model: string;
   usage: AIUsage;
-  providerMode?: 'single' | 'dual';
+  providerMode?: 'single' | 'dual' | 'pipeline';
   providersUsed?: string[];
 }
 
@@ -79,7 +86,9 @@ const AI_PROVIDERS: Record<string, AIProvider[]> = {
   content_review: [p('anthropic', CLAUDE_TEXT, ['review', 'careful']), p('openai', OPENAI_TEXT, ['review', 'structured'])],
   content_editing: [p('anthropic', CLAUDE_TEXT, ['editing', 'nuanced']), p('openai', OPENAI_TEXT, ['editing', 'instruction-following'])],
   eeat_review: [p('anthropic', CLAUDE_TEXT, ['authority', 'trust']), p('openai', OPENAI_TEXT, ['structured'])],
-  seo_analysis: [p('openai', OPENAI_TEXT, ['seo', 'structured']), p('anthropic', CLAUDE_TEXT, ['semantic'])],
+  // Curto e estruturado (meta_title/meta_description/focus_keyword em JSON) —
+  // mesmo porte de title_generation/meta_description, então usa o tier econômico.
+  seo_analysis: [p('openai', OPENAI_ECONOMY, ['seo', 'structured']), p('anthropic', CLAUDE_ECONOMY, ['semantic'])],
   geo_optimization: [p('openai', OPENAI_TEXT, ['geo', 'structured']), p('anthropic', CLAUDE_TEXT, ['semantic'])],
   aeo_analysis: [p('openai', OPENAI_TEXT, ['aeo', 'structured']), p('anthropic', CLAUDE_TEXT, ['qa'])],
   title_generation: [p('openai', OPENAI_ECONOMY, ['creative']), p('anthropic', CLAUDE_ECONOMY, ['creative'])],
@@ -156,11 +165,13 @@ export class AIOrchestrator {
     return keys;
   }
 
+  // Directives are kept as their OWN leading system message (not concatenated
+  // into the caller's system content) so callAnthropic can mark exactly this
+  // static, repeated-verbatim-per-taskType block as an Anthropic prompt-cache
+  // breakpoint, while the caller's dynamic system content stays uncached.
   private injectDirectives(taskType: TaskType, messages: AIMessage[]): AIMessage[] {
     const directives = getDirectivesForTask(taskType);
-    const hasSystem = messages.some((message) => message.role === 'system');
-    if (hasSystem) return messages.map((message) => message.role === 'system' ? { ...message, content: `${directives}\n\n---\n\n${message.content}` } : message);
-    return [{ role: 'system', content: directives }, ...messages];
+    return [{ role: 'system', content: directives, cacheable: true }, ...messages];
   }
 
   async call(taskType: TaskType, messages: AIMessage[], options?: AICallOptions): Promise<string> {
@@ -279,7 +290,21 @@ export class AIOrchestrator {
   }
 
   private async callAnthropic(model: string, key: string, messages: AIMessage[], options?: AICallOptions): Promise<{ content: string; usage: AIUsage }> {
-    const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
+    // Messages API prompt caching (current format, no beta header required):
+    // `system` as an array of text blocks, with `cache_control: { type: "ephemeral" }`
+    // on the static directives block only — the dynamic per-call system content
+    // (caller's own prompt) stays out of the cached block so it never poisons
+    // the cache key. Blocks below the model's minimum cacheable token count are
+    // simply not cached by Anthropic; no error is raised, so this is safe even
+    // when the directives block is short for a given call.
+    const systemMessages = messages.filter((m) => m.role === 'system');
+    const system = systemMessages.length
+      ? systemMessages.map((m) => (
+          m.cacheable
+            ? { type: 'text' as const, text: m.content, cache_control: { type: 'ephemeral' as const } }
+            : { type: 'text' as const, text: m.content }
+        ))
+      : undefined;
     const conversation = messages.filter((m) => m.role !== 'system').map((m) => ({ role: m.role === 'assistant' || m.role === 'model' ? 'assistant' : 'user', content: m.content }));
     const response = await fetch(`${ANTHROPIC_API_BASE}/messages`, {
       method: 'POST',

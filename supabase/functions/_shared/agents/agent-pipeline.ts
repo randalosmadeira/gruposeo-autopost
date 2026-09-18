@@ -7,7 +7,8 @@
  * producing progressively better content through collaboration.
  */
 
-import { AIOrchestrator, getOrchestrator, type AIMessage, type TaskType } from "../ai-orchestrator.ts";
+import { type TaskType } from "../ai-orchestrator.ts";
+import { getOrchestratorForUser } from "../byok-resolver.ts";
 import { type SectorConfig, SECTOR_CONFIGS, mapSegmentToSector, buildSectorPromptSection } from "../sector-config.ts";
 
 export interface AgentPipelineConfig {
@@ -22,7 +23,7 @@ export interface AgentPipelineConfig {
   contentType?: string;
   goal?: string;
   intentType?: string;
-  
+
   // Company data
   companyName?: string;
   companyPhone?: string;
@@ -32,20 +33,30 @@ export interface AgentPipelineConfig {
   targetAudience?: string;
   painPoints?: string;
   ctaObjective?: string;
-  
+
   // Content elements
   includeFaq: boolean;
   faqCount: number;
   includeTable: boolean;
   includeList: boolean;
   includeConclusion: boolean;
-  
+
   // Internal links
   internalLinks?: Array<{ anchor: string; url: string }>;
-  
+
   // Options
   useAgentPipeline?: boolean;
   preferredProvider?: string;
+
+  // BYOK identity: which user's credentials fund the 4 agent calls and whose
+  // token_usage_logs each call is attributed to (via getOrchestratorForUser's
+  // usageSink). Required — this pipeline must never fall back to
+  // platform/environment-only credentials.
+  userId: string;
+  // Optional governance/observability threading, same convention as the
+  // options accepted by AIOrchestrator.callWithMeta/callDualWithMeta.
+  articleId?: string;
+  correlationId?: string;
 }
 
 export interface StrategyOutput {
@@ -324,7 +335,13 @@ INSTRUÇÕES:
 // =================== PIPELINE EXECUTION ===================
 
 export async function runAgentPipeline(config: AgentPipelineConfig): Promise<AgentPipelineResult> {
-  const orchestrator = getOrchestrator();
+  // BYOK real: nunca usar credenciais de ambiente/plataforma isoladas aqui.
+  // getOrchestratorForUser resolve a chave do usuário/organização (com
+  // fallback ao Vault da plataforma) e já registra cada chamada em
+  // token_usage_logs via usageSink — sem isso, os 4 agentes gerariam custo de
+  // IA invisível à governança de consumo.
+  const orchestrator = await getOrchestratorForUser(config.userId);
+  const callOptions = { articleId: config.articleId, correlationId: config.correlationId };
   const providersUsed: string[] = [];
   
   // Determine sector config
@@ -342,7 +359,7 @@ export async function runAgentPipeline(config: AgentPipelineConfig): Promise<Age
     const strategyResult = await orchestrator.call('strategy_planning', [
       { role: 'system', content: getStrategistPrompt(config, sectorConfig) },
       { role: 'user', content: `Crie a estratégia de conteúdo para o artigo sobre: "${config.keyword}"` },
-    ], { maxTokens: 2000, temperature: 0.7, preferredProvider: 'gemini' });
+    ], { maxTokens: 2000, temperature: 0.7, preferredProvider: 'gemini', ...callOptions });
     
     providersUsed.push('strategist');
     
@@ -394,10 +411,11 @@ export async function runAgentPipeline(config: AgentPipelineConfig): Promise<Age
 - Linguagem SIMPLES (um adolescente de 14 anos deve entender)
 - MÍNIMO 2 links externos para fontes oficiais
 - Comece com <!-- META_DESCRIPTION: ... --> na primeira linha.` },
-  ], { 
-    maxTokens: 8000, 
+  ], {
+    maxTokens: 8000,
     temperature: 0.5,
     preferredProvider: sectorConfig.preferredAI,
+    ...callOptions,
   });
   providersUsed.push('writer');
 
@@ -407,7 +425,7 @@ export async function runAgentPipeline(config: AgentPipelineConfig): Promise<Age
     const editedContent = await orchestrator.call('content_editing', [
       { role: 'system', content: getEditorPrompt() },
       { role: 'user', content: `Edite e melhore o seguinte artigo para máxima conversão:\n\n${content}` },
-    ], { maxTokens: 8000, temperature: 0.3, preferredProvider: 'anthropic' });
+    ], { maxTokens: 8000, temperature: 0.3, preferredProvider: 'anthropic', ...callOptions });
     
     // Only use edited content if it's substantial
     if (editedContent && editedContent.length > content.length * 0.5) {
@@ -424,7 +442,7 @@ export async function runAgentPipeline(config: AgentPipelineConfig): Promise<Age
     const reviewedContent = await orchestrator.call('content_review', [
       { role: 'system', content: getSEOReviewerPrompt(config.keyword, sectorConfig) },
       { role: 'user', content: `Revise o SEO e compliance do seguinte artigo:\n\n${content}` },
-    ], { maxTokens: 8000, temperature: 0.2, preferredProvider: 'gemini' });
+    ], { maxTokens: 8000, temperature: 0.2, preferredProvider: 'gemini', ...callOptions });
     
     if (reviewedContent && reviewedContent.length > content.length * 0.5) {
       content = reviewedContent;

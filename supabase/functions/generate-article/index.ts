@@ -1,8 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
+import type { AICallResult } from "../_shared/ai-orchestrator.ts";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 import { distributeProjectCtas } from "../_shared/editorial-cta.ts";
+import { runAgentPipeline } from "../_shared/agents/agent-pipeline.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,6 +50,11 @@ interface ArticleConfig {
   projectId?: string;
   articleId?: string;
   projectConfig?: Record<string, string | undefined>;
+  // Opt-in backend capability (not wired to any UI yet): runs the 4-agent
+  // pipeline (Estrategista -> Redator -> Editor -> Revisor SEO) instead of
+  // the single callWithMeta/callDualWithMeta generation call. Defaults to
+  // false so existing behavior is untouched.
+  usePipeline?: boolean;
 }
 
 type Band = { label: string; min: number; max: number; purpose: string };
@@ -247,9 +254,66 @@ Deno.serve(async (req: Request) => {
       { role: "system", content: systemPrompt },
       { role: "user", content: prompt },
     ] as const;
-    let generation = dualProvider
-      ? await orchestrator.callDualWithMeta("article_generation", [...generationMessages], { maxTokens: 32000, temperature: 0.35, articleId: config.articleId, correlationId: requestId })
-      : await orchestrator.callWithMeta("article_generation", [...generationMessages], { preferredProvider, maxTokens: 32000, temperature: 0.35, articleId: config.articleId, correlationId: requestId });
+
+    let generation: AICallResult;
+    if (config.usePipeline) {
+      // Opt-in 4-agent path (Estrategista -> Redator -> Editor -> Revisor
+      // SEO), backend-only capability for now (no UI wires this in yet).
+      // getOrchestratorForUser was already called above for parity/logging,
+      // but runAgentPipeline resolves its own BYOK orchestrator internally
+      // (same userId) so each of the 4 agent calls is billed and logged to
+      // token_usage_logs individually.
+      const secondaryKeywords = String(config.secondaryKeywords || "")
+        .split(",").map((item) => item.trim()).filter(Boolean);
+      const pipelineResult = await runAgentPipeline({
+        keyword: config.keyword,
+        title: config.title,
+        secondaryKeywords,
+        sector: config.segment || "general",
+        language: config.language || "pt-BR",
+        tone: config.tone || "profissional e acessível",
+        pointOfView: config.pointOfView || "voce",
+        wordCount: config.wordCount || "medium",
+        contentType: config.contentType,
+        goal: config.goal,
+        intentType: config.intentType,
+        companyName: config.companyName,
+        companyPhone: config.companyPhone,
+        companyAddress: config.companyAddress,
+        differentials: config.differentials,
+        targetAudience: config.targetAudience,
+        painPoints: config.painPoints,
+        ctaObjective: config.ctaObjective,
+        includeFaq: config.includeFaq !== false,
+        faqCount: config.faqCount || 5,
+        includeTable: Boolean(config.includeTable),
+        includeList: config.includeList !== false,
+        includeConclusion: config.includeConclusion !== false,
+        internalLinks: config.internalLinks,
+        preferredProvider,
+        userId,
+        articleId: config.articleId,
+        correlationId: requestId,
+      });
+      // Synthesize an AICallResult-shaped object so everything downstream
+      // (SOURCE_SIGNAL/REVIEW_MARKER checks, word-count expansion,
+      // distributeProjectCtas, SSE/JSON response) keeps working unmodified.
+      // usage stays zeroed here on purpose: real token usage was already
+      // recorded per-agent-call by getOrchestratorForUser's usageSink inside
+      // runAgentPipeline, so summing it again here would double-count it.
+      generation = {
+        content: pipelineResult.content,
+        provider: "multi-agent",
+        model: pipelineResult.providersUsed.join("+"),
+        usage: { inputTokens: 0, outputTokens: 0 },
+        providerMode: "pipeline",
+        providersUsed: pipelineResult.providersUsed,
+      };
+    } else {
+      generation = dualProvider
+        ? await orchestrator.callDualWithMeta("article_generation", [...generationMessages], { maxTokens: 32000, temperature: 0.35, articleId: config.articleId, correlationId: requestId })
+        : await orchestrator.callWithMeta("article_generation", [...generationMessages], { preferredProvider, maxTokens: 32000, temperature: 0.35, articleId: config.articleId, correlationId: requestId });
+    }
 
     let content = generation.content.trim();
     const initialSourceSignal = content.match(SOURCE_SIGNAL);
