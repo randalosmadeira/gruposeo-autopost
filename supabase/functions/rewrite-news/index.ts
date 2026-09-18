@@ -135,6 +135,11 @@ REGRAS OBRIGATÓRIAS
 9. Use links internos reais do projeto quando disponíveis. Nunca invente URL.
 10. image_prompt deve descrever imagem editorial horizontal com safe area para 1200x630, sem texto embutido.
 11. Não inclua resíduos de prompt, placeholders, JSON ou notas internas no artigo.
+12. Só inclua uma seção <h2>Perguntas Frequentes</h2> seguida de 2 ou mais pares
+    <h3>pergunta real</h3><p>resposta objetiva baseada apenas nos fatos já apresentados na matéria</p>
+    se a fonte realmente sustentar 2 ou mais perguntas de leitor genuínas e não redundantes entre si.
+    Caso contrário, omita a seção inteiramente. Nunca invente perguntas artificiais só para
+    atingir a quantidade mínima — uma FAQ fraca ou forçada é pior do que nenhuma FAQ.
 
 Retorne somente JSON válido com title, meta_description, slug, excerpt, keyword, content_html,
 primary_sources, secondary_sources, legal_authorities, verification_flags, needs_primary_source,

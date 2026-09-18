@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { validateRSSUrl, fetchFeed as fetchSharedFeed } from "../_shared/rss-feed.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,66 +43,22 @@ async function sha256(value: string) {
   return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function decodeXml(value: string) {
-  return value
-    .replace(/<!\[CDATA\[|\]\]>/g, "")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
-    .trim();
-}
-
-function stripHtml(value: string) {
-  return decodeXml(value).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function firstTag(xml: string, tag: string) {
-  const escaped = tag.replace(":", "\\:");
-  const match = xml.match(new RegExp(`<${escaped}[^>]*>([\\s\\S]*?)<\\/${escaped}>`, "i"));
-  return match?.[1] ? decodeXml(match[1]) : "";
-}
-
+// Fetches a feed via the shared, SSRF-hardened rss-feed module and adapts
+// its richer item shape to this function's local RSSItem contract. Callers
+// MUST call validateRSSUrl(url) first (this function does not validate).
 async function fetchFeed(url: string): Promise<RSSItem[]> {
-  const parsed = new URL(url);
-  if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("RSS URL inválida");
-
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "GrupoSEO-AutoPost/1.0",
-      Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml",
-    },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) throw new Error(`RSS HTTP ${res.status}`);
-  const xml = await res.text();
-  if (xml.length > 5_000_000) throw new Error("RSS excede 5 MB");
+  const feed = await fetchSharedFeed(url);
 
   const items: RSSItem[] = [];
-  const rssMatches = [...xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)];
-  const atomMatches = [...xml.matchAll(/<entry\b[^>]*>([\s\S]*?)<\/entry>/gi)];
-  const blocks = rssMatches.length ? rssMatches.map((m) => m[1]) : atomMatches.map((m) => m[1]);
-
-  for (const block of blocks.slice(0, 20)) {
-    const title = stripHtml(firstTag(block, "title"));
-    let link = firstTag(block, "link");
-    if (!link) {
-      const href = block.match(/<link\b[^>]*href=["']([^"']+)["'][^>]*>/i)?.[1];
-      link = href || "";
-    }
-    const descriptionRaw = firstTag(block, "description") || firstTag(block, "summary");
-    const contentRaw = firstTag(block, "content:encoded") || firstTag(block, "content");
-    const dateRaw = firstTag(block, "pubDate") || firstTag(block, "published") || firstTag(block, "updated");
-
-    if (!title || !link) continue;
-    try { new URL(link); } catch { continue; }
+  for (const item of feed.items.slice(0, 20)) {
+    if (!item.title || !item.link) continue;
+    try { new URL(item.link); } catch { continue; }
     items.push({
-      title,
-      link,
-      description: stripHtml(descriptionRaw),
-      content: contentRaw ? stripHtml(contentRaw) : undefined,
-      publishedAt: dateRaw ? new Date(dateRaw).toISOString() : null,
+      title: item.title,
+      link: item.link,
+      description: item.description || "",
+      publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : null,
+      content: item.content || undefined,
     });
   }
   return items;
@@ -139,8 +96,17 @@ Deno.serve(async (req: Request) => {
   const automationKey = req.headers.get("x-zica-automation-key") || "";
   let automationAuthorized = false;
   if (automationKey) {
-    const { data: ingress } = await admin.from("automation_ingress_keys").select("secret_hash,enabled").eq("name", "news-agents").maybeSingle();
-    automationAuthorized = Boolean(ingress?.enabled && ingress.secret_hash && await sha256(automationKey) === ingress.secret_hash);
+    // Accepts either the shared "news-agents" ingress key (execute-news-agents
+    // cron) or the dedicated "rss-schedules" key (auto-process-rss cron, see
+    // migration 20260919010000_auto_process_rss_cron.sql) so each cron job can
+    // carry its own rotatable secret without duplicating this auth check.
+    const { data: ingressRows } = await admin
+      .from("automation_ingress_keys")
+      .select("secret_hash,enabled")
+      .in("name", ["news-agents", "rss-schedules"])
+      .eq("enabled", true);
+    const keyHash = await sha256(automationKey);
+    automationAuthorized = Boolean(ingressRows?.some((row) => row.secret_hash && row.secret_hash === keyHash));
   }
   if (!serviceAuthorized && !automationAuthorized) return json({ error: "Autorização necessária" }, 401);
   const body = await req.json().catch(() => ({}));
@@ -166,6 +132,7 @@ Deno.serve(async (req: Request) => {
     const schedule = raw as Schedule;
     try {
       if (!(await claimSchedule(admin, schedule))) continue;
+      validateRSSUrl(schedule.feed_url); // throws on private/local targets; caught below, this schedule is skipped and logged
       const items = await fetchFeed(schedule.feed_url);
       let createdForSchedule = 0;
       let publishedForSchedule = 0;
