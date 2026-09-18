@@ -3,6 +3,7 @@ import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
 import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
 import { orchestrate, resolveVernizDNA } from "../_shared/verniz-orchestrator.ts";
 import { PLUGIN_VERSION } from "../_shared/plugin-version.ts";
+import { AI_CRAWLER_BOTS } from "../_shared/ai-crawler-bots.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -880,11 +881,7 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
           const robotsResp = await fetch(`${siteRoot}/robots.txt`, { signal: AbortSignal.timeout(8000) });
           if (robotsResp.ok) {
             const robotsTxt = await robotsResp.text();
-            const requiredBots = [
-              "GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot",
-              "PerplexityBot", "Google-Extended", "Bingbot", "Applebot-Extended",
-              "Googlebot", "Googlebot-Image", "Googlebot-Video"
-            ];
+            const requiredBots = AI_CRAWLER_BOTS;
             const blockedBots: string[] = [];
             for (const bot of requiredBots) {
               const botRegex = new RegExp(`User-agent:\\s*${bot}[\\s\\S]*?Disallow:\\s*/\\s*$`, "im");
@@ -898,10 +895,12 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
               // Auto-fix via plugin
               if (isPlugin && apiKey) {
                 try {
-                  await fetch(`${baseUrl}/wp-json/zica-ai/v1/fix-robots-ai-crawlers`, {
+                  // Real route is /fix-ai-crawlers (no "robots-" segment) — it takes no
+                  // payload, it just re-enables the plugin's own robots_txt filter and
+                  // reports which of AI_CRAWLER_BOTS are unblocked afterwards.
+                  await fetch(`${baseUrl}/wp-json/zica-ai/v1/fix-ai-crawlers`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
-                    body: JSON.stringify({ bots: blockedBots }),
                   });
                   vpsAuditDetails.push(`✅ Auto-fix: ${blockedBots.length} bots desbloqueados no robots.txt`);
                 } catch { /* */ }
@@ -934,10 +933,12 @@ JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","f
           } else {
             vpsAuditDetails.push("⚠ llms.txt não encontrado — IA discovery comprometida");
             vpsScore -= 10;
-            // Auto-fix: force regenerate via plugin
+            // Auto-fix: force regenerate via plugin. Real route is /discovery/refresh
+            // (calls Zica_Posts_Discovery::refresh_files() directly, which regenerates
+            // llms.txt/llms-full.txt/ai.txt/manifest/sitemap in one pass).
             if (isPlugin && apiKey) {
               try {
-                await fetch(`${baseUrl}/wp-json/zica-ai/v1/llms-txt-regenerate`, {
+                await fetch(`${baseUrl}/wp-json/zica-ai/v1/discovery/refresh`, {
                   method: "POST",
                   headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" },
                 });
@@ -1699,7 +1700,9 @@ async function submitIndexing(
 
     if (urls.length > 0) {
       try {
-        const indexNowResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/indexnow-batch`, {
+        // Real route is /indexnow/batch (slash, not dash); response wraps the
+        // submission result under "result" ({success, result: {submitted, status}}).
+        const indexNowResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/indexnow/batch`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1710,7 +1713,7 @@ async function submitIndexing(
 
         if (indexNowResp.ok) {
           const indexData = await indexNowResp.json();
-          submitted = indexData.submitted || 0;
+          submitted = indexData.result?.submitted || 0;
           if (submitted > 0) {
             detailsList.push(`IndexNow: ${submitted} URLs submetidas`);
           } else {
@@ -1785,7 +1788,9 @@ async function submitIndexing(
     }
 
     try {
-      await fetch(`${baseUrl}/wp-json/zica-ai/v1/refresh-llms`, {
+      // Real route is /discovery/refresh (refresh-llms never existed in the
+      // currently-distributed plugin, only in the retired zica-ai legacy).
+      await fetch(`${baseUrl}/wp-json/zica-ai/v1/discovery/refresh`, {
         method: "POST",
         headers: { "X-ZICA-AI-API-Key": apiKey },
       });
@@ -1869,7 +1874,7 @@ async function optimizeAIDiscovery(
   }
 
   try {
-    const llmsResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/refresh-llms`, {
+    const llmsResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/discovery/refresh`, {
       method: "POST",
       headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({ include_full_catalog: true }),
@@ -1894,15 +1899,30 @@ async function optimizeAIDiscovery(
   } catch { /* ignore */ }
 
   try {
-    const schemaResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/validate-schemas`, {
-      method: "POST",
-      headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ auto_fix: true, include_faq: true, include_howto: true }),
-    });
-    if (schemaResp.ok) {
-      const schemaData = await schemaResp.json();
-      schemaEnhanced = schemaData.fixed > 0 || schemaData.enhanced > 0;
-      if (schemaEnhanced) actions.push(`Schema.org: ${schemaData.fixed || 0} corrigidos, ${schemaData.enhanced || 0} aprimorados`);
+    // Real route is /schema/validate — it only REPORTS (no auto_fix/enhance option
+    // exists server-side), and validates one post's stored schema per call, not the
+    // whole site at once. Sample the most recently published post from our own index
+    // as a representative check instead of inventing a fake site-wide call.
+    const { data: sampleArticle } = await supabase
+      .from("wordpress_article_index")
+      .select("wp_post_id")
+      .eq("project_id", project.id)
+      .eq("wp_post_status", "publish")
+      .order("last_analyzed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (sampleArticle?.wp_post_id) {
+      const schemaResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/schema/validate`, {
+        method: "POST",
+        headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ post_id: sampleArticle.wp_post_id }),
+      });
+      if (schemaResp.ok) {
+        const schemaData = await schemaResp.json();
+        const issueCount = (schemaData.errors?.length || 0) + (schemaData.warnings?.length || 0);
+        schemaEnhanced = issueCount === 0 && schemaData.schemas_validated > 0;
+        if (schemaData.schemas_validated > 0) actions.push(`Schema.org: ${schemaData.schemas_validated} schema(s) validados (amostra), ${issueCount} problema(s) reportado(s)`);
+      }
     }
   } catch { /* ignore */ }
 
@@ -1990,7 +2010,7 @@ async function runFullTechnicalAudit(
       } else {
         const robotsContent = await robotsResp.text();
         const robotsLines = robotsContent.split('\n').map(l => l.trim().toLowerCase());
-        const blockedCrawlers = ["GPTBot", "ClaudeBot", "PerplexityBot", "Google-Extended"].filter(bot => {
+        const blockedCrawlers = AI_CRAWLER_BOTS.filter(bot => {
           const botLower = bot.toLowerCase();
           const botLineIdx = robotsLines.findIndex(l => l === `user-agent: ${botLower}`);
           if (botLineIdx === -1) return false;
@@ -2071,7 +2091,7 @@ async function runFullTechnicalAudit(
 
         if (isPlugin && apiKey) {
           try {
-            const fixResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/refresh-llms`, { method: "POST", headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ force_enable: true }) });
+            const fixResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/discovery/refresh`, { method: "POST", headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" } });
             if (fixResp.ok) {
               try {
                 const verifyResp = await fetch(`${baseUrl.replace(/\/blog\/?$/, "")}/llms.txt`, { signal: AbortSignal.timeout(5000) });
@@ -2091,19 +2111,34 @@ async function runFullTechnicalAudit(
   }
 
   // ═══ AUDIT 2: Schema Markup ═══
+  // Real route is /schema/validate — validates ONE post's stored _zica_posts_json_ld
+  // per call and never auto-fixes (the plugin's validator only reports). Sample up to
+  // 10 recently-modified published posts instead of the old (non-existent) site-wide
+  // auto_fix call, and aggregate how many of them have at least one error.
   if (isPlugin && apiKey && baseUrl) {
     try {
-      const schemaResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/validate-schemas`, { method: "POST", headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ auto_fix: true, include_faq: true }) });
-      if (schemaResp.ok) {
-        const schemaData = await schemaResp.json();
-        const schemaErrors = schemaData.errors || 0;
-        const schemaFixed = schemaData.fixed || 0;
-        if (schemaErrors > 0) {
-          issues.push({ id: "SCH-001", priority: "P1", category: "schema", title: `${schemaErrors} erros de Schema JSON-LD detectados`, description: `Schemas inválidos encontrados em ${schemaErrors} páginas.`, impact: "Rich Results não aparecerão no Google.", fix_instruction: "Plugin tentou corrigir automaticamente.", auto_fixed: schemaFixed > 0 });
-          categories.schema.score -= Math.min(schemaErrors * 5, 40);
-          categories.schema.issues++;
-          if (schemaFixed > 0) { totalFixed++; categories.schema.fixed++; }
-        }
+      const { data: schemaSample } = await supabase
+        .from("wordpress_article_index")
+        .select("wp_post_id")
+        .eq("project_id", project.id)
+        .eq("wp_post_status", "publish")
+        .order("last_wp_modified_at", { ascending: false, nullsFirst: false })
+        .limit(10);
+      let schemaErrors = 0;
+      for (const item of schemaSample || []) {
+        if (!item.wp_post_id) continue;
+        try {
+          const schemaResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/schema/validate`, { method: "POST", headers: { "X-ZICA-AI-API-Key": apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ post_id: item.wp_post_id }) });
+          if (schemaResp.ok) {
+            const schemaData = await schemaResp.json();
+            if ((schemaData.errors?.length || 0) > 0) schemaErrors++;
+          }
+        } catch { /* skip this post */ }
+      }
+      if (schemaErrors > 0) {
+        issues.push({ id: "SCH-001", priority: "P1", category: "schema", title: `${schemaErrors} erros de Schema JSON-LD detectados`, description: `Schemas inválidos encontrados em ${schemaErrors} de até ${(schemaSample || []).length} páginas amostradas.`, impact: "Rich Results não aparecerão no Google.", fix_instruction: "O validador do plugin só reporta — corrija manualmente os campos apontados ou regenere o schema do artigo.", auto_fixed: false });
+        categories.schema.score -= Math.min(schemaErrors * 5, 40);
+        categories.schema.issues++;
       }
     } catch { /* */ }
   }
@@ -2258,7 +2293,9 @@ JSON: {"links":[{"source_url":"...","anchor_text":"...","relevance":85}]}`;
             if (project.social_twitter) sameAs.push(project.social_twitter);
             if (sameAs.length > 0) localBusinessSchema.sameAs = sameAs;
 
-            const injectResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/inject-homepage-schema`, { method: "POST", headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey }, body: JSON.stringify({ schema: localBusinessSchema }) });
+            // Real route is /homepage-schema/inject and takes an ARRAY under "schemas"
+            // (it stores whatever is sent verbatim and echoes it on is_front_page()).
+            const injectResp = await fetch(`${baseUrl}/wp-json/zica-ai/v1/homepage-schema/inject`, { method: "POST", headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey }, body: JSON.stringify({ schemas: [localBusinessSchema] }) });
             if (injectResp.ok) { issues[issues.length - 1].auto_fixed = true; totalFixed++; categories.geo.fixed++; categories.geo.score += 20; }
           } catch { /* endpoint may not exist yet */ }
         }
@@ -2406,7 +2443,7 @@ async function runAutonomousSEOFix(
     if (applied > 0) {
       const fixedUrls = issuesList.map((i: any) => i.url).filter(Boolean).slice(0, 100);
       try {
-        await fetch(`${baseUrl}/wp-json/zica-ai/v1/indexnow-batch`, {
+        await fetch(`${baseUrl}/wp-json/zica-ai/v1/indexnow/batch`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
           body: JSON.stringify({ urls: fixedUrls }),
@@ -2648,7 +2685,7 @@ JSON:
     const enrichedUrls = articlesNeedingLinks.slice(0, crossLinksCreated + 10).map(a => a.wp_post_url).filter(Boolean);
     if (enrichedUrls.length > 0) {
       try {
-        await fetch(`${baseUrl}/wp-json/zica-ai/v1/indexnow-batch`, {
+        await fetch(`${baseUrl}/wp-json/zica-ai/v1/indexnow/batch`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-ZICA-AI-API-Key": apiKey },
           body: JSON.stringify({ urls: enrichedUrls }),

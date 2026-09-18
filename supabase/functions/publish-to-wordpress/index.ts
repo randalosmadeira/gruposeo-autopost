@@ -4,6 +4,10 @@ import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.t
 import { ensureEditorialHeadingStructure, normalizeEditorialHtml } from "../_shared/editorial-html.ts";
 import { findPublicationResidues, repairPublicationResidues, resolveMetaDescription } from "../_shared/publication-safety.ts";
 import { evaluateTitleQuality, findBrokenContactCtas, findComplianceViolations, lookupPublishedSlug, normalizeSlugForLookup, repairBrokenContactCtas, repairCommonTitleTypos } from "../_shared/publication-quality.ts";
+import { buildArticleJsonLd } from "../_shared/schema-builder.ts";
+import { mapSegmentToSector } from "../_shared/sector-config.ts";
+import { isPluginModeProject, pluginRequest, resolvePluginKey, resolvePluginNamespace } from "../_shared/wordpress-plugin-client.ts";
+import { syncHreflangForTranslationGroup } from "../_shared/hreflang-sync.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,46 +32,6 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
-}
-
-function endpointCandidates(baseUrl: string, path: string, namespace = "zica-posts/v1") {
-  const base = baseUrl.replace(/\/$/, "");
-  const clean = path.replace(/^\/+/, "");
-  return [`${base}/wp-json/${namespace}/${clean}`, `${base}/?rest_route=/${namespace}/${clean}`];
-}
-
-async function pluginRequest(baseUrl: string, apiKey: string, path: string, init: RequestInit, namespace = "zica-posts/v1") {
-  let lastError = "Zica Posts WordPress indisponível";
-  for (const endpoint of endpointCandidates(baseUrl, path, namespace)) {
-    try {
-      const response = await fetch(endpoint, {
-        ...init,
-        headers: { ...(init.headers || {}), "X-ZICA-POSTS-Key": apiKey, Accept: "application/json" },
-      });
-      const text = await response.text();
-      let data: Record<string, any> | null = null;
-      try { data = JSON.parse(text); } catch { /* WordPress may return HTML on routing failures. */ }
-      if (response.ok && data) return { data, endpointMode: endpoint.includes("rest_route=") ? "rest_route" : "wp_json" };
-      if (response.status === 401 || response.status === 403) throw new Error("API Key Zica Posts recusada");
-      lastError = String(data?.message || data?.error || (text.trim().startsWith("<") ? `WordPress retornou HTML (HTTP ${response.status})` : `HTTP ${response.status}`));
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : lastError;
-      if (lastError.includes("API Key")) throw error;
-    }
-  }
-  throw new Error(lastError);
-}
-
-async function resolvePluginKey(admin: any, project: Record<string, any>) {
-  const ref = String(project.wordpress_credential_ref || "").trim();
-  if (ref) {
-    const { data, error } = await admin.rpc("get_zica_wordpress_credential", { p_ref: ref });
-    if (error || !data) throw new Error("Credencial WordPress do Vault indisponível");
-    return { apiKey: String(data), source: "vault" };
-  }
-  const legacy = String(project.wordpress_app_password || "").trim();
-  if (!legacy) throw new Error("Credencial WordPress não configurada");
-  return { apiKey: legacy, source: "legacy-project-field" };
 }
 
 function extensionForDataUrl(dataUrl: string) {
@@ -163,6 +127,9 @@ async function publishPlugin(
     image_alt_text: config.image_geo?.alt_text || undefined,
     image_caption: config.image_geo?.caption || undefined,
   };
+  const sectorType = mapSegmentToSector(String(config.segment || article.nicho_detectado || "general"));
+  payload.json_ld_schemas = buildArticleJsonLd({ article, project, sectorType });
+
   if (featuredImageId) payload.featured_image_id = featuredImageId;
   if (categories.length) payload.categories = categories;
   else if (Array.isArray(config.wordpress_categories)) payload.categories = config.wordpress_categories;
@@ -179,7 +146,7 @@ async function publishPlugin(
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(90000),
     },
-    String(project.wordpress_plugin_namespace || "zica-posts/v1"),
+    resolvePluginNamespace(project),
   );
   if (!result.data.success) throw new Error(String(result.data.message || result.data.error || "Publicação recusada"));
   const row = result.data.data || {};
@@ -471,7 +438,7 @@ Deno.serve(async (req: Request) => {
 
     const categories = Array.isArray(body.categories) ? body.categories : [];
     const tags = Array.isArray(body.tags) ? body.tags : [];
-    const pluginMode = String(project.wordpress_connector_mode) === "zica_posts" || String(project.wordpress_username) === "__ZICA_POSTS_PLUGIN__";
+    const pluginMode = isPluginModeProject(project);
     let result: any;
     let credentialSource: string | null = null;
 
@@ -535,6 +502,19 @@ Deno.serve(async (req: Request) => {
       admin.from("projects").update({ is_connected: true, wordpress_last_verified_at: now, updated_at: now }).eq("id", project.id).eq("organization_id", project.organization_id),
     ]);
 
+    // When this article belongs to a translation group, its published_url
+    // (just written above) changes what every sibling's hreflang map should
+    // look like — push the refreshed map to the whole family. Never lets a
+    // sync failure fail the publish itself (see _shared/hreflang-sync.ts).
+    let hreflangSync: Awaited<ReturnType<typeof syncHreflangForTranslationGroup>> | null = null;
+    if (status === "publish" && article.translation_group_id) {
+      try {
+        hreflangSync = await syncHreflangForTranslationGroup(admin, project, String(article.translation_group_id));
+      } catch (syncError) {
+        console.warn(`[publish-to-wordpress] hreflang sync failed: ${syncError instanceof Error ? syncError.message : "unknown"}`);
+      }
+    }
+
     return json({
       success: true,
       articleId: article.id,
@@ -551,6 +531,7 @@ Deno.serve(async (req: Request) => {
       credentialSource,
       metaDescription,
       editorial: { version: "2.1.0", issues: audit.issues, metrics: audit.metrics },
+      hreflangSync,
       request_id: requestId,
     });
   } catch (error) {
