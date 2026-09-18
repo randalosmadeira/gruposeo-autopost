@@ -1,0 +1,34 @@
+-- Drop the stale target_function CHECK constraint on prompt_templates.
+--
+-- Root cause: 20260208173228_a3a1b349-0055-4b83-860b-ed9bb5ad6a95.sql added
+-- target_function with an inline, unnamed CHECK:
+--   TEXT CHECK (target_function IN ('article_generator', 'news_rewriter',
+--   'landing_page', 'authority_planner', 'bulk_generator',
+--   'image_generator', 'content_variations'))
+-- Postgres auto-names an inline single-column CHECK added this way as
+-- "<table>_<column>_check" (the same convention this repo already relies on
+-- elsewhere, e.g. articles_originality_score_check in
+-- 20260831064000_add_articles_originality_score.sql), so this constraint is
+-- named prompt_templates_target_function_check.
+--
+-- src/components/settings/PromptTemplatesCard.tsx's TARGET_FUNCTIONS array
+-- (the actual, current source of truth for this category) has since drifted
+-- from that list in both directions: it dropped 'landing_page' (existing
+-- rows with that value still need to render, restored as a UI label in the
+-- same change that ships this migration) and it added 'blog_architecture',
+-- 'seo_audit' and 'metadata_schema' - three categories the CHECK rejects
+-- today, so saving a template under any of them fails the insert/update
+-- outright.
+--
+-- Rather than widen the list again (which just moves the same failure mode
+-- to the next category the UI adds), this follows the reasoning already
+-- established in this repo for the identical situation on
+-- public.articles.language (see 20260918020000_article_translation_groups.sql's
+-- comment on why no CHECK was added there): target_function is an
+-- app-defined, growing category list, not a real closed domain enforced by
+-- the data model itself. A CHECK here only ever lags the frontend and
+-- reintroduces the exact insert-failure bug this migration fixes. The value
+-- list continues to live purely in TARGET_FUNCTIONS in the frontend.
+
+alter table public.prompt_templates
+  drop constraint if exists prompt_templates_target_function_check;

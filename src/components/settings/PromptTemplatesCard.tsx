@@ -85,9 +85,14 @@ const VARIABLES = [
   { name: '${language}', required: false, description: 'Alias para idioma' },
 ];
 
+// Canonical variable names (without ${...}), derived from VARIABLES above -
+// this is the single source of truth used to flag unknown tokens at save time.
+const KNOWN_VARIABLE_NAMES = VARIABLES.map(v => v.name.replace(/[${}]/g, ''));
+
 const TARGET_FUNCTIONS = [
   { id: 'article_generator', label: 'Gerador de Artigos', icon: '📝' },
   { id: 'news_rewriter', label: 'Repostagem Jornalística', icon: '📰' },
+  { id: 'landing_page', label: 'Landing Page', icon: '🌐' },
   { id: 'authority_planner', label: 'Planejador de Autoridade', icon: '📊' },
   { id: 'bulk_generator', label: 'Geração em Massa', icon: '⚡' },
   { id: 'image_generator', label: 'Geração de Imagens', icon: '🎨' },
@@ -1138,7 +1143,27 @@ export function PromptTemplatesCard() {
 
   const handleSave = () => {
     if (!editingTemplate) return;
-    
+
+    // Advisory-only check: warn about `${xyz}` tokens in the prompt that
+    // aren't in the known variable list, but never block the save on it -
+    // the prompt may intentionally reference something new, and the user
+    // should just be able to confirm it will actually be substituted at
+    // generation time.
+    const usedVariables = new Set(
+      Array.from(editingTemplate.prompt.matchAll(/\$\{([a-zA-Z0-9_]+)\}/g)).map(m => m[1])
+    );
+    const unknownVariables = Array.from(usedVariables).filter(
+      name => !KNOWN_VARIABLE_NAMES.includes(name)
+    );
+    if (unknownVariables.length > 0) {
+      toast({
+        title: unknownVariables.length > 1 ? 'Variáveis desconhecidas' : 'Variável desconhecida',
+        description: unknownVariables
+          .map(name => `Variável desconhecida: \`\${${name}}\` — confirme se será substituída na geração.`)
+          .join('\n'),
+      });
+    }
+
     updateTemplate.mutate({
       id: editingTemplate.id,
       name: editingTemplate.name,

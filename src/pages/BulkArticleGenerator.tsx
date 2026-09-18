@@ -1,8 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -41,6 +43,7 @@ import {
   Bot,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
+import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { ToneVoiceConfig, AIModelSelector, ContentStructureConfig, ArticleListManager } from '@/components/shared';
@@ -64,6 +67,7 @@ const articleSizes = [
 export default function BulkArticleGenerator() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
 
   const [articles, setArticles] = useState<ArticleRow[]>([]);
@@ -123,6 +127,24 @@ export default function BulkArticleGenerator() {
     contentType: 'how-to',
     goal: 'inform',
     intentType: 'informational',
+    // Prompt template selection ("Tipo de Artigo"), applied to the whole batch
+    promptTemplateId: undefined as string | undefined,
+  });
+
+  // User's own saved prompt templates ("Tipo de Artigo"), managed in PromptTemplatesCard
+  const { data: promptTemplates = [] } = useQuery({
+    queryKey: ['prompt-templates-for-generation', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from('prompt_templates')
+        .select('id,name,target_function,description')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
   });
 
   // Projects for internal linking
@@ -295,6 +317,8 @@ export default function BulkArticleGenerator() {
               includeMetaDescription: globalConfig.metaDescription,
               humanizeContent: globalConfig.humanizeContent,
               secondaryKeywords: '',
+              // Prompt template selection ("Tipo de Artigo")
+              promptTemplateId: globalConfig.promptTemplateId || undefined,
               // Project config with company data, CTAs, social links
               projectConfig: projectConfigData,
             },
@@ -434,6 +458,34 @@ export default function BulkArticleGenerator() {
                 value={globalConfig.aiModel}
                 onChange={(v) => setGlobalConfig(prev => ({ ...prev, aiModel: v }))}
               />
+
+              {/* Prompt Template ("Tipo de Artigo") - applied to every article in the batch */}
+              <div className="space-y-2">
+                <Label className="text-sm text-muted-foreground">Tipo de Artigo</Label>
+                <Select
+                  value={globalConfig.promptTemplateId || 'none'}
+                  onValueChange={(v) => setGlobalConfig(prev => ({
+                    ...prev,
+                    promptTemplateId: v === 'none' ? undefined : v,
+                  }))}
+                >
+                  <SelectTrigger className="border-border bg-background">
+                    <SelectValue placeholder="Padrão do sistema" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Padrão do sistema</SelectItem>
+                    {promptTemplates.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                        {template.target_function ? ` · ${template.target_function}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Escolha um dos seus modelos salvos em Configurações para todo o lote, ou use o padrão do sistema.
+                </p>
+              </div>
             </AccordionContent>
           </AccordionItem>
         </Accordion>
