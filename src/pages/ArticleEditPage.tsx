@@ -23,6 +23,8 @@ interface Article {
   scheduled_at?: Date | null;
   config: Record<string, unknown> | null;
   wordpress_categories?: number[];
+  language?: string | null;
+  translation_group_id?: string | null;
 }
 
 type ErrorState = { code: ArticleLoadErrorCode; message: string } | null;
@@ -70,6 +72,8 @@ export default function ArticleEditPage() {
         scheduled_at: data.scheduled_at ? new Date(data.scheduled_at) : null,
         config,
         wordpress_categories: wordpressCategories,
+        language: data.language ?? null,
+        translation_group_id: data.translation_group_id ?? null,
       });
     } catch (loadError) {
       if (loadError instanceof ArticleLoadError) setError({ code: loadError.code, message: loadError.message });

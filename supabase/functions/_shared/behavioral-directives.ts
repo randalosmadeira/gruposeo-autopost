@@ -45,6 +45,8 @@ export const GEO_AEO_2026_RULES = `POLÍTICA INTERNA ZICA.AI PARA SEO, GEO, AEO 
 - Tabelas comparativas são recomendadas somente quando houver elementos realmente comparáveis e dados suficientes.
 - Use listas para passos, requisitos, riscos, documentos, critérios ou sínteses que se beneficiem de escaneabilidade.
 - FAQ deve ser incluído somente quando houver perguntas reais e respostas sustentadas pelo conteúdo.
+- Padrão obrigatório de FAQ para extração automática de dado estruturado: um heading (H2 ou H3) contendo as palavras "Perguntas Frequentes" ou "FAQ", seguido por pares <h3>pergunta terminada em ?</h3><p>resposta objetiva</p>, sem nenhuma outra tag entre a pergunta e a resposta e sem numerar as perguntas (nunca usar prefixos como "1.", "P1:"). Mínimo de 2 perguntas reais para a seção valer a pena; qualquer desvio desse padrão quebra a extração automática de FAQPage.
+- O conteúdo nunca deve contradizer o tipo de negócio declarado no schema estruturado do site (ex.: escritório de advocacia nunca deve ser descrito como "loja", "clínica" ou termo equivalente de outro ramo em nenhum trecho).
 - Links internos fornecidos pelo sistema devem ser usados sempre que semanticamente pertinentes, preferindo 2 a 6 interlinks distribuídos no corpo. Nunca invente URLs.
 - Prefira parágrafos curtos, frases claras e alta densidade de informação.
 - Evite thin content, repetição de palavra-chave e texto inflado para atingir contagem de palavras.
@@ -57,6 +59,7 @@ export const IMAGE_GEO_2026_RULES = `POLÍTICA VISUAL ZICA.AI (2026-09)
 - Zona de segurança: deixar de 15% a 20% de margem em todas as bordas apenas com fundo e manter o assunto centralizado, porque Google e IAs recortam em 1:1 e em cartões menores.
 - Nunca inserir texto, número, logotipo, selo ou marca d'água dentro da imagem. A mensagem vai para o alt text, a legenda e o HTML ao redor.
 - Alt text deve descrever objetivamente o conteúdo visual e sua relação com a página, sem lista artificial de palavras-chave.
+- O alt text e a legenda gerados alimentam diretamente o campo "image" do schema JSON-LD do artigo: por isso devem continuar descritivos e específicos, nunca genéricos como "imagem do artigo" ou "foto ilustrativa".
 - Nome de arquivo deve ser semântico, legível e separado por hífens.
 - Sempre que útil, forneça legenda e contexto textual próximo da imagem.
 - Se existir acervo fixo autorizado para o módulo, selecione desse acervo antes de considerar geração sintética.

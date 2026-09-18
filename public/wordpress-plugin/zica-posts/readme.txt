@@ -4,10 +4,18 @@ Tags: seo, geo, llms, indexnow, schema, wordpress, automation, queue
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.13.0
+Stable tag: 3.14.0
 License: GPLv2 or later
 
 Agente WordPress leve oficial da Zica.ai. Publica, registra eventos duráveis, serve discovery files e conversa com o Zica Orchestrator sem executar IA pesada durante save_post.
+
+== 3.14.0 ==
+
+* Lista canônica de bots de IA liberados em robots.txt/ai.txt ampliada (Claude-SearchBot, Googlebot-Image, Googlebot-Video, Bingbot, DuckAssistBot).
+* Schema JSON-LD de homepage (Organization/LegalService) via `POST /homepage-schema/inject`, impresso em `wp_head` na home.
+* hreflang entre traduções via `POST /articles/hreflang-sync`, impresso em `wp_head` nos posts singulares.
+* Agente.IA Auditor: checagem sob demanda de robots.txt, arquivos de discovery, schema por artigo, schema de homepage e hreflang — botão no admin e `GET /ai-audit`.
+* Endpoints portados do plugin legado zica-ai: `POST /fix-ai-crawlers`, `POST /discovery/refresh`, `GET /diagnostics` (estendido), `POST /schema/validate` (com LegalService/Attorney/Organization).
 
 == 3.13.0 ==
 

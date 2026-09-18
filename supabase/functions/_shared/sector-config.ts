@@ -445,6 +445,13 @@ export function buildSectorPromptSection(sectorConfig: SectorConfig): string {
   prompt += `- Seções sem propósito de conversão\n`;
   prompt += `- CTAs genéricos ("Entre em contato")\n`;
   prompt += `- Linguagem passiva demais\n`;
-  
+
+  if (sectorConfig.sector === 'legal' || sectorConfig.sector === 'legal-high-complexity') {
+    prompt += `\n### DADOS ESTRUTURADOS (LegalService/Attorney)\n`;
+    prompt += `- Mencione claramente a área de atuação jurídica tratada no artigo (ex.: "${sectorConfig.displayName}").\n`;
+    prompt += `- Se o nome do profissional/escritório e o número de inscrição na OAB estiverem disponíveis no briefing fornecido, cite-os de forma natural pelo menos uma vez no texto — esse trecho sustenta o schema estruturado LegalService/Attorney gerado a partir dos dados reais da organização.\n`;
+    prompt += `- Nunca invente nome de profissional, escritório ou número de OAB que não tenha sido fornecido; se o dado não estiver disponível, escreva sem citá-lo.\n`;
+  }
+
   return prompt;
 }

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { SEOOptimizationPanel } from './SEOOptimizationPanel';
 import { SchemaPreview } from './SchemaPreview';
+import { TranslationsPanel } from './TranslationsPanel';
 import { AISEOAnalysisPanel } from './AISEOAnalysisPanel';
 import { GoogleAdsVariationsPanel } from './GoogleAdsVariationsPanel';
 import { WordPressCategorySelector } from '../WordPressCategorySelector';
@@ -45,6 +46,8 @@ interface Article {
   project_id?: string | null;
   wordpress_categories?: number[];
   scheduled_at?: Date | null;
+  language?: string | null;
+  translation_group_id?: string | null;
 }
 
 interface ArticleEditorSidebarProps {
@@ -292,6 +295,14 @@ export function ArticleEditorSidebar({
                   onCategoriesChange={(categories) => onFieldUpdate('wordpress_categories', categories)}
                 />
               </div>
+
+              {/* Languages / Translations */}
+              <TranslationsPanel
+                articleId={article.id}
+                projectId={article.project_id}
+                language={article.language}
+                translationGroupId={article.translation_group_id}
+              />
 
               {/* Scheduling Options */}
               <div className="space-y-3 pt-2 border-t">
