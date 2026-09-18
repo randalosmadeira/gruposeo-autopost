@@ -44,6 +44,8 @@ interface Article {
   wordpress_categories?: number[];
   scheduled_at?: Date | null;
   config?: ArticleConfig | null;
+  language?: string | null;
+  translation_group_id?: string | null;
 }
 
 interface ArticleEditorProps {

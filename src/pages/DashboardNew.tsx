@@ -39,6 +39,7 @@ import { CronNotificationsPanel } from '@/components/dashboard/CronNotifications
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { SEOAgentPanel } from '@/components/dashboard/SEOAgentPanel';
 import { AuditReportPanel } from '@/components/dashboard/AuditReportPanel';
+import { AiGeoAuditPanel } from '@/components/dashboard/AiGeoAuditPanel';
 import { AuditScoreHistoryChart } from '@/components/dashboard/AuditScoreHistoryChart';
 import { TrafficBrainHero } from '@/components/brand/TrafficBrainHero';
 
@@ -383,6 +384,7 @@ export default function DashboardNew() {
               <SEOAgentPanel />
               <AuditReportPanel />
             </div>
+            <AiGeoAuditPanel />
             <AuditScoreHistoryChart />
             <CronNotificationsPanel />
             {projects && projects.some(p => p.wordpress_url) && (
