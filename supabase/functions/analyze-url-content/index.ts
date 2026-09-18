@@ -1,4 +1,5 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { fetchUserKeys } from "../_shared/byok-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -328,14 +329,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get user's API key first (BYOK), fallback to environment
-    const { data: settings } = await supabase
-      .from("user_settings")
-      .select("gemini_api_key")
-      .eq("user_id", user.id)
-      .single();
-
-    const geminiKey = settings?.gemini_api_key || Deno.env.get("GEMINI_API_KEY");
+    // Get user's API key via the shared BYOK resolver (same pattern as
+    // ai-chat/gbp-audit) instead of reading user_settings directly.
+    const keys = await fetchUserKeys(user.id);
+    const geminiKey = keys.gemini;
 
     if (!geminiKey) {
       console.error("No Gemini API key found (user or env)");
