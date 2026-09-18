@@ -38,23 +38,27 @@ import { ptBR } from 'date-fns/locale';
 
 export default function NewsAgents() {
   const navigate = useNavigate();
-  const { 
-    agents, 
-    isLoading, 
-    activeAgentsCount, 
+  const {
+    agents,
+    isLoading,
+    activeAgentsCount,
     totalArticles,
+    newsFoundToday,
+    isLoadingNewsToday,
     toggleAgent,
-    deleteAgent 
+    deleteAgent
   } = useNewsAgents();
-  
-  
+
+
   const [selectedAgent, setSelectedAgent] = useState<NewsAgent | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [agentToDelete, setAgentToDelete] = useState<string | null>(null);
 
   const maxAgents = 3;
   const maxNewsPerDay = 10;
-  const newsToday = 0; // TODO: Calculate from actual data
+  // Contagem real de agent_news criadas hoje (nunca um "0" fabricado): mostra
+  // "—" enquanto carrega em vez de um valor que pareça dado real.
+  const newsTodayDisplay = isLoadingNewsToday ? "—" : String(newsFoundToday ?? 0);
 
   const handleDeleteConfirm = () => {
     if (agentToDelete) {
@@ -115,7 +119,7 @@ export default function NewsAgents() {
                 Notícias Hoje
               </p>
               <p className="text-xl font-bold mt-0.5">
-                {newsToday} / {maxNewsPerDay}
+                {newsTodayDisplay} / {maxNewsPerDay}
               </p>
             </CardContent>
           </Card>
