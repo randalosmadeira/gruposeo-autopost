@@ -476,6 +476,12 @@ Deno.serve(async (req) => {
         // ═══════════════════════════════════════════
         let auditResult: any = { score: 0, issues: [], issues_found: 0, issues_fixed: 0, categories: {} };
         let autonomousResult: any = { applied: 0, redirects_created: 0, types: [] };
+        // Step 7 (runFullBaseCrossLinking) was removed from this call site when Steps 5+6
+        // were parallelized, but its summary-line reads below were left behind, throwing
+        // ReferenceError on every run. This default keeps that pre-existing dead state
+        // (cross-linking is not executed here) without crashing before the run can reach
+        // its "completed" status.
+        let crossLinkResult: any = { cross_links_created: 0, articles_enriched: 0, cross_links_verified: 0, false_positives: 0, details: [] };
         if (hasTimeLeft()) {
           console.log(`[SEO Agent v200%] [${project.name}] Steps 5+6 PARALLEL: Audit + Autonomous Fix (${Math.round(elapsedMs()/1000)}s)`);
           const [auditRes, autoRes] = await Promise.allSettled([
