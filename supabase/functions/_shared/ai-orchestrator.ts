@@ -32,10 +32,13 @@ export interface AIUsage {
 
 export interface AICallResult {
   content: string;
-  provider: 'openai' | 'anthropic' | 'gemini';
+  // A single real call always sets one of AIProvider['name']. 'multi-agent' is
+  // reserved for the 4-agent pipeline result assembled in generate-article,
+  // which is not a single provider call — see agents/agent-pipeline.ts.
+  provider: AIProvider['name'] | 'multi-agent';
   model: string;
   usage: AIUsage;
-  providerMode?: 'single' | 'dual';
+  providerMode?: 'single' | 'dual' | 'pipeline';
   providersUsed?: string[];
 }
 
