@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
 import { orchestrate } from "../_shared/verniz-orchestrator.ts";
-import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
+import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
+import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -98,42 +98,35 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceKey);
-  const orchestrator = getOrchestrator();
 
   try {
     const body = await req.json();
     const { article_ids, mode } = body;
 
-    // --- BYOK: Fetch user's API keys from user_settings ---
-    const authHeader = req.headers.get("authorization") || "";
-    const token = authHeader.replace("Bearer ", "");
-    let userId: string | null = null;
-    
-    if (token) {
-      const { data: { user } } = await createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY") || serviceKey, {
-        global: { headers: { Authorization: `Bearer ${token}` } },
-      }).auth.getUser();
-
-      if (user) {
-        userId = user.id;
-        await setEnvKeysForUser(user.id);
-
-        const { data: settings } = await supabase
-          .from("user_settings")
-          .select("gemini_api_key, openai_api_key, anthropic_api_key")
-          .eq("user_id", user.id)
-          .single();
-
-        if (settings) {
-          orchestrator.setKeys({
-            gemini: settings.gemini_api_key || undefined,
-            openai: settings.openai_api_key || undefined,
-            anthropic: settings.anthropic_api_key || undefined,
-          });
-          console.log("[AI SEO] BYOK keys loaded for orchestrator + gemini.ts runtime");
-        }
+    // Gate de autenticação obrigatório — sem isso, userId ficava null e a função
+    // seguia executando com o service role (bypassa RLS), permitindo IDOR sobre
+    // article_ids de qualquer organização. Ver auditoria 2026-09-18, CRÍTICO 1.
+    let userId: string;
+    try {
+      const actor = await resolveRequestActor(req, body.userId);
+      userId = actor.userId;
+    } catch (error) {
+      if (error instanceof RequestAuthError) {
+        return new Response(
+          JSON.stringify({ success: false, error: error.message, code: error.code }),
+          { status: error.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
+      throw error;
     }
+
+    // BYOK: mesmo padrão de ai-chat/gbp-audit — resolve chaves do usuário (com
+    // fallback para Vault/plataforma) em vez de ler user_settings diretamente.
+    const orchestrator = await getOrchestratorForUser(userId);
+
+    // Bearer bruto do caller, só para repassar ao publish-to-wordpress no
+    // auto-republish abaixo — já validado por resolveRequestActor acima.
+    const token = (req.headers.get("Authorization") || req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
 
     if (!article_ids || !Array.isArray(article_ids) || article_ids.length === 0) {
       return new Response(
@@ -144,27 +137,59 @@ Deno.serve(async (req) => {
 
     const isOptimize = mode === "optimize";
 
-    // Fetch articles
-    const { data: articles, error: fetchErr } = await supabase
+    // Fetch articles (inclui organization_id para a checagem de fronteira abaixo)
+    const { data: articlesRaw, error: fetchErr } = await supabase
       .from("articles")
-      .select("id, title, keyword, content, excerpt, slug, seo_score, word_count, status, project_id, published_url, secondary_keywords, type")
+      .select("id, title, keyword, content, excerpt, slug, seo_score, word_count, status, project_id, published_url, secondary_keywords, type, organization_id")
       .in("id", article_ids);
 
     if (fetchErr) throw fetchErr;
-    if (!articles || articles.length === 0) {
+    if (!articlesRaw || articlesRaw.length === 0) {
       return new Response(
         JSON.stringify({ error: "No articles found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Fetch project data for context
+    // Fronteira organizacional (mesmo padrão de publish-to-wordpress): mantém
+    // apenas artigos cuja organização o usuário autenticado integra ativamente.
+    // Isso corrige o IDOR — sem isso, qualquer article_id era lido/sobrescrito
+    // e as credenciais WordPress do projeto associado eram carregadas em memória
+    // independentemente da organização do requisitante.
+    const candidateOrgIds = [...new Set(articlesRaw.map((a) => a.organization_id).filter(Boolean))];
+    const allowedOrgIds = new Set<string>();
+    if (candidateOrgIds.length > 0) {
+      const { data: memberships } = await supabase
+        .from("organization_members")
+        .select("organization_id")
+        .in("organization_id", candidateOrgIds)
+        .eq("user_id", userId)
+        .eq("status", "active");
+      for (const m of memberships || []) allowedOrgIds.add(m.organization_id);
+    }
+
+    const deniedIds = articlesRaw
+      .filter((a) => !a.organization_id || !allowedOrgIds.has(a.organization_id))
+      .map((a) => a.id);
+    const articles = articlesRaw.filter((a) => a.organization_id && allowedOrgIds.has(a.organization_id));
+
+    if (deniedIds.length > 0) {
+      console.warn(`[AI SEO] organization_boundary: ${deniedIds.length} article_id(s) fora da organização do usuário ${userId} foram excluídos do processamento`);
+    }
+    if (articles.length === 0) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Nenhum artigo pertence a uma organização do usuário autenticado", code: "organization_boundary" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Fetch project data for context (somente projetos dos artigos já filtrados pela fronteira acima)
     const projectIds = [...new Set(articles.map(a => a.project_id).filter(Boolean))];
     const projectsMap: Record<string, any> = {};
     if (projectIds.length > 0) {
       const { data: projects } = await supabase
         .from("projects")
-        .select("id, name, domain, wordpress_url, wordpress_username, wordpress_app_password, nicho, tom_padrao, compliance_rules, links_prioritarios, social_instagram, social_youtube, social_linkedin, social_twitter, social_tiktok, social_google_maps, social_linktree, cta_leads, cta_conclusao, cta_comunidade, empresa_nome, empresa_whatsapp, empresa_telefone, empresa_endereco")
+        .select("id, name, domain, wordpress_url, nicho, tom_padrao, compliance_rules, links_prioritarios, social_instagram, social_youtube, social_linkedin, social_twitter, social_tiktok, social_google_maps, social_linktree, cta_leads, cta_conclusao, cta_comunidade, empresa_nome, empresa_whatsapp, empresa_telefone, empresa_endereco")
         .in("id", projectIds);
       if (projects) {
         for (const p of projects) {
@@ -226,7 +251,15 @@ Deno.serve(async (req) => {
       console.log(`[AI SEO] Internal links for project ${pid}: ${internalLinksMap[pid].length} | Orphans: ${orphanCount}/${totalArticles} | Duplicate hashes: ${duplicateHashes.size}`);
     }
 
-    const results = [];
+    const results: any[] = deniedIds.map((id) => ({
+      article_id: id,
+      score: 0,
+      optimized: false,
+      generated: false,
+      error: "organization_boundary",
+      analysis: null,
+      ai: { error: "Artigo não pertence à organização do usuário autenticado." },
+    }));
 
     for (const article of articles) {
       const content = article.content || "";
@@ -261,7 +294,7 @@ Deno.serve(async (req) => {
                 seo_score: newScore,
                 status: "ready",
                 image_prompt: generated.imagePrompt || null,
-              }).eq("id", article.id);
+              }).eq("id", article.id).eq("organization_id", article.organization_id);
 
               if (updateErr) {
                 console.error(`[AI SEO] DB UPDATE FAILED for article ${article.id}:`, updateErr);
@@ -333,7 +366,7 @@ Deno.serve(async (req) => {
                 excerpt: finalOptExcerpt,
                 word_count: wordCount,
                 seo_score: newScore,
-              }).eq("id", article.id);
+              }).eq("id", article.id).eq("organization_id", article.organization_id);
 
               if (optUpdateErr) {
                 console.error(`[AI SEO] DB UPDATE FAILED for optimize ${article.id}:`, optUpdateErr);
@@ -390,7 +423,7 @@ Deno.serve(async (req) => {
         // Fallback: analysis only (no optimization)
         const localAnalysis = analyzeContent(content, cleanContent, article, project);
         const score = Math.min(100, calculateScore(localAnalysis));
-        await supabase.from("articles").update({ seo_score: score }).eq("id", article.id);
+        await supabase.from("articles").update({ seo_score: score }).eq("id", article.id).eq("organization_id", article.organization_id);
         
         results.push({
           article_id: article.id,
