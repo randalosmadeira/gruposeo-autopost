@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { BRAND_BACKDROP_GRADIENT, HERO_16_9, HERO_MAX_BYTES, HERO_SAFE_ZONE_RATIO, WEBP_CANVAS_QUALITY_STEPS } from '@/lib/image-policy';
 
 const BUCKET = 'organization-brand-assets';
 const SLOT_COUNT = 6;
@@ -35,43 +36,148 @@ async function imageFromFile(file: File) {
   }
 }
 
-async function createChromaPreview(file: File): Promise<Blob> {
-  const image = await imageFromFile(file);
-  const canvas = document.createElement('canvas');
-  canvas.width = 1200;
-  canvas.height = 675;
-  const context = canvas.getContext('2d', { willReadFrequently: true });
-  if (!context) throw new Error('Seu navegador não disponibilizou o processador de imagem.');
+// Chroma key tuning: color-distance band (weighted RGB Euclidean) between the
+// sampled background reference and "definitely subject". Pixels closer than
+// CHROMA_INNER_DISTANCE to the reference are fully removed, pixels farther
+// than CHROMA_OUTER_DISTANCE are kept fully opaque, and everything between
+// fades linearly — a soft mask instead of a hard on/off cutoff.
+const CHROMA_INNER_DISTANCE = 38;
+const CHROMA_OUTER_DISTANCE = 92;
+const CHROMA_WEIGHTS = { r: 0.3, g: 0.59, b: 0.11 };
+const CHROMA_FEATHER_RADIUS_PX = 2;
+const BORDER_SAMPLE_WIDTH_PX = 6;
 
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  const scale = Math.min(canvas.width / image.naturalWidth, canvas.height / image.naturalHeight);
-  const width = Math.round(image.naturalWidth * scale);
-  const height = Math.round(image.naturalHeight * scale);
-  const x = Math.round((canvas.width - width) / 2);
-  const y = Math.round((canvas.height - height) / 2);
-  context.drawImage(image, x, y, width, height);
+type RgbColor = { r: number; g: number; b: number };
 
-  const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-  for (let index = 0; index < pixels.data.length; index += 4) {
-    const red = pixels.data[index];
-    const green = pixels.data[index + 1];
-    const blue = pixels.data[index + 2];
-    const dominance = green - Math.max(red, blue);
-    if (green > 70 && dominance > 22) {
-      const alpha = Math.max(0, 255 - Math.round((dominance - 22) * 5.2));
-      pixels.data[index + 3] = Math.min(pixels.data[index + 3], alpha);
-      if (alpha > 0) pixels.data[index + 1] = Math.min(green, Math.max(red, blue) + 12);
-    }
-  }
-  context.putImageData(pixels, 0, 0);
-
-  return exportWebpWithinBudget(canvas);
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
 }
 
-// Image policy 2026-09: hero WebP must stay under 150 KB. Lower the quality in
-// steps until the export fits; the last step is kept even if it is still larger.
-const HERO_MAX_BYTES = 150 * 1024;
-const WEBP_QUALITY_STEPS = [0.86, 0.8, 0.74, 0.68, 0.62, 0.56];
+/**
+ * A real chroma-key shot is reliably background along a thin strip at the
+ * image edges (the subject is centered), so the median color of that strip
+ * is a much safer "what is the background color" guess than a single
+ * hardcoded green threshold — it adapts to the actual green/blue screen and
+ * its lighting in each upload.
+ */
+function sampleBorderReferenceColor(pixels: ImageData, borderWidth = BORDER_SAMPLE_WIDTH_PX): RgbColor {
+  const { width, height, data } = pixels;
+  const reds: number[] = [];
+  const greens: number[] = [];
+  const blues: number[] = [];
+  const sample = (x: number, y: number) => {
+    const index = (y * width + x) * 4;
+    reds.push(data[index]);
+    greens.push(data[index + 1]);
+    blues.push(data[index + 2]);
+  };
+  for (let x = 0; x < width; x++) {
+    for (let y = 0; y < borderWidth; y++) sample(x, y);
+    for (let y = Math.max(0, height - borderWidth); y < height; y++) sample(x, y);
+  }
+  for (let y = borderWidth; y < height - borderWidth; y++) {
+    for (let x = 0; x < borderWidth; x++) sample(x, y);
+    for (let x = Math.max(0, width - borderWidth); x < width; x++) sample(x, y);
+  }
+  return { r: median(reds), g: median(greens), b: median(blues) };
+}
+
+function colorDistance(r: number, g: number, b: number, reference: RgbColor): number {
+  const dr = r - reference.r;
+  const dg = g - reference.g;
+  const db = b - reference.b;
+  return Math.sqrt(CHROMA_WEIGHTS.r * dr * dr + CHROMA_WEIGHTS.g * dg * dg + CHROMA_WEIGHTS.b * db * db);
+}
+
+/** One pixel per source pixel: 0 = background (drop it), 255 = subject (keep it), with a soft ramp between. */
+function buildAlphaMask(pixels: ImageData, reference: RgbColor): Uint8ClampedArray {
+  const { data } = pixels;
+  const mask = new Uint8ClampedArray(data.length / 4);
+  for (let index = 0, pixel = 0; index < data.length; index += 4, pixel++) {
+    const distance = colorDistance(data[index], data[index + 1], data[index + 2], reference);
+    if (distance <= CHROMA_INNER_DISTANCE) mask[pixel] = 0;
+    else if (distance >= CHROMA_OUTER_DISTANCE) mask[pixel] = 255;
+    else mask[pixel] = Math.round(((distance - CHROMA_INNER_DISTANCE) / (CHROMA_OUTER_DISTANCE - CHROMA_INNER_DISTANCE)) * 255);
+  }
+  return mask;
+}
+
+function boxBlur1D(source: Uint8ClampedArray, width: number, height: number, radius: number, horizontal: boolean): Uint8ClampedArray {
+  const output = new Uint8ClampedArray(source.length);
+  const windowSize = radius * 2 + 1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      for (let k = -radius; k <= radius; k++) {
+        if (horizontal) {
+          const sampleX = Math.min(width - 1, Math.max(0, x + k));
+          sum += source[y * width + sampleX];
+        } else {
+          const sampleY = Math.min(height - 1, Math.max(0, y + k));
+          sum += source[sampleY * width + x];
+        }
+      }
+      output[y * width + x] = Math.round(sum / windowSize);
+    }
+  }
+  return output;
+}
+
+/** Small feather so the cutout edge is soft instead of jagged/hard-edged. */
+function featherMask(mask: Uint8ClampedArray, width: number, height: number, radius = CHROMA_FEATHER_RADIUS_PX): Uint8ClampedArray {
+  if (radius <= 0) return mask;
+  const blurredHorizontally = boxBlur1D(mask, width, height, radius, true);
+  return boxBlur1D(blurredHorizontally, width, height, radius, false);
+}
+
+function fillBrandBackdrop(context: CanvasRenderingContext2D, width: number, height: number) {
+  const gradient = context.createLinearGradient(0, 0, width, height);
+  for (const stop of BRAND_BACKDROP_GRADIENT.stops) gradient.addColorStop(stop.offset, stop.color);
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
+}
+
+async function createChromaPreview(file: File): Promise<Blob> {
+  const image = await imageFromFile(file);
+  const { width: targetWidth, height: targetHeight } = HERO_16_9;
+
+  // Cover-fit (fill the full frame, center-crop the overflow) instead of
+  // contain-fit, so the export never has letterbox bars.
+  const cutoutCanvas = document.createElement('canvas');
+  cutoutCanvas.width = targetWidth;
+  cutoutCanvas.height = targetHeight;
+  const cutoutContext = cutoutCanvas.getContext('2d', { willReadFrequently: true });
+  if (!cutoutContext) throw new Error('Seu navegador não disponibilizou o processador de imagem.');
+
+  const scale = Math.max(targetWidth / image.naturalWidth, targetHeight / image.naturalHeight);
+  const drawWidth = Math.round(image.naturalWidth * scale);
+  const drawHeight = Math.round(image.naturalHeight * scale);
+  const drawX = Math.round((targetWidth - drawWidth) / 2);
+  const drawY = Math.round((targetHeight - drawHeight) / 2);
+  cutoutContext.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+
+  const pixels = cutoutContext.getImageData(0, 0, targetWidth, targetHeight);
+  const reference = sampleBorderReferenceColor(pixels);
+  const alphaMask = featherMask(buildAlphaMask(pixels, reference), targetWidth, targetHeight);
+  for (let index = 0, pixel = 0; index < pixels.data.length; index += 4, pixel++) {
+    pixels.data[index + 3] = Math.min(pixels.data[index + 3], alphaMask[pixel]);
+  }
+  cutoutContext.putImageData(pixels, 0, 0);
+
+  // Composite the keyed-out subject onto the standardized brand backdrop
+  // (never transparency, never a letterbox bar) so every slot in the bank
+  // looks like one consistent, reusable set instead of six random photos.
+  const exportCanvas = document.createElement('canvas');
+  exportCanvas.width = targetWidth;
+  exportCanvas.height = targetHeight;
+  const exportContext = exportCanvas.getContext('2d');
+  if (!exportContext) throw new Error('Seu navegador não disponibilizou o processador de imagem.');
+  fillBrandBackdrop(exportContext, targetWidth, targetHeight);
+  exportContext.drawImage(cutoutCanvas, 0, 0);
+
+  return exportWebpWithinBudget(exportCanvas);
+}
 
 function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -79,9 +185,12 @@ function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob>
   });
 }
 
+// Image policy 2026-09: hero WebP must stay under 150 KB (HERO_MAX_BYTES).
+// Lower the quality in steps (WEBP_CANVAS_QUALITY_STEPS) until the export
+// fits; the last step is kept even if it is still larger.
 async function exportWebpWithinBudget(canvas: HTMLCanvasElement): Promise<Blob> {
   let last: Blob | null = null;
-  for (const quality of WEBP_QUALITY_STEPS) {
+  for (const quality of WEBP_CANVAS_QUALITY_STEPS) {
     last = await canvasToBlob(canvas, quality);
     if (last.size <= HERO_MAX_BYTES) return last;
   }
@@ -195,7 +304,7 @@ export function BrandAssetsCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><ImagePlus className="h-5 w-5 text-primary" />Banco visual reutilizável</CardTitle>
-        <CardDescription>Cadastre até 6 fotos. O fundo verde é removido, a imagem vira WebP 1200 × 675 e só é liberada depois da sua aprovação.</CardDescription>
+        <CardDescription>Cadastre até 6 fotos. O fundo verde é removido, a foto é recomposta sobre um fundo padrão da marca em WebP 1200 × 675 e só é liberada depois da sua aprovação.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex gap-2 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
@@ -208,8 +317,15 @@ export function BrandAssetsCard() {
             const busy = busySlot === slot;
             return (
               <div key={slot} className="overflow-hidden rounded-xl border bg-background">
-                <div className="aspect-video bg-[linear-gradient(135deg,#111827_25%,#1f2937_25%,#1f2937_50%,#111827_50%,#111827_75%,#1f2937_75%)] bg-[length:24px_24px]">
-                  {asset?.previewUrl ? <img src={asset.previewUrl} alt={`Prévia da foto ${slot}`} className="h-full w-full object-contain" /> : <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Foto {slot}</div>}
+                <div className="relative aspect-video bg-[linear-gradient(135deg,#111827_25%,#1f2937_25%,#1f2937_50%,#111827_50%,#111827_75%,#1f2937_75%)] bg-[length:24px_24px]">
+                  {asset?.previewUrl ? <img src={asset.previewUrl} alt={`Prévia da foto ${slot}`} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Foto {slot}</div>}
+                  {asset?.status === 'preview_ready' ? (
+                    <div
+                      className="pointer-events-none absolute rounded-sm border border-dashed border-white/70 shadow-[0_0_0_1000px_rgba(0,0,0,0.25)]"
+                      style={{ top: `${HERO_SAFE_ZONE_RATIO * 100}%`, left: `${HERO_SAFE_ZONE_RATIO * 100}%`, right: `${HERO_SAFE_ZONE_RATIO * 100}%`, bottom: `${HERO_SAFE_ZONE_RATIO * 100}%` }}
+                      title="Zona de segurança: mantenha o rosto/objeto principal dentro desta área, pois cortes 1:1 e menores recortam as bordas."
+                    />
+                  ) : null}
                 </div>
                 <div className="space-y-3 p-3">
                   <div className="flex items-center justify-between">

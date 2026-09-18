@@ -50,6 +50,11 @@ interface ArticleConfig {
   projectId?: string;
   articleId?: string;
   projectConfig?: Record<string, string | undefined>;
+  // Optional user-selected prompt template (template-picker UI, wired in a
+  // separate parallel workstream). When present and owned by the requesting
+  // user, it takes precedence over the hardcoded "editor-seo-geo" template
+  // lookup below. Never trusted without the user_id ownership check.
+  promptTemplateId?: string;
   // Opt-in backend capability (not wired to any UI yet): runs the 4-agent
   // pipeline (Estrategista -> Redator -> Editor -> Revisor SEO) instead of
   // the single callWithMeta/callDualWithMeta generation call. Defaults to
@@ -134,21 +139,14 @@ SEGMENTO: ${config.segment || "general"}
 PALAVRAS-CHAVE SECUNDÁRIAS: ${config.secondaryKeywords || ""}
 
 REGRAS GEO/AEO INTERNAS DO ZICA.AI:
-1. Densidade informacional e precisão valem mais que volume bruto.
-2. Não repita ideias para atingir contagem de palavras.
-3. Abra o primeiro parágrafo com resposta objetiva à intenção principal.
-4. O título do WordPress será o único H1. No corpo use somente H2 e H3 semanticamente claros.
-5. Quando um H2/H3 representar pergunta ou intenção objetiva, inicie com Answer Capsule de aproximadamente 25 a 45 palavras e depois aprofunde.
-6. Inclua dados, percentuais, anos, estatísticas, leis, decisões ou estudos somente quando estiverem sustentados pelas fontes/contexto fornecidos. Nunca invente números ou autoridades.
-7. ${config.includeTable ? "Use tabela comparativa quando houver elementos realmente comparáveis e dados suficientes." : "Tabela é opcional e só deve aparecer se acrescentar clareza."}
-8. ${config.includeList === false ? "Não force listas." : "Use listas em passos, requisitos, documentos, critérios, riscos ou sínteses quando melhorarem a leitura."}
-9. ${config.includeFaq === false ? "Não inclua FAQ." : `Inclua FAQ somente se houver perguntas úteis e respondíveis pelo conteúdo, com até ${config.faqCount || 5} itens.`}
-10. Não use keyword stuffing, alegações sem fonte ou texto genérico de preenchimento.
-11. Não escreva comentários técnicos TITLE_SEO, META_DESCRIPTION, JSON, prompts, TODOs ou qualquer metadado interno no corpo. Título SEO e meta description são produzidos por outra etapa do pipeline.
-12. Preserve integralmente o assunto, a intenção e o segmento informados. Não troque a pauta por tema adjacente.
-13. Se produzir título editorial em metadado ou texto auxiliar, ele deve conter a palavra-chave principal de forma natural e manter seu sentido.
-14. Não acrescente ano, número, percentual, quantidade ou estatística que não exista na palavra-chave ou nas fontes fornecidas.
-15. Não padronize títulos com “Guia Completo”, “Guia Definitivo” ou fórmulas genéricas semelhantes.
+1. ${config.includeTable ? "Use tabela comparativa quando houver elementos realmente comparáveis e dados suficientes." : "Tabela é opcional e só deve aparecer se acrescentar clareza."}
+2. ${config.includeList === false ? "Não force listas." : "Use listas em passos, requisitos, documentos, critérios, riscos ou sínteses quando melhorarem a leitura."}
+3. ${config.includeFaq === false ? "Não inclua FAQ." : `Inclua FAQ somente se houver perguntas úteis e respondíveis pelo conteúdo, com até ${config.faqCount || 5} itens.`}
+4. Não escreva comentários técnicos TITLE_SEO, META_DESCRIPTION, JSON, prompts, TODOs ou qualquer metadado interno no corpo. Título SEO e meta description são produzidos por outra etapa do pipeline.
+5. Preserve integralmente o assunto, a intenção e o segmento informados. Não troque a pauta por tema adjacente.
+6. Se produzir título editorial em metadado ou texto auxiliar, ele deve conter a palavra-chave principal de forma natural e manter seu sentido.
+7. Não acrescente ano, número, percentual, quantidade ou estatística que não exista na palavra-chave ou nas fontes fornecidas.
+8. Não padronize títulos com “Guia Completo”, “Guia Definitivo” ou fórmulas genéricas semelhantes.
 
 REGRAS FACTUAIS E DE PUBLICAÇÃO:
 - Não invente fatos, números, decisões, estudos, citações, pessoas, leis ou fontes.
@@ -233,17 +231,38 @@ Deno.serve(async (req: Request) => {
           editorial_identity: JSON.stringify(project.editorial_identity || {}),
         };
       }
-      const templateQuery = admin.from("prompt_templates").select("prompt,version,project_id")
-        .eq("user_id", userId).eq("name", "editor-seo-geo").eq("is_active", true)
-        .order("updated_at", { ascending: false }).limit(1);
-      const { data: templates } = config.projectId
-        ? await templateQuery.or(`project_id.eq.${config.projectId},project_id.is.null`)
-        : await templateQuery.is("project_id", null);
-      const selectedTemplate = templates?.find((item) => item.project_id === config.projectId && Boolean(item.prompt?.trim()))
-        || templates?.find((item) => item.project_id === null && Boolean(item.prompt?.trim()));
-      if (selectedTemplate?.prompt) {
-        systemPrompt = selectedTemplate.prompt;
-        promptVersion = Number(selectedTemplate.version || 1);
+      // Optional explicit template selection (template-picker UI). The admin
+      // client uses the service role and bypasses RLS, so ownership MUST be
+      // enforced here explicitly: a user must never be able to load another
+      // user's prompt template by guessing/passing its id. Any miss (absent
+      // field, not found, or found but owned by someone else) falls through
+      // silently to the default hardcoded lookup below — a stale template
+      // reference in a saved draft should never break generation.
+      let customTemplateApplied = false;
+      const requestedTemplateId = typeof config.promptTemplateId === "string" ? config.promptTemplateId.trim() : "";
+      if (requestedTemplateId) {
+        const { data: customTemplate } = await admin.from("prompt_templates").select("prompt,version")
+          .eq("id", requestedTemplateId).eq("user_id", userId).maybeSingle();
+        if (customTemplate?.prompt?.trim()) {
+          systemPrompt = customTemplate.prompt;
+          promptVersion = Number(customTemplate.version || 1);
+          customTemplateApplied = true;
+        }
+      }
+
+      if (!customTemplateApplied) {
+        const templateQuery = admin.from("prompt_templates").select("prompt,version,project_id")
+          .eq("user_id", userId).eq("name", "editor-seo-geo").eq("is_active", true)
+          .order("updated_at", { ascending: false }).limit(1);
+        const { data: templates } = config.projectId
+          ? await templateQuery.or(`project_id.eq.${config.projectId},project_id.is.null`)
+          : await templateQuery.is("project_id", null);
+        const selectedTemplate = templates?.find((item) => item.project_id === config.projectId && Boolean(item.prompt?.trim()))
+          || templates?.find((item) => item.project_id === null && Boolean(item.prompt?.trim()));
+        if (selectedTemplate?.prompt) {
+          systemPrompt = selectedTemplate.prompt;
+          promptVersion = Number(selectedTemplate.version || 1);
+        }
       }
     }
 

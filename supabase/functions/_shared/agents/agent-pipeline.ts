@@ -109,6 +109,8 @@ ${sectorConfig.secondaryCTAs.map(c => `- "${c}"`).join('\n')}
 
 PALAVRAS PROIBIDAS: ${sectorConfig.forbiddenWords.join(', ')}
 
+${buildSectorPromptSection(sectorConfig)}
+
 SAÍDA (JSON):
 {
   "conversionStrategy": {
@@ -220,7 +222,7 @@ Tags permitidas: <p>, <h2>, <h3>, <h4>, <ul>, <ol>, <li>, <strong>, <em>, <a>, <
 Escreva o artigo completo agora:`;
 }
 
-function getEditorPrompt(): string {
+function getEditorPrompt(sectorConfig: SectorConfig): string {
   return `Você é um EDITOR DE CONVERSÃO que transforma textos bons em textos que VENDEM.
 
 REGRAS OBRIGATÓRIAS DE EDIÇÃO:
@@ -270,7 +272,12 @@ TÉCNICAS DE MELHORIA:
 
 IMPORTANTE: Retorne o artigo COMPLETO editado em HTML. Mantenha a estrutura, melhore a persuasão.
 REMOVA qualquer marcador técnico visível como "[CTA #1]", "[CTA #2]", "[CTA]", "CALL TO ACTION" — substituir por HTML natural.
-NÃO adicione comentários sobre as mudanças. Retorne APENAS o HTML editado.`;
+NÃO adicione comentários sobre as mudanças. Retorne APENAS o HTML editado.
+
+## COMPLIANCE ${sectorConfig.complianceBody || 'GERAL'} — NÃO REINTRODUZIR NA EDIÇÃO
+Ao intensificar persuasão e simplificar linguagem, NUNCA introduza estas expressões proibidas no setor ${sectorConfig.displayName}:
+${sectorConfig.forbiddenWords.map(w => `- "${w}"`).join('\n')}
+${sectorConfig.requiredDisclaimer ? `\nDisclaimer obrigatório que deve permanecer no texto (não remover nem reescrever de forma a descaracterizá-lo): "${sectorConfig.requiredDisclaimer}"` : ''}`;
 }
 
 function getSEOReviewerPrompt(keyword: string, sectorConfig: SectorConfig): string {
@@ -321,8 +328,7 @@ CHECKLIST TÉCNICO SEO (TODOS DEVEM PASSAR):
 - Bold apenas em termos-chave (não frases inteiras)?
 
 ## COMPLIANCE ${sectorConfig.complianceBody || 'GERAL'}
-${sectorConfig.forbiddenWords.map(w => `- NÃO contém "${w}"?`).join('\n')}
-${sectorConfig.requiredDisclaimer ? `- Disclaimer presente: "${sectorConfig.requiredDisclaimer}"` : ''}
+${buildSectorPromptSection(sectorConfig)}
 
 INSTRUÇÕES:
 1. Revise o artigo fornecido
@@ -423,7 +429,7 @@ export async function runAgentPipeline(config: AgentPipelineConfig): Promise<Age
   console.log('[AgentPipeline] Agente 3/4: Editor...');
   try {
     const editedContent = await orchestrator.call('content_editing', [
-      { role: 'system', content: getEditorPrompt() },
+      { role: 'system', content: getEditorPrompt(sectorConfig) },
       { role: 'user', content: `Edite e melhore o seguinte artigo para máxima conversão:\n\n${content}` },
     ], { maxTokens: 8000, temperature: 0.3, preferredProvider: 'anthropic', ...callOptions });
     

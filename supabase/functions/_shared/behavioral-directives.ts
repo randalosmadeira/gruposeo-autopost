@@ -83,9 +83,19 @@ export const MAD1470_ELECTORAL_DIRECTIVES = `UNIDADE ELEITORAL MAD1470
 
 export function getDirectivesForTask(taskType: string): string {
   const legalTasks = new Set(['legal_review', 'content_review', 'content_editing', 'article_generation']);
-  const discoveryTasks = new Set(['seo_analysis', 'geo_optimization', 'aeo_analysis', 'eeat_review', 'title_generation', 'meta_description', 'share_of_model']);
+  const discoveryTasks = new Set(['seo_analysis', 'geo_optimization', 'aeo_analysis', 'eeat_review', 'title_generation', 'meta_description', 'share_of_model', 'strategy_planning']);
   const imageTasks = new Set(['image_generation']);
   if (taskType === 'news_rewrite') return `${BEHAVIORAL_DIRECTIVES}\n\n${LEGAL_NEWS_DIRECTIVES}\n\n${REPOST_NEWS_DIRECTIVES}\n\n${GEO_AEO_2026_RULES}`;
+  // Electoral editorial content gets BEHAVIORAL_DIRECTIVES + GEO_AEO_2026_RULES
+  // only — deliberately excluded from legalTasks/discoveryTasks and kept as
+  // its own explicit branch so this narrowly-scoped path stays easy to audit.
+  // LEGAL_NEWS_DIRECTIVES is specific to legal journalism/fact-checking and
+  // does not apply to electoral editorial copy. The function-specific
+  // electoral safety rules (controlled corpus, no microtargeting, no vote
+  // persuasion, human review required) are injected separately by
+  // electoral-content-variations/index.ts via its own system message and are
+  // unaffected by this branch.
+  if (taskType === 'electoral_content') return `${BEHAVIORAL_DIRECTIVES}\n\n${GEO_AEO_2026_RULES}`;
   if (legalTasks.has(taskType)) return `${BEHAVIORAL_DIRECTIVES}\n\n${LEGAL_NEWS_DIRECTIVES}\n\n${GEO_AEO_2026_RULES}`;
   if (discoveryTasks.has(taskType)) return `${BEHAVIORAL_DIRECTIVES}\n\n${GEO_AEO_2026_RULES}`;
   if (imageTasks.has(taskType)) return `${BEHAVIORAL_DIRECTIVES}\n\n${IMAGE_GEO_2026_RULES}`;

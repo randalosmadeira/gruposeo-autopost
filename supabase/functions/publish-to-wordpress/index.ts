@@ -8,6 +8,7 @@ import { buildArticleJsonLd } from "../_shared/schema-builder.ts";
 import { mapSegmentToSector } from "../_shared/sector-config.ts";
 import { isPluginModeProject, pluginRequest, resolvePluginKey, resolvePluginNamespace } from "../_shared/wordpress-plugin-client.ts";
 import { syncHreflangForTranslationGroup } from "../_shared/hreflang-sync.ts";
+import { HERO_MAX_BYTES } from "../_shared/image-policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -93,9 +94,9 @@ async function uploadPluginImage(baseUrl: string, apiKey: string, featured: stri
       alt_text: String(imageGeo.alt_text || article.title || "Imagem destacada").slice(0, 300),
       caption: String(imageGeo.caption || "").slice(0, 500),
       preferred_format: imageGeo.preferred_format || "webp",
-      target_width: 1200,
-      target_height: 675,
-      max_kb: 150,
+      target_width: Number(imageGeo?.hero?.width) || 1200,
+      target_height: Number(imageGeo?.hero?.height) || 675,
+      max_kb: Math.round((Number(imageGeo?.hero?.bytes) || HERO_MAX_BYTES) / 1024) || 150,
     }),
     signal: AbortSignal.timeout(60000),
   });

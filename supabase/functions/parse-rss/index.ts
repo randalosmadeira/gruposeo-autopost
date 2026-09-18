@@ -1,6 +1,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import { validateRSSUrl as validateRSSUrlOrThrow, fetchFeed as fetchRSSFeed, type RSSItem, type RSSFeed } from "../_shared/rss-feed.ts";
 
 const FUNCTION_NAME = "parse-rss";
 
@@ -9,188 +10,17 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-export interface RSSItem {
-  title: string;
-  link: string;
-  description: string;
-  pubDate: string;
-  source: string;
-  guid?: string;
-  author?: string;
-  categories?: string[];
-  imageUrl?: string;
-}
+export type { RSSItem, RSSFeed };
 
-export interface RSSFeed {
-  title: string;
-  description: string;
-  link: string;
-  lastBuildDate?: string;
-  items: RSSItem[];
-}
-
-// --- SSRF Protection ---
+// Preserves this function's original boolean-returning contract while
+// delegating the actual blocklist logic to the shared module.
 function validateRSSUrl(urlString: string): boolean {
   try {
-    const url = new URL(urlString);
-
-    if (!['http:', 'https:'].includes(url.protocol)) {
-      return false;
-    }
-
-    const hostname = url.hostname.toLowerCase();
-    if (
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname === '[::1]' ||
-      hostname === '0.0.0.0' ||
-      hostname.startsWith('192.168.') ||
-      hostname.startsWith('10.') ||
-      hostname.startsWith('172.16.') ||
-      hostname.startsWith('172.17.') ||
-      hostname.startsWith('172.18.') ||
-      hostname.startsWith('172.19.') ||
-      hostname.startsWith('172.20.') ||
-      hostname.startsWith('172.21.') ||
-      hostname.startsWith('172.22.') ||
-      hostname.startsWith('172.23.') ||
-      hostname.startsWith('172.24.') ||
-      hostname.startsWith('172.25.') ||
-      hostname.startsWith('172.26.') ||
-      hostname.startsWith('172.27.') ||
-      hostname.startsWith('172.28.') ||
-      hostname.startsWith('172.29.') ||
-      hostname.startsWith('172.30.') ||
-      hostname.startsWith('172.31.') ||
-      hostname === '169.254.169.254' ||
-      hostname.endsWith('.internal') ||
-      hostname.endsWith('.local')
-    ) {
-      return false;
-    }
-
+    validateRSSUrlOrThrow(urlString);
     return true;
   } catch {
     return false;
   }
-}
-
-// --- XML Parsing Helpers ---
-function extractCDATA(content: string): string {
-  const cdataMatch = content.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
-  if (cdataMatch) return cdataMatch[1].trim();
-  return content.replace(/<[^>]+>/g, '').trim();
-}
-
-function extractTag(xml: string, tag: string): string {
-  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i');
-  const match = xml.match(regex);
-  return match ? extractCDATA(match[1]) : '';
-}
-
-function extractAttribute(xml: string, tag: string, attr: string): string {
-  const regex = new RegExp(`<${tag}[^>]*${attr}=["']([^"']+)["']`, 'i');
-  const match = xml.match(regex);
-  return match ? match[1] : '';
-}
-
-function parseRSSXML(xmlText: string, feedUrl: string): RSSFeed {
-  const isAtom = xmlText.includes('<feed') && xmlText.includes('xmlns="http://www.w3.org/2005/Atom"');
-
-  let feedTitle = '';
-  let feedDescription = '';
-  let feedLink = '';
-  const items: RSSItem[] = [];
-
-  if (isAtom) {
-    feedTitle = extractTag(xmlText, 'title');
-    feedDescription = extractTag(xmlText, 'subtitle');
-    feedLink = extractAttribute(xmlText, 'link', 'href') || feedUrl;
-
-    const entryRegex = /<entry>([\s\S]*?)<\/entry>/gi;
-    let match;
-
-    while ((match = entryRegex.exec(xmlText)) !== null) {
-      const entryContent = match[1];
-      const link = extractAttribute(entryContent, 'link', 'href') || extractTag(entryContent, 'id');
-      const pubDate = extractTag(entryContent, 'published') || extractTag(entryContent, 'updated');
-      const author = extractTag(entryContent, 'name') || extractTag(entryContent, 'author');
-
-      items.push({
-        title: extractTag(entryContent, 'title'),
-        link,
-        description: extractTag(entryContent, 'summary') || extractTag(entryContent, 'content'),
-        pubDate,
-        source: feedTitle || new URL(feedUrl).hostname,
-        guid: extractTag(entryContent, 'id'),
-        author,
-      });
-    }
-  } else {
-    const channelMatch = xmlText.match(/<channel>([\s\S]*?)<\/channel>/i);
-    const channelContent = channelMatch ? channelMatch[1] : xmlText;
-
-    feedTitle = extractTag(channelContent, 'title');
-    feedDescription = extractTag(channelContent, 'description');
-    feedLink = extractTag(channelContent, 'link') || feedUrl;
-
-    const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
-    let match;
-
-    while ((match = itemRegex.exec(xmlText)) !== null) {
-      const itemContent = match[1];
-
-      let imageUrl = extractAttribute(itemContent, 'media:content', 'url');
-      if (!imageUrl) {
-        imageUrl = extractAttribute(itemContent, 'enclosure', 'url');
-        if (imageUrl && !imageUrl.match(/\.(jpg|jpeg|png|gif|webp)/i)) {
-          imageUrl = '';
-        }
-      }
-
-      const categories: string[] = [];
-      const catRegex = /<category[^>]*>([^<]+)<\/category>/gi;
-      let catMatch;
-      while ((catMatch = catRegex.exec(itemContent)) !== null) {
-        categories.push(extractCDATA(catMatch[1]));
-      }
-
-      items.push({
-        title: extractTag(itemContent, 'title'),
-        link: extractTag(itemContent, 'link'),
-        description: extractTag(itemContent, 'description'),
-        pubDate: extractTag(itemContent, 'pubDate'),
-        source: extractTag(itemContent, 'source') || feedTitle || new URL(feedUrl).hostname,
-        guid: extractTag(itemContent, 'guid'),
-        author: extractTag(itemContent, 'author') || extractTag(itemContent, 'dc:creator'),
-        categories,
-        imageUrl,
-      });
-    }
-  }
-
-  return {
-    title: feedTitle,
-    description: feedDescription,
-    link: feedLink,
-    items,
-  };
-}
-
-async function fetchRSSFeed(feedUrl: string): Promise<RSSFeed> {
-  const response = await fetch(feedUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; ContentFactoryBot/1.0)',
-      'Accept': 'application/rss+xml, application/xml, text/xml, application/atom+xml',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch feed: ${response.status} ${response.statusText}`);
-  }
-
-  const xmlText = await response.text();
-  return parseRSSXML(xmlText, feedUrl);
 }
 
 Deno.serve(async (req) => {

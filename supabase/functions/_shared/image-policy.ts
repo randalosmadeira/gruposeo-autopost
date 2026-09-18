@@ -46,14 +46,22 @@ export function heroDimensionsFor(aspectRatio?: string | null): HeroDimensions {
   return aspectRatio === "4:3" ? HERO_4_3 : HERO_16_9;
 }
 
-/** Rules injected into every image-generation prompt. */
-export const IMAGE_PROMPT_RULES = [
-  "Imagem horizontal, proporção 16:9, pensada para 1200x675 pixels.",
-  "Assunto principal (rosto, produto ou objeto) rigorosamente centralizado, ocupando no máximo a área central de 70% da largura e 70% da altura.",
-  "Deixar de 15% a 20% de margem em todas as bordas apenas com cenário de fundo, sem elementos importantes, porque a imagem será recortada em 1:1 e em formatos menores.",
-  "Proibido qualquer texto, letra, número, logotipo, selo, legenda ou marca d'água dentro da imagem.",
-  "Sem bordas, molduras, colagens ou divisões de tela.",
-].join(" ");
+/** Rules injected into every image-generation prompt, parametric on the real target aspect. */
+export function imagePromptRules(aspect: HeroAspect = "16:9"): string {
+  const orientationLine = aspect === "4:3"
+    ? `Imagem horizontal, proporção 4:3, pensada para ${HERO_4_3.width}x${HERO_4_3.height} pixels.`
+    : `Imagem horizontal, proporção 16:9, pensada para ${HERO_16_9.width}x${HERO_16_9.height} pixels.`;
+  return [
+    orientationLine,
+    "Assunto principal (rosto, produto ou objeto) rigorosamente centralizado, ocupando no máximo a área central de 70% da largura e 70% da altura.",
+    "Deixar de 15% a 20% de margem em todas as bordas apenas com cenário de fundo, sem elementos importantes, porque a imagem será recortada em 1:1 e em formatos menores.",
+    "Proibido qualquer texto, letra, número, logotipo, selo, legenda ou marca d'água dentro da imagem.",
+    "Sem bordas, molduras, colagens ou divisões de tela.",
+  ].join(" ");
+}
+
+/** Backward-compatible constant for any caller that isn't updated to pass the real target aspect. */
+export const IMAGE_PROMPT_RULES = imagePromptRules("16:9");
 
 export interface HeroDerivation {
   url: string;

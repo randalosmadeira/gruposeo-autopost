@@ -26,10 +26,15 @@ describe('client bulk, brand media and CTA controls', () => {
   });
 
   it('uses deterministic WebP chroma processing without paid AI providers', () => {
+    const imagePolicy = readFileSync(resolve(process.cwd(), 'src/lib/image-policy.ts'), 'utf8');
     expect(media).toContain("'image/webp', quality");
-    expect(media).toContain('const WEBP_QUALITY_STEPS = [0.86');
-    expect(media).toContain('const HERO_MAX_BYTES = 150 * 1024;');
-    expect(media).toContain('green - Math.max(red, blue)');
+    expect(media).toContain("HERO_MAX_BYTES, HERO_SAFE_ZONE_RATIO, WEBP_CANVAS_QUALITY_STEPS } from '@/lib/image-policy'");
+    expect(imagePolicy).toContain('export const HERO_MAX_BYTES = 150 * 1024;');
+    expect(imagePolicy).toContain('export const WEBP_CANVAS_QUALITY_STEPS = [0.86, 0.8, 0.74, 0.68, 0.62, 0.56];');
+    // Chroma key is a color-distance band sampled from the image's own border,
+    // not a hardcoded single-pixel green/dominance threshold (see BrandAssetsCard.tsx).
+    expect(media).toContain('function colorDistance(');
+    expect(media).toContain('sampleBorderReferenceColor(');
     expect(media).not.toContain('supabase.functions.invoke');
     expect(media).not.toContain('generate-image');
   });

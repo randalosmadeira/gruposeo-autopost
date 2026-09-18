@@ -1,7 +1,16 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Accordion,
   AccordionContent,
@@ -20,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useSettings } from '@/hooks/useSettings';
+import { useAuth } from '@/hooks/useAuth';
 import { useArticleGeneration } from '@/hooks/useArticleGeneration';
 import { useArticleAutoSave } from '@/hooks/useArticleAutoSave';
 import { useWordPressPublish } from '@/hooks/useWordPressPublish';
@@ -128,6 +138,7 @@ export default function ArticleGeneratorV2() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const { user } = useAuth();
   const { projects } = useProjects();
   const { settings } = useSettings();
   const { isGenerating, generateArticle, content: generatedContent } = useArticleGeneration();
@@ -161,6 +172,23 @@ export default function ArticleGeneratorV2() {
   const [featuredImageUrl, setFeaturedImageUrl] = useState<string | null>(null);
   const [isImageLoading, setIsImageLoading] = useState(false);
   const [userCredits] = useState(10);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(undefined);
+
+  // User's own saved prompt templates ("Tipo de Artigo"), managed in PromptTemplatesCard
+  const { data: promptTemplates = [] } = useQuery({
+    queryKey: ['prompt-templates-for-generation', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from('prompt_templates')
+        .select('id,name,target_function,description')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
 
   const connectedProjects = projects.filter(p => p.is_connected);
 
@@ -383,6 +411,7 @@ export default function ArticleGeneratorV2() {
         projectConfig: projectConfigData,
         targetFunction: 'article_generator',
         projectId: config.projectId || (selectedProject?.id) || undefined,
+        promptTemplateId: selectedTemplateId || undefined,
       });
     })();
 
@@ -643,9 +672,27 @@ export default function ArticleGeneratorV2() {
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pb-4">
-                    <div className="p-4 bg-muted/50 rounded-lg border border-dashed border-border">
-                      <p className="text-sm text-muted-foreground text-center">
-                        Seus modelos salvos aparecerão aqui.
+                    <div className="space-y-2">
+                      <Label className="text-sm text-muted-foreground">Tipo de Artigo</Label>
+                      <Select
+                        value={selectedTemplateId || 'none'}
+                        onValueChange={(v) => setSelectedTemplateId(v === 'none' ? undefined : v)}
+                      >
+                        <SelectTrigger className="border-border bg-background">
+                          <SelectValue placeholder="Padrão do sistema" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Padrão do sistema</SelectItem>
+                          {promptTemplates.map((template) => (
+                            <SelectItem key={template.id} value={template.id}>
+                              {template.name}
+                              {template.target_function ? ` · ${template.target_function}` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Escolha um dos seus modelos salvos em Configurações ou use o padrão do sistema.
                       </p>
                     </div>
                   </AccordionContent>

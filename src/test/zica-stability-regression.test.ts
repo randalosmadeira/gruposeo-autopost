@@ -54,7 +54,7 @@ describe('Zica Posts stability regressions', () => {
   it('generates a branded image before an automatic RSS publication', () => {
     const rss = read('supabase/functions/auto-process-rss/index.ts');
     expect(rss).toContain('x-zica-automation-key');
-    expect(rss).toContain('.eq("name", "news-agents")');
+    expect(rss).toContain('.in("name", ["news-agents", "rss-schedules"])');
     expect(rss).toContain('body?.dryRun === true');
     expect(rss).toContain('/functions/v1/generate-image');
     expect(rss).toContain('watermark: "RDM ADVOGADOS"');

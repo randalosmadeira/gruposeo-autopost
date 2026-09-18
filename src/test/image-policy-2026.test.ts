@@ -25,7 +25,7 @@ describe('image policy 2026: one rule set for every generated image', () => {
   it('forbids text inside images and demands the centred safe zone in every prompt', () => {
     expect(policy).toMatch(/Proibido qualquer texto, letra, número, logotipo, selo, legenda ou marca d'água/);
     expect(policy).toMatch(/15% a 20% de margem/);
-    expect(generator).toContain('IMAGE_PROMPT_RULES');
+    expect(generator).toContain('imagePromptRules(heroDimensionsFor(body.aspectRatio).aspect)');
     expect(generator).not.toMatch(/exatamente com o texto: \$\{watermark\}/);
     expect(directives).toContain('1200x675');
     expect(directives).toContain('Nunca inserir texto');
@@ -40,10 +40,13 @@ describe('image policy 2026: one rule set for every generated image', () => {
     expect(generator).toContain('heroDimensionsFor(body.aspectRatio)');
   });
 
-  it('the publisher asks WordPress for the 1200x675 / 150 KB featured image', () => {
-    expect(publisher).toContain('target_width: 1200');
-    expect(publisher).toContain('target_height: 675');
-    expect(publisher).toContain('max_kb: 150');
+  it('the publisher derives the real hero dimensions, defaulting to 1200x675 / 150 KB', () => {
+    // Since 2026-09-19 these come from the article's own image_geo.hero metadata
+    // (imagePolicyMetadata() in image-policy.ts) instead of being hardcoded to
+    // 16:9's numbers, so a 4:3 hero (1200x900) reaches WordPress correctly too.
+    expect(publisher).toContain('target_width: Number(imageGeo?.hero?.width) || 1200');
+    expect(publisher).toContain('target_height: Number(imageGeo?.hero?.height) || 675');
+    expect(publisher).toContain('max_kb: Math.round((Number(imageGeo?.hero?.bytes) || HERO_MAX_BYTES) / 1024) || 150');
   });
 
   it('stored module policies follow the same numbers', () => {
@@ -69,19 +72,26 @@ describe('Zica Posts 3.14.0 image delivery', () => {
   });
 
   it('bumps the plugin version everywhere while keeping 3.12.0 installs allowed', () => {
-    expect(plugin).toContain('Version: 3.14.0');
-    expect(plugin).toContain("define('ZICA_POSTS_VERSION', '3.14.0');");
-    expect(read('public/wordpress-plugin/zica-posts/version.json')).toContain('"version": "3.14.0"');
-    expect(read('public/wordpress-plugin/zica-posts/readme.txt')).toContain('Stable tag: 3.14.0');
-    expect(read('scripts/build-wordpress-downloads.mjs')).toContain("outputName: 'zica-posts-3.14.0.zip'");
-    expect(read('.github/workflows/zica-posts-package.yml')).toContain("grep -q 'Version: 3.14.0'");
-    expect(read('supabase/functions/_shared/plugin-version.ts')).toContain('PLUGIN_VERSION="3.14.0"');
+    expect(plugin).toContain('Version: 3.15.0');
+    expect(plugin).toContain("define('ZICA_POSTS_VERSION', '3.15.0');");
+    expect(read('public/wordpress-plugin/zica-posts/version.json')).toContain('"version": "3.15.0"');
+    expect(read('public/wordpress-plugin/zica-posts/readme.txt')).toContain('Stable tag: 3.15.0');
+    expect(read('scripts/build-wordpress-downloads.mjs')).toContain("outputName: 'zica-posts-3.15.0.zip'");
+    expect(read('.github/workflows/zica-posts-package.yml')).toContain("grep -q 'Version: 3.15.0'");
+    expect(read('supabase/functions/_shared/plugin-version.ts')).toContain('PLUGIN_VERSION="3.15.0"');
     expect(read('supabase/functions/_shared/plugin-version.ts')).toContain('PLUGIN_MINIMUM_VERSION="3.12.0"');
-    expect(read('src/lib/plugin-version.ts')).toContain("PLUGIN_VERSION='3.14.0'");
+    expect(read('src/lib/plugin-version.ts')).toContain("PLUGIN_VERSION='3.15.0'");
   });
 
   it('the brand bank export stays under 150 KB', () => {
+    // Since 2026-09-19 these are imported from src/lib/image-policy.ts rather
+    // than declared locally — see src/test/image-policy-frontend-parity.test.ts
+    // for the cross-runtime numeric-parity check.
     expect(card).toContain('HERO_MAX_BYTES');
-    expect(card).toMatch(/for \(const quality of WEBP_QUALITY_STEPS\)/);
+    expect(card).toMatch(/for \(const quality of WEBP_CANVAS_QUALITY_STEPS\)/);
+  });
+
+  it('enforces the resize/recompress budget server-side via the plugin feature flag', () => {
+    expect(read('supabase/functions/_shared/plugin-version.ts')).toContain('server_side_hero_resize');
   });
 });

@@ -63,7 +63,8 @@ export type TaskType =
   | 'geo_optimization'
   | 'aeo_analysis'
   | 'eeat_review'
-  | 'share_of_model';
+  | 'share_of_model'
+  | 'electoral_content';
 
 // Public OpenAI API model. `gpt-5.6-sol` is an internal Codex runtime name and
 // is not a valid model identifier for customer API keys.
@@ -97,6 +98,10 @@ const AI_PROVIDERS: Record<string, AIProvider[]> = {
   strategy_planning: [p('anthropic', CLAUDE_TEXT, ['reasoning']), p('openai', OPENAI_TEXT, ['planning'])],
   share_of_model: [p('openai', OPENAI_TEXT, ['analysis']), p('anthropic', CLAUDE_TEXT, ['analysis'])],
   image_generation: [p('openai', OPENAI_IMAGE, ['image-generation'])],
+  // Mirrors electoral-content-variations/index.ts's pre-orchestrator provider
+  // order: Claude tried first, OpenAI economy tier (gpt-4o-mini, the
+  // function's previous default OPENAI_MODEL) as fallback.
+  electoral_content: [p('anthropic', CLAUDE_TEXT, ['electoral', 'careful', 'editorial']), p('openai', OPENAI_ECONOMY, ['electoral', 'structured'])],
 };
 
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
