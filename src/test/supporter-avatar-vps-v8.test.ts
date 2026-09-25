@@ -20,6 +20,8 @@ const legacyGenerator = read('supabase/functions/generate-supporter-avatar/index
 const ui = read('src/pages/SupporterAvatar1470V2.tsx');
 const migration = read('supabase/migrations/20260925150000_supporter_avatar_vps_fast_v8.sql');
 const deploy = read('.github/workflows/zica-ai-vps-deploy.yml');
+const sharePages = read('scripts/build-share-pages.mjs');
+const pkg = JSON.parse(read('package.json')) as { scripts: Record<string, string> };
 
 function directive(source: string, name: string) {
   const match = source.match(new RegExp(`export const ${name} = \`([\\s\\S]*?)\`\\.trim\\(\\);`));
@@ -110,6 +112,20 @@ describe('Apoiadores 1470 - pipeline VPS v8 (rápido, sem selo na imagem)', () =
     expect(deploy).toContain('"version":"3.11.0"');
     expect(orchestratorPackage.version).toBe('3.11.0');
     expect(server).toContain("version:'3.11.0'");
+  });
+
+  it('serve /1470 com Open Graph da campanha (bordão, logo com onça e taco, ícone próprio)', () => {
+    expect(pkg.scripts['build:zica']).toContain('node scripts/build-share-pages.mjs');
+    expect(sharePages).toContain("url: 'https://app.zica.posts.zicajuris.com.br/1470'");
+    expect(sharePages).toContain('Madeira neles!');
+    expect(sharePages).toContain("image: 'https://app.zica.posts.zicajuris.com.br/1470/og.png'");
+    expect(sharePages).toContain('summary_large_image');
+    expect(sharePages).toContain('/1470/icon-192.png');
+    expect(deploy).toContain('location ~ ^/(1470|apoiadores)(/avatar)?/?$ {');
+    expect(deploy).toContain('try_files /1470/index.html =404;');
+    for (const asset of ['public/1470/og.png', 'public/1470/icon-512.png', 'public/1470/icon-192.png', 'public/1470/icon-180.png', 'public/1470/icon-64.png']) {
+      expect(existsSync(resolve(root, asset)), asset).toBe(true);
+    }
   });
 
   it('aposenta o gerador Edge antigo com 410 e sem modelos inexistentes', () => {
