@@ -16,4 +16,4 @@ export async function enqueueReconcile(targetKey:string,date:string){return cont
 export async function enqueueIndexFlush(targetKey:string){const bucket=Math.floor(Date.now()/300000);return indexQueue.add('flush',{targetKey},{jobId:`index:${targetKey}:${bucket}`,attempts:5,backoff:{type:'exponential',delay:5000},removeOnComplete:500,removeOnFail:1000});}
 
 /** Um job BullMQ por job Supabase: redespachos do Edge para o mesmo jobId são deduplicados. */
-export async function enqueueSupporterAvatar(data:SupporterAvatarJobData){return supporterAvatarQueue.add('generate',data,{jobId:`supporter:${data.jobId}`,attempts:MAX_PIPELINE_ATTEMPTS,backoff:{type:'exponential',delay:3000},removeOnComplete:500,removeOnFail:1000});}
+export async function enqueueSupporterAvatar(data:SupporterAvatarJobData){return supporterAvatarQueue.add('generate',data,{jobId:`supporter-${data.jobId}`,attempts:MAX_PIPELINE_ATTEMPTS,backoff:{type:'exponential',delay:3000},removeOnComplete:500,removeOnFail:1000});}

@@ -100,7 +100,7 @@ describe('Apoiadores 1470 - pipeline VPS v8 (rápido, sem selo na imagem)', () =
     expect(server).toContain('dispatch_token_hash');
     expect(server).toContain("reply.code(202).send({ok:true,queued:true,pipeline:SUPPORTER_PIPELINE,runtime:'vps'})");
     expect(queues).toContain("SUPPORTER_AVATAR_QUEUE_NAME='zica-supporter-avatar'");
-    expect(queues).toContain('jobId:`supporter:${data.jobId}`');
+    expect(queues).toContain('jobId:`supporter-${data.jobId}`');
     expect(worker).toContain('processSupporterAvatarJob(job.data,job.attemptsMade+1)');
     expect(worker).toContain('lockDuration:420000');
     expect(publicApi).toContain('const WORKER_DISPATCH_URL = Deno.env.get("SUPPORTER_AVATAR_WORKER_URL") || "https://app.zica.posts.zicajuris.com.br/supporter-avatar/dispatch"');
