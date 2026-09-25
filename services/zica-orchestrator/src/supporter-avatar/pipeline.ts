@@ -21,7 +21,7 @@ import { PIPELINE_VERSION, QA_PROMPT, SELECTOR_PROMPT, SUPPORTER_AVATAR_PROMPT_V
  */
 export const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
 /** Modelos de imagem aceitos para override por pedido (provider_preference = "openai:<modelo>"). */
-export const IMAGE_MODEL_ALLOWLIST = ['gpt-image-2', 'gpt-image-1'] as const;
+export const IMAGE_MODEL_ALLOWLIST = ['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'gpt-image-1.5', 'gpt-image-1'] as const;
 export function resolveImageModel(providerPreference: unknown) {
   const value = String(providerPreference || '').trim().toLowerCase();
   const override = value.startsWith('openai:') ? value.slice(7) : '';

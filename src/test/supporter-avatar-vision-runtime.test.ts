@@ -9,8 +9,9 @@ const migration = readFileSync(resolve(process.cwd(), 'supabase/migrations/20260
 describe('supporter avatar vision runtime (VPS v8)', () => {
   it('envia referências reduzidas em base64 em vez de fotos originais completas', () => {
     expect(source).toContain('VISION_MAX_EDGE = 768');
-    expect(source).toContain('downscale(image.bytes, VISION_MAX_EDGE');
-    expect(source).toContain("detail: 'low'");
+    expect(source).toContain('QA_MAX_EDGE = 1280');
+    expect(source).toContain("downscale(image.bytes, detail === 'high' ? QA_MAX_EDGE : VISION_MAX_EDGE");
+    expect(source).toContain("detail: 'low' | 'high' = 'low'");
   });
 
   it('usa saídas estruturadas estritas para seleção e QA', () => {
