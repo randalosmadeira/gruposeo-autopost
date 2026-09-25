@@ -19,6 +19,13 @@ import { PIPELINE_VERSION, QA_PROMPT, SELECTOR_PROMPT, SUPPORTER_AVATAR_PROMPT_V
  *  - vocabulário de status de request/job
  */
 export const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
+/** Modelos de imagem aceitos para override por pedido (provider_preference = "openai:<modelo>"). */
+export const IMAGE_MODEL_ALLOWLIST = ['gpt-image-2', 'gpt-image-1'] as const;
+export function resolveImageModel(providerPreference: unknown) {
+  const value = String(providerPreference || '').trim().toLowerCase();
+  const override = value.startsWith('openai:') ? value.slice(7) : '';
+  return (IMAGE_MODEL_ALLOWLIST as readonly string[]).includes(override) ? override : OPENAI_IMAGE_MODEL;
+}
 export const OPENAI_VISION_MODEL = process.env.OPENAI_VISION_MODEL || 'gpt-4.1-mini';
 // Fidelidade facial pesa mais que velocidade: qualidade alta por padrão (override por env).
 const IMAGE_QUALITY = (process.env.SUPPORTER_AVATAR_IMAGE_QUALITY || 'high') as 'low' | 'medium' | 'high';
@@ -231,10 +238,10 @@ export function qaFeedback(qa: QaResult) {
 
 /* ---------- geração ---------- */
 
-async function generateMaster(supporter: Loaded, candidate: Loaded, prompt: string, key: string) {
+async function generateMaster(supporter: Loaded, candidate: Loaded, prompt: string, key: string, imageModel: string) {
   const send = async (withFidelity: boolean) => {
     const form = new FormData();
-    form.set('model', OPENAI_IMAGE_MODEL);
+    form.set('model', imageModel);
     form.set('prompt', prompt);
     form.set('size', MASTER_SIZE.openai);
     form.set('quality', IMAGE_QUALITY);
@@ -287,6 +294,7 @@ export async function processSupporterAvatarJob(data: SupporterAvatarJobData, at
     if (requestError || !request) throw new Error('request_not_found');
     if (!request.consent_image_use || !request.consent_terms) throw new Error('required_consent_missing');
     const key = openAIKey();
+    const imageModel = resolveImageModel(request.provider_preference);
 
     await updateRequest(requestId, { status: 'analyzing', pipeline_version: PIPELINE_VERSION, supporter_approved_at: null, completed_at: null });
     const { data: sourceRows, error: sourceError } = await supabase.from('supporter_avatar_sources').select('id,storage_path,mime_type,file_size_bytes').eq('request_id', requestId).order('created_at', { ascending: true }).limit(3);
@@ -352,7 +360,7 @@ export async function processSupporterAvatarJob(data: SupporterAvatarJobData, at
       await updateRequest(requestId, { status: generationAttempt > 1 ? 'regenerate' : 'generating' });
       const tGen = Date.now();
       const prompt = buildCompositionPrompt({ candidatePresetLabel: candidateMeta.label, candidatePresetHint: candidateMeta.prompt_hint, candidateHasBat, scene: selection.scene, compositionPlan: selection.composition_plan, qaFeedback: feedback || undefined });
-      const master = await generateMaster(supporterImage, candidateImage, prompt, key);
+      const master = await generateMaster(supporterImage, candidateImage, prompt, key, imageModel);
       mark('image_generation', tGen);
 
       await updateRequest(requestId, { status: 'qa' });
@@ -389,7 +397,7 @@ export async function processSupporterAvatarJob(data: SupporterAvatarJobData, at
       pass: passed, agent: SUPPORTER_PHOTO_AGENT_NAME, pipeline_version: PIPELINE_VERSION, render_version: RENDER_VERSION, generation_job_id: jobId,
       autonomous_recovery: true, scene: selection.scene, openai_usage: best.usage, candidate_reference_internal: candidateMeta.slug, candidate_has_bat: candidateHasBat,
       supporter_source_internal_index: selection.supporter_index, qa_provider_error: qaProviderError || null, image_quality: IMAGE_QUALITY,
-      input_fidelity_used: best.inputFidelityUsed, generation_attempts: generationAttempt, selected_generation_attempt: best.attempt, qa_thresholds: QA_THRESHOLDS,
+      input_fidelity_used: best.inputFidelityUsed, image_model: imageModel, generation_attempts: generationAttempt, selected_generation_attempt: best.attempt, qa_thresholds: QA_THRESHOLDS,
     };
     const files: Array<{ platform: string; width: number; height: number; bytes: Buffer; mime: string }> = [
       { platform: 'master', width: MASTER_SIZE.width, height: MASTER_SIZE.height, bytes: masterJpeg, mime: 'image/jpeg' },
@@ -402,7 +410,7 @@ export async function processSupporterAvatarJob(data: SupporterAvatarJobData, at
       if (uploadError) throw new TransientPipelineError(`storage_upload_failed:${safeDetail(uploadError.message, 120)}`);
       const { error: insertError } = await supabase.from('supporter_avatar_outputs').insert({
         request_id: requestId, platform: file.platform, width: file.width, height: file.height, storage_path: path, mime_type: file.mime,
-        model: OPENAI_IMAGE_MODEL, prompt_version: SUPPORTER_AVATAR_PROMPT_VERSION,
+        model: imageModel, prompt_version: SUPPORTER_AVATAR_PROMPT_VERSION,
         qa_score: best.qa ? clamp(best.qa.supporter_fidelity_score) : null,
         qa_payload: { ...qaPayloadBase, exact_output: `${file.width}x${file.height}` },
       });
@@ -422,7 +430,7 @@ export async function processSupporterAvatarJob(data: SupporterAvatarJobData, at
     const finalStatus = passed ? 'completed' : 'needs_review';
     await updateRequest(requestId, { status: finalStatus, completed_at: passed ? nowIso() : null, pipeline_version: PIPELINE_VERSION });
     await updateJob(jobId, {
-      status: finalStatus, stage: PIPELINE_VERSION, model: OPENAI_IMAGE_MODEL,
+      status: finalStatus, stage: PIPELINE_VERSION, model: imageModel,
       error_message: passed ? null : 'qa_threshold_not_met_or_qa_provider_pending',
       output_payload: { pipeline_version: PIPELINE_VERSION, render_version: RENDER_VERSION, outputs: stored, qa_pass: passed, autonomous_recovery: true, technical_retries_are_free: true, scene: selection.scene, candidate_has_bat: candidateHasBat, degraded_selection: degraded, generation_attempts: generationAttempt, timings_ms: timings, runtime: 'vps' },
       completed_at: nowIso(),
