@@ -16,7 +16,7 @@
     "check:electoral-release": "node scripts/check-electoral-release-contract.mjs",
     "e2e:supporter-avatar": "node scripts/supporter-avatar-production-e2e.mjs",
     "check": "npm run check:claude-models && npm run lint && npm run test && npm run build",
-    "build:zica": "npm run build:wordpress-packages && vite build --mode production",
+    "build:zica": "npm run build:wordpress-packages && vite build --mode production && node scripts/build-share-pages.mjs",
     "test:zica": "vitest run",
     "verify:zica": "npm run test && npm run build"
   },

@@ -329,6 +329,11 @@ jobs:
                   add_header Cache-Control "public, max-age=300";
               }
 
+              # Página do gerador de apoiadores 1470 com Open Graph próprio (preview do WhatsApp/Instagram).
+              location ~ ^/(1470|apoiadores)(/avatar)?/?$ {
+                  try_files /1470/index.html =404;
+              }
+
               location / {
                   try_files \$uri \$uri/ /index.html;
               }
