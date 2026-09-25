@@ -91,7 +91,7 @@ describe('Apoiadores 1470 - pipeline VPS v8 (rápido, sem selo na imagem)', () =
 
   it('modelo padrão gpt-image-2 (decisão 2026-09-25 após teste comparativo), override só por allowlist', () => {
     expect(pipeline).toContain("process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2'");
-    expect(pipeline).toContain("IMAGE_MODEL_ALLOWLIST = ['gpt-image-2', 'gpt-image-1']");
+    expect(pipeline).toContain("IMAGE_MODEL_ALLOWLIST = ['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'gpt-image-1.5', 'gpt-image-1']");
     expect(pipeline).toContain('resolveImageModel(request.provider_preference)');
     expect(ui).toContain('Sem óculos escuros, boné ou filtro');
   });
