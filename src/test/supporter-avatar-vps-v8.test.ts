@@ -89,10 +89,19 @@ describe('Apoiadores 1470 - pipeline VPS v8 (rápido, sem selo na imagem)', () =
     expect(sharedPrompt).not.toContain('Prefira referência sem taco');
   });
 
-  it('rostos intactos: qualidade alta, limiar de fidelidade 85 e uma regeneração guiada pelo QA', () => {
+  it('modelo padrão gpt-image-2 (decisão 2026-09-25 após teste comparativo), override só por allowlist', () => {
+    expect(pipeline).toContain("process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2'");
+    expect(pipeline).toContain("IMAGE_MODEL_ALLOWLIST = ['gpt-image-2', 'gpt-image-1']");
+    expect(pipeline).toContain('resolveImageModel(request.provider_preference)');
+    expect(ui).toContain('Sem óculos escuros, boné ou filtro');
+  });
+
+  it('rostos intactos: qualidade alta, limiar de fidelidade 90 e até duas regenerações guiadas pelo QA', () => {
     expect(pipeline).toContain("process.env.SUPPORTER_AVATAR_IMAGE_QUALITY || 'high'");
-    expect(pipeline).toContain('QA_THRESHOLDS = { supporter: 85, candidate: 80, anatomy: 70, wardrobe: 70 }');
-    expect(pipeline).toContain('MAX_GENERATIONS_PER_JOB = 2');
+    expect(pipeline).toContain('QA_THRESHOLDS = { supporter: 90, candidate: 90, anatomy: 75, wardrobe: 75 }');
+    expect(pipeline).toContain('MAX_GENERATIONS_PER_JOB = 3');
+    expect(pipeline).toContain("'quality_auditor', QA_SCHEMA, key, 'high')");
+    expect(pipeline).toContain('REFERENCE_MAX_EDGE = 2048');
     expect(pipeline).toContain('while (generationAttempt < MAX_GENERATIONS_PER_JOB)');
     expect(pipeline).toContain('qaFeedback: feedback || undefined');
     expect(pipeline).toContain('input_fidelity_used: best.inputFidelityUsed');

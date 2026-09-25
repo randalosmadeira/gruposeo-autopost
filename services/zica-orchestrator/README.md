@@ -21,3 +21,5 @@ O worker usa concorrência 5 e limitador 20 jobs/10s, ajustáveis após observab
 ## Apoiadores 1470 (pipeline VPS v8)
 
 `POST /supporter-avatar/dispatch` recebe `{requestId, jobId, dispatchToken}` da Edge Function pública, valida o hash do token no job e enfileira em `zica-supporter-avatar`. O worker faz uma chamada de visão (seleção), uma geração `gpt-image-2` 1024x1536 sem texto, renderiza os três formatos com sharp + identidade vetorial (`src/supporter-avatar/brand-1470.ts`, `render.ts`) e um QA advisory. Nenhum selo é desenhado na imagem. Env opcionais: `OPENAI_IMAGE_MODEL`, `OPENAI_VISION_MODEL`, `SUPPORTER_AVATAR_IMAGE_QUALITY` (low|medium|high), `SUPPORTER_AVATAR_CONCURRENCY`.
+
+Modelo de imagem: padrão `gpt-image-2` (decisão de 2026-09-25 após comparativo com `gpt-image-1`, que aceitou `input_fidelity=high` mas trocou a roupa do apoiador e inventou texto). Override por pedido: `supporter_avatar_requests.provider_preference = 'openai:gpt-image-1'` (allowlist em `IMAGE_MODEL_ALLOWLIST`); o modelo usado fica em `supporter_avatar_outputs.model`.
