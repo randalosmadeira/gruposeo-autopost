@@ -76,6 +76,13 @@ describe('Apoiadores 1470 - pipeline VPS v8 (rápido, sem selo na imagem)', () =
     expect(orchestratorPackage.dependencies.sharp).toBeTruthy();
   });
 
+  it('garante uma referência com taco na lista curta enviada à visão', () => {
+    expect(pipeline).toContain('export function visionShortlist(');
+    expect(pipeline).toContain("const bat = candidates.find((candidate) => candidate.prop === 'com-taco')");
+    expect(sharedPrompt).toContain('O taco de beisebol faz parte da identidade da campanha');
+    expect(sharedPrompt).not.toContain('Prefira referência sem taco');
+  });
+
   it('faz uma única geração de imagem e uma única seleção de visão por pedido', () => {
     expect((pipeline.match(/api\.openai\.com\/v1\/images\/edits/g) || []).length).toBe(1);
     expect(pipeline).toContain('await generateMaster(');

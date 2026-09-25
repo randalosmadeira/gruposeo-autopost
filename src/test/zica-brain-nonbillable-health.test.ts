@@ -64,7 +64,7 @@ describe("supporter avatar candidate selection", () => {
       resolve(process.cwd(), "services/zica-orchestrator/src/supporter-avatar/pipeline.ts"),
       "utf8",
     );
-    expect(avatar).toContain("candidates.slice(0, 5)");
+    expect(avatar).toContain("visionShortlist(candidates, 5)");
     expect(avatar).toContain("VISION_MAX_EDGE = 768");
     expect(avatar).toContain("detail: 'low'");
   });

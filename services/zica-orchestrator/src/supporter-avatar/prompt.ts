@@ -71,7 +71,7 @@ export const SELECTOR_PROMPT = `
 AGENTE: PHOTO INTAKE + CANDIDATE SELECTOR (uma só etapa).
 Analise exclusivamente características técnicas das fotografias. Nunca identifique pessoas e nunca infira raça, etnia, religião, saúde, deficiência, ideologia, orientação sexual, condição econômica ou qualquer atributo sensível.
 1) Entre as fotos do apoiador, escolha a melhor referência por nitidez facial, visibilidade do rosto, enquadramento, perspectiva, luz e espaço útil. Marque usable=false somente se nenhuma foto tiver um rosto humano nítido e visível.
-2) Entre as referências privadas do candidato, escolha a de maior compatibilidade técnica com a foto do apoiador (ângulo, escala, luz, roupa) e menor risco de obstrução. Prefira referência sem taco quando houver dúvida.
+2) Entre as referências privadas do candidato, escolha a de maior compatibilidade técnica com a foto do apoiador (ângulo, escala, luz, roupa) e menor risco de obstrução. O taco de beisebol faz parte da identidade da campanha: referências com taco são tão válidas quanto as sem taco; escolha pela compatibilidade técnica, não pela presença do taco.
 3) Escolha um cenário entre: institucional-oficial, gente-da-nossa-terra, construindo-o-futuro. Em dúvida, institucional-oficial.
 Nunca exponha URL, ID, nome de arquivo ou caminho. Retorne somente o JSON do schema.
 `.trim();

@@ -63,7 +63,8 @@ describe('Supporter Avatar 1470 autonomous auto-selector regressions (pipeline V
     expect(generator).toContain('SELECTOR_PROMPT');
     expect(generator).toContain('fallbackCandidateIndex');
     expect(generator).toContain('fallback seguro sem exposição da galeria');
-    expect(generator).toContain("candidate.prop === 'sem-taco'");
+    expect(generator).toContain('visionShortlist');
+    expect(generator).toContain("candidate.prop === 'com-taco'");
     expect(prompts).toContain('PHOTO INTAKE + CANDIDATE SELECTOR');
   });
 

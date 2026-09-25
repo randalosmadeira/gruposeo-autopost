@@ -133,12 +133,25 @@ async function candidateMetadata(): Promise<CandidateMeta[]> {
   return rows;
 }
 
-/** Fallback determinístico, sem expor a galeria: sem taco > frontal > roupa compatível com o estilo. */
+/**
+ * Lista curta enviada à visão (limite de payload): os primeiros por ordem, mas
+ * sempre com pelo menos uma referência COM taco quando houver uma ativa. O taco
+ * "Madeira neles" é parte da identidade da campanha e não pode ficar de fora só
+ * por causa da posição na galeria.
+ */
+export function visionShortlist(candidates: CandidateMeta[], size = 5) {
+  const base = candidates.slice(0, size);
+  if (base.some((candidate) => candidate.prop === 'com-taco')) return base;
+  const bat = candidates.find((candidate) => candidate.prop === 'com-taco');
+  if (!bat) return base;
+  return [...base.slice(0, Math.max(0, size - 1)), bat];
+}
+
+/** Fallback determinístico, sem expor a galeria: frontal > roupa compatível com o estilo. */
 export function fallbackCandidateIndex(candidates: CandidateMeta[], style: string) {
   const formal = ['premium', 'institucional', 'dark'].includes(style);
   return candidates.map((candidate, index) => {
     let score = 0;
-    if (candidate.prop === 'sem-taco') score += 50;
     if (/frontal/i.test(candidate.label)) score += 30;
     if (formal && candidate.wardrobe === 'terno') score += 15;
     if (!formal && candidate.wardrobe === 'camisa-1470') score += 15;
@@ -267,7 +280,7 @@ export async function processSupporterAvatarJob(data: SupporterAvatarJobData, at
     // 1) carregar referências em paralelo (apoiador + galeria privada)
     const t0 = Date.now();
     const candidates = await candidateMetadata();
-    const shortlist = candidates.slice(0, 5);
+    const shortlist = visionShortlist(candidates, 5);
     const [supporterImages, candidateImages] = await Promise.all([
       Promise.all(sources.map(loadSource)),
       Promise.all(shortlist.map((candidate) => loadCandidate(candidate).catch(() => null))),
