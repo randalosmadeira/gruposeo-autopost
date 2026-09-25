@@ -8,12 +8,13 @@ const fixturePath = resolve(String(process.env.SUPPORTER_E2E_FIXTURE || ''));
 const timeoutMs = Number(process.env.SUPPORTER_E2E_TIMEOUT_MS || 12 * 60 * 1000);
 const pollMs = Number(process.env.SUPPORTER_E2E_POLL_MS || 5000);
 const testRegeneration = process.env.SUPPORTER_E2E_REGENERATE === 'true';
-const expectedPipeline = 'supporter-avatar-resumable-v7';
-const expectedDisclosure = 'Imagem gerada por IA - Campanha Oficial';
+const expectedPipeline = 'supporter-avatar-vps-v8';
+// v8: nenhum selo dentro da imagem; o aviso é exibido na página.
+const expectedDisclosure = 'page-notice';
 const expectedOutputs = new Map([
-  ['square', [1080, 1080]],
-  ['portrait', [1080, 1350]],
-  ['landscape', [1200, 630]],
+  ['whatsapp', [1080, 1080]],
+  ['instagram', [1080, 1350]],
+  ['story', [1080, 1920]],
 ]);
 
 if (!process.env.SUPPORTER_E2E_FIXTURE) {
@@ -147,7 +148,7 @@ try {
   }
 
   const approved = await post(approveUrl, { requestId: session.requestId, token: session.token });
-  if (approved.payload.disclosure !== expectedDisclosure || approved.payload.deliveryMode !== 'social-pack-3') {
+  if (approved.payload.aiDisclosure !== expectedDisclosure || approved.payload.deliveryMode !== 'social-pack-3') {
     throw new Error('approval_contract_invalid');
   }
   assertOutputContract(approved.payload.outputs);

@@ -34,3 +34,6 @@ lerna-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# renders locais de preview do gerador de apoiadores
+services/zica-orchestrator/.preview/

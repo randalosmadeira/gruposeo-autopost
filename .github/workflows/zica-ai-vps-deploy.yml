@@ -296,6 +296,16 @@ jobs:
                   proxy_set_header X-Forwarded-Proto \$scheme;
               }
 
+              location = /supporter-avatar/dispatch {
+                  proxy_pass http://127.0.0.1:8787/supporter-avatar/dispatch;
+                  proxy_http_version 1.1;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+                  proxy_read_timeout 30s;
+              }
+
               location = /webhooks/wordpress {
                   proxy_pass http://127.0.0.1:8787/webhooks/wordpress;
                   proxy_http_version 1.1;
@@ -350,7 +360,7 @@ jobs:
           BODY="$(ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$HOME/.ssh/zica_ai_deploy" -p "$ZICA_AI_VPS_PORT" "$ZICA_AI_VPS_USER@$ZICA_AI_VPS_HOST" 'curl --fail --silent http://127.0.0.1:8787/health')"
           echo "$BODY" | grep -q '"ok":true'
           echo "$BODY" | grep -q '"service":"zica-ia-posts-orchestrator"'
-          echo "$BODY" | grep -q '"version":"3.10.3"'
+          echo "$BODY" | grep -q '"version":"3.11.0"'
           ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$HOME/.ssh/zica_ai_deploy" -p "$ZICA_AI_VPS_PORT" "$ZICA_AI_VPS_USER@$ZICA_AI_VPS_HOST" 'test -f /opt/zica-ia-posts/frontend/current/index.html'
 
       - name: Verify public application
@@ -362,7 +372,7 @@ jobs:
             echo "$ROOT" | grep -q 'id="root"'
             HEALTH="$(curl --fail --silent --show-error --retry 12 --retry-delay 5 "$TARGET_URL/health")"
             echo "$HEALTH" | grep -q '"ok":true'
-            echo "$HEALTH" | grep -q '"version":"3.10.3"'
+            echo "$HEALTH" | grep -q '"version":"3.11.0"'
           else
             echo "DNS ainda não resolve; frontend e runtime foram instalados localmente."
           fi

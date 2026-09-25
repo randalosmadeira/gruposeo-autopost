@@ -11,7 +11,8 @@ const indexHtml = read('index.html');
 const ui = read('src/pages/SupporterAvatar1470V2.tsx');
 const publicApi = read('supabase/functions/supporter-avatar-public-v2/index.ts');
 const legacyProxy = read('supabase/functions/supporter-avatar-public/index.ts');
-const generator = read('supabase/functions/generate-supporter-avatar/index.ts');
+// Desde 2026-09-25 o gerador roda no orquestrador da VPS (pipeline v8).
+const generator = read('services/zica-orchestrator/src/supporter-avatar/pipeline.ts');
 const candidateAssets = read('supabase/functions/supporter-avatar-candidate-assets/index.ts');
 const prompts = read('supabase/functions/_shared/supporter-avatar-prompt.ts');
 const stateMigration = read('supabase/migrations/20260902173000_supporter_avatar_auto_selector_pipeline.sql');
@@ -19,7 +20,7 @@ const autonomyMigration = read('supabase/migrations/20260903174000_supporter_ava
 
 const runtime = [ui, publicApi, generator, candidateAssets, prompts].join('\n');
 
-describe('Supporter Avatar 1470 autonomous auto-selector v3 regressions', () => {
+describe('Supporter Avatar 1470 autonomous auto-selector regressions (pipeline VPS v8)', () => {
   it('0. hard-pins public routes to the V2 UI while the backend pipeline evolves independently', () => {
     expect(mainEntry).toContain('import("./pages/SupporterAvatar1470V2")');
     expect(mainEntry).not.toContain('import("./pages/SupporterAvatar1470")');
@@ -41,6 +42,7 @@ describe('Supporter Avatar 1470 autonomous auto-selector v3 regressions', () => 
     expect(ui).toContain('.slice(0, 3)');
     expect(publicApi).toContain('(count || 0) >= 3');
     expect(publicApi).toContain('maxSourceImages: 3');
+    expect(generator).toContain(".order('created_at', { ascending: true }).limit(3)");
   });
 
   it('3. keeps candidate gallery inaccessible to anonymous public users', () => {
@@ -54,14 +56,16 @@ describe('Supporter Avatar 1470 autonomous auto-selector v3 regressions', () => 
     expect(statusBlock).not.toContain('drive_file_id');
     expect(statusBlock).not.toContain('drive_download_url');
     expect(statusBlock).toContain('candidateSelection: "automatic-private"');
+    expect(prompts).toContain('Nunca exponha URL, ID, nome de arquivo ou caminho');
   });
 
-  it('5. performs private automatic selection with a deterministic fallback and runner-up', () => {
-    expect(generator).toContain('photoIntakeAgent');
-    expect(generator).toContain('candidateSelectorAgent');
-    expect(generator).toContain('fallbackCandidate');
-    expect(generator).toContain('runnerUpMeta');
-    expect(prompts).toContain('CANDIDATE SELECTOR AGENT');
+  it('5. performs private automatic selection in one vision call with a deterministic fallback', () => {
+    expect(generator).toContain('SELECTOR_PROMPT');
+    expect(generator).toContain('fallbackCandidateIndex');
+    expect(generator).toContain('fallback seguro sem exposição da galeria');
+    expect(generator).toContain('visionShortlist');
+    expect(generator).toContain("candidate.prop === 'com-taco'");
+    expect(prompts).toContain('PHOTO INTAKE + CANDIDATE SELECTOR');
   });
 
   it('6. enforces dual identity preservation without face swap or beautification', () => {
@@ -72,14 +76,12 @@ describe('Supporter Avatar 1470 autonomous auto-selector v3 regressions', () => 
     expect(generator).toContain('candidate_reference_fidelity_score');
   });
 
-  it('7. has five bounded infrastructure retries and one QA attempt per resumed output', () => {
-    expect(generator).toContain('MAX_PIPELINE_ATTEMPTS = 5');
-    expect(generator).toContain('MAX_QA_GENERATIONS = 1');
-    expect(generator).toContain('pendingIndex');
-    expect(generator).toContain('scheduleSelfRetry(requestId, jobId, dispatchToken, pipelineAttempt + 1)');
-    expect(generator).toContain('claim_supporter_avatar_generation_attempt');
+  it('7. has bounded infrastructure retries serialized by the claim RPC', () => {
+    expect(generator).toContain('MAX_PIPELINE_ATTEMPTS = 4');
+    expect(generator).toContain("rpc('claim_supporter_avatar_generation_attempt'");
     expect(generator).toContain("status: 'superseded'");
     expect(generator).toContain("status: 'retry'");
+    expect(generator).toContain('attempt < MAX_PIPELINE_ATTEMPTS');
     expect(publicApi).toContain('dispatch_retry_');
   });
 
@@ -88,42 +90,44 @@ describe('Supporter Avatar 1470 autonomous auto-selector v3 regressions', () => 
     expect(generator).toMatch(/abort\|timeout/i);
     expect(generator).toContain('response.status !== 429');
     expect(generator).toMatch(/5\\d\\d/);
-    expect(generator).toContain('transientError');
+    expect(generator).toContain('TransientPipelineError');
   });
 
   it('9. technical failures do not consume a public generation before an output exists', () => {
     expect(autonomyMigration).toContain('technical_retries_are_free');
     expect(autonomyMigration).toContain('record_supporter_avatar_generation_result');
-    expect(generator).toContain('if (stored.length < packEntries.length)');
-    expect(generator).toContain('await countGenerationResult(requestId, jobId)');
+    expect(generator).toContain("rpc('record_supporter_avatar_generation_result'");
+    expect(generator.indexOf("rpc('record_supporter_avatar_generation_result'")).toBeGreaterThan(generator.indexOf("from(OUTPUT_BUCKET).upload("));
   });
 
-  it('10. vision analysis uses short-lived URLs plus structured outputs instead of resizing all uploads inside Edge', () => {
-    expect(generator).toContain('createSignedUrl');
+  it('10. vision analysis uses downscaled references plus strict structured outputs', () => {
     expect(generator).toContain("type: 'json_schema'");
-    expect(generator).toContain("tool_choice: { type: 'tool', name: 'emit_result' }");
-    expect(generator).not.toContain('visionImageFromBytes');
+    expect(generator).toContain('strict: true');
+    expect(generator).toContain('VISION_MAX_EDGE');
+    expect(generator).toContain('SELECTOR_SCHEMA');
+    expect(generator).toContain('QA_SCHEMA');
   });
 
-  it('11. automatically switches candidate or supporter reference after identity QA drift', () => {
-    expect(generator).toContain('trocar automaticamente para referência reserva do candidato');
-    expect(generator).toContain('trocar automaticamente para segunda referência técnica do apoiador');
-    expect(generator).toContain('rankedReferenceIndices');
+  it('11. unusable supporter photos go back to needs_input instead of a terminal failure', () => {
+    expect(generator).toContain('if (!selection.usable)');
+    expect(generator).toContain("error_message: 'supporter_photo_not_usable'");
+    expect(generator).toContain("status: 'needs_input'");
   });
 
-  it('12. resumes every finalized format within the same job, including QA-rejected output', () => {
-    expect(generator).toContain('existingJobOutput');
+  it('12. stores master plus the three formats under the same job with an idempotent unique index', () => {
+    expect(generator).toContain("platform: 'master'");
     expect(generator).toContain('generation_job_id: jobId');
-    expect(generator).toContain('canResumeAnalysis');
-    expect(generator).toContain("pipeline_version: PIPELINE_VERSION");
+    expect(generator).toContain('pipeline_version: PIPELINE_VERSION');
+    expect(generator).toContain("includes('duplicate')");
   });
 
-  it('13. produces square, portrait and landscape outputs', () => {
-    expect(prompts).toContain('exactWidth: 1080');
-    expect(prompts).toContain('exactHeight: 1080');
-    expect(prompts).toContain('exactHeight: 1350');
-    expect(prompts).toContain('exactWidth: 1200');
-    expect(prompts).toContain('exactHeight: 630');
+  it('13. produces whatsapp, instagram and story outputs only', () => {
+    expect(prompts).toContain('whatsapp: {');
+    expect(prompts).toContain('instagram: {');
+    expect(prompts).toContain('story: {');
+    expect(prompts).toContain('exactHeight: 1920');
+    expect(prompts).not.toContain('exactHeight: 630');
+    expect(prompts).not.toContain('landscape');
   });
 
   it('14. contains no legacy dispatch in the active runtime', () => {
@@ -139,10 +143,10 @@ describe('Supporter Avatar 1470 autonomous auto-selector v3 regressions', () => 
     expect(ui).not.toContain('PRESETS_URL');
   });
 
-  it('16. validates Drive asset MIME before generation and can fall back to the runner-up asset', () => {
+  it('16. validates Drive asset MIME before generation and caches the private gallery in memory', () => {
     expect(generator).toContain('candidate_asset_invalid_mime');
-    expect(generator).toContain('runnerUpMeta.slug === candidateMeta.slug');
-    expect(generator).toContain('runnerUpMeta.slug !== currentCandidateMeta.slug');
+    expect(generator).toContain('candidateCache');
+    expect(generator).toContain('CANDIDATE_CACHE_MS');
   });
 
   it('17. uses high image input fidelity when supported and transparently retries without the optional parameter if rejected', () => {
@@ -152,15 +156,16 @@ describe('Supporter Avatar 1470 autonomous auto-selector v3 regressions', () => 
 
   it('18. distinguishes generated-but-pending-QA from a terminal pipeline crash', () => {
     expect(generator).toContain('qa_provider_unavailable');
-    expect(generator).toContain("const finalStatus = allPass ? 'completed' : 'needs_review'");
+    expect(generator).toContain("const finalStatus = passed ? 'completed' : 'needs_review'");
     expect(generator).toContain('qa_threshold_not_met_or_qa_provider_pending');
   });
 
-  it('19. preserves candidate attire, bat integrity, safe synthetic scenes and AI disclosure', () => {
+  it('19. preserves candidate attire, bat integrity and safe synthetic scenes, without any text inside the image', () => {
     expect(prompts).toContain('taco preto de beisebol');
     expect(prompts).toContain('Preserve o vestuário autorizado');
-    expect(prompts).toContain('palanque-convencao-generica');
-    expect(prompts).toContain('Imagem gerada por IA - Campanha Oficial');
+    expect(prompts).toContain('institucional-oficial');
+    expect(prompts).toContain('PROIBIDO ABSOLUTO: qualquer texto');
+    expect(prompts).not.toContain('Imagem gerada por IA - Campanha Oficial');
   });
 
   it('20. preserves the durable request-state vocabulary', () => {

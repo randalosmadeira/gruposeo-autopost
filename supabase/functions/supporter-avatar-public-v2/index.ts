@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { SUPPORT_STYLES, SUPPORT_TEXTS } from "../_shared/supporter-avatar-prompt.ts";
+import { PIPELINE_VERSION, SUPPORT_SOCIAL_OUTPUTS, SUPPORT_SOCIAL_PACK, SUPPORT_STYLES, SUPPORT_TEXTS } from "../_shared/supporter-avatar-prompt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +14,10 @@ const RATE_LIMIT = Number(Deno.env.get("SUPPORTER_AVATAR_DAILY_LIMIT") || "5");
 const CONTACT_LIMIT = Number(Deno.env.get("SUPPORTER_AVATAR_CONTACT_WEEKLY_LIMIT") || "3");
 const GLOBAL_HOURLY_LIMIT = Number(Deno.env.get("SUPPORTER_AVATAR_GLOBAL_HOURLY_LIMIT") || "60");
 const TURNSTILE_SECRET = Deno.env.get("TURNSTILE_SECRET_KEY") || "";
-const PIPELINE = "supporter-avatar-resumable-v7";
+const PIPELINE = PIPELINE_VERSION;
+// O gerador roda no orquestrador da VPS (BullMQ + sharp). Sem segredo extra: o token de despacho por job autoriza.
+const WORKER_DISPATCH_URL = Deno.env.get("SUPPORTER_AVATAR_WORKER_URL") || "https://app.zica.posts.zicajuris.com.br/supporter-avatar/dispatch";
+const PUBLIC_PLATFORMS = Object.keys(SUPPORT_SOCIAL_PACK);
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false, autoRefreshToken: false } });
 
 function publicReason(errorMessage: unknown) {
@@ -100,10 +103,11 @@ function dispatch(requestId: string, jobId: string, dispatchToken: string) {
         await new Promise((resolve) => setTimeout(resolve, 800 * 2 ** (attempt - 2)));
       }
       try {
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-supporter-avatar`, {
+        const response = await fetch(WORKER_DISPATCH_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ requestId, jobId, dispatchToken, dispatchAttempt: attempt }),
+          signal: AbortSignal.timeout(20000),
         });
         if (response.ok) return;
         const text = await response.text().catch(() => "");
@@ -136,7 +140,9 @@ Deno.serve(async (req: Request) => {
         pipeline: PIPELINE,
         candidateSelection: "private-automatic",
         publicCandidateGallery: false,
-        socialOutputs: ["1080x1080", "1080x1350", "1200x630"],
+        socialOutputs: [...SUPPORT_SOCIAL_OUTPUTS],
+        runtime: "vps",
+        aiDisclosureInImage: false,
         technicalRetriesFree: true,
         resumable: true,
         abuseProtection: { turnstileConfigured: Boolean(TURNSTILE_SECRET), atomicRateLimits: true, uploadSignatureValidation: true },
@@ -199,7 +205,7 @@ Deno.serve(async (req: Request) => {
         maxSourceImages: 3,
         maxGenerations: data.max_generations,
         candidateSelection: "automatic",
-        socialOutputs: ["1080x1080", "1080x1350", "1200x630"],
+        socialOutputs: [...SUPPORT_SOCIAL_OUTPUTS],
       }, 201);
     }
 
@@ -298,7 +304,7 @@ Deno.serve(async (req: Request) => {
         .eq("request_id", requestId).order("created_at", { ascending: false }).limit(1).maybeSingle();
       const { data: outputs } = await admin.from("supporter_avatar_outputs")
         .select("platform,width,height,storage_path,qa_score")
-        .eq("request_id", requestId).in("platform", ["square", "portrait", "landscape"]).order("created_at", { ascending: false });
+        .eq("request_id", requestId).in("platform", PUBLIC_PLATFORMS).order("created_at", { ascending: false });
 
       const signed: Array<Record<string, unknown>> = [];
       const seen = new Set<string>();

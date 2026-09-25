@@ -59,13 +59,14 @@ describe("RSS automation service authentication", () => {
 
 describe("supporter avatar candidate selection", () => {
   it("caps vision inputs before contacting a paid provider", () => {
+    // Pipeline VPS v8 (2026-09-25): a seleção roda no orquestrador.
     const avatar = readFileSync(
-      resolve(process.cwd(), "supabase/functions/generate-supporter-avatar/index.ts"),
+      resolve(process.cwd(), "services/zica-orchestrator/src/supporter-avatar/pipeline.ts"),
       "utf8",
     );
-    expect(avatar).toContain(".slice(0, 5)");
-    expect(avatar).toContain("candidatePreviewUrl(item.candidate, 768)");
-    expect(avatar).toContain("vision_shortlist_size: shortlist.length");
+    expect(avatar).toContain("visionShortlist(candidates, 5)");
+    expect(avatar).toContain("VISION_MAX_EDGE = 768");
+    expect(avatar).toContain("detail: 'low'");
   });
 });
 
