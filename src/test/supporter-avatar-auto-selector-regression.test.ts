@@ -65,6 +65,7 @@ describe('Supporter Avatar 1470 autonomous auto-selector regressions (pipeline V
     expect(generator).toContain('fallback seguro sem exposição da galeria');
     expect(generator).toContain('visionShortlist');
     expect(generator).toContain("candidate.prop === 'com-taco'");
+    expect(generator).toContain('qaNeedsRegeneration');
     expect(prompts).toContain('PHOTO INTAKE + CANDIDATE SELECTOR');
   });
 
@@ -162,9 +163,10 @@ describe('Supporter Avatar 1470 autonomous auto-selector regressions (pipeline V
 
   it('19. preserves candidate attire, bat integrity and safe synthetic scenes, without any text inside the image', () => {
     expect(prompts).toContain('taco preto de beisebol');
-    expect(prompts).toContain('Preserve o vestuário autorizado');
+    expect(prompts).toContain('Preserve integralmente o vestuário');
     expect(prompts).toContain('institucional-oficial');
-    expect(prompts).toContain('PROIBIDO ABSOLUTO: qualquer texto');
+    expect(prompts).toContain('PROIBIDO ADICIONAR: qualquer texto');
+    expect(prompts).toContain('WARDROBE GUARDIAN AGENT');
     expect(prompts).not.toContain('Imagem gerada por IA - Campanha Oficial');
   });
 
