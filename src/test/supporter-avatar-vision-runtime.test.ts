@@ -33,9 +33,9 @@ describe('supporter avatar vision runtime (VPS v8)', () => {
     expect(source.indexOf("rpc('record_supporter_avatar_generation_result'")).toBeGreaterThan(source.indexOf("from(OUTPUT_BUCKET).upload("));
   });
 
-  it('gera a imagem no máximo duas vezes por job (segunda só por reprovação de fidelidade) e sem texto novo', () => {
+  it('gera a imagem no máximo três vezes por job (repetições só por reprovação de fidelidade) e sem texto novo', () => {
     expect((source.match(/api\.openai\.com\/v1\/images\/edits/g) || []).length).toBe(1);
-    expect(source).toContain('MAX_GENERATIONS_PER_JOB = 2');
+    expect(source).toContain('MAX_GENERATIONS_PER_JOB = 3');
     expect(source).toContain('buildCompositionPrompt(');
     expect(source).not.toContain('supportText');
   });

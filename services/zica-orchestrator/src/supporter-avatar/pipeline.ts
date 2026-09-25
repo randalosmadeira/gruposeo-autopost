@@ -8,8 +8,9 @@ import { PIPELINE_VERSION, QA_PROMPT, SELECTOR_PROMPT, SUPPORTER_AVATAR_PROMPT_V
  * Gerador de apoiadores 1470 - pipeline VPS v8.1 ("rápido, rostos intactos").
  *
  * Uma chamada de visão (seleção), uma geração de imagem (composição sem texto
- * novo, roupas e taco preservados), QA de fidelidade e, só quando o rosto não
- * bate, UMA regeneração com a correção apontada pelo QA. Depois, renderização
+ * novo, roupas e taco preservados), QA de fidelidade facial em alta definição e,
+ * só quando o rosto não bate (limiar 90), até duas regenerações guiadas pelo QA,
+ * ficando com a melhor. Depois, renderização
  * vetorial local dos 3 formatos (< 1,5 s) com slogan no topo e 1470 embaixo.
  *
  * Contratos preservados com o banco/Edge:
@@ -32,12 +33,13 @@ const IMAGE_QUALITY = (process.env.SUPPORTER_AVATAR_IMAGE_QUALITY || 'high') as 
 const FIXED_DRIVE_FOLDER = '1NB_yQBM_2bGA5UC6JyCEgC54sjCHSyO6';
 export const MAX_PIPELINE_ATTEMPTS = 4;
 /** Gerações de imagem por job: a segunda só acontece se o QA reprovar a fidelidade. */
-export const MAX_GENERATIONS_PER_JOB = 2;
-export const QA_THRESHOLDS = { supporter: 85, candidate: 80, anatomy: 70, wardrobe: 70 } as const;
+export const MAX_GENERATIONS_PER_JOB = 3;
+export const QA_THRESHOLDS = { supporter: 90, candidate: 90, anatomy: 75, wardrobe: 75 } as const;
 const UPLOAD_BUCKET = 'supporter-avatar-uploads';
 const OUTPUT_BUCKET = 'supporter-avatar-generated';
-const REFERENCE_MAX_EDGE = 1536;
+const REFERENCE_MAX_EDGE = 2048;
 const VISION_MAX_EDGE = 768;
+const QA_MAX_EDGE = 1280;
 
 type Json = Record<string, unknown>;
 type SourceRow = { id: string; storage_path: string; mime_type: string; file_size_bytes: number };
@@ -192,11 +194,11 @@ const QA_SCHEMA = {
   required: ['supporter_fidelity_score', 'candidate_reference_fidelity_score', 'wardrobe_fidelity_score', 'anatomy_score', 'human_texture_score', 'lighting_consistency_score', 'face_count', 'added_text_detected', 'artifacts', 'remediation'],
 } as const;
 
-async function visionJson<T>(prompt: string, images: Loaded[], schemaName: string, schema: Record<string, unknown>, key: string): Promise<T> {
+async function visionJson<T>(prompt: string, images: Loaded[], schemaName: string, schema: Record<string, unknown>, key: string, detail: 'low' | 'high' = 'low'): Promise<T> {
   const content: Array<Record<string, unknown>> = [{ type: 'input_text', text: prompt }];
   for (const image of images) {
-    const small = await downscale(image.bytes, VISION_MAX_EDGE, 80);
-    content.push({ type: 'input_image', image_url: `data:${small.mime};base64,${small.bytes.toString('base64')}`, detail: 'low' });
+    const small = await downscale(image.bytes, detail === 'high' ? QA_MAX_EDGE : VISION_MAX_EDGE, detail === 'high' ? 88 : 80);
+    content.push({ type: 'input_image', image_url: `data:${small.mime};base64,${small.bytes.toString('base64')}`, detail });
   }
   const response = await requestWithRetry('https://api.openai.com/v1/responses', {
     method: 'POST',
@@ -368,7 +370,7 @@ export async function processSupporterAvatarJob(data: SupporterAvatarJobData, at
       let qa: QaResult | null = null;
       try {
         const masterJpeg = await sharp(master.bytes).jpeg({ quality: 90 }).toBuffer();
-        qa = await visionJson<QaResult>(`${QA_PROMPT}\nA referência do candidato ${candidateHasBat ? 'CONTÉM' : 'NÃO CONTÉM'} taco.`, [supporterImage, candidateImage, { bytes: masterJpeg, mime: 'image/jpeg' }], 'quality_auditor', QA_SCHEMA, key);
+        qa = await visionJson<QaResult>(`${QA_PROMPT}\nA referência do candidato ${candidateHasBat ? 'CONTÉM' : 'NÃO CONTÉM'} taco.`, [supporterImage, candidateImage, { bytes: masterJpeg, mime: 'image/jpeg' }], 'quality_auditor', QA_SCHEMA, key, 'high');
       } catch (error) { qaProviderError = safeDetail(error, 200); }
       mark('qa', tQa);
 
