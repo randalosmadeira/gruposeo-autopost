@@ -11,7 +11,7 @@
  * oficial da campanha) são preservadas. Sem selo "gerada por IA" na imagem.
  */
 export const PIPELINE_VERSION = 'supporter-avatar-vps-v8';
-export const SUPPORTER_AVATAR_PROMPT_VERSION = 'supporter-avatar-vps-v8.1.0';
+export const SUPPORTER_AVATAR_PROMPT_VERSION = 'supporter-avatar-vps-v8.2.0';
 export const SUPPORTER_PHOTO_AGENT_NAME = 'NEXUS PHOTO 1470';
 export const SUPPORTER_PHOTO_AGENT_ROLE = 'Compositor fotográfico eleitoral com preservação máxima de identidade';
 
@@ -38,9 +38,11 @@ export const MASTER_MODEL_SIZE = '1024x1536';
 
 export const IDENTITY_GUARDIAN_DIRECTIVE = `
 IDENTITY GUARDIAN AGENT - prioridade absoluta, acima de qualquer outra diretriz.
-A primeira imagem de referência é o apoiador; a segunda é o candidato. Os dois rostos devem ser tratados como recortes fotográficos das referências: mesma pessoa, mesma idade aparente, mesmo formato de rosto, mesmos olhos, sobrancelhas, nariz, boca, orelhas, mandíbula, barba ou bigode, cabelo (corte, volume, textura e cor), tom e textura natural da pele, sinais, cicatrizes e assimetrias.
-Não embeleze. Não use face swap. Não reconstrua o rosto. Não rejuvenesça, não emagreça, não suavize a pele, não altere a expressão, não altere estrutura óssea, olhos, nariz, mandíbula, idade aparente, tom de pele ou textura natural.
-Qualquer mudança perceptível de fisionomia em qualquer uma das duas pessoas é falha grave e invalida a imagem.
+A primeira imagem de referência é o apoiador; a segunda é o candidato. As duas pessoas devem ser reproduzidas como recortes fotográficos das referências, SEMPRE O ORIGINAL: mesma pessoa, mesma idade aparente, mesmo formato de rosto, mesmos olhos, sobrancelhas, nariz, boca, dentes, orelhas, mandíbula, barba ou bigode, cabelo (corte, volume, textura e cor), tom e textura natural da pele, rugas, sinais, pintas, manchas, cicatrizes e assimetrias.
+TATUAGENS, PIERCINGS, ÓCULOS, BRINCOS, COLARES, PULSEIRAS, RELÓGIOS E QUALQUER MARCA NA PELE QUE APAREÇAM NAS REFERÊNCIAS DEVEM SER MANTIDOS NO MESMO LUGAR, COM O MESMO DESENHO E TAMANHO. Nunca remova, apague, cubra, suavize ou invente tatuagens, sinais ou acessórios.
+CORPO: preserve o peso, a silhueta, a largura dos ombros, o volume do rosto, do pescoço, dos braços e do tronco exatamente como nas referências. Não emagreça, não engorde, não alongue, não afine o rosto ou o corpo, não corrija postura, não "melhore" a forma física.
+Não embeleze. Não use face swap. Não reconstrua o rosto. Não rejuvenesça, não suavize a pele, não altere a expressão, não altere estrutura óssea, olhos, nariz, mandíbula, idade aparente, tom de pele ou textura natural.
+Qualquer mudança perceptível de fisionomia, corpo, marcas na pele ou acessórios em qualquer uma das duas pessoas é falha grave e invalida a imagem.
 Se cenário, pose, acessório ou composição competirem com a identidade, simplifique todo o resto e preserve a identidade.
 `.trim();
 
@@ -82,7 +84,10 @@ changed nose, changed eye shape, deformed eyes, incorrect pupils, beauty filter,
 plastic skin, wax skin, unnaturally smooth skin, excessive makeup, age modification, altered skin tone,
 younger face, slimmer face, facial reconstruction, cartoon, anime, illustration, painting, 3D render,
 CGI appearance, blur, oversaturated skin, harsh overhead lighting, dramatic side lighting, crushed shadows,
-extreme contrast, HDR halo, duplicate person, duplicate face, merged bodies, extra limbs, extra fingers,
+extreme contrast, HDR halo, removed tattoo, missing tattoo, altered tattoo, invented tattoo, removed mole,
+removed scar, removed birthmark, removed piercing, removed glasses, removed earrings, slimmer body, heavier body,
+thinner face, changed body proportions, changed shoulder width, idealized physique, corrected posture,
+duplicate person, duplicate face, merged bodies, extra limbs, extra fingers,
 missing fingers, deformed hands, broken anatomy, intersecting arms, impossible embrace, duplicated baseball bat,
 warped baseball bat, missing baseball bat, floating object, malformed clothing, erased shirt print,
 altered clothing, plain shirt replacing printed shirt, added text, invented letters, invented numbers,
@@ -109,8 +114,8 @@ Nunca exponha URL, ID, nome de arquivo ou caminho. Retorne somente o JSON do sch
 export const QA_PROMPT = `
 AGENTE: QUALITY AUDITOR.
 Compare tecnicamente a referência do apoiador (imagem 0), a referência do candidato (imagem 1) e a composição final (imagem 2). Nunca identifique pessoas nem infira atributos sensíveis.
-Pontue de 0 a 100: supporter_fidelity_score (o rosto do apoiador na composição é a mesma pessoa da imagem 0, com os mesmos traços, idade, cabelo e pele), candidate_reference_fidelity_score (idem para o candidato), wardrobe_fidelity_score (roupas e estampas iguais às referências, inclusive a estampa da camiseta do candidato), anatomy_score, human_texture_score, lighting_consistency_score.
-Informe face_count na composição e added_text_detected (true apenas se houver texto, número ou logotipo que NÃO exista nas referências; estampas presentes nas roupas das referências não contam).
+Pontue de 0 a 100: supporter_fidelity_score (o rosto do apoiador na composição é a mesma pessoa da imagem 0, com os mesmos traços, idade, cabelo e pele), candidate_reference_fidelity_score (idem para o candidato), wardrobe_fidelity_score (roupas e estampas iguais às referências, inclusive a estampa da camiseta do candidato), body_shape_score (peso, silhueta, largura de ombros e volume de rosto e corpo iguais às referências; emagrecer, engordar ou afinar reduz a nota), anatomy_score, human_texture_score, lighting_consistency_score.
+Informe face_count na composição, identity_marks_preserved (true somente se TODAS as tatuagens, sinais, pintas, cicatrizes, piercings, óculos e acessórios visíveis nas referências aparecem na composição no mesmo lugar e sem invenções; se as referências não tiverem marcas, true) e added_text_detected (true apenas se houver texto, número ou logotipo que NÃO exista nas referências; estampas presentes nas roupas das referências não contam).
 Liste artifacts e remediation curtos e específicos (ex.: "olhos do apoiador mais estreitos que a referência"). Não tente forçar aprovação: o backend recalcula o veredito.
 `.trim();
 

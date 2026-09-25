@@ -34,7 +34,7 @@ const FIXED_DRIVE_FOLDER = '1NB_yQBM_2bGA5UC6JyCEgC54sjCHSyO6';
 export const MAX_PIPELINE_ATTEMPTS = 4;
 /** Gerações de imagem por job: a segunda só acontece se o QA reprovar a fidelidade. */
 export const MAX_GENERATIONS_PER_JOB = 3;
-export const QA_THRESHOLDS = { supporter: 90, candidate: 90, anatomy: 75, wardrobe: 75 } as const;
+export const QA_THRESHOLDS = { supporter: 90, candidate: 90, anatomy: 75, wardrobe: 75, body: 85 } as const;
 const UPLOAD_BUCKET = 'supporter-avatar-uploads';
 const OUTPUT_BUCKET = 'supporter-avatar-generated';
 const REFERENCE_MAX_EDGE = 2048;
@@ -187,11 +187,11 @@ const QA_SCHEMA = {
   type: 'object', additionalProperties: false,
   properties: {
     supporter_fidelity_score: { type: 'integer' }, candidate_reference_fidelity_score: { type: 'integer' }, wardrobe_fidelity_score: { type: 'integer' },
-    anatomy_score: { type: 'integer' }, human_texture_score: { type: 'integer' }, lighting_consistency_score: { type: 'integer' },
-    face_count: { type: 'integer' }, added_text_detected: { type: 'boolean' },
+    body_shape_score: { type: 'integer' }, anatomy_score: { type: 'integer' }, human_texture_score: { type: 'integer' }, lighting_consistency_score: { type: 'integer' },
+    face_count: { type: 'integer' }, identity_marks_preserved: { type: 'boolean' }, added_text_detected: { type: 'boolean' },
     artifacts: { type: 'array', items: { type: 'string' } }, remediation: { type: 'array', items: { type: 'string' } },
   },
-  required: ['supporter_fidelity_score', 'candidate_reference_fidelity_score', 'wardrobe_fidelity_score', 'anatomy_score', 'human_texture_score', 'lighting_consistency_score', 'face_count', 'added_text_detected', 'artifacts', 'remediation'],
+  required: ['supporter_fidelity_score', 'candidate_reference_fidelity_score', 'wardrobe_fidelity_score', 'body_shape_score', 'anatomy_score', 'human_texture_score', 'lighting_consistency_score', 'face_count', 'identity_marks_preserved', 'added_text_detected', 'artifacts', 'remediation'],
 } as const;
 
 async function visionJson<T>(prompt: string, images: Loaded[], schemaName: string, schema: Record<string, unknown>, key: string, detail: 'low' | 'high' = 'low'): Promise<T> {
@@ -213,7 +213,7 @@ async function visionJson<T>(prompt: string, images: Loaded[], schemaName: strin
 }
 
 type Selection = { usable: boolean; supporter_index: number; face_count: number; face_quality_score: number; candidate_index: number; scene: string; composition_plan: string; technical_notes: string };
-export type QaResult = { supporter_fidelity_score: number; candidate_reference_fidelity_score: number; wardrobe_fidelity_score: number; anatomy_score: number; human_texture_score: number; lighting_consistency_score: number; face_count: number; added_text_detected: boolean; artifacts: string[]; remediation: string[] };
+export type QaResult = { supporter_fidelity_score: number; candidate_reference_fidelity_score: number; wardrobe_fidelity_score: number; body_shape_score: number; anatomy_score: number; human_texture_score: number; lighting_consistency_score: number; face_count: number; identity_marks_preserved: boolean; added_text_detected: boolean; artifacts: string[]; remediation: string[] };
 
 export function qaVerdict(qa: QaResult | null) {
   if (!qa) return false;
@@ -222,6 +222,8 @@ export function qaVerdict(qa: QaResult | null) {
     && clamp(qa.candidate_reference_fidelity_score) >= QA_THRESHOLDS.candidate
     && clamp(qa.anatomy_score) >= QA_THRESHOLDS.anatomy
     && clamp(qa.wardrobe_fidelity_score) >= QA_THRESHOLDS.wardrobe
+    && clamp(qa.body_shape_score, 100) >= QA_THRESHOLDS.body
+    && qa.identity_marks_preserved !== false
     && qa.added_text_detected !== true;
 }
 
@@ -234,7 +236,7 @@ export function qaNeedsRegeneration(qa: QaResult | null) {
 export function qaFeedback(qa: QaResult) {
   const remediation = Array.isArray(qa.remediation) ? qa.remediation.filter(Boolean).join('; ') : '';
   const artifacts = Array.isArray(qa.artifacts) ? qa.artifacts.filter(Boolean).join('; ') : '';
-  const scores = `apoiador=${clamp(qa.supporter_fidelity_score)} candidato=${clamp(qa.candidate_reference_fidelity_score)} roupa=${clamp(qa.wardrobe_fidelity_score)} anatomia=${clamp(qa.anatomy_score)} rostos=${qa.face_count}`;
+  const scores = `apoiador=${clamp(qa.supporter_fidelity_score)} candidato=${clamp(qa.candidate_reference_fidelity_score)} roupa=${clamp(qa.wardrobe_fidelity_score)} corpo=${clamp(qa.body_shape_score, 100)} marcas=${qa.identity_marks_preserved === false ? 'removidas' : 'ok'} anatomia=${clamp(qa.anatomy_score)} rostos=${qa.face_count}`;
   return `${remediation || artifacts || 'preservar mais fielmente os rostos e as roupas das referências'} (${scores})`;
 }
 
