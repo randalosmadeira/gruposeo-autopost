@@ -98,14 +98,21 @@ describe('Apoiadores 1470 - pipeline VPS v8 (rápido, sem selo na imagem)', () =
 
   it('rostos intactos: qualidade alta, limiar de fidelidade 90 e até duas regenerações guiadas pelo QA', () => {
     expect(pipeline).toContain("process.env.SUPPORTER_AVATAR_IMAGE_QUALITY || 'high'");
-    expect(pipeline).toContain('QA_THRESHOLDS = { supporter: 90, candidate: 90, anatomy: 75, wardrobe: 75 }');
+    expect(pipeline).toContain('QA_THRESHOLDS = { supporter: 90, candidate: 90, anatomy: 75, wardrobe: 75, body: 85 }');
     expect(pipeline).toContain('MAX_GENERATIONS_PER_JOB = 3');
     expect(pipeline).toContain("'quality_auditor', QA_SCHEMA, key, 'high')");
     expect(pipeline).toContain('REFERENCE_MAX_EDGE = 2048');
     expect(pipeline).toContain('while (generationAttempt < MAX_GENERATIONS_PER_JOB)');
     expect(pipeline).toContain('qaFeedback: feedback || undefined');
     expect(pipeline).toContain('input_fidelity_used: best.inputFidelityUsed');
-    expect(sharedPrompt).toContain('Qualquer mudança perceptível de fisionomia em qualquer uma das duas pessoas é falha grave');
+    expect(sharedPrompt).toContain('Qualquer mudança perceptível de fisionomia, corpo, marcas na pele ou acessórios em qualquer uma das duas pessoas é falha grave');
+    expect(sharedPrompt).toContain('TATUAGENS, PIERCINGS, ÓCULOS, BRINCOS');
+    expect(sharedPrompt).toContain('Não emagreça, não engorde');
+    expect(sharedPrompt).toContain('removed tattoo, missing tattoo');
+    expect(sharedPrompt).toContain('body_shape_score');
+    expect(sharedPrompt).toContain('identity_marks_preserved');
+    expect(pipeline).toContain('qa.identity_marks_preserved !== false');
+    expect(pipeline).toContain('clamp(qa.body_shape_score, 100) >= QA_THRESHOLDS.body');
   });
 
   it('slogan "MADEIRA NELES!" no topo dos três formatos e 1470 embaixo', () => {
