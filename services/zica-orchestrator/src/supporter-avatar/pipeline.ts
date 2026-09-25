@@ -19,7 +19,7 @@ import { PIPELINE_VERSION, QA_PROMPT, SELECTOR_PROMPT, SUPPORTER_AVATAR_PROMPT_V
  *  - supporter_avatar_outputs.qa_payload.{pipeline_version,generation_job_id}
  *  - vocabulário de status de request/job
  */
-export const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
+export const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2.5-sunburst';
 /** Modelos de imagem aceitos para override por pedido (provider_preference = "openai:<modelo>"). */
 export const IMAGE_MODEL_ALLOWLIST = ['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'gpt-image-1.5', 'gpt-image-1'] as const;
 export function resolveImageModel(providerPreference: unknown) {
