@@ -11,7 +11,9 @@ const API_URL = `${EDGE_ROOT}/supporter-avatar-public-v2`;
 const APPROVE_URL = `${EDGE_ROOT}/approve-supporter-avatar-final`;
 const STORAGE_KEY = 'zica1470-supporter-avatar-v5';
 const AGENT_NAME = 'NEXUS PHOTO 1470';
-const AI_DISCLOSURE = 'Imagem gerada por IA - Campanha Oficial';
+// Aviso de IA fica na página (não é desenhado na imagem).
+const AI_PAGE_NOTICE = 'Composição fotográfica produzida com inteligência artificial pela campanha, a partir da sua foto e das fotos oficiais do candidato.';
+const PLATFORM_ORDER = ['whatsapp', 'instagram', 'story'];
 
 const processingStates = new Set(['analyzing', 'candidate_selected', 'generating', 'qa', 'retry', 'regenerate']);
 const statusLabels: Record<string, string> = {
@@ -19,8 +21,8 @@ const statusLabels: Record<string, string> = {
   uploaded: 'Foto recebida',
   analyzing: 'Analisando sua foto',
   candidate_selected: 'Composição definida pela IA',
-  generating: 'Gerando as imagens',
-  qa: 'Verificando fidelidade e qualidade',
+  generating: 'Gerando a sua foto com o candidato',
+  qa: 'Aplicando a identidade 1470 e verificando qualidade',
   retry: 'Tentando novamente automaticamente',
   regenerate: 'Refazendo uma versão que não passou no QA',
   needs_review: 'Em revisão técnica',
@@ -29,9 +31,9 @@ const statusLabels: Record<string, string> = {
 };
 
 const outputLabels: Record<string, string> = {
-  square: '1080 × 1080 · Instagram / WhatsApp / Facebook',
-  portrait: '1080 × 1350 · Feed vertical',
-  landscape: '1200 × 630 · Facebook / LinkedIn',
+  whatsapp: 'Foto de perfil · WhatsApp / Instagram · 1080 × 1080',
+  instagram: 'Feed · Instagram 4:5 · 1080 × 1350',
+  story: 'Story · Reels · Status · 1080 × 1920',
 };
 
 type Session = { requestId: string; token: string };
@@ -106,7 +108,7 @@ export default function SupporterAvatar1470V2() {
   const current = status?.request?.status || (session ? 'needs_input' : 'draft');
   const processing = processingStates.has(current);
   const outputs = useMemo(() => status?.outputs || [], [status]);
-  const completePack = current === 'completed' && ['square', 'portrait', 'landscape'].every((platform) => outputs.some((item) => item.platform === platform));
+  const completePack = current === 'completed' && PLATFORM_ORDER.every((platform) => outputs.some((item) => item.platform === platform));
 
   useEffect(() => {
     const urls = files.map((file) => URL.createObjectURL(file));
@@ -294,11 +296,11 @@ export default function SupporterAvatar1470V2() {
           <Card className="border-white/10 bg-[#11161d]/95 text-white">
             <CardHeader>
               <CardTitle>2. Geração automática</CardTitle>
-              <CardDescription className="text-slate-400">A IA escolhe a foto do candidato internamente. Nenhuma galeria, URL, ID ou arquivo privado é enviado ao navegador.</CardDescription>
+              <CardDescription className="text-slate-400">Você recebe três arquivos: foto de perfil para WhatsApp e Instagram, post para o feed e story. A IA escolhe a foto do candidato internamente; nenhuma galeria, URL, ID ou arquivo privado é enviado ao navegador.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div className="flex items-center gap-3"><div className={`h-3 w-3 rounded-full ${current === 'completed' ? 'bg-green-400' : current === 'needs_review' ? 'bg-amber-400' : current === 'failed' ? 'bg-red-400' : 'bg-[#D4FF00]'}`} /><div><div className="font-bold">{statusLabels[current] || 'Aguardando início'}</div><div className="mt-1 text-xs text-slate-500">Photo Intake → Candidate Selector → Identity Guardian → Composition → Lighting → Scene → Social Crop → QA</div></div></div>
+                <div className="flex items-center gap-3"><div className={`h-3 w-3 rounded-full ${current === 'completed' ? 'bg-green-400' : current === 'needs_review' ? 'bg-amber-400' : current === 'failed' ? 'bg-red-400' : 'bg-[#D4FF00]'}`} /><div><div className="font-bold">{statusLabels[current] || 'Aguardando início'}</div><div className="mt-1 text-xs text-slate-500">Sua foto → composição com o candidato → identidade 1470 em vetor → perfil, feed e story. Normalmente leva cerca de um minuto.</div></div></div>
               </div>
 
               {current === 'needs_review' && (
@@ -307,9 +309,11 @@ export default function SupporterAvatar1470V2() {
 
               {outputs.length > 0 && (
                 <div className="space-y-3">
-                  {outputs.sort((a, b) => ['square', 'portrait', 'landscape'].indexOf(a.platform) - ['square', 'portrait', 'landscape'].indexOf(b.platform)).map((output) => (
+                  {outputs.sort((a, b) => PLATFORM_ORDER.indexOf(a.platform) - PLATFORM_ORDER.indexOf(b.platform)).map((output) => (
                     <div key={output.platform} className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
-                      <img src={output.url} alt={outputLabels[output.platform] || output.platform} className="w-full object-contain" />
+                      {output.platform === 'whatsapp'
+                        ? <div className="flex justify-center bg-[#0b141a] p-6"><img src={output.url} alt={outputLabels[output.platform]} className="h-64 w-64 rounded-full object-cover ring-4 ring-[#D7AD02]/60" /></div>
+                        : <img src={output.url} alt={outputLabels[output.platform] || output.platform} className="w-full object-contain" />}
                       <div className="flex items-center justify-between gap-3 p-3"><div><div className="text-sm font-bold">{outputLabels[output.platform] || output.platform}</div>{typeof output.qa_score === 'number' && <div className="text-xs text-slate-500">QA de fidelidade: {output.qa_score}</div>}</div><CheckCircle2 className="h-5 w-5 text-green-400" /></div>
                     </div>
                   ))}
@@ -333,7 +337,7 @@ export default function SupporterAvatar1470V2() {
                 <Button variant="outline" onClick={regenerate} disabled={busy} className="w-full"><RefreshCcw className="mr-2 h-4 w-4" />Gerar outra tentativa</Button>
               )}
 
-              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-xs leading-5 text-cyan-100"><ShieldCheck className="mb-2 h-5 w-5" />Suas fotos são privadas. A referência escolhida do candidato também permanece privada. O resultado contém o aviso: {AI_DISCLOSURE}.</div>
+              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-xs leading-5 text-cyan-100"><ShieldCheck className="mb-2 h-5 w-5" />Suas fotos são privadas. A referência escolhida do candidato também permanece privada. {AI_PAGE_NOTICE}</div>
 
               {session && <Button variant="ghost" onClick={remove} disabled={busy} className="w-full text-red-300 hover:text-red-200"><Trash2 className="mr-2 h-4 w-4" />Excluir minha solicitação e arquivos</Button>}
             </CardContent>

@@ -11,6 +11,7 @@ on:
       - 'src/**'
       - 'supabase/functions/supporter-avatar-*/**'
       - 'supabase/functions/generate-supporter-avatar/**'
+      - 'services/zica-orchestrator/src/supporter-avatar/**'
       - 'supabase/migrations/**supporter_avatar**'
   push:
     branches: [main]
@@ -53,7 +54,7 @@ jobs:
           python - <<'PY'
           import json
           p=json.load(open('/tmp/capabilities.json', encoding='utf-8'))
-          assert p['pipeline']=='supporter-avatar-resumable-v7'
+          assert p['pipeline']=='supporter-avatar-vps-v8'
           assert p['abuseProtection']['atomicRateLimits'] is True
           assert p['abuseProtection']['uploadSignatureValidation'] is True
           PY

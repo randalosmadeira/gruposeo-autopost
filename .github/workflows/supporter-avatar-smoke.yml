@@ -11,6 +11,7 @@ on:
       - 'supabase/functions/supporter-avatar-candidate-assets/**'
       - 'supabase/functions/generate-supporter-avatar/**'
       - 'supabase/functions/_shared/supporter-avatar-prompt.ts'
+      - 'services/zica-orchestrator/src/supporter-avatar/**'
 
 permissions:
   contents: read
@@ -49,10 +50,12 @@ jobs:
           import json
           p=json.load(open('/tmp/capabilities.json', encoding='utf-8'))
           assert p.get('ok') is True
-          assert p.get('pipeline') == 'supporter-avatar-resumable-v7'
+          assert p.get('pipeline') == 'supporter-avatar-vps-v8'
           assert p.get('candidateSelection') == 'private-automatic'
           assert p.get('publicCandidateGallery') is False
-          assert p.get('socialOutputs') == ['1080x1080','1080x1350','1200x630']
+          assert p.get('socialOutputs') == ['1080x1080','1080x1350','1080x1920']
+          assert p.get('runtime') == 'vps'
+          assert p.get('aiDisclosureInImage') is False
           abuse=p.get('abuseProtection') or {}
           assert abuse.get('atomicRateLimits') is True
           assert abuse.get('uploadSignatureValidation') is True
@@ -103,9 +106,9 @@ jobs:
             echo '## Supporter Avatar /1470 smoke'
             echo ''
             echo '- Public route: HTTP 200'
-            echo '- Pipeline contract: supporter-avatar-resumable-v7'
+            echo '- Pipeline contract: supporter-avatar-vps-v8 (VPS)'
             echo '- Candidate gallery: anonymous access denied'
             echo '- Public candidate metadata: absent'
-            echo '- Social pack: 1080x1080, 1080x1350, 1200x630'
+            echo '- Social pack: whatsapp 1080x1080, instagram 1080x1350, story 1080x1920'
             echo '- Legacy dispatch reference in active runtime: absent'
           } >> "$GITHUB_STEP_SUMMARY"

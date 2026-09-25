@@ -24,8 +24,9 @@ describe('política de modelos Claude', () => {
   });
 
   it('aplica o resolvedor nos consumidores Supabase configuráveis', () => {
-    const avatar = readFileSync('supabase/functions/generate-supporter-avatar/index.ts', 'utf8');
-    expect(avatar).toContain("resolveAnthropicModel(Deno.env.get('ANTHROPIC_MODEL'))");
+    // O gerador de apoiadores migrou para o orquestrador da VPS (2026-09-25), que já aplica o resolvedor em ai.ts.
+    const orchestratorAi = readFileSync('services/zica-orchestrator/src/ai.ts', 'utf8');
+    expect(orchestratorAi).toContain('resolveAnthropicModel(process.env.ANTHROPIC_MODEL)');
   });
 
   it('electoral-content-variations delega ao orchestrator compartilhado em vez de resolver o modelo por conta própria', () => {

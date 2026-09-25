@@ -1,4 +1,4 @@
-# Zica Orchestrator 3.10.2
+# Zica Orchestrator 3.11.0
 
 Camada externa do Zica.ai para retirar IA, mídia, backpressure e distribuição do request PHP do WordPress.
 
@@ -17,3 +17,7 @@ Queues: `zica:content` e `zica:index-flush`. URLs IndexNow ficam em Redis Sets p
 Targets e event ledger ficam no Supabase em `zica_orchestrator_targets` e `zica_orchestrator_events`, guardando somente referências de credenciais.
 
 O worker usa concorrência 5 e limitador 20 jobs/10s, ajustáveis após observabilidade de CPU/MySQL/quota. Às 15h de São Paulo usa lock Redis diário para enfileirar reconciliação por target; WP-Cron permanece como fallback.
+
+## Apoiadores 1470 (pipeline VPS v8)
+
+`POST /supporter-avatar/dispatch` recebe `{requestId, jobId, dispatchToken}` da Edge Function pública, valida o hash do token no job e enfileira em `zica-supporter-avatar`. O worker faz uma chamada de visão (seleção), uma geração `gpt-image-2` 1024x1536 sem texto, renderiza os três formatos com sharp + identidade vetorial (`src/supporter-avatar/brand-1470.ts`, `render.ts`) e um QA advisory. Nenhum selo é desenhado na imagem. Env opcionais: `OPENAI_IMAGE_MODEL`, `OPENAI_VISION_MODEL`, `SUPPORTER_AVATAR_IMAGE_QUALITY` (low|medium|high), `SUPPORTER_AVATAR_CONCURRENCY`.

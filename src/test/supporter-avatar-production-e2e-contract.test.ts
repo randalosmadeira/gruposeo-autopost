@@ -21,12 +21,13 @@ describe('contrato do E2E de produção do apoiador 1470', () => {
     expect(script).toContain('finally');
   });
 
-  it('valida o pacote social e o aviso obrigatório', () => {
-    expect(script).toContain("['square', [1080, 1080]]");
-    expect(script).toContain("['portrait', [1080, 1350]]");
-    expect(script).toContain("['landscape', [1200, 630]]");
-    expect(script).toContain('Imagem gerada por IA - Campanha Oficial');
-    expect(script).toContain('supporter-avatar-resumable-v7');
+  it('valida o pacote social v8 (perfil, feed, story) e o aviso de IA na página', () => {
+    expect(script).toContain("['whatsapp', [1080, 1080]]");
+    expect(script).toContain("['instagram', [1080, 1350]]");
+    expect(script).toContain("['story', [1080, 1920]]");
+    expect(script).not.toContain('Imagem gerada por IA - Campanha Oficial');
+    expect(script).toContain("expectedDisclosure = 'page-notice'");
+    expect(script).toContain('supporter-avatar-vps-v8');
     expect(script).toContain("status === 'needs_review'");
   });
 

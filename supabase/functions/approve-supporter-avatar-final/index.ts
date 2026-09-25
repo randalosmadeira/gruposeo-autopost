@@ -10,7 +10,9 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SECRET_KEY') || '';
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false, autoRefreshToken: false } });
-const PLATFORMS = ['square', 'portrait', 'landscape'];
+// Pacote v8: foto de perfil (WhatsApp/Instagram), feed 4:5 e story 9:16.
+const PLATFORMS = ['whatsapp', 'instagram', 'story'];
+const EXACT_DIMENSIONS: Record<string, [number, number]> = { whatsapp: [1080, 1080], instagram: [1080, 1350], story: [1080, 1920] };
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
@@ -53,10 +55,9 @@ serve(async (req) => {
     const latest = new Map<string, any>();
     for (const row of rows || []) if (!latest.has(row.platform)) latest.set(row.platform, row);
     if (PLATFORMS.some((platform) => !latest.has(platform))) return json({ error: 'social_pack_incomplete' }, 409);
-    const exactDimensions: Record<string, [number, number]> = { square: [1080, 1080], portrait: [1080, 1350], landscape: [1200, 630] };
     if (PLATFORMS.some((platform) => {
       const output = latest.get(platform);
-      const expected = exactDimensions[platform];
+      const expected = EXACT_DIMENSIONS[platform];
       return output.width !== expected[0] || output.height !== expected[1];
     })) return json({ error: 'social_pack_dimensions_invalid' }, 409);
 
@@ -81,7 +82,8 @@ serve(async (req) => {
       outputs,
       socialPublishing: false,
       deliveryMode: 'social-pack-3',
-      disclosure: 'Imagem gerada por IA - Campanha Oficial',
+      // O aviso de conteúdo gerado com IA é exibido na página, não dentro da imagem.
+      aiDisclosure: 'page-notice',
     });
   } catch (error) {
     console.error('approve-supporter-avatar-final:', error instanceof Error ? error.message : 'unknown_error');

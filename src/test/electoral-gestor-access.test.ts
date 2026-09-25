@@ -60,8 +60,9 @@ describe('electoral Gestor access and supporter link', () => {
     expect(publicApi).toContain('rpc("reconcile_stale_supporter_avatar_jobs")');
   });
 
-  it('keeps the repository public endpoint aligned with the resumable v7 contract', () => {
-    expect(publicApi).toContain('supporter-avatar-resumable-v7');
+  it('keeps the repository public endpoint aligned with the VPS v8 contract', () => {
+    expect(publicApi).toContain('const PIPELINE = PIPELINE_VERSION;');
+    expect(publicApi).toContain('runtime: "vps"');
     expect(publicApi).toContain('technicalRetriesFree: true');
     expect(publicApi).toContain('resumable: true');
   });

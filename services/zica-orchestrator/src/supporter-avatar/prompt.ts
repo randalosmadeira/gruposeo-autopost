@@ -1,39 +1,18 @@
 /**
- * Fonte canônica dos prompts e do contrato do gerador de apoiadores 1470
- * (pipeline VPS v8). O orquestrador da VPS mantém uma cópia em
- * services/zica-orchestrator/src/supporter-avatar/prompt.ts; o teste
- * src/test/supporter-avatar-vps-v8.test.ts garante que os blocos de diretriz
- * são idênticos nos dois arquivos.
+ * Prompts do gerador de apoiadores 1470 (pipeline VPS v8).
  *
  * Princípio: a IA só compõe a FOTOGRAFIA (apoiador + candidato). Nenhum texto,
  * número, logotipo ou selo é pedido ao modelo; a identidade visual entra depois,
- * como vetor. Sem selo "gerada por IA" dentro da imagem.
+ * como vetor, em render.ts. Isso elimina tipografia distorcida, remove o selo
+ * de IA da imagem e permite gerar uma única imagem por pedido.
+ *
+ * As diretrizes de identidade abaixo são espelhadas em
+ * supabase/functions/_shared/supporter-avatar-prompt.ts (fonte canônica lida
+ * pelos testes). Mantenha os dois arquivos idênticos nesses blocos.
  */
 export const PIPELINE_VERSION = 'supporter-avatar-vps-v8';
 export const SUPPORTER_AVATAR_PROMPT_VERSION = 'supporter-avatar-vps-v8.0.0';
 export const SUPPORTER_PHOTO_AGENT_NAME = 'NEXUS PHOTO 1470';
-export const SUPPORTER_PHOTO_AGENT_ROLE = 'Compositor fotográfico eleitoral com preservação máxima de identidade';
-
-export const SUPPORT_TEXTS = [
-  'DR. MADEIRA 1470',
-  'EU APOIO DR. MADEIRA 1470',
-  'APOIO AO DR. MADEIRA 1470',
-  'FEDERAL 1470',
-  'Madeiraaa Nelesss! 🪵 1470',
-] as const;
-
-export const SUPPORT_STYLES = ['premium', 'clean', 'institucional', 'brasil', 'dark'] as const;
-
-/** Pacote social v8: os únicos formatos entregues. A tipografia é vetorial (render.ts na VPS). */
-export const SUPPORT_SOCIAL_PACK = {
-  whatsapp: { label: 'Foto de perfil · WhatsApp / Instagram', exactWidth: 1080, exactHeight: 1080 },
-  instagram: { label: 'Feed · Instagram 4:5', exactWidth: 1080, exactHeight: 1350 },
-  story: { label: 'Story · Reels · Status 9:16', exactWidth: 1080, exactHeight: 1920 },
-} as const;
-export type SupportSocialPackKey = keyof typeof SUPPORT_SOCIAL_PACK;
-export const SUPPORT_SOCIAL_OUTPUTS = ['1080x1080', '1080x1350', '1080x1920'] as const;
-/** Tamanho pedido ao modelo: retrato 2:3, base para os três recortes. */
-export const MASTER_MODEL_SIZE = '1024x1536';
 
 export const IDENTITY_GUARDIAN_DIRECTIVE = `
 IDENTITY GUARDIAN AGENT - prioridade absoluta.
