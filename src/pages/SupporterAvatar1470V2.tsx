@@ -267,7 +267,7 @@ export default function SupporterAvatar1470V2() {
           <Card className="border-white/10 bg-[#11161d]/95 text-white">
             <CardHeader>
               <CardTitle>1. Envie sua foto</CardTitle>
-              <CardDescription className="text-slate-400">Prefira rosto visível, boa luz e imagem nítida. Você pode enviar até 3 fotos e a IA escolherá tecnicamente a melhor.</CardDescription>
+              <CardDescription className="text-slate-400">Para o seu rosto sair igual: foto de frente, olhando para a câmera, rosto grande no quadro e bem iluminado (luz do dia é o melhor). Sem óculos escuros, boné ou filtro. Você pode enviar até 3 fotos e a IA escolhe a melhor.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-[#D4FF00]/35 bg-[#D4FF00]/5 p-6 text-center hover:bg-[#D4FF00]/10">

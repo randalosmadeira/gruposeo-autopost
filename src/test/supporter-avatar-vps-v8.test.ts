@@ -89,6 +89,13 @@ describe('Apoiadores 1470 - pipeline VPS v8 (rápido, sem selo na imagem)', () =
     expect(sharedPrompt).not.toContain('Prefira referência sem taco');
   });
 
+  it('modelo padrão gpt-image-2 (decisão 2026-09-25 após teste comparativo), override só por allowlist', () => {
+    expect(pipeline).toContain("process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2'");
+    expect(pipeline).toContain("IMAGE_MODEL_ALLOWLIST = ['gpt-image-2', 'gpt-image-1']");
+    expect(pipeline).toContain('resolveImageModel(request.provider_preference)');
+    expect(ui).toContain('Sem óculos escuros, boné ou filtro');
+  });
+
   it('rostos intactos: qualidade alta, limiar de fidelidade 85 e uma regeneração guiada pelo QA', () => {
     expect(pipeline).toContain("process.env.SUPPORTER_AVATAR_IMAGE_QUALITY || 'high'");
     expect(pipeline).toContain('QA_THRESHOLDS = { supporter: 85, candidate: 80, anatomy: 70, wardrobe: 70 }');
