@@ -115,6 +115,17 @@ describe('Apoiadores 1470 - pipeline VPS v8 (rápido, sem selo na imagem)', () =
     expect(render).toContain("RENDER_VERSION = 'brand-vector-v2-slogan'");
   });
 
+  it('sessão antiga do navegador nunca trava o apoiador: é descartada e vira pedido novo', () => {
+    expect(ui).toContain("const STORAGE_KEY = 'zica1470-supporter-avatar-v6';");
+    expect(ui).toContain('const isExpiredSession = (error: unknown) =>');
+    expect(ui).toContain("e?.code === 'request_not_found_or_expired' || e?.status === 404");
+    expect(ui).toContain('const resetSession = () => {');
+    expect(ui).toContain('if (!stopped && isExpiredSession(error)) resetSession();');
+    expect(ui).toContain('if (!isExpiredSession(error)) throw error;');
+    expect(ui).toContain('active = null;');
+    expect(ui).not.toContain('Esta sessão expirou. Inicie uma nova solicitação.');
+  });
+
   it('download liberado assim que as imagens existem, com aprovação registrada automaticamente', () => {
     expect(ui).toContain('async function downloadOutput(url: string, filename: string)');
     expect(ui).toContain("dr-madeira-1470-perfil.jpg");

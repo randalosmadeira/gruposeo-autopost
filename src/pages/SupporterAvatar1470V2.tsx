@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 const EDGE_ROOT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 const API_URL = `${EDGE_ROOT}/supporter-avatar-public-v2`;
 const APPROVE_URL = `${EDGE_ROOT}/approve-supporter-avatar-final`;
-const STORAGE_KEY = 'zica1470-supporter-avatar-v5';
+const STORAGE_KEY = 'zica1470-supporter-avatar-v6';
 const AGENT_NAME = 'NEXUS PHOTO 1470';
 // Aviso de IA fica na página (não é desenhado na imagem).
 const AI_PAGE_NOTICE = 'Composição fotográfica produzida com inteligência artificial pela campanha, a partir da sua foto e das fotos oficiais do candidato.';
@@ -81,7 +81,7 @@ const errorLabels: Record<string, string> = {
   upload_at_least_one_photo: 'Envie pelo menos uma fotografia sua.',
   generation_limit_reached: 'O limite de versões desta solicitação foi atingido.',
   daily_limit_reached: 'O limite diário deste dispositivo foi atingido.',
-  request_not_found_or_expired: 'Esta sessão expirou. Inicie uma nova solicitação.',
+  request_not_found_or_expired: 'Sua sessão anterior expirou. Envie a foto novamente.',
   supporter_photo_not_usable: 'A foto não permite preservar sua aparência com segurança. Envie uma imagem mais nítida, bem iluminada e com o rosto visível.',
 };
 
@@ -94,10 +94,19 @@ async function post(url: string, body: Record<string, unknown>) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const code = String(payload.error || `HTTP ${response.status}`);
-    throw new Error(errorLabels[code] || String(payload.detail || code));
+    const error = new Error(errorLabels[code] || String(payload.detail || code)) as Error & { code?: string; status?: number };
+    error.code = code;
+    error.status = response.status;
+    throw error;
   }
   return payload;
 }
+
+// Sessão guardada no navegador que já não existe no servidor (pedido apagado ou expirado).
+const isExpiredSession = (error: unknown) => {
+  const e = error as { code?: string; status?: number } | null;
+  return e?.code === 'request_not_found_or_expired' || e?.status === 404;
+};
 
 const api = (body: Record<string, unknown>) => post(API_URL, body);
 const fullNameOk = (value: string) => value.trim().split(/\s+/).filter((part) => part.length >= 2).length >= 2;
@@ -123,6 +132,13 @@ export default function SupporterAvatar1470V2() {
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<StatusPayload | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const resetSession = () => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+    setSession(null);
+    setStatus(null);
+    setAutoApproved(false);
+  };
 
   const current = status?.request?.status || (session ? 'needs_input' : 'draft');
   const processing = processingStates.has(current);
@@ -157,7 +173,10 @@ export default function SupporterAvatar1470V2() {
       try {
         const data = await api({ action: 'status', requestId: session.requestId, token: session.token });
         if (!stopped) setStatus(data);
-      } catch { /* expired sessions are handled when user submits */ }
+      } catch (error) {
+        // Sessão antiga (pedido apagado/expirado): volta ao início sem mensagem de erro.
+        if (!stopped && isExpiredSession(error)) resetSession();
+      }
     };
     void refresh();
     const timer = window.setInterval(refresh, processing ? 3000 : 12000);
@@ -180,6 +199,15 @@ export default function SupporterAvatar1470V2() {
     setBusy(true);
     try {
       let active = session;
+      if (active) {
+        try {
+          await syncContact(active);
+        } catch (error) {
+          if (!isExpiredSession(error)) throw error;
+          resetSession();
+          active = null;
+        }
+      }
       if (!active) {
         const created = await api({
           action: 'create',
@@ -196,9 +224,7 @@ export default function SupporterAvatar1470V2() {
         });
         active = { requestId: created.requestId, token: created.token };
         setSession(active);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(active));
-      } else {
-        await syncContact(active);
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(active)); } catch { /* ignore */ }
       }
 
       if (files.length) {
@@ -226,7 +252,14 @@ export default function SupporterAvatar1470V2() {
     if (!session || !fullNameOk(name) || !emailOk(email) || !phoneOk(whatsapp)) return;
     setBusy(true);
     try {
-      await syncContact(session);
+      try {
+        await syncContact(session);
+      } catch (error) {
+        if (!isExpiredSession(error)) throw error;
+        resetSession();
+        toast({ title: 'Sua sessão anterior expirou', description: 'Envie a foto novamente para gerar um pedido novo.' });
+        return;
+      }
       await api({ action: 'regenerate', requestId: session.requestId, token: session.token });
       setStatus(await api({ action: 'status', requestId: session.requestId, token: session.token }));
       setAutoApproved(false);
@@ -241,12 +274,9 @@ export default function SupporterAvatar1470V2() {
     if (!session) return;
     setBusy(true);
     try {
-      await api({ action: 'delete', requestId: session.requestId, token: session.token });
-      localStorage.removeItem(STORAGE_KEY);
-      setSession(null);
-      setStatus(null);
+      await api({ action: 'delete', requestId: session.requestId, token: session.token }).catch((error) => { if (!isExpiredSession(error)) throw error; });
+      resetSession();
       setFiles([]);
-      setAutoApproved(false);
     } finally {
       setBusy(false);
     }
