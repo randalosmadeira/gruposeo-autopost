@@ -14,7 +14,7 @@ describe('supporter avatar QA integrity (VPS v8)', () => {
     expect(generator).not.toContain('cropSafe: 95');
     expect(generator).not.toContain('lighting: 92');
     expect(generator).not.toContain('batIntegrity: 92');
-    expect(generator).toContain('qa_score: qa ? clamp(qa.supporter_fidelity_score) : null');
+    expect(generator).toContain('qa_score: best.qa ? clamp(best.qa.supporter_fidelity_score) : null');
   });
 
   it('falha de provedor de QA vira revisão, nunca aprovação', () => {
@@ -27,10 +27,10 @@ describe('supporter avatar QA integrity (VPS v8)', () => {
 
   it('o veredito exige duas pessoas, fidelidade mínima e nenhum texto na composição', () => {
     expect(generator).toContain('qa.face_count === 2');
-    expect(generator).toContain('clamp(qa.supporter_fidelity_score) >= 70');
-    expect(generator).toContain('clamp(qa.candidate_reference_fidelity_score) >= 70');
-    expect(generator).toContain('clamp(qa.anatomy_score) >= 70');
-    expect(generator).toContain('qa.text_detected !== true');
+    expect(generator).toContain('clamp(qa.supporter_fidelity_score) >= QA_THRESHOLDS.supporter');
+    expect(generator).toContain('clamp(qa.candidate_reference_fidelity_score) >= QA_THRESHOLDS.candidate');
+    expect(generator).toContain('clamp(qa.anatomy_score) >= QA_THRESHOLDS.anatomy');
+    expect(generator).toContain('qa.added_text_detected !== true');
   });
 
   it('seleção degradada continua sem expor a galeria', () => {

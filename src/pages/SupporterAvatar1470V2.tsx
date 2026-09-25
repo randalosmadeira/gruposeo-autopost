@@ -14,6 +14,27 @@ const AGENT_NAME = 'NEXUS PHOTO 1470';
 // Aviso de IA fica na página (não é desenhado na imagem).
 const AI_PAGE_NOTICE = 'Composição fotográfica produzida com inteligência artificial pela campanha, a partir da sua foto e das fotos oficiais do candidato.';
 const PLATFORM_ORDER = ['whatsapp', 'instagram', 'story'];
+const downloadNames: Record<string, string> = { whatsapp: 'dr-madeira-1470-perfil.jpg', instagram: 'dr-madeira-1470-feed.jpg', story: 'dr-madeira-1470-story.jpg' };
+
+// Baixa a imagem como arquivo (as URLs assinadas do Storage aceitam CORS); se o navegador
+// bloquear, abre a imagem em nova aba para o apoiador salvar.
+async function downloadOutput(url: string, filename: string) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`http_${response.status}`);
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+  } catch {
+    window.open(url, '_blank', 'noopener');
+  }
+}
 
 const processingStates = new Set(['analyzing', 'candidate_selected', 'generating', 'qa', 'retry', 'regenerate']);
 const statusLabels: Record<string, string> = {
@@ -25,7 +46,7 @@ const statusLabels: Record<string, string> = {
   qa: 'Aplicando a identidade 1470 e verificando qualidade',
   retry: 'Tentando novamente automaticamente',
   regenerate: 'Refazendo uma versão que não passou no QA',
-  needs_review: 'Em revisão técnica',
+  needs_review: 'Pronto, com revisão técnica pendente',
   completed: 'Pronto para baixar',
   failed: 'Falha técnica terminal',
 };
@@ -51,8 +72,6 @@ type StatusPayload = {
   job?: { stage?: string; status?: string } | null;
   outputs?: Output[];
 };
-
-type ApprovedOutput = { platform: string; url: string; width: number; height: number; qaScore?: number | null };
 
 const errorLabels: Record<string, string> = {
   supporter_full_name_required: 'Informe nome e sobrenome.',
@@ -99,16 +118,24 @@ export default function SupporterAvatar1470V2() {
   const [consentImage, setConsentImage] = useState(false);
   const [consentTerms, setConsentTerms] = useState(false);
   const [consentGallery, setConsentGallery] = useState(false);
-  const [approved, setApproved] = useState(false);
+  const [autoApproved, setAutoApproved] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<StatusPayload | null>(null);
-  const [approvedOutputs, setApprovedOutputs] = useState<ApprovedOutput[]>([]);
   const [busy, setBusy] = useState(false);
 
   const current = status?.request?.status || (session ? 'needs_input' : 'draft');
   const processing = processingStates.has(current);
   const outputs = useMemo(() => status?.outputs || [], [status]);
   const completePack = current === 'completed' && PLATFORM_ORDER.every((platform) => outputs.some((item) => item.platform === platform));
+
+  // Downloads são liberados assim que as imagens existem. A aprovação do apoiador é registrada
+  // automaticamente no primeiro pacote completo (mantém o histórico do backend), sem etapa manual.
+  useEffect(() => {
+    if (!session || !completePack || autoApproved) return;
+    setAutoApproved(true);
+    post(APPROVE_URL, { requestId: session.requestId, token: session.token }).catch(() => undefined);
+  }, [session, completePack, autoApproved]);
 
   useEffect(() => {
     const urls = files.map((file) => URL.createObjectURL(file));
@@ -151,7 +178,6 @@ export default function SupporterAvatar1470V2() {
   const generate = async () => {
     if (!validate()) return;
     setBusy(true);
-    setApprovedOutputs([]);
     try {
       let active = session;
       if (!active) {
@@ -187,7 +213,7 @@ export default function SupporterAvatar1470V2() {
 
       await api({ action: 'submit', requestId: active.requestId, token: active.token });
       setStatus(await api({ action: 'status', requestId: active.requestId, token: active.token }));
-      setApproved(false);
+      setAutoApproved(false);
       toast({ title: 'Fotos recebidas', description: 'A IA está analisando sua foto e escolherá, de forma privada, a referência do candidato mais compatível.' });
     } catch (error) {
       toast({ title: 'Não foi possível iniciar a geração', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
@@ -199,27 +225,13 @@ export default function SupporterAvatar1470V2() {
   const regenerate = async () => {
     if (!session || !fullNameOk(name) || !emailOk(email) || !phoneOk(whatsapp)) return;
     setBusy(true);
-    setApprovedOutputs([]);
     try {
       await syncContact(session);
       await api({ action: 'regenerate', requestId: session.requestId, token: session.token });
       setStatus(await api({ action: 'status', requestId: session.requestId, token: session.token }));
-      setApproved(false);
+      setAutoApproved(false);
     } catch (error) {
       toast({ title: 'Não foi possível refazer agora', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const releaseDownloads = async () => {
-    if (!session || !approved || !completePack) return;
-    setBusy(true);
-    try {
-      const data = await post(APPROVE_URL, { requestId: session.requestId, token: session.token });
-      setApprovedOutputs(Array.isArray(data.outputs) ? data.outputs : []);
-    } catch (error) {
-      toast({ title: 'Falha ao liberar os arquivos', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
     } finally {
       setBusy(false);
     }
@@ -234,8 +246,7 @@ export default function SupporterAvatar1470V2() {
       setSession(null);
       setStatus(null);
       setFiles([]);
-      setApproved(false);
-      setApprovedOutputs([]);
+      setAutoApproved(false);
     } finally {
       setBusy(false);
     }
@@ -304,7 +315,7 @@ export default function SupporterAvatar1470V2() {
               </div>
 
               {current === 'needs_review' && (
-                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">A imagem não foi liberada automaticamente porque algum critério técnico não atingiu o padrão. O registro foi preservado para revisão e não foi convertido em falha definitiva.</div>
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">Algum critério técnico não atingiu o padrão da campanha, mas as imagens geradas já estão liberadas abaixo. Se quiser, gere outra tentativa.</div>
               )}
 
               {outputs.length > 0 && (
@@ -315,22 +326,18 @@ export default function SupporterAvatar1470V2() {
                         ? <div className="flex justify-center bg-[#0b141a] p-6"><img src={output.url} alt={outputLabels[output.platform]} className="h-64 w-64 rounded-full object-cover ring-4 ring-[#D7AD02]/60" /></div>
                         : <img src={output.url} alt={outputLabels[output.platform] || output.platform} className="w-full object-contain" />}
                       <div className="flex items-center justify-between gap-3 p-3"><div><div className="text-sm font-bold">{outputLabels[output.platform] || output.platform}</div>{typeof output.qa_score === 'number' && <div className="text-xs text-slate-500">QA de fidelidade: {output.qa_score}</div>}</div><CheckCircle2 className="h-5 w-5 text-green-400" /></div>
+                      <div className="px-3 pb-3">
+                        <Button onClick={async () => { setDownloading(output.platform); try { await downloadOutput(output.url, downloadNames[output.platform] || `dr-madeira-1470-${output.platform}.jpg`); } finally { setDownloading(null); } }} disabled={downloading === output.platform} className="h-11 w-full bg-[#D4FF00] font-black text-black hover:bg-[#c6ef00]">
+                          {downloading === output.platform ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}Baixar {output.platform === 'whatsapp' ? 'foto de perfil' : output.platform === 'instagram' ? 'post do feed' : 'story'}
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
 
-              {completePack && (
-                <>
-                  <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-300"><input type="checkbox" checked={approved} onChange={(event) => setApproved(event.target.checked)} className="mt-1" /><span>Aprovo esta composição e quero liberar os arquivos finais para minhas redes sociais.</span></label>
-                  <Button onClick={releaseDownloads} disabled={!approved || busy} className="w-full"><Download className="mr-2 h-4 w-4" />Liberar downloads</Button>
-                </>
-              )}
-
-              {approvedOutputs.length > 0 && (
-                <div className="space-y-2 rounded-xl border border-green-500/20 bg-green-500/5 p-4">
-                  {approvedOutputs.map((output) => <a key={output.platform} href={output.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-3 text-sm font-semibold hover:bg-white/10"><span>{outputLabels[output.platform] || `${output.width} × ${output.height}`}</span><Download className="h-4 w-4" /></a>)}
-                </div>
+              {outputs.length > 0 && (
+                <div className="rounded-xl border border-[#D4FF00]/20 bg-[#D4FF00]/5 p-4 text-xs leading-5 text-slate-200">Suas imagens já estão liberadas. Foto de perfil: WhatsApp → Configurações → toque na foto. Instagram: use o post do feed e o story como quiser. Madeira neles!</div>
               )}
 
               {session && !processing && current !== 'completed' && (

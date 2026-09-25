@@ -5,12 +5,12 @@ import { MASTER_SIZE, RENDER_VERSION, SUPPORTER_OUTPUTS, renderSupporterPack, ty
 import { PIPELINE_VERSION, QA_PROMPT, SELECTOR_PROMPT, SUPPORTER_AVATAR_PROMPT_VERSION, SUPPORTER_PHOTO_AGENT_NAME, buildCompositionPrompt } from './prompt.js';
 
 /**
- * Gerador de apoiadores 1470 - pipeline VPS v8 ("rápido").
+ * Gerador de apoiadores 1470 - pipeline VPS v8.1 ("rápido, rostos intactos").
  *
- * Uma chamada de visão (seleção), UMA geração de imagem (composição sem texto),
- * renderização vetorial local dos 3 formatos (<1 s) e um QA de visão advisory.
- * Alvo: ~45-90 s por pedido, contra horas do pipeline Edge anterior (3 gerações
- * de imagem em invocações encadeadas).
+ * Uma chamada de visão (seleção), uma geração de imagem (composição sem texto
+ * novo, roupas e taco preservados), QA de fidelidade e, só quando o rosto não
+ * bate, UMA regeneração com a correção apontada pelo QA. Depois, renderização
+ * vetorial local dos 3 formatos (< 1,5 s) com slogan no topo e 1470 embaixo.
  *
  * Contratos preservados com o banco/Edge:
  *  - claim_supporter_avatar_generation_attempt (serialização de tentativas)
@@ -20,9 +20,13 @@ import { PIPELINE_VERSION, QA_PROMPT, SELECTOR_PROMPT, SUPPORTER_AVATAR_PROMPT_V
  */
 export const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
 export const OPENAI_VISION_MODEL = process.env.OPENAI_VISION_MODEL || 'gpt-4.1-mini';
-const IMAGE_QUALITY = (process.env.SUPPORTER_AVATAR_IMAGE_QUALITY || 'medium') as 'low' | 'medium' | 'high';
+// Fidelidade facial pesa mais que velocidade: qualidade alta por padrão (override por env).
+const IMAGE_QUALITY = (process.env.SUPPORTER_AVATAR_IMAGE_QUALITY || 'high') as 'low' | 'medium' | 'high';
 const FIXED_DRIVE_FOLDER = '1NB_yQBM_2bGA5UC6JyCEgC54sjCHSyO6';
 export const MAX_PIPELINE_ATTEMPTS = 4;
+/** Gerações de imagem por job: a segunda só acontece se o QA reprovar a fidelidade. */
+export const MAX_GENERATIONS_PER_JOB = 2;
+export const QA_THRESHOLDS = { supporter: 85, candidate: 80, anatomy: 70, wardrobe: 70 } as const;
 const UPLOAD_BUCKET = 'supporter-avatar-uploads';
 const OUTPUT_BUCKET = 'supporter-avatar-generated';
 const REFERENCE_MAX_EDGE = 1536;
@@ -91,7 +95,7 @@ async function downscale(bytes: Buffer, maxEdge: number, quality = 88) {
 async function loadSource(source: SourceRow): Promise<Loaded> {
   const { data, error } = await supabase.storage.from(UPLOAD_BUCKET).download(source.storage_path);
   if (error || !data) throw new TransientPipelineError(`storage_download_failed:${safeDetail(error?.message || 'empty', 120)}`);
-  return downscale(Buffer.from(await data.arrayBuffer()), REFERENCE_MAX_EDGE);
+  return downscale(Buffer.from(await data.arrayBuffer()), REFERENCE_MAX_EDGE, 94);
 }
 
 const candidateCache = new Map<string, { loaded: Loaded; expiresAt: number }>();
@@ -109,13 +113,13 @@ async function loadCandidate(candidate: CandidateMeta): Promise<Loaded> {
   let lastReason = 'candidate_asset_unavailable';
   for (const url of urls) {
     try {
-      const response = await requestWithRetry(url, { redirect: 'follow', headers: { 'User-Agent': `${SUPPORTER_PHOTO_AGENT_NAME}/8.0` } }, 45_000, 2);
+      const response = await requestWithRetry(url, { redirect: 'follow', headers: { 'User-Agent': `${SUPPORTER_PHOTO_AGENT_NAME}/8.1` } }, 45_000, 2);
       if (!response.ok) { lastReason = `candidate_asset_http_${response.status}`; continue; }
       const mime = (response.headers.get('content-type') || '').split(';')[0]?.toLowerCase() || '';
       if (!/^image\/(jpeg|png|webp)$/.test(mime)) { lastReason = `candidate_asset_invalid_mime:${mime || 'missing'}`; continue; }
       const raw = Buffer.from(await response.arrayBuffer());
       if (!raw.length || raw.length > 15 * 1024 * 1024) { lastReason = `candidate_asset_size_invalid:${raw.length}`; continue; }
-      const loaded = await downscale(raw, REFERENCE_MAX_EDGE, 92);
+      const loaded = await downscale(raw, REFERENCE_MAX_EDGE, 94);
       candidateCache.set(key, { loaded, expiresAt: Date.now() + CANDIDATE_CACHE_MS });
       return loaded;
     } catch (error) { lastReason = safeDetail(error); }
@@ -134,24 +138,22 @@ async function candidateMetadata(): Promise<CandidateMeta[]> {
 }
 
 /**
- * Lista curta enviada à visão (limite de payload): os primeiros por ordem, mas
- * sempre com pelo menos uma referência COM taco quando houver uma ativa. O taco
- * "Madeira neles" é parte da identidade da campanha e não pode ficar de fora só
- * por causa da posição na galeria.
+ * Lista curta enviada à visão (limite de payload). O taco de beisebol é o
+ * símbolo do slogan da campanha ("Madeira neles!"): todas as referências COM
+ * taco entram primeiro; as sem taco completam as vagas restantes.
  */
 export function visionShortlist(candidates: CandidateMeta[], size = 5) {
-  const base = candidates.slice(0, size);
-  if (base.some((candidate) => candidate.prop === 'com-taco')) return base;
-  const bat = candidates.find((candidate) => candidate.prop === 'com-taco');
-  if (!bat) return base;
-  return [...base.slice(0, Math.max(0, size - 1)), bat];
+  const withBat = candidates.filter((candidate) => candidate.prop === 'com-taco');
+  const withoutBat = candidates.filter((candidate) => candidate.prop !== 'com-taco');
+  return [...withBat, ...withoutBat].slice(0, Math.max(size, Math.min(withBat.length + 1, 6)));
 }
 
-/** Fallback determinístico, sem expor a galeria: frontal > roupa compatível com o estilo. */
+/** Fallback determinístico, sem expor a galeria: com taco > frontal > roupa compatível com o estilo. */
 export function fallbackCandidateIndex(candidates: CandidateMeta[], style: string) {
   const formal = ['premium', 'institucional', 'dark'].includes(style);
   return candidates.map((candidate, index) => {
     let score = 0;
+    if (candidate.prop === 'com-taco') score += 50;
     if (/frontal/i.test(candidate.label)) score += 30;
     if (formal && candidate.wardrobe === 'terno') score += 15;
     if (!formal && candidate.wardrobe === 'camisa-1470') score += 15;
@@ -175,11 +177,12 @@ const SELECTOR_SCHEMA = {
 const QA_SCHEMA = {
   type: 'object', additionalProperties: false,
   properties: {
-    supporter_fidelity_score: { type: 'integer' }, candidate_reference_fidelity_score: { type: 'integer' }, anatomy_score: { type: 'integer' },
-    human_texture_score: { type: 'integer' }, lighting_consistency_score: { type: 'integer' }, face_count: { type: 'integer' }, text_detected: { type: 'boolean' },
+    supporter_fidelity_score: { type: 'integer' }, candidate_reference_fidelity_score: { type: 'integer' }, wardrobe_fidelity_score: { type: 'integer' },
+    anatomy_score: { type: 'integer' }, human_texture_score: { type: 'integer' }, lighting_consistency_score: { type: 'integer' },
+    face_count: { type: 'integer' }, added_text_detected: { type: 'boolean' },
     artifacts: { type: 'array', items: { type: 'string' } }, remediation: { type: 'array', items: { type: 'string' } },
   },
-  required: ['supporter_fidelity_score', 'candidate_reference_fidelity_score', 'anatomy_score', 'human_texture_score', 'lighting_consistency_score', 'face_count', 'text_detected', 'artifacts', 'remediation'],
+  required: ['supporter_fidelity_score', 'candidate_reference_fidelity_score', 'wardrobe_fidelity_score', 'anatomy_score', 'human_texture_score', 'lighting_consistency_score', 'face_count', 'added_text_detected', 'artifacts', 'remediation'],
 } as const;
 
 async function visionJson<T>(prompt: string, images: Loaded[], schemaName: string, schema: Record<string, unknown>, key: string): Promise<T> {
@@ -191,7 +194,7 @@ async function visionJson<T>(prompt: string, images: Loaded[], schemaName: strin
   const response = await requestWithRetry('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: OPENAI_VISION_MODEL, input: [{ role: 'user', content }], text: { format: { type: 'json_schema', name: schemaName, strict: true, schema } }, max_output_tokens: 600 }),
+    body: JSON.stringify({ model: OPENAI_VISION_MODEL, input: [{ role: 'user', content }], text: { format: { type: 'json_schema', name: schemaName, strict: true, schema } }, max_output_tokens: 700 }),
   }, 60_000, 2);
   const payload = await response.json().catch(() => ({})) as { output_text?: string; output?: Array<{ content?: Array<{ text?: string }> }>; error?: { message?: string } };
   if (!response.ok) throw new Error(`vision_http_${response.status}:${safeDetail(payload?.error?.message, 160)}`);
@@ -201,15 +204,29 @@ async function visionJson<T>(prompt: string, images: Loaded[], schemaName: strin
 }
 
 type Selection = { usable: boolean; supporter_index: number; face_count: number; face_quality_score: number; candidate_index: number; scene: string; composition_plan: string; technical_notes: string };
-type QaResult = { supporter_fidelity_score: number; candidate_reference_fidelity_score: number; anatomy_score: number; human_texture_score: number; lighting_consistency_score: number; face_count: number; text_detected: boolean; artifacts: string[]; remediation: string[] };
+export type QaResult = { supporter_fidelity_score: number; candidate_reference_fidelity_score: number; wardrobe_fidelity_score: number; anatomy_score: number; human_texture_score: number; lighting_consistency_score: number; face_count: number; added_text_detected: boolean; artifacts: string[]; remediation: string[] };
 
 export function qaVerdict(qa: QaResult | null) {
   if (!qa) return false;
   return qa.face_count === 2
-    && clamp(qa.supporter_fidelity_score) >= 70
-    && clamp(qa.candidate_reference_fidelity_score) >= 70
-    && clamp(qa.anatomy_score) >= 70
-    && qa.text_detected !== true;
+    && clamp(qa.supporter_fidelity_score) >= QA_THRESHOLDS.supporter
+    && clamp(qa.candidate_reference_fidelity_score) >= QA_THRESHOLDS.candidate
+    && clamp(qa.anatomy_score) >= QA_THRESHOLDS.anatomy
+    && clamp(qa.wardrobe_fidelity_score) >= QA_THRESHOLDS.wardrobe
+    && qa.added_text_detected !== true;
+}
+
+/** Vale a pena regenerar? Só falhas de fidelidade/anatomia/roupa; texto adicionado também. */
+export function qaNeedsRegeneration(qa: QaResult | null) {
+  if (!qa) return false;
+  return !qaVerdict(qa);
+}
+
+export function qaFeedback(qa: QaResult) {
+  const remediation = Array.isArray(qa.remediation) ? qa.remediation.filter(Boolean).join('; ') : '';
+  const artifacts = Array.isArray(qa.artifacts) ? qa.artifacts.filter(Boolean).join('; ') : '';
+  const scores = `apoiador=${clamp(qa.supporter_fidelity_score)} candidato=${clamp(qa.candidate_reference_fidelity_score)} roupa=${clamp(qa.wardrobe_fidelity_score)} anatomia=${clamp(qa.anatomy_score)} rostos=${qa.face_count}`;
+  return `${remediation || artifacts || 'preservar mais fielmente os rostos e as roupas das referências'} (${scores})`;
 }
 
 /* ---------- geração ---------- */
@@ -225,9 +242,9 @@ async function generateMaster(supporter: Loaded, candidate: Loaded, prompt: stri
     if (withFidelity) form.set('input_fidelity', 'high');
     form.append('image[]', new Blob([new Uint8Array(supporter.bytes)], { type: supporter.mime }), '01-supporter.jpg');
     form.append('image[]', new Blob([new Uint8Array(candidate.bytes)], { type: candidate.mime }), '02-candidate.jpg');
-    const response = await requestWithRetry('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form }, 180_000, 2);
+    const response = await requestWithRetry('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form }, 240_000, 2);
     const payload = await response.json().catch(() => ({})) as { data?: Array<{ b64_json?: string; url?: string }>; usage?: unknown; error?: { message?: string } };
-    return { response, payload };
+    return { response, payload, withFidelity };
   };
   let result = await send(true);
   if (!result.response.ok && result.response.status === 400 && /input_fidelity|unknown parameter|unsupported/i.test(String(result.payload?.error?.message || ''))) result = await send(false);
@@ -237,11 +254,11 @@ async function generateMaster(supporter: Loaded, candidate: Loaded, prompt: stri
     throw new Error(message);
   }
   const first = result.payload?.data?.[0];
-  if (first?.b64_json) return { bytes: Buffer.from(first.b64_json, 'base64'), usage: result.payload?.usage ?? null };
+  if (first?.b64_json) return { bytes: Buffer.from(first.b64_json, 'base64'), usage: result.payload?.usage ?? null, inputFidelityUsed: result.withFidelity };
   if (first?.url) {
     const download = await requestWithRetry(first.url, {}, 60_000, 2);
     if (!download.ok) throw new TransientPipelineError(`openai_image_download_error:${download.status}`);
-    return { bytes: Buffer.from(await download.arrayBuffer()), usage: result.payload?.usage ?? null };
+    return { bytes: Buffer.from(await download.arrayBuffer()), usage: result.payload?.usage ?? null, inputFidelityUsed: result.withFidelity };
   }
   throw new Error('openai_image_missing_output');
 }
@@ -252,7 +269,7 @@ export async function processSupporterAvatarJob(data: SupporterAvatarJobData, at
   const { requestId, jobId, dispatchToken } = data;
   const started = Date.now();
   const timings: Record<string, number> = {};
-  const mark = (label: string, from: number) => { timings[label] = Date.now() - from; };
+  const mark = (label: string, from: number) => { timings[label] = (timings[label] || 0) + (Date.now() - from); };
 
   const { data: job, error: jobError } = await supabase.from('supporter_avatar_jobs').select('*').eq('id', jobId).eq('request_id', requestId).maybeSingle();
   if (jobError) throw new TransientPipelineError(`job_lookup_failed:${safeDetail(jobError.message, 120)}`);
@@ -277,7 +294,7 @@ export async function processSupporterAvatarJob(data: SupporterAvatarJobData, at
     const sources = (sourceRows || []) as SourceRow[];
     if (!sources.length) throw new Error('no_source_images');
 
-    // 1) carregar referências em paralelo (apoiador + galeria privada)
+    // 1) carregar referências em paralelo (apoiador + galeria privada, taco primeiro)
     const t0 = Date.now();
     const candidates = await candidateMetadata();
     const shortlist = visionShortlist(candidates, 5);
@@ -286,6 +303,8 @@ export async function processSupporterAvatarJob(data: SupporterAvatarJobData, at
       Promise.all(shortlist.map((candidate) => loadCandidate(candidate).catch(() => null))),
     ]);
     mark('load_references', t0);
+    const availableCandidates = shortlist.filter((_, index) => candidateImages[index]);
+    if (!availableCandidates.length) throw new TransientPipelineError('candidate_asset_unavailable');
 
     // 2) uma chamada de visão: melhor foto do apoiador + referência do candidato + cenário
     const t1 = Date.now();
@@ -294,20 +313,17 @@ export async function processSupporterAvatarJob(data: SupporterAvatarJobData, at
     let degraded = false;
     try {
       const visionInputs: Loaded[] = [...supporterImages, ...candidateImages.filter((image): image is Loaded => Boolean(image))];
-      const availableCandidates = shortlist.filter((_, index) => candidateImages[index]);
       const descriptions = availableCandidates.map((candidate, index) => `CANDIDATO ${index}: roupa=${candidate.wardrobe}; taco=${candidate.prop}; diretriz=${candidate.prompt_hint || 'preservar referência'}`).join('\n');
       const prompt = `${SELECTOR_PROMPT}\nESTILO: ${style}.\nORDEM: imagens 0..${supporterImages.length - 1} são fotos do apoiador; as seguintes correspondem aos candidatos 0..${availableCandidates.length - 1}.\n${descriptions}`;
       const raw = await visionJson<Selection>(prompt, visionInputs, 'supporter_selection', SELECTOR_SCHEMA, key);
       const supporterIndex = Number.isInteger(raw.supporter_index) && raw.supporter_index >= 0 && raw.supporter_index < supporterImages.length ? raw.supporter_index : 0;
       const shortIndex = Number.isInteger(raw.candidate_index) && raw.candidate_index >= 0 && raw.candidate_index < availableCandidates.length ? raw.candidate_index : 0;
-      const chosen = availableCandidates[shortIndex] || availableCandidates[0];
-      if (!chosen) throw new Error('candidate_gallery_empty');
+      const chosen = availableCandidates[shortIndex] || availableCandidates[0]!;
       selection = { ...raw, supporter_index: supporterIndex, candidate_index: candidates.indexOf(chosen) };
     } catch (error) {
       degraded = true;
-      const firstAvailable = shortlist.findIndex((_, index) => candidateImages[index]);
-      const fallback = fallbackCandidateIndex(candidates.filter((_, index) => index < shortlist.length && candidateImages[index]), style);
-      selection = { usable: true, supporter_index: 0, face_count: 1, face_quality_score: 60, candidate_index: firstAvailable >= 0 ? (candidates.indexOf(shortlist.filter((_, index) => candidateImages[index])[fallback] || shortlist[firstAvailable]!)) : 0, scene: 'institucional-oficial', composition_plan: 'duas pessoas lado a lado; referência do candidato com área lateral livre; cenário simples', technical_notes: `fallback seguro sem exposição da galeria: ${safeDetail(error, 120)}` };
+      const fallback = fallbackCandidateIndex(availableCandidates, style);
+      selection = { usable: true, supporter_index: 0, face_count: 1, face_quality_score: 60, candidate_index: candidates.indexOf(availableCandidates[fallback] || availableCandidates[0]!), scene: 'institucional-oficial', composition_plan: 'duas pessoas lado a lado; referência do candidato com área lateral livre; cenário simples', technical_notes: `fallback seguro sem exposição da galeria: ${safeDetail(error, 120)}` };
     }
     mark('vision_selection', t1);
     if (!selection.usable) {
@@ -317,48 +333,63 @@ export async function processSupporterAvatarJob(data: SupporterAvatarJobData, at
     }
 
     const candidateMeta = candidates[selection.candidate_index] || candidates[0]!;
-    const candidateImage = candidateImages[candidates.indexOf(candidateMeta)] || await loadCandidate(candidateMeta);
+    const candidateImage = candidateImages[shortlist.indexOf(candidateMeta)] || await loadCandidate(candidateMeta);
     const supporterImage = supporterImages[selection.supporter_index] || supporterImages[0]!;
     const candidateHasBat = String(candidateMeta.prop || '').includes('com-taco');
     const internalSelection = {
       pipeline_version: PIPELINE_VERSION, supporter_source_index: selection.supporter_index, selected_candidate_slug: candidateMeta.slug,
-      scene: selection.scene, composition_plan: selection.composition_plan, face_count: selection.face_count, degraded, autonomous_recovery: true,
+      candidate_has_bat: candidateHasBat, scene: selection.scene, composition_plan: selection.composition_plan, face_count: selection.face_count, degraded, autonomous_recovery: true,
     };
     await updateRequest(requestId, { status: 'candidate_selected', candidate_preset_slug: candidateMeta.slug, internal_selection: internalSelection });
 
-    // 3) UMA geração de imagem, sem texto
-    const t2 = Date.now();
-    await updateRequest(requestId, { status: 'generating' });
-    const prompt = buildCompositionPrompt({ candidatePresetLabel: candidateMeta.label, candidatePresetHint: candidateMeta.prompt_hint, candidateHasBat, scene: selection.scene, compositionPlan: selection.composition_plan });
-    const master = await generateMaster(supporterImage, candidateImage, prompt, key);
-    mark('image_generation', t2);
+    // 3) geração + QA de fidelidade; UMA regeneração com a correção do QA quando o rosto não bate
+    let best: { bytes: Buffer; usage: unknown; inputFidelityUsed: boolean; qa: QaResult | null; score: number; attempt: number } | null = null;
+    let qaProviderError = '';
+    let feedback = '';
+    let generationAttempt = 0;
+    while (generationAttempt < MAX_GENERATIONS_PER_JOB) {
+      generationAttempt += 1;
+      await updateRequest(requestId, { status: generationAttempt > 1 ? 'regenerate' : 'generating' });
+      const tGen = Date.now();
+      const prompt = buildCompositionPrompt({ candidatePresetLabel: candidateMeta.label, candidatePresetHint: candidateMeta.prompt_hint, candidateHasBat, scene: selection.scene, compositionPlan: selection.composition_plan, qaFeedback: feedback || undefined });
+      const master = await generateMaster(supporterImage, candidateImage, prompt, key);
+      mark('image_generation', tGen);
 
-    // 4) renderização vetorial dos 3 formatos + master (local, < 1 s)
+      await updateRequest(requestId, { status: 'qa' });
+      const tQa = Date.now();
+      let qa: QaResult | null = null;
+      try {
+        const masterJpeg = await sharp(master.bytes).jpeg({ quality: 90 }).toBuffer();
+        qa = await visionJson<QaResult>(`${QA_PROMPT}\nA referência do candidato ${candidateHasBat ? 'CONTÉM' : 'NÃO CONTÉM'} taco.`, [supporterImage, candidateImage, { bytes: masterJpeg, mime: 'image/jpeg' }], 'quality_auditor', QA_SCHEMA, key);
+      } catch (error) { qaProviderError = safeDetail(error, 200); }
+      mark('qa', tQa);
+
+      const score = qa ? clamp(qa.supporter_fidelity_score) + clamp(qa.candidate_reference_fidelity_score) : -1;
+      if (!best || score > best.score) best = { ...master, qa, score, attempt: generationAttempt };
+      if (!qa) break; // provedor de QA indisponível: não há como orientar uma regeneração
+      if (qaVerdict(qa)) break;
+      feedback = qaFeedback(qa);
+      console.warn('[supporter-avatar]', requestId, `qa_reprovou tentativa ${generationAttempt}: ${feedback}`);
+    }
+    if (!best) throw new Error('generation_missing');
+    const passed = qaVerdict(best.qa);
+
+    // 4) renderização vetorial dos 3 formatos + master (local)
     const t3 = Date.now();
-    await updateRequest(requestId, { status: 'qa' });
-    const pack = await renderSupporterPack(master.bytes);
-    const masterJpeg = await sharp(master.bytes).jpeg({ quality: 92 }).toBuffer();
+    const pack = await renderSupporterPack(best.bytes);
+    const masterJpeg = await sharp(best.bytes).jpeg({ quality: 92 }).toBuffer();
     mark('render', t3);
 
-    // 5) QA advisory (uma chamada). Falha do provedor não é aprovação: vira revisão.
-    const t4 = Date.now();
-    let qa: QaResult | null = null;
-    let qaProviderError = '';
-    try {
-      qa = await visionJson<QaResult>(`${QA_PROMPT}\nA referência do candidato ${candidateHasBat ? 'CONTÉM' : 'NÃO CONTÉM'} taco.`, [supporterImage, candidateImage, { bytes: masterJpeg, mime: 'image/jpeg' }], 'quality_auditor', QA_SCHEMA, key);
-    } catch (error) { qaProviderError = safeDetail(error, 200); }
-    const passed = qaVerdict(qa);
-    mark('qa', t4);
-
-    // 6) persistir saídas (master + 3 formatos) - uma vez por job (índice único v8)
+    // 5) persistir saídas (master + 3 formatos) - uma vez por job (índice único v8)
     const { data: currentAttempt } = await supabase.from('supporter_avatar_jobs').select('attempts,status').eq('id', jobId).single();
     if (Number(currentAttempt?.attempts || 0) !== attempt || currentAttempt?.status !== 'running') return { ok: true, status: 'superseded' };
     const t5 = Date.now();
     const qaPayloadBase = {
-      ...(qa || { artifacts: ['qa_provider_unavailable'], remediation: ['reexecutar QA quando o provedor estiver disponível'] }),
+      ...(best.qa || { artifacts: ['qa_provider_unavailable'], remediation: ['reexecutar QA quando o provedor estiver disponível'] }),
       pass: passed, agent: SUPPORTER_PHOTO_AGENT_NAME, pipeline_version: PIPELINE_VERSION, render_version: RENDER_VERSION, generation_job_id: jobId,
-      autonomous_recovery: true, scene: selection.scene, openai_usage: master.usage, candidate_reference_internal: candidateMeta.slug,
+      autonomous_recovery: true, scene: selection.scene, openai_usage: best.usage, candidate_reference_internal: candidateMeta.slug, candidate_has_bat: candidateHasBat,
       supporter_source_internal_index: selection.supporter_index, qa_provider_error: qaProviderError || null, image_quality: IMAGE_QUALITY,
+      input_fidelity_used: best.inputFidelityUsed, generation_attempts: generationAttempt, selected_generation_attempt: best.attempt, qa_thresholds: QA_THRESHOLDS,
     };
     const files: Array<{ platform: string; width: number; height: number; bytes: Buffer; mime: string }> = [
       { platform: 'master', width: MASTER_SIZE.width, height: MASTER_SIZE.height, bytes: masterJpeg, mime: 'image/jpeg' },
@@ -372,7 +403,7 @@ export async function processSupporterAvatarJob(data: SupporterAvatarJobData, at
       const { error: insertError } = await supabase.from('supporter_avatar_outputs').insert({
         request_id: requestId, platform: file.platform, width: file.width, height: file.height, storage_path: path, mime_type: file.mime,
         model: OPENAI_IMAGE_MODEL, prompt_version: SUPPORTER_AVATAR_PROMPT_VERSION,
-        qa_score: qa ? clamp(qa.supporter_fidelity_score) : null,
+        qa_score: best.qa ? clamp(best.qa.supporter_fidelity_score) : null,
         qa_payload: { ...qaPayloadBase, exact_output: `${file.width}x${file.height}` },
       });
       if (insertError) {
@@ -387,12 +418,13 @@ export async function processSupporterAvatarJob(data: SupporterAvatarJobData, at
     if (countError) throw new TransientPipelineError(`generation_count_failed:${safeDetail(countError.message, 120)}`);
     timings.total = Date.now() - started;
 
+    // As imagens ficam disponíveis para download em ambos os casos; needs_review só sinaliza revisão técnica.
     const finalStatus = passed ? 'completed' : 'needs_review';
     await updateRequest(requestId, { status: finalStatus, completed_at: passed ? nowIso() : null, pipeline_version: PIPELINE_VERSION });
     await updateJob(jobId, {
       status: finalStatus, stage: PIPELINE_VERSION, model: OPENAI_IMAGE_MODEL,
       error_message: passed ? null : 'qa_threshold_not_met_or_qa_provider_pending',
-      output_payload: { pipeline_version: PIPELINE_VERSION, render_version: RENDER_VERSION, outputs: stored, qa_pass: passed, autonomous_recovery: true, technical_retries_are_free: true, scene: selection.scene, degraded_selection: degraded, timings_ms: timings, runtime: 'vps' },
+      output_payload: { pipeline_version: PIPELINE_VERSION, render_version: RENDER_VERSION, outputs: stored, qa_pass: passed, autonomous_recovery: true, technical_retries_are_free: true, scene: selection.scene, candidate_has_bat: candidateHasBat, degraded_selection: degraded, generation_attempts: generationAttempt, timings_ms: timings, runtime: 'vps' },
       completed_at: nowIso(),
     });
     return { ok: true, status: finalStatus, outputs: stored, timings_ms: timings };

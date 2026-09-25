@@ -23,7 +23,7 @@ export type SupporterOutputKey = keyof typeof SUPPORTER_OUTPUTS;
 export const SUPPORTER_OUTPUT_KEYS = Object.keys(SUPPORTER_OUTPUTS) as SupporterOutputKey[];
 /** Tamanho pedido ao modelo: retrato 2:3, base para os três recortes. */
 export const MASTER_SIZE = { width: 1024, height: 1536, openai: '1024x1536' } as const;
-export const RENDER_VERSION = 'brand-vector-v1';
+export const RENDER_VERSION = 'brand-vector-v2-slogan';
 
 type Color = keyof typeof BRAND_COLORS;
 type Palette = Partial<Record<BrandPath['fill'], Color>>;
@@ -62,6 +62,19 @@ function svgDoc(width: number, height: number, body: string) {
   return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${body}</svg>`);
 }
 
+/** Faixa escura suave no topo para o slogan ficar legível sobre qualquer cenário. */
+function topFade(width: number, to: number, opacity = 0.62) {
+  return `<defs><linearGradient id="topfade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="${opacity}"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient></defs>`
+    + `<rect x="0" y="0" width="${width}" height="${to}" fill="url(#topfade)"/>`;
+}
+
+/** Slogan da campanha ("MADEIRA NELES!") em dourado, com sombra, centralizado no topo. */
+function slogan(cx: number, y: number, size: number) {
+  const shadow = vectorText('madeira_neles', { cx: cx + Math.round(size * 0.05), y: y + Math.round(size * 0.05), size, fill: '#000000', opacity: 0.7 });
+  const text = vectorText('madeira_neles', { cx, y, size, fill: BRAND_COLORS.gold });
+  return shadow.svg + text.svg;
+}
+
 function bottomFade(width: number, height: number, from: number, opacity = 0.92) {
   return `<defs><linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="0.55" stop-color="#000" stop-opacity="${(opacity * 0.85).toFixed(2)}"/><stop offset="1" stop-color="#000" stop-opacity="${opacity}"/></linearGradient></defs>`
     + `<rect x="0" y="${from}" width="${width}" height="${height - from}" fill="url(#fade)"/>`;
@@ -80,7 +93,9 @@ export function whatsappOverlay() {
   const numX = (W - 440) / 2, numY = badgeY + (badgeH - num.height) / 2;
   const numSvg = number1470({ x: numX, y: numY, width: 440, fill: 'black' }).svg;
   const fade = bottomFade(W, W, 640, 0.78);
-  return svgDoc(W, W, fade + shadow.svg + label.svg + badge + numSvg + ring);
+  // slogan no topo, dentro do círculo (corda em y=200 tem meia-largura ~460)
+  const top = topFade(W, 330, 0.7) + slogan(540, 198, 78);
+  return svgDoc(W, W, top + fade + shadow.svg + label.svg + badge + numSvg + ring);
 }
 
 /** Overlay 1080x1350 (feed 4:5). */
@@ -91,7 +106,8 @@ export function instagramOverlay() {
   const shadow = vectorText('eu_apoio', { cx: 544, y: 872, size: 84, fill: '#000000', opacity: 0.6 });
   const line = `<rect x="200" y="882" width="680" height="4" fill="${BRAND_COLORS.gold}" opacity="0.9"/>`;
   const logo = logoGroup({ x: (W - 520) / 2, y: 906, width: 520, deputado: false });
-  return svgDoc(W, H, fade + shadow.svg + label.svg + line + logo.svg);
+  const top = topFade(W, 360, 0.66) + slogan(540, 152, 100);
+  return svgDoc(W, H, top + fade + shadow.svg + label.svg + line + logo.svg);
 }
 
 /** Overlay 1080x1920 (story 9:16). A foto ocupa 1080x1620 no topo; base sólida. */
@@ -103,7 +119,8 @@ export function storyOverlay() {
   const shadow = vectorText('eu_apoio', { cx: 545, y: 1293, size: 110, fill: '#000000', opacity: 0.6 });
   const line = `<rect x="160" y="1304" width="760" height="5" fill="${BRAND_COLORS.gold}" opacity="0.9"/>`;
   const logo = logoGroup({ x: (W - 600) / 2, y: 1334, width: 600, deputado: true });
-  return svgDoc(W, H, base + fade + shadow.svg + label.svg + line + logo.svg);
+  const top = topFade(W, 460, 0.66) + slogan(540, 206, 118);
+  return svgDoc(W, H, top + base + fade + shadow.svg + label.svg + line + logo.svg);
 }
 
 export interface RenderedOutput { key: SupporterOutputKey; width: number; height: number; mime: 'image/jpeg'; bytes: Buffer }

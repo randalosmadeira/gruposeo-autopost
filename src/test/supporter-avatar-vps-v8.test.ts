@@ -31,7 +31,7 @@ function directive(source: string, name: string) {
 
 describe('Apoiadores 1470 - pipeline VPS v8 (rápido, sem selo na imagem)', () => {
   it('mantém o prompt canônico do Supabase idêntico ao do orquestrador nos blocos de diretriz', () => {
-    for (const name of ['IDENTITY_GUARDIAN_DIRECTIVE', 'COMPOSITION_DIRECTOR_DIRECTIVE', 'LIGHTING_HARMONIZER_DIRECTIVE', 'FRAMING_DIRECTIVE', 'NO_TEXT_DIRECTIVE', 'NEGATIVE_PROMPT', 'SELECTOR_PROMPT', 'QA_PROMPT']) {
+    for (const name of ['IDENTITY_GUARDIAN_DIRECTIVE', 'WARDROBE_DIRECTIVE', 'COMPOSITION_DIRECTOR_DIRECTIVE', 'LIGHTING_HARMONIZER_DIRECTIVE', 'FRAMING_DIRECTIVE', 'NO_TEXT_DIRECTIVE', 'NEGATIVE_PROMPT', 'SELECTOR_PROMPT', 'QA_PROMPT']) {
       expect(directive(vpsPrompt, name), name).toBe(directive(sharedPrompt, name));
     }
     expect(sharedPrompt).toContain("PIPELINE_VERSION = 'supporter-avatar-vps-v8'");
@@ -43,8 +43,10 @@ describe('Apoiadores 1470 - pipeline VPS v8 (rápido, sem selo na imagem)', () =
       expect(source).not.toContain('Imagem gerada por IA');
       expect(source).not.toContain('TRANSPARÊNCIA: inserir');
       expect(source).not.toMatch(/BRANDING: inserir/);
-      expect(source).toContain('PROIBIDO ABSOLUTO: qualquer texto, letra, número, logotipo, selo');
-      expect(source).toContain('any text, any letters, any numbers, logo');
+      expect(source).toContain('PROIBIDO ADICIONAR: qualquer texto, letra, número, logotipo, selo');
+      expect(source).toContain('added text, invented letters, invented numbers');
+      expect(source).toContain('Estampas, números e logotipos já presentes nas roupas das referências devem ser mantidos fielmente');
+      expect(source).toContain('WARDROBE GUARDIAN AGENT');
     }
     expect(render).not.toContain('Imagem gerada por IA - Campanha Oficial');
     expect(brand).not.toContain('gerada por IA');
@@ -78,11 +80,39 @@ describe('Apoiadores 1470 - pipeline VPS v8 (rápido, sem selo na imagem)', () =
     expect(orchestratorPackage.dependencies.sharp).toBeTruthy();
   });
 
-  it('garante uma referência com taco na lista curta enviada à visão', () => {
+  it('taco primeiro: referências com taco lideram a lista curta e o seletor prefere taco', () => {
     expect(pipeline).toContain('export function visionShortlist(');
-    expect(pipeline).toContain("const bat = candidates.find((candidate) => candidate.prop === 'com-taco')");
-    expect(sharedPrompt).toContain('O taco de beisebol faz parte da identidade da campanha');
+    expect(pipeline).toContain("const withBat = candidates.filter((candidate) => candidate.prop === 'com-taco')");
+    expect(pipeline).toContain('return [...withBat, ...withoutBat]');
+    expect(pipeline).toContain("if (candidate.prop === 'com-taco') score += 50;");
+    expect(sharedPrompt).toContain('PREFIRA referências com taco');
     expect(sharedPrompt).not.toContain('Prefira referência sem taco');
+  });
+
+  it('rostos intactos: qualidade alta, limiar de fidelidade 85 e uma regeneração guiada pelo QA', () => {
+    expect(pipeline).toContain("process.env.SUPPORTER_AVATAR_IMAGE_QUALITY || 'high'");
+    expect(pipeline).toContain('QA_THRESHOLDS = { supporter: 85, candidate: 80, anatomy: 70, wardrobe: 70 }');
+    expect(pipeline).toContain('MAX_GENERATIONS_PER_JOB = 2');
+    expect(pipeline).toContain('while (generationAttempt < MAX_GENERATIONS_PER_JOB)');
+    expect(pipeline).toContain('qaFeedback: feedback || undefined');
+    expect(pipeline).toContain('input_fidelity_used: best.inputFidelityUsed');
+    expect(sharedPrompt).toContain('Qualquer mudança perceptível de fisionomia em qualquer uma das duas pessoas é falha grave');
+  });
+
+  it('slogan "MADEIRA NELES!" no topo dos três formatos e 1470 embaixo', () => {
+    expect(brand).toContain('madeira_neles: { d:');
+    expect(render).toContain("function slogan(cx: number, y: number, size: number)");
+    expect((render.match(/slogan\(540, /g) || []).length).toBe(3);
+    expect(render).toContain("RENDER_VERSION = 'brand-vector-v2-slogan'");
+  });
+
+  it('download liberado assim que as imagens existem, com aprovação registrada automaticamente', () => {
+    expect(ui).toContain('async function downloadOutput(url: string, filename: string)');
+    expect(ui).toContain("dr-madeira-1470-perfil.jpg");
+    expect(ui).toContain('Suas imagens já estão liberadas');
+    expect(ui).not.toContain('Liberar downloads');
+    expect(ui).not.toContain('Aprovo esta composição');
+    expect(ui).toContain('post(APPROVE_URL, { requestId: session.requestId, token: session.token })');
   });
 
   it('faz uma única geração de imagem e uma única seleção de visão por pedido', () => {
@@ -91,7 +121,7 @@ describe('Apoiadores 1470 - pipeline VPS v8 (rápido, sem selo na imagem)', () =
     expect((pipeline.match(/await generateMaster\(/g) || []).length).toBe(1);
     expect(pipeline).toContain("form.set('size', MASTER_SIZE.openai)");
     expect(pipeline).toContain("form.set('quality', IMAGE_QUALITY)");
-    expect(pipeline).toContain('await renderSupporterPack(master.bytes)');
+    expect(pipeline).toContain('await renderSupporterPack(best.bytes)');
     expect(pipeline).toContain('timings_ms');
     expect(pipeline).not.toContain('SUPPORT_SOCIAL_PACK');
   });
