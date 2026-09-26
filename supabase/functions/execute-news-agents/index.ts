@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
+import { fetchFeed, validateRSSUrl } from "../_shared/rss-feed.ts";
 
 const FUNCTION_NAME = "execute-news-agents";
 const corsHeaders = {
@@ -16,6 +17,7 @@ type Agent = {
   name: string;
   topics: string[];
   rss_feeds: string[] | null;
+  category: string | null;
   language: string;
   country: string;
   prompt_template: string;
@@ -26,11 +28,33 @@ type Agent = {
   execution_times: string[] | null;
   image_generation: string;
   articles_generated: number | null;
+  last_run_at: string | null;
   is_active: boolean;
 };
 
 type NewsItem = { title: string; link: string; snippet: string; source: string; date?: string };
 type Body = { force?: boolean; agentIds?: string[]; dryRun?: boolean; limitPerAgent?: number };
+type JsonRecord = Record<string, unknown>;
+type EdgeCallResult = { ok: boolean; status: number; data: JsonRecord | null };
+type GeneratedArticle = {
+  id: string;
+  title: string;
+  excerpt?: string;
+  content: string;
+  status: string;
+  featured_image_url?: string | null;
+  config?: JsonRecord | null;
+};
+type AgentRunResult = {
+  agentId: string;
+  agentName: string;
+  discovered: number;
+  generated: number;
+  wordpressDrafts: number;
+  published: number;
+  imagePending: number;
+  errors: string[];
+};
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -45,52 +69,83 @@ async function sha256(value: string) {
   return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function nowSaoPaulo() {
+function saoPauloClock(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     weekday: "short",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-  }).formatToParts(new Date());
+  }).formatToParts(date);
   const weekday = String(parts.find((p) => p.type === "weekday")?.value || "").toLowerCase();
   const hour = String(parts.find((p) => p.type === "hour")?.value || "00").padStart(2, "0");
   const minute = String(parts.find((p) => p.type === "minute")?.value || "00").padStart(2, "0");
+  const year = String(parts.find((p) => p.type === "year")?.value || "0000");
+  const month = String(parts.find((p) => p.type === "month")?.value || "00").padStart(2, "0");
+  const dayOfMonth = String(parts.find((p) => p.type === "day")?.value || "00").padStart(2, "0");
   const map: Record<string, string> = { sun: "dom", mon: "seg", tue: "ter", wed: "qua", thu: "qui", fri: "sex", sat: "sab" };
-  return { day: map[weekday] || "seg", time: `${hour}:${minute}`, hour };
+  return {
+    date: `${year}-${month}-${dayOfMonth}`,
+    day: map[weekday] || "seg",
+    time: `${hour}:${minute}`,
+    minuteOfDay: Number(hour) * 60 + Number(minute),
+  };
+}
+
+function minuteOfDay(value: string) {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
 }
 
 function eligible(agent: Agent, force: boolean) {
   if (force) return true;
-  const now = nowSaoPaulo();
+  const now = saoPauloClock();
   const days = agent.active_days?.length ? agent.active_days : ["seg", "ter", "qua", "qui", "sex"];
   if (!days.includes(now.day)) return false;
-  const times = agent.execution_times || [];
-  if (!times.length) return now.hour === "08";
-  return times.some((value) => value.startsWith(now.hour));
+  const times = agent.execution_times?.length ? agent.execution_times : ["08:00"];
+  const targetMinute = times
+    .map(minuteOfDay)
+    .find((value) => value !== null && now.minuteOfDay >= value && now.minuteOfDay - value < 15);
+  if (targetMinute === undefined) return false;
+  if (!agent.last_run_at) return true;
+  const lastRun = saoPauloClock(new Date(agent.last_run_at));
+  return lastRun.date !== now.date || lastRun.minuteOfDay < targetMinute;
+}
+
+function normalizeSourceUrl(value: string) {
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^(utm_|fbclid$|gclid$)/i.test(key)) url.searchParams.delete(key);
+    }
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return value.trim().replace(/\/$/, "");
+  }
 }
 
 async function fetchRSS(url: string, limit = 5): Promise<NewsItem[]> {
   try {
-    const response = await fetch(url, {
-      headers: { "User-Agent": "ZicaNewsBot/3.10.2", Accept: "application/rss+xml, application/xml, text/xml" },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!response.ok) return [];
-    const xml = await response.text();
-    const rows: NewsItem[] = [];
-    const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
-    let match: RegExpExecArray | null;
-    while ((match = itemRegex.exec(xml)) && rows.length < limit) {
-      const block = match[1];
-      const title = (block.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>|<title>([^<]+)<\/title>/i)?.slice(1).find(Boolean) || "").trim();
-      const link = (block.match(/<link>([^<]+)<\/link>/i)?.[1] || "").trim();
-      const snippet = (block.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>|<description>([\s\S]*?)<\/description>/i)?.slice(1).find(Boolean) || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 1200);
-      const source = (block.match(/<source[^>]*>([^<]+)<\/source>/i)?.[1] || new URL(url).hostname).trim();
-      const date = block.match(/<pubDate>([^<]+)<\/pubDate>/i)?.[1];
-      if (title && link) rows.push({ title, link, snippet, source, date });
-    }
-    return rows;
+    validateRSSUrl(url);
+    const feed = await fetchFeed(url);
+    return feed.items
+      .filter((item) => item.title && item.link)
+      .slice(0, limit)
+      .map((item) => ({
+        title: item.title,
+        link: item.link,
+        snippet: (item.content || item.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 1200),
+        source: item.source || feed.title || new URL(url).hostname,
+        date: item.pubDate || undefined,
+      }));
   } catch {
     return [];
   }
@@ -132,7 +187,7 @@ async function fetchSourceContent(url: string) {
 }
 
 async function edgeCall(baseUrl: string, serviceKey: string, slug: string, body: Record<string, unknown>, attempts = 3) {
-  let last: { ok: boolean; status: number; data: any } = { ok: false, status: 500, data: null };
+  let last: EdgeCallResult = { ok: false, status: 500, data: null };
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       const response = await fetch(`${baseUrl}/functions/v1/${slug}`, {
@@ -142,8 +197,15 @@ async function edgeCall(baseUrl: string, serviceKey: string, slug: string, body:
         signal: AbortSignal.timeout(slug === "generate-image" ? 150000 : 120000),
       });
       const text = await response.text();
-      let data: any = null;
-      try { data = JSON.parse(text); } catch { data = { error: text.slice(0, 500) }; }
+      let data: JsonRecord = {};
+      try {
+        const parsed: unknown = JSON.parse(text);
+        data = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+          ? parsed as JsonRecord
+          : { value: parsed };
+      } catch {
+        data = { error: text.slice(0, 500) };
+      }
       last = { ok: response.ok && data?.success !== false, status: response.status, data };
       const noRetry = response.status === 401 || response.status === 403 || response.status === 402 || data?.retryable === false || data?.code === "editorial_gate";
       if (last.ok || noRetry) return last;
@@ -196,21 +258,29 @@ Deno.serve(async (req: Request) => {
     if (error) throw error;
     const agents = (agentRows || []) as Agent[];
     const selected = agents.filter((agent) => eligible(agent, Boolean(body.force)));
-    const results: any[] = [];
+    const results: AgentRunResult[] = [];
 
     for (const agent of selected) {
       const result = { agentId: agent.id, agentName: agent.name, discovered: 0, generated: 0, wordpressDrafts: 0, published: 0, imagePending: 0, errors: [] as string[] };
       try {
         const candidates: NewsItem[] = [];
-        for (const feed of agent.rss_feeds || []) candidates.push(...await fetchRSS(feed, agent.news_per_day || 1));
+        for (const feed of agent.rss_feeds || []) candidates.push(...await fetchRSS(feed, 50));
         if (candidates.length < (agent.news_per_day || 1)) {
           for (const topic of (agent.topics || []).slice(0, 3)) {
             candidates.push(...await searchGoogleNews(topic, agent.language || "pt-BR", agent.country || "BR"));
             if (candidates.length >= Math.max(3, agent.news_per_day || 1)) break;
           }
         }
+        const { data: priorRows } = await admin
+          .from("agent_news")
+          .select("source_url")
+          .eq("agent_id", agent.id)
+          .not("source_url", "is", null)
+          .limit(5000);
+        const seenUrls = new Set((priorRows || []).map((row) => normalizeSourceUrl(String(row.source_url || ""))));
         const unique = candidates
-          .filter((item, index, all) => index === all.findIndex((other) => other.title === item.title))
+          .filter((item, index, all) => index === all.findIndex((other) => normalizeSourceUrl(other.link) === normalizeSourceUrl(item.link)))
+          .filter((item) => !seenUrls.has(normalizeSourceUrl(item.link)))
           .slice(0, body.limitPerAgent || agent.news_per_day || 1);
         result.discovered = unique.length;
 
@@ -232,9 +302,35 @@ Deno.serve(async (req: Request) => {
             result.errors.push(`rewrite: ${String(rewrite.data?.error || rewrite.status).slice(0, 160)}`);
             continue;
           }
+          if (rewrite.data.duplicate === true) continue;
 
-          const article = rewrite.data.article;
+          const article = rewrite.data.article as GeneratedArticle;
           result.generated++;
+
+          const categoryId = Number(agent.category);
+          const wordpressCategories: Array<number | string> = agent.category
+            ? [Number.isInteger(categoryId) && categoryId > 0 ? categoryId : agent.category]
+            : [];
+          const enrichedConfig = {
+            ...(article.config && typeof article.config === "object" ? article.config : {}),
+            source_type: agent.rss_feeds?.length ? "rss" : "news_search",
+            source_agent_id: agent.id,
+            source_agent_name: agent.name,
+            source_url: source.finalUrl || item.link,
+            source_name: item.source,
+            source_original_title: item.title,
+            source_published_at: item.date || null,
+            wordpress_categories: wordpressCategories,
+          };
+          const { error: provenanceError } = await admin.from("articles").update({
+            config: enrichedConfig,
+            updated_at: new Date().toISOString(),
+          }).eq("id", article.id).eq("user_id", agent.user_id);
+          if (provenanceError) {
+            result.errors.push(`provenance: ${provenanceError.message.slice(0, 160)}`);
+            continue;
+          }
+          article.config = enrichedConfig;
           let imageOk = Boolean(article.featured_image_url);
           if (!body.dryRun && agent.image_generation !== "none" && article.status === "ready") {
             const image = await edgeCall(supabaseUrl, serviceKey, "generate-image", {

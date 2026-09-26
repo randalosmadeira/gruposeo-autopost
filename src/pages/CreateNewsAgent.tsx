@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -41,13 +41,14 @@ import {
 } from '@/components/ui/form';
 import { useNewsAgents } from '@/hooks/useNewsAgents';
 import { useProjects } from '@/hooks/useProjects';
+import { useWordPressAPI } from '@/hooks/useWordPressAPI';
 import { RSSFeedManager } from '@/components/news-agents/RSSFeedManager';
 import { cn } from '@/lib/utils';
 
 const formSchema = z.object({
   name: z.string().min(2, 'Nome obrigatório'),
   agent_type: z.enum(['news', 'rss']),
-  project_id: z.string().optional(),
+  project_id: z.string().min(1, 'Selecione o site WordPress de destino'),
   category: z.string().optional(),
   search_internal_links: z.boolean(),
   publish_status: z.string(),
@@ -61,6 +62,7 @@ const formSchema = z.object({
 });
 
 type FormData = z.infer<typeof formSchema>;
+type WordPressCategory = { id: number; name: string; slug: string };
 
 const DAYS = [
   { id: 'dom', label: 'Dom' },
@@ -89,6 +91,9 @@ export default function CreateNewsAgent() {
   const [rssFeedInput, setRssFeedInput] = useState('');
   const [activeDays, setActiveDays] = useState<string[]>(['seg', 'ter', 'qua', 'qui', 'sex']);
   const [executionTimes, setExecutionTimes] = useState<string[]>([]);
+  const [wordpressCategories, setWordpressCategories] = useState<WordPressCategory[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -110,6 +115,27 @@ export default function CreateNewsAgent() {
   });
 
   const agentType = form.watch('agent_type');
+  const projectId = form.watch('project_id');
+  const { getCategories } = useWordPressAPI(projectId || null);
+
+  useEffect(() => {
+    let cancelled = false;
+    form.setValue('category', '');
+    setWordpressCategories([]);
+    setCategoriesError(null);
+    if (!projectId) return () => { cancelled = true; };
+
+    setCategoriesLoading(true);
+    void getCategories(100).then((result) => {
+      if (cancelled) return;
+      if (result.success && result.data) setWordpressCategories(result.data);
+      else setCategoriesError(result.error || 'Não foi possível carregar as categorias do WordPress');
+    }).finally(() => {
+      if (!cancelled) setCategoriesLoading(false);
+    });
+
+    return () => { cancelled = true; };
+  }, [form, getCategories, projectId]);
 
   const addTopic = () => {
     const trimmed = topicInput.trim();
@@ -154,14 +180,24 @@ export default function CreateNewsAgent() {
 
     createAgent.mutate({
       name: data.name,
-      project_id: data.project_id || undefined,
+      project_id: data.project_id,
+      agent_type: data.agent_type,
+      category: data.category || undefined,
       topics,
       keywords: [],
       rss_feeds: rssFeeds,
       search_internal_links: data.search_internal_links,
       cite_sources_inline: true,
       auto_publish: data.publish_status === 'publish',
-      post_type: data.prompt_template,
+      post_type: 'blog',
+      publish_status: data.publish_status as 'draft' | 'pending' | 'publish',
+      news_per_day: data.news_per_day,
+      active_days: activeDays,
+      execution_times: executionTimes,
+      search_window: data.search_window,
+      image_generation: data.image_generation,
+      prompt_template: data.prompt_template,
+      is_active: data.is_active,
       language: data.language,
       country: data.country,
     }, {
@@ -286,19 +322,21 @@ export default function CreateNewsAgent() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Categorias de Publicação (Opcional)</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={!projectId || categoriesLoading}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Selecione categorias..." />
+                              <SelectValue placeholder={categoriesLoading ? 'Carregando categorias...' : 'Selecione uma categoria...'} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="tecnologia">Tecnologia</SelectItem>
-                            <SelectItem value="negocios">Negócios</SelectItem>
-                            <SelectItem value="marketing">Marketing</SelectItem>
-                            <SelectItem value="saude">Saúde</SelectItem>
+                            {wordpressCategories.map((category) => (
+                              <SelectItem key={category.id} value={String(category.id)}>
+                                {category.name}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
+                        {categoriesError && <FormDescription className="text-destructive">{categoriesError}</FormDescription>}
                         <FormMessage />
                       </FormItem>
                     )}
