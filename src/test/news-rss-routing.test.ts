@@ -46,6 +46,7 @@ describe('RSS republication routing', () => {
 
   it('drains unseen feed items without replaying previously processed URLs', () => {
     const worker = read('supabase/functions/execute-news-agents/index.ts');
+    expect(worker).toContain('.formatToParts(date)');
     expect(worker).toContain('fetchRSS(feed, 50)');
     expect(worker).toContain('.from("agent_news")');
     expect(worker).toContain('seenUrls.has(normalizeSourceUrl(item.link))');
