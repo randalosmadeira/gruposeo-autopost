@@ -54,7 +54,7 @@ describe('RSS republication routing', () => {
   });
 
   it('dispatches half-hour schedules through a quarter-hour cron', () => {
-    const migration = read('supabase/migrations/20260926040000_news_agents_quarter_hour_cron.sql');
+    const migration = read('supabase/migrations/20260926200258_news_agents_quarter_hour_cron.sql');
     expect(migration).toContain("'5,20,35,50 * * * *'");
     expect(migration).toContain("'zica-news-agents-15min'");
   });
