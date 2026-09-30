@@ -59,12 +59,12 @@ jobs:
           echo "== Docker =="
           docker --version
           echo "== Zica.ai containers only =="
-          docker ps --format '{{.Names}} | {{.Image}} | {{.Ports}}' | grep '^zica-ai-' || true
+          docker ps --format '{{.Names}} | {{.Image}} | {{.Ports}}' | grep '^zica-ia-posts-' || true
           echo "== Zica.ai port =="
           ss -ltn 2>/dev/null | grep -E ':8787\b' || true
           echo "== Zica.ai root =="
-          test -d /opt/zica-ai/orchestrator && echo 'zica_ai_root=present' || echo 'zica_ai_root=absent'
-          test -f /opt/zica-ai/orchestrator/shared/.env.production && echo 'zica_ai_env=present' || echo 'zica_ai_env=absent'
+          test -d /opt/zica-ia-posts/orchestrator && echo 'zica_ai_root=present' || echo 'zica_ai_root=absent'
+          test -f /opt/zica-ia-posts/orchestrator/shared/.env.production && echo 'zica_ai_env=present' || echo 'zica_ai_env=absent'
           echo "== Proxy capabilities =="
           for bin in nginx certbot; do
             if command -v "$bin" >/dev/null 2>&1; then echo "$bin=present"; else echo "$bin=absent"; fi
@@ -80,6 +80,6 @@ jobs:
         run: |
           echo "### Zica.ai VPS isolation preflight" >> "$GITHUB_STEP_SUMMARY"
           echo "- Environment: \`zica-ai-production\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Root: \`/opt/zica-ai/orchestrator\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Root: \`/opt/zica-ia-posts/orchestrator\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Dedicated SSH identity is decoded from ZICA_AI_VPS_SSH_PRIVATE_KEY_B64." >> "$GITHUB_STEP_SUMMARY"
           echo "- No ZicaJuris files, secrets or containers are inspected." >> "$GITHUB_STEP_SUMMARY"
