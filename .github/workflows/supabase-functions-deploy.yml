@@ -1,0 +1,128 @@
+name: Deploy Supabase Edge Functions
+
+# Implanta edge functions direto do repositório, com a CLI do Supabase.
+#
+# Por que existe: até 2026-10-02 as funções eram enviadas arquivo por arquivo por um agente. Esse
+# canal deixou a produção divergente do repositório (analyze-seo-advanced atrás da main) e, em
+# 2026-09-23, gravou um texto de marcador no lugar do código da seo-agent, que ficou fora do ar.
+# Aqui o conteúdo sai do commit, sem transcrição.
+#
+# Requisito único: o secret SUPABASE_ACCESS_TOKEN no environment zica-ai-production
+# (token pessoal criado em supabase.com/dashboard/account/tokens).
+
+on:
+  workflow_dispatch:
+    inputs:
+      functions:
+        description: 'Funções separadas por espaço. Ex.: seo-agent analyze-seo-advanced'
+        required: true
+        type: string
+      dry_run:
+        description: 'Só validar (não implanta)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-functions-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy edge functions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: zica-ai-production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: ubahrbgaxrkjxklytobl
+      FUNCTIONS: ${{ inputs.functions }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate request
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_ACCESS_TOKEN:-}" || { echo "::error::SUPABASE_ACCESS_TOKEN ausente no environment zica-ai-production."; exit 1; }
+          test -n "${FUNCTIONS// /}" || { echo "::error::Informe ao menos uma função."; exit 1; }
+          for fn in $FUNCTIONS; do
+            case "$fn" in
+              *[!a-z0-9-]*|'') echo "::error::Nome de função inválido: $fn"; exit 1;;
+            esac
+            entry="supabase/functions/$fn/index.ts"
+            test -f "$entry" || { echo "::error::$entry não existe no repositório."; exit 1; }
+            # Uma função real serve requisições (Deno.serve ou serve do std) ou reexporta outra função.
+            # Marcador, arquivo vazio ou rascunho não passam.
+            size="$(wc -c < "$entry")"
+            if ! grep -Eq 'Deno\.serve\(|(^|[^A-Za-z0-9_.])serve\(|^import "\.\./[a-z0-9-]+/index\.ts";' "$entry"; then
+              echo "::error::$entry não parece uma edge function ($size bytes, sem handler)."; exit 1
+            fi
+            echo "ok: $fn ($size bytes)"
+          done
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.116.0
+
+      - name: Deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.supabase.com/v1/projects/$PROJECT_REF/functions"
+          {
+            echo "## Edge functions"
+            echo "| Função | verify_jwt | Resultado |"
+            echo "|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for fn in $FUNCTIONS; do
+            # verify_jwt: mantém o que está em produção; função nova usa o supabase/config.toml.
+            http="$(curl --silent --output /tmp/fn.json --write-out '%{http_code}' -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "$api/$fn")"
+            flag=""
+            if [ "$http" = "200" ]; then
+              verify="$(jq -r '.verify_jwt' /tmp/fn.json)"
+              source="produção"
+              [ "$verify" = "false" ] && flag="--no-verify-jwt"
+            elif [ "$http" = "404" ]; then
+              verify="config.toml"
+              source="função nova"
+            else
+              echo "::error::Não foi possível ler $fn em produção (HTTP $http)."; exit 1
+            fi
+            echo "== $fn (verify_jwt=$verify, origem: $source)"
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "| \`$fn\` | $verify | validado, não implantado |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            # shellcheck disable=SC2086
+            supabase functions deploy "$fn" --project-ref "$PROJECT_REF" --use-api $flag
+            echo "| \`$fn\` | $verify | implantado de ${GITHUB_SHA::7} |" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Verify functions boot
+        if: ${{ inputs.dry_run != true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Erro de inicialização aparece como 500/503 em qualquer chamada. Uma função que subiu
+          # responde ao preflight (200/204) ou recusa por falta de credencial (401/403/405).
+          failed=0
+          for fn in $FUNCTIONS; do
+            code="000"
+            for attempt in 1 2 3 4 5 6; do
+              code="$(curl --silent --output /tmp/probe.txt --write-out '%{http_code}' --max-time 30 -X OPTIONS "https://$PROJECT_REF.supabase.co/functions/v1/$fn" || true)"
+              case "$code" in 2*|401|403|405) break;; esac
+              sleep 5
+            done
+            case "$code" in
+              2*|401|403|405) echo "ok: $fn respondeu HTTP $code";;
+              *) echo "::error::$fn não iniciou (HTTP $code): $(head -c 200 /tmp/probe.txt)"; failed=1;;
+            esac
+          done
+          exit "$failed"

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   evaluateTitleQuality,
   findComplianceViolations,
@@ -284,5 +286,26 @@ describe('a tela mostra a regra e o trecho que bloquearam', () => {
     expect(withGateIssues('Falha ao publicar no WordPress.', { error: 'x' })).toBe('Falha ao publicar no WordPress.');
     expect(describeGateIssues(null)).toBe('');
     expect(describeGateIssues({ issues: 'texto' })).toBe('');
+  });
+});
+
+describe('prompt da função analyze-seo-advanced e canal de deploy', () => {
+  const read = (path: string) => readFileSync(resolve(__dirname, '../..', path), 'utf8');
+
+  it('não pede chamada de urgência no artigo gerado', () => {
+    const source = read('supabase/functions/analyze-seo-advanced/index.ts');
+    expect(source).not.toContain('CTAs: 5 estratégicos (urgência');
+    expect(source).not.toContain('CTAs estratégicos (urgência');
+    expect(source).toContain('CONVITES DE CONTATO: sóbrios e informativos');
+  });
+
+  it('o workflow de deploy recusa marcador no lugar do código e preserva o verify_jwt de produção', () => {
+    const workflow = read('.github/workflows/supabase-functions-deploy.yml');
+    expect(workflow).toContain('environment: zica-ai-production');
+    expect(workflow).toContain('secrets.SUPABASE_ACCESS_TOKEN');
+    expect(workflow).toContain('não parece uma edge function');
+    expect(workflow).toContain('--no-verify-jwt');
+    expect(workflow).toContain('supabase functions deploy "$fn" --project-ref "$PROJECT_REF" --use-api');
+    expect(workflow).not.toMatch(/sbp_[A-Za-z0-9]{20,}/);
   });
 });
