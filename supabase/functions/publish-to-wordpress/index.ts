@@ -3,7 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 import { ensureEditorialHeadingStructure, normalizeEditorialHtml } from "../_shared/editorial-html.ts";
 import { findPublicationResidues, repairPublicationResidues, resolveMetaDescription } from "../_shared/publication-safety.ts";
-import { evaluateTitleQuality, findBrokenContactCtas, findComplianceViolations, lookupPublishedSlug, normalizeSlugForLookup, repairBrokenContactCtas, repairCommonTitleTypos } from "../_shared/publication-quality.ts";
+import { evaluateTitleQuality, findBrokenContactCtas, findComplianceViolations, lookupPublishedSlug, normalizeSlugForLookup, repairBrokenContactCtas, repairCommonTitleTypos, repairSolicitationCtas } from "../_shared/publication-quality.ts";
 import { buildArticleJsonLd } from "../_shared/schema-builder.ts";
 import { mapSegmentToSector } from "../_shared/sector-config.ts";
 import { isPluginModeProject, pluginRequest, resolvePluginKey, resolvePluginNamespace } from "../_shared/wordpress-plugin-client.ts";
@@ -296,6 +296,16 @@ Deno.serve(async (req: Request) => {
     }
     const ctaRepair = repairBrokenContactCtas(article.content, project.empresa_whatsapp);
     if (ctaRepair.repaired) article.content = ctaRepair.content;
+    // Chamadas de captação direta escritas pelo redator viram convite sóbrio antes do portão; o texto
+    // corrigido é gravado para que a prévia no painel mostre exatamente o que vai ao ar.
+    const solicitationRepair = repairSolicitationCtas(article.content, project.empresa_whatsapp);
+    const excerptRepair = repairSolicitationCtas(article.excerpt);
+    if (solicitationRepair.repaired || excerptRepair.repaired) {
+      article.content = solicitationRepair.content;
+      if (article.excerpt) article.excerpt = excerptRepair.content;
+      await admin.from("articles").update({ content: article.content, excerpt: article.excerpt, updated_at: new Date().toISOString() })
+        .eq("id", article.id).eq("organization_id", article.organization_id);
+    }
     const brokenCtas = findBrokenContactCtas(article.content);
     if (brokenCtas.length > 0) {
       return json({
@@ -307,7 +317,7 @@ Deno.serve(async (req: Request) => {
         request_id: requestId,
       }, 409);
     }
-    const complianceViolations = findComplianceViolations({ title: article.title, content: article.content, excerpt: article.excerpt || config.seo_description });
+    const complianceViolations = findComplianceViolations({ title: article.title, content: article.content, excerpt: article.excerpt || config.seo_description, brand: project.empresa_nome });
     if (complianceViolations.length > 0) {
       return json({
         success: false,
