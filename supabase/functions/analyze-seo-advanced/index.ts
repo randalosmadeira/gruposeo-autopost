@@ -514,7 +514,7 @@ function buildImprovements(analysis: any): Array<{area: string, priority: string
     improvements.push({ area: 'FAQ + Schema', priority: 'alta', suggestion: 'Adicione FAQ com 5-8 perguntas + FAQPage schema para featured snippets e Share of Model em IAs.', impact: 'CTR +30% + visibilidade GEO' });
   }
   if (!analysis.structure.hasCTA) {
-    improvements.push({ area: 'CTA', priority: 'média', suggestion: 'Adicione CTAs estratégicos (urgência, autoridade, lead, comunidade, fechamento).', impact: 'Conversão +15%' });
+    improvements.push({ area: 'CTA', priority: 'média', suggestion: 'Adicione convites de contato sóbrios (orientação, autoridade, contato, comunidade, fechamento), sem urgência nem promessa.', impact: 'Conversão +15%' });
   }
   if (!analysis.keyword.titleHasKeyword) {
     improvements.push({ area: 'Keyword no Título', priority: 'alta', suggestion: `A keyword "${analysis.keyword.keyword}" não está no título. Inclua-a nos primeiros 60 chars.`, impact: 'Ranking +10-15 posições' });
@@ -642,7 +642,7 @@ ${internalLinksStr}
 5. FLESCH >= 70: Frases máx 25 palavras, parágrafos 3-7 linhas, voz ativa
 6. Estrutura: H2 (mín 5) > H3 (mín 3), HTML semântico
 7. FAQ: 5-8 perguntas com <h3> dentro de seção FAQ
-8. CTAs: 5 estratégicos (urgência, autoridade, lead, comunidade, fechamento)
+8. CONVITES DE CONTATO: sóbrios e informativos, nos cinco blocos indicados acima (orientação, autoridade, contato, comunidade, fechamento); sem urgência, medo, gratuidade ou promessa
 9. CONCLUSÃO: com CTA final e links de redes sociais
 10. MÍNIMO 1500 palavras de conteúdo
 
