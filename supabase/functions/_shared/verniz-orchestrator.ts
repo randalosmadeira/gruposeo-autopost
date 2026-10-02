@@ -215,9 +215,9 @@ export const VERNIZ_DNA_MATRIX: Record<VernizNicheType, Record<VernizTriggerType
   advocacia: {
     serio: { tone: "Técnico-institucional", vocabulary: ["conforme legislação", "jurisprudência consolidada", "entendimento do STF"], cta: "Consulte um advogado especializado", imageStyle: "martelo jurídico, balança da justiça, tons azul-marinho" },
     humor: { tone: "Didático leve", vocabulary: ["acredite se quiser", "a lei prevê que", "surpreendentemente legal"], cta: "Conheça seus direitos", imageStyle: "ilustração conceitual jurídica" },
-    preocupacao: { tone: "Alerta jurídico preventivo", vocabulary: ["risco legal", "pode ser penalizado", "atenção ao prazo"], cta: "Não perca seus direitos — consulte um advogado", imageStyle: "relógio, documentos, tons de alerta" },
+    preocupacao: { tone: "Alerta jurídico preventivo", vocabulary: ["risco legal", "pode ser penalizado", "atenção ao prazo"], cta: "Conheça seus direitos e consulte um advogado", imageStyle: "relógio, documentos, tons de alerta" },
     revolta: { tone: "Denúncia jurídica fundamentada", vocabulary: ["afronta à constituição", "violação de direitos", "impunidade"], cta: "Não aceite — conheça seus direitos", imageStyle: "punho cerrado, constituição, tons vermelhos escuros" },
-    angustia: { tone: "Defesa humanizada", vocabulary: ["desespero jurídico", "sem amparo legal", "clamor por justiça"], cta: "Busque orientação jurídica agora", imageStyle: "silhueta em tribunal, tons sombrios" },
+    angustia: { tone: "Defesa humanizada", vocabulary: ["insegurança jurídica", "sem amparo legal", "busca por justiça"], cta: "Busque orientação jurídica", imageStyle: "silhueta em tribunal, tons sombrios" },
     sarcasmo: { tone: "Crítica jurídica afiada", vocabulary: ["a justiça é cega — literalmente", "mais uma decisão surpreendente"], cta: "Entenda o que isso significa na prática", imageStyle: "balança desequilibrada, expressão irônica" },
     satira: { tone: "Paródia jurídica inteligente", vocabulary: ["no país da jurisprudência criativa", "lei para inglês ver"], cta: "Reflexão jurídica para compartilhar", imageStyle: "caricatura de tribunal" },
     felicidade: { tone: "Conquista de direitos", vocabulary: ["vitória judicial", "direito garantido", "marco jurídico"], cta: "Conheça essa conquista", imageStyle: "martelo jurídico dourado, sorrisos" },
@@ -470,11 +470,12 @@ Na prática, isso significa que [consequência real para o leitor].
     section += `\nOs CTAs devem ser renderizados como blocos HTML visuais naturais (blockquote, div, parágrafo com link) — o leitor NUNCA deve saber que é um "CTA".`;
     section += `\nSe aparecer "[CTA" em qualquer parte do artigo final, é um ERRO GRAVE.`;
 
-    // CTA de urgência (após introdução/gancho)
-    section += `\n\n**Bloco de urgência** (inserir APÓS os 2 primeiros parágrafos como <blockquote> ou <div>):`;
-    section += `\nConteúdo sugerido:`;
+    // Convite de orientação (após introdução/gancho). O texto do link precisa passar no portão de
+    // publicidade de publication-quality.ts: sem "agora", sem urgência, sem promessa.
+    section += `\n\n**Bloco de orientação** (inserir APÓS os 2 primeiros parágrafos como <blockquote> ou <div>):`;
+    section += `\nConteúdo sugerido (tom informativo e sóbrio, sem urgência, sem medo e sem promessa):`;
     if (config.ctaLeads) section += `\n- ${config.ctaLeads}`;
-    if (config.empresaNome) section += `\n- Link: <a href="${siteUrl}">Fale agora com um especialista</a>`;
+    if (config.empresaNome) section += `\n- Link: <a href="${siteUrl}">Converse com a nossa equipe</a>`;
     if (config.empresaEndereco) section += `\n- Endereço: ${config.empresaEndereco}`;
 
     // CTA de autoridade (após corpo principal)
@@ -486,10 +487,10 @@ Na prática, isso significa que [consequência real para o leitor].
 
     // CTA de lead/avaliação (após erros comuns)
     if (config.ctaLeads) {
-      section += `\n\n**Bloco de avaliação gratuita** (inserir após seção de erros comuns como <div> estilizado):`;
+      section += `\n\n**Bloco de contato** (inserir após seção de erros comuns como <div> estilizado):`;
       section += `\nConteúdo: ${config.ctaLeads}`;
-      section += `\n- Resposta rápida • Sem compromisso • Atendimento humano`;
-      section += `\n- Link: <a href="${siteUrl}">Avaliar meu caso gratuitamente</a>`;
+      section += `\n- Atendimento humano • Canais oficiais do escritório/empresa`;
+      section += `\n- Link: <a href="${siteUrl}">Enviar uma mensagem para a equipe</a>`;
     }
 
     // CTA de comunidade e redes sociais
@@ -510,9 +511,19 @@ Na prática, isso significa que [consequência real para o leitor].
       section += `\nConteúdo: ${config.ctaConclusao}`;
       if (config.empresaEndereco) section += `\n- Endereço: ${config.empresaEndereco}`;
       if (config.socialGoogleMaps) section += `\n- Google Maps: <a href="${config.socialGoogleMaps}">Ver no mapa</a>`;
-      section += `\n- Link: <a href="${siteUrl}">Resolver agora</a>`;
+      section += `\n- Link: <a href="${siteUrl}">Conhecer os canais de atendimento</a>`;
     }
   }
+
+  // Padrão de publicidade (Provimento 205/2021 CFOAB). Espelha COMPLIANCE_RULES de
+  // publication-quality.ts: o que o redator escrever aqui fora da regra é bloqueado na publicação.
+  section += `\n\n### ⚖️ PADRÃO DE PUBLICIDADE (o texto é BLOQUEADO na publicação se violar):`;
+  section += `\n- NUNCA usar chamada imperativa de captação: "fale agora", "ligue agora", "chame no WhatsApp", "mande um WhatsApp", "contrate agora", "entre em contato agora", "clique aqui e fale"`;
+  section += `\n- NUNCA usar urgência comercial ou gratuidade como isca: "não perca tempo", "última chance", "vagas limitadas", "consulta gratuita", "avaliação gratuita", "sem custo", "sem compromisso"`;
+  section += `\n- NUNCA prometer ou garantir resultado: "garantimos", "resultado garantido", "sucesso garantido", "ganhe sua causa", "resolve seu caso"`;
+  section += `\n- NUNCA usar superlativo ou comparação: "o melhor advogado", "o maior escritório", "referência nacional", "diferente dos outros escritórios"`;
+  section += `\n- NUNCA explorar medo, prejuízo ou desespero do leitor como motivo para contato`;
+  section += `\n- Convites de contato são SÓBRIOS e informativos: "Converse com a nossa equipe", "Conheça os canais de atendimento", "Tire suas dúvidas com um advogado"`;
 
   // Add writing prohibitions (RDM Standard)
   section += `\n\n### ❌ PROIBIÇÕES ABSOLUTAS DE ESCRITA:`;
@@ -529,11 +540,11 @@ Na prática, isso significa que [consequência real para o leitor].
   section += `\n\n### 📋 ESTRUTURA OBRIGATÓRIA DO ARTIGO:`;
   section += `\n1. **GANCHO** (2 parágrafos): Começar com a dor/situação REAL do leitor`;
   section += `\n2. **CONTEXTO**: Validar que o problema é sério com dado ou lei`;
-  section += `\n3. Bloco de urgência (HTML natural, sem rótulo)`;
+  section += `\n3. Bloco de orientação (HTML natural, sem rótulo)`;
   section += `\n4. **CORPO PRINCIPAL**: H2s como perguntas do leitor + listas + boxes de atenção`;
   section += `\n5. Bloco de autoridade (HTML natural, sem rótulo)`;
   section += `\n6. **APROFUNDAMENTO**: Prazos, variações, jurisprudência`;
-  section += `\n7. Bloco de avaliação (HTML natural, sem rótulo)`;
+  section += `\n7. Bloco de contato (HTML natural, sem rótulo)`;
   section += `\n8. **ERROS COMUNS**: 3-5 erros que fazem perder direitos`;
   section += `\n9. Bloco de redes sociais (HTML natural, sem rótulo)`;
   section += `\n10. **FAQ**: Mínimo 5 perguntas`;

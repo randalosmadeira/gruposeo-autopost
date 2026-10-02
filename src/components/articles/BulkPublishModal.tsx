@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { AlertCircle, Check, CheckCircle2, Globe, Loader2, RefreshCw, Search, Tag, Upload, WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { withGateIssues } from '@/lib/publish-gate-issues';
 
 type Step = 'destination' | 'categories' | 'publishing';
 type HealthState = 'idle' | 'checking' | 'online' | 'offline';
@@ -59,14 +60,14 @@ interface BulkPublishModalProps {
 
 async function extractInvokeError(error: unknown, data: any, fallback: string) {
   const fromData = String(data?.error || data?.message || '').trim();
-  if (fromData) return fromData;
+  if (fromData) return withGateIssues(fromData, data);
   const candidate = error as { message?: string; context?: Response } | null;
   const response = candidate?.context;
   if (response && typeof response.clone === 'function') {
     try {
       const payload = await response.clone().json();
       const message = String(payload?.error || payload?.message || payload?.hint || '').trim();
-      if (message) return message;
+      if (message) return withGateIssues(message, payload);
     } catch {
       try {
         const text = await response.clone().text();
@@ -386,7 +387,7 @@ export function BulkPublishModal({ isOpen, onClose, selectedArticles, projects, 
           {step === 'publishing' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between"><div><p className="font-semibold">Execução por destino</p><p className="text-sm text-muted-foreground">Cada publicação possui status próprio. Uma falha em um site não cancela os demais.</p></div><div className="flex gap-2"><Badge className="bg-emerald-500/10 text-emerald-400">{successCount} sucesso</Badge><Badge className="bg-red-500/10 text-red-400">{failedCount} falha</Badge></div></div>
-              {rows.map((row) => <div key={row.key} className="rounded-xl border border-border p-3"><div className="flex items-start gap-3"><div className="mt-0.5">{row.status === 'publishing' ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : row.status === 'success' ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : row.status === 'error' ? <AlertCircle className="h-4 w-4 text-red-400" /> : <div className="h-4 w-4 rounded-full border border-border" />}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{row.articleTitle}</p><p className="text-xs text-muted-foreground">{row.projectName}</p>{row.error && <p className="mt-1 text-xs text-red-400">{row.error}</p>}{row.url && <a className="mt-1 block truncate text-xs text-primary hover:underline" href={row.url} target="_blank" rel="noreferrer">{row.url}</a>}</div></div></div>)}
+              {rows.map((row) => <div key={row.key} className="rounded-xl border border-border p-3"><div className="flex items-start gap-3"><div className="mt-0.5">{row.status === 'publishing' ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : row.status === 'success' ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : row.status === 'error' ? <AlertCircle className="h-4 w-4 text-red-400" /> : <div className="h-4 w-4 rounded-full border border-border" />}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{row.articleTitle}</p><p className="text-xs text-muted-foreground">{row.projectName}</p>{row.error && <p className="mt-1 whitespace-pre-line break-words text-xs text-red-400">{row.error}</p>}{row.url && <a className="mt-1 block truncate text-xs text-primary hover:underline" href={row.url} target="_blank" rel="noreferrer">{row.url}</a>}</div></div></div>)}
               {!isPublishing && failedCount > 0 && <Button variant="outline" onClick={() => void startPublishing(true)}><RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente somente as falhas</Button>}
             </div>
           )}

@@ -59,7 +59,9 @@ export function evaluateTitleQuality(rawTitle: string | null | undefined): Title
   }
   if (title.length < 18) push('title_too_short', 'Título curto demais para uma pauta editorial');
   if (MARKUP_ARTIFACT.test(title)) push('title_artifact_markup', 'Título contém marcação técnica ou molde de prompt');
-  if (PREPOSITION_TAIL.test(title)) push('title_truncated', 'Título termina em preposição ou artigo (pauta truncada)');
+  // O teste roda no título sem acentos: em JavaScript \b trata "ã", "ç" e "ú" como fim de palavra, e
+  // "infiltração", "receptação" ou "saúde" eram lidos como terminados no artigo "o" ou na preposição "de".
+  if (PREPOSITION_TAIL.test(fold(title))) push('title_truncated', 'Título termina em preposição ou artigo (pauta truncada)');
   if (LEGAL_MISSPELLINGS.test(fold(title))) push('title_misspelling', 'Título com grafia errada de termo jurídico (palavra-chave crua)');
   if (title.split(' ').length < 3 && title.length < 18) push('title_keyword_only', 'Título curto demais e com menos de três palavras');
 
@@ -67,17 +69,27 @@ export function evaluateTitleQuality(rawTitle: string | null | undefined): Title
 }
 
 // Provimento 205/2021 CFOAB — regras que reprovam publicidade de advocacia.
-const COMPLIANCE_RULES: Array<{ code: string; label: string; pattern: RegExp; skipInQuestion?: boolean }> = [
+const COMPLIANCE_RULES: Array<{ code: string; label: string; pattern: RegExp; skipInQuestion?: boolean; skipWhenNegated?: boolean; needsLegalContext?: boolean }> = [
   {
     code: 'promessa_resultado',
     label: 'Promessa ou garantia de resultado',
     pattern: /(garantimos|garantia de (?:resultado|exito|sucesso|vitoria|absolvicao|liberdade|aprovacao)|resultado garantido|sucesso garantido|vitoria garantida|absolvicao garantida|liberdade garantida|ganhe (?:a|sua) causa|certeza de (?:absolvicao|vitoria|exito)|100% de (?:exito|sucesso|chance|aprovacao)|(?:exito|sucesso|vitoria) (?:e )?garantid[oa])/,
     skipInQuestion: true,
+    skipWhenNegated: true,
   },
   {
     code: 'superlativo',
     label: 'Superlativo ou autotitulação',
-    pattern: /((?:o|a|os|as) (?:melhor(?:es)?|maior(?:es)?) (?:advogad|escritorio|banca|profission|equipe|especialist)|melhor advogad|melhor escritorio|lider (?:de mercado|em direito|no mercado)|n(?:o|umero) ?1 (?:em|do|da)|referencia nacional|o mais (?:renomado|experiente|qualificado|premiado)|advogad[oa] mais (?:renomad|experient|qualificad))/,
+    pattern: /((?:o|a|os|as) (?:melhor(?:es)?|maior(?:es)?) (?:advogad|escritorio|banca)|melhor advogad|melhor escritorio|advogad[oa] mais (?:renomad|experient|qualificad))/,
+  },
+  {
+    // Expressões que também aparecem em notícia comum ("as maiores equipes do campeonato", "Bolsa
+    // Família, referência nacional em assistência social"). Só reprovam quando a mesma oração fala de
+    // advocacia, do escritório ou em primeira pessoa.
+    code: 'superlativo',
+    label: 'Superlativo ou autotitulação',
+    pattern: /((?:o|a|os|as) (?:melhor(?:es)?|maior(?:es)?) (?:profission|equipe|especialist)|lider (?:de mercado|em direito|no mercado)|n(?:o|umero) ?1 (?:em|do|da)|referencia nacional|o mais (?:renomado|experiente|qualificado|premiado))/,
+    needsLegalContext: true,
   },
   {
     code: 'comparacao',
@@ -108,8 +120,34 @@ function sentenceAround(text: string, index: number) {
   return text.slice(start, end);
 }
 
-export function findComplianceViolations(input: { title?: string | null; content?: string | null; excerpt?: string | null }): QualityIssue[] {
+// O texto que NEGA a promessa ("não há garantia de resultado", "nem de sucesso garantido") ou que trata
+// a promessa como objeto de análise ("anúncios que possam sugerir garantia de resultado", "cláusula de
+// garantia de resultado") é o aviso correto, não a infração. A negação precisa estar na mesma oração,
+// nos 45 caracteres anteriores, sem dois-pontos, ponto e vírgula ou travessão no meio.
+const NEGATION_LEAD = /(?:\bnao\b|\bnem\b|\bsem\b|\bnunca\b|\bjamais\b|\binexiste\b|\bnenhuma?\b|\bveda(?:m|d[oa]s?|cao)?\b|\bproib(?:e|em|id[oa]s?|icao)\b|\bsuger(?:ir|e|em)\b|\bclausula de\b)/;
+
+// A oração que classifica a promessa como infração ("a oferta de garantia de resultado é considerada
+// infração ética") também é o aviso correto.
+const CONDEMNATION_TAIL = /^[^.!?]{0,60}(?:(?:e|sao) considerad[oa]s? (?:infracao|ilegal|irregular|abusiv|enganos|crime)|configura(?:m)? (?:infracao|publicidade enganosa|crime)|(?:e|sao) (?:vedad|proibid)[oa]s?|nao (?:e|sao) permitid[oa]s?)/;
+
+function isNegatedPromise(text: string, index: number, matchLength: number) {
+  const sentenceStart = Math.max(text.lastIndexOf('.', index - 1), text.lastIndexOf('?', index - 1), text.lastIndexOf('!', index - 1)) + 1;
+  const lead = text.slice(Math.max(sentenceStart, index - 45), index).split(/[:;—–]/).pop() || '';
+  if (NEGATION_LEAD.test(lead)) return true;
+  return CONDEMNATION_TAIL.test(text.slice(index + matchLength, index + matchLength + 130));
+}
+
+const LEGAL_CONTEXT = /(?:advogad|advocacia|escritorio|\bbanca\b|juridic|\bdireito\b|\bnoss[oa]s?\b|\bsomos\b)/;
+
+// Primeira palavra distintiva do nome do escritório/empresa ("RDM Advogados Associados" -> "rdm").
+function brandToken(brand: string | null | undefined) {
+  const generic = new Set(['advogados', 'advogado', 'advocacia', 'associados', 'escritorio', 'sociedade', 'grupo', 'blog', 'portal']);
+  return fold(String(brand || '')).split(' ').find((word) => word.length >= 3 && !generic.has(word)) || '';
+}
+
+export function findComplianceViolations(input: { title?: string | null; content?: string | null; excerpt?: string | null; brand?: string | null }): QualityIssue[] {
   const issues: QualityIssue[] = [];
+  const brand = brandToken(input.brand);
   const fields: Array<['title' | 'content', string]> = [
     ['title', fold(String(input.title || ''))],
     ['content', fold(stripTags(String(input.content || '') + ' ' + String(input.excerpt || '')))],
@@ -117,11 +155,14 @@ export function findComplianceViolations(input: { title?: string | null; content
   for (const [field, text] of fields) {
     if (!text) continue;
     for (const rule of COMPLIANCE_RULES) {
+      if (issues.some((issue) => issue.code === rule.code && issue.field === field)) continue;
       const re = new RegExp(rule.pattern.source, 'g');
       let match: RegExpExecArray | null;
       while ((match = re.exec(text))) {
         const sentence = sentenceAround(text, match.index);
         if (rule.skipInQuestion && sentence.trim().endsWith('?')) continue;
+        if (rule.skipWhenNegated && isNegatedPromise(text, match.index, match[0].length)) continue;
+        if (rule.needsLegalContext && !LEGAL_CONTEXT.test(sentence) && !(brand && sentence.split(/[^a-z0-9]+/).includes(brand))) continue;
         issues.push({ code: rule.code, label: rule.label, field, sample: sentence.trim().slice(0, 160) });
         break;
       }
@@ -166,6 +207,187 @@ export function repairBrokenContactCtas(content: string | null | undefined, what
     .replace(/whatsapp\s*\(\s*\)/gi, `<a href="${whatsappUrl}">WhatsApp</a>`)
     .replace(/whatsapp\s+para\s*\./gi, `WhatsApp: <a href="${whatsappUrl}">iniciar conversa</a>.`);
   return { content: repaired, repaired: repaired !== original };
+}
+
+// Captação direta escrita pelo próprio redator ("Fale agora com um especialista e não fique no
+// prejuízo"). O reparo troca a ORAÇÃO inteira da chamada por um convite sóbrio e mantém o link de
+// contato, de modo que o resto da frase (urgência, medo, "sem compromisso") sai junto. Quando a oração
+// não pode ser delimitada com segurança, troca só o gatilho. O portão roda depois: o que sobrar, bloqueia.
+const SOLICITATION_TRIGGER_SOURCE = '(?:fale\\s+agora\\s+com|ligue\\s+agora|chame\\s+(?:agora\\s+)?no\\s+whatsapp|clique\\s+aqui\\s+e\\s+fale|contrate\\s+(?:agora|j[aá])|entre\\s+em\\s+contato\\s+agora|mande\\s+(?:um\\s+)?whatsapp)';
+const INLINE_TAGS = new Set(['a', 'strong', 'em', 'b', 'i', 'u', 'span', 'mark', 'small']);
+const MARKDOWN_BLOCK_LINE = /^\s*(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|\||>)/;
+const SEGMENT_BACK_LIMIT = 320;
+const SEGMENT_FORWARD_LIMIT = 420;
+const MAX_SOLICITATION_REPAIRS = 12;
+
+function tagNameAt(html: string, open: number) {
+  const match = /^<\/?\s*([a-zA-Z][a-zA-Z0-9]*)/.exec(html.slice(open, open + 40));
+  return match ? match[1].toLowerCase() : '';
+}
+
+function lineBefore(html: string, newlineIndex: number) {
+  return html.slice(html.lastIndexOf('\n', newlineIndex - 1) + 1, newlineIndex);
+}
+
+function lineAfter(html: string, newlineIndex: number) {
+  const next = html.indexOf('\n', newlineIndex + 1);
+  return html.slice(newlineIndex + 1, next < 0 ? html.length : next);
+}
+
+function isBlockBreak(html: string, newlineIndex: number) {
+  const before = lineBefore(html, newlineIndex);
+  const after = lineAfter(html, newlineIndex);
+  return !before.trim() || !after.trim() || MARKDOWN_BLOCK_LINE.test(before) || MARKDOWN_BLOCK_LINE.test(after);
+}
+
+// Devolve -1 quando o início da oração não aparece dentro do limite (o chamador troca só o gatilho).
+function solicitationSegmentStart(html: string, index: number) {
+  let i = index - 1;
+  while (i >= 0) {
+    if (index - i > SEGMENT_BACK_LIMIT) return -1;
+    const ch = html[i];
+    if (ch === '>') {
+      const open = html.lastIndexOf('<', i);
+      if (open < 0 || !INLINE_TAGS.has(tagNameAt(html, open))) return i + 1;
+      i = open - 1;
+      continue;
+    }
+    if (ch === '\n' && isBlockBreak(html, i)) return i + 1;
+    if ((ch === '.' || ch === '!' || ch === '?') && /[\s<]/.test(html[i + 1] || '')) return i + 1;
+    i -= 1;
+  }
+  return 0;
+}
+
+// Devolve -1 quando o fim da oração não aparece dentro do limite.
+function solicitationSegmentEnd(html: string, index: number) {
+  let i = index;
+  while (i < html.length) {
+    if (i - index > SEGMENT_FORWARD_LIMIT) return -1;
+    const ch = html[i];
+    if (ch === '<') {
+      const close = html.indexOf('>', i);
+      if (close < 0 || !INLINE_TAGS.has(tagNameAt(html, i))) return i;
+      i = close + 1;
+      continue;
+    }
+    if (ch === ']' && html[i + 1] === '(') {
+      const close = html.indexOf(')', i);
+      if (close < 0) return i;
+      i = close + 1;
+      continue;
+    }
+    if (ch === '\n' && isBlockBreak(html, i)) return i;
+    if ((ch === '.' || ch === '!' || ch === '?') && (i + 1 >= html.length || /[\s<]/.test(html[i + 1]))) {
+      let end = i + 1;
+      for (;;) {
+        const closer = /^\s*<\/(?:a|strong|em|b|i|u|span|mark|small)\s*>/i.exec(html.slice(end, end + 40));
+        if (!closer) break;
+        end += closer[0].length;
+      }
+      return end;
+    }
+    i += 1;
+  }
+  return html.length;
+}
+
+// Marcações inline que o trecho abre sem fechar (ou fecha sem ter aberto) precisam continuar no HTML.
+function unmatchedInlineTags(segment: string) {
+  const closers: string[] = [];
+  const stack: Array<{ name: string; raw: string }> = [];
+  const re = /<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(segment))) {
+    const name = match[2].toLowerCase();
+    if (!INLINE_TAGS.has(name)) continue;
+    if (!match[1]) stack.push({ name, raw: match[0] });
+    else if (stack.length && stack[stack.length - 1].name === name) stack.pop();
+    else closers.push(match[0]);
+  }
+  return { closers: closers.join(''), openers: stack.map((tag) => tag.raw).join('') };
+}
+
+const CONTACT_HREF = /^(?:https?:\/\/(?:wa\.me|(?:api|web)\.whatsapp\.com)\/|tel:|mailto:)/i;
+
+// Link do convite: o canal de contato que já estava na chamada; na falta dele, o WhatsApp do projeto
+// (o redator às vezes aponta a chamada para a própria página ou para o Google Maps); por último, o
+// primeiro link do trecho.
+function soberCta(segment: string, whatsappUrl: string) {
+  const htmlHrefs = [...segment.matchAll(/<a\b[^>]*\bhref="([^"]+)"/gi)].map((match) => match[1]);
+  const markdownHrefs = [...segment.matchAll(/\]\(([^)\s]+)\)/g)].map((match) => match[1]);
+  const usable = [...htmlHrefs, ...markdownHrefs].filter((href) => !/google\.[a-z.]+\/maps/i.test(href));
+  const href = usable.find((candidate) => CONTACT_HREF.test(candidate)) || whatsappUrl || usable[0] || '';
+  const label = /wa\.me|whatsapp/i.test(href) ? 'Converse com a nossa equipe pelo WhatsApp' : 'Converse com a nossa equipe';
+  const period = /[.!?]\s*$/.test(segment.replace(/<[^>]+>/g, '')) ? '.' : '';
+  if (!href) return `${label} para tirar dúvidas sobre a sua situação${period}`;
+  if (!htmlHrefs.length && markdownHrefs.length) return `[${label}](${href})${period}`;
+  return `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>${period}`;
+}
+
+function softenTrigger(trigger: string) {
+  const folded = fold(trigger);
+  const soft = folded.startsWith('fale agora com') ? 'Converse com'
+    : folded.startsWith('ligue agora') ? 'Ligue'
+    : folded.startsWith('chame') ? 'Converse pelo WhatsApp'
+    : folded.startsWith('clique aqui e fale') ? 'Fale'
+    : folded.startsWith('contrate') ? 'Conheça'
+    : folded.startsWith('entre em contato agora') ? 'Entre em contato'
+    : 'Envie uma mensagem pelo WhatsApp';
+  const first = trigger.trim()[0] || '';
+  return first && first === first.toLowerCase() ? soft[0].toLowerCase() + soft.slice(1) : soft;
+}
+
+export function repairSolicitationCtas(content: string | null | undefined, whatsappNumber?: string | null) {
+  const digits = String(whatsappNumber || '').replace(/\D/g, '');
+  const whatsappUrl = digits.length >= 10 && digits.length <= 15 ? `https://wa.me/${digits}` : '';
+  let html = String(content || '');
+  let repairs = 0;
+  let from = 0;
+  for (let guard = 0; guard < 60 && repairs < MAX_SOLICITATION_REPAIRS; guard += 1) {
+    const re = new RegExp(SOLICITATION_TRIGGER_SOURCE, 'gi');
+    re.lastIndex = from;
+    const match = re.exec(html);
+    if (!match) break;
+    const triggerEnd = match.index + match[0].length;
+    // Gatilho dentro de um atributo (title="…", alt="…") não é texto publicado: segue adiante.
+    if (html.lastIndexOf('<', match.index) > html.lastIndexOf('>', match.index)) {
+      from = triggerEnd;
+      continue;
+    }
+    const end = solicitationSegmentEnd(html, triggerEnd);
+    let start = solicitationSegmentStart(html, match.index);
+    let replacement: string;
+    let cutStart: number;
+    let cutEnd: number;
+    if (end < 0) {
+      cutStart = match.index;
+      cutEnd = triggerEnd;
+      replacement = softenTrigger(match[0]);
+    } else {
+      if (start < 0) start = match.index;
+      while (start < match.index && /\s/.test(html[start])) start += 1;
+      // Outro link antes da chamada, na mesma oração ("Veja o <a>guia</a> e <a>fale agora…</a>"), é
+      // conteúdo do artigo: o corte começa na âncora da chamada e o começo da oração fica.
+      let midSentence = false;
+      if (/<\/a\s*>/i.test(html.slice(start, match.index))) {
+        const anchorOpen = html.lastIndexOf('<a', match.index);
+        const anchorClose = html.toLowerCase().lastIndexOf('</a', match.index);
+        start = anchorOpen > anchorClose && anchorOpen >= start ? anchorOpen : match.index;
+        midSentence = true;
+      }
+      const segment = html.slice(start, end);
+      const tags = unmatchedInlineTags(segment);
+      const cta = soberCta(segment, whatsappUrl);
+      cutStart = start;
+      cutEnd = end;
+      replacement = tags.closers + (midSentence ? cta.replace('Converse com', 'converse com') : cta) + tags.openers;
+    }
+    html = html.slice(0, cutStart) + replacement + html.slice(cutEnd);
+    from = cutStart + replacement.length;
+    repairs += 1;
+  }
+  return { content: html, repaired: repairs > 0, repairs };
 }
 
 export function normalizeSlugForLookup(slug: string | null | undefined, title?: string | null) {
