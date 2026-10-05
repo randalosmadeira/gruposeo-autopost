@@ -1,0 +1,95 @@
+name: Autopublic Project Isolation Contract
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+      - chore/project-isolation-contract-20260903
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: autopublic-isolation-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      EXPECTED_REPOSITORY: randalosmadeira/gruposeo-autopost
+      EXPECTED_SUPABASE_REF: ubahrbgaxrkjxklytobl
+      EXPECTED_SUPABASE_URL: https://ubahrbgaxrkjxklytobl.supabase.co
+      EXPECTED_NAMESPACE: /opt/zica-ai
+      EXPECTED_RUNTIME_PREFIX: zica-ai-orchestrator
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate repository and Supabase identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          grep -Fxq "project_id = \"$EXPECTED_SUPABASE_REF\"" supabase/config.toml
+          grep -Fq "$EXPECTED_SUPABASE_URL" .github/workflows/zica-ai-vps-deploy.yml
+          grep -Fq "$EXPECTED_NAMESPACE" .github/workflows/zica-ai-vps-deploy.yml
+          grep -Fq "$EXPECTED_RUNTIME_PREFIX" .github/workflows/zica-ai-vps-deploy.yml
+
+      - name: Reject tracked runtime environment files
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRACKED_ENV="$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -Ev '(^|/)\.env(\.[A-Za-z0-9_-]+)*\.example$' || true)"
+          if [ -n "$TRACKED_ENV" ]; then
+            echo "::error::Arquivos de ambiente reais estão versionados:"
+            printf '%s\n' "$TRACKED_ENV"
+            exit 1
+          fi
+
+      - name: Reject foreign Supabase identities and secret namespaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          FOREIGN_REFS='wnguzwhodirkaqczckmb|blqdowesaodkrbzzncpy|ypsgsnysjksgrjbuajqe|iurxdfoqgygdszcmrwgy'
+          TARGETS=(supabase/config.toml .env.example .github/workflows/zica-ai-vps-deploy.yml services/zica-orchestrator src)
+          if grep -RInE "$FOREIGN_REFS" "${TARGETS[@]}"; then
+            echo "::error::Foi encontrada identidade Supabase de outro software em caminho ativo do Autopublic-prod."
+            exit 1
+          fi
+
+          if grep -Eq 'ZICAJURIS_SUPABASE|ZICAGLAM_SUPABASE|JURISEXPLICADO_SUPABASE|ZICACORTEX_SUPABASE' .github/workflows/zica-ai-vps-deploy.yml; then
+            echo "::error::O deploy referencia namespace de secret pertencente a outro produto."
+            exit 1
+          fi
+
+          grep -Fq 'secrets.ZICA_AI_SUPABASE_SERVICE_ROLE_KEY' .github/workflows/zica-ai-vps-deploy.yml
+
+      - name: Report hardening migration without changing production
+        shell: bash
+        run: |
+          set -euo pipefail
+          PENDING=false
+          if grep -Eq 'VITE_SUPABASE_PUBLISHABLE_KEY:[[:space:]]+sb_' .github/workflows/zica-ai-vps-deploy.yml; then
+            echo "::warning::A publishable key ainda está literal no workflow. Migrar para ZICA_AI_SUPABASE_PUBLISHABLE_KEY antes da próxima rotação."
+            PENDING=true
+          fi
+          if grep -q 'ssh-keyscan' .github/workflows/zica-ai-vps-deploy.yml; then
+            echo "::warning::O deploy ainda coleta a host key em tempo de execução. Substituir por known_hosts dedicado e pinado."
+            PENDING=true
+          fi
+          echo "HARDENING_PENDING=$PENDING" >> "$GITHUB_ENV"
+
+      - name: Publish isolation summary
+        run: |
+          {
+            echo '### Autopublic-prod isolation contract'
+            echo "- Repository: $EXPECTED_REPOSITORY"
+            echo "- Supabase ref: $EXPECTED_SUPABASE_REF"
+            echo "- VPS namespace: $EXPECTED_NAMESPACE"
+            echo '- Foreign project identities: none in checked runtime paths'
+            echo "- Hardening migration pending: $HARDENING_PENDING"
+          } >> "$GITHUB_STEP_SUMMARY"
