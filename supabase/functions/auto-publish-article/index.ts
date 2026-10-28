@@ -1,3 +1,4 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 // Retired 2026-09-17 (remediation of the 2026-08-22 accidental wipe, see

@@ -1,3 +1,4 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
 import { editorialFingerprint, verifyEditorialReceipt } from "../_shared/nexus-approval.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -271,9 +272,9 @@ Deno.serve(async (req: Request) => {
     if (status === "publish" && article.scheduled_at && Date.parse(article.scheduled_at) > Date.now() + 1000) {
       return json({ success: false, error: "Publicação agendada ainda não venceu", code: "scheduled_not_due", scheduled_at: article.scheduled_at, retryable: true, request_id: requestId }, 409);
     }
-    if (status === "publish" && config.nexus_approval_required === true) {
+    if (status === "publish") {
       const fingerprint = await editorialFingerprint(article, project);
-      if (!await verifyEditorialReceipt(config.nexus_approval, fingerprint, serviceKey)) {
+      if (project.nexus_profile_status !== "complete" || config.nexus_approval?.review_mode !== "autonomous" || !await verifyEditorialReceipt(config.nexus_approval, fingerprint, serviceKey)) {
         return json({ success: false, error: "Revise e aprove esta versão na visualização do artigo antes de publicar.", code: "nexus_approval_required", retryable: false, request_id: requestId }, 409);
       }
     }
@@ -456,9 +457,9 @@ Deno.serve(async (req: Request) => {
 
     // Formatting is canonicalized in the fingerprint. Material automatic repairs
     // are saved above but must be reviewed again before any WordPress request.
-    if (status === "publish" && config.nexus_approval_required === true) {
+    if (status === "publish") {
       const deliveredFingerprint = await editorialFingerprint(normalizedArticle, project);
-      if (!await verifyEditorialReceipt(config.nexus_approval, deliveredFingerprint, serviceKey)) {
+      if (config.nexus_approval?.review_mode !== "autonomous" || !await verifyEditorialReceipt(config.nexus_approval, deliveredFingerprint, serviceKey)) {
         return json({ success: false, error: "O preparo editorial ajustou esta versão. Reabra o artigo e aprove o conteúdo atualizado antes de publicar.", code: "nexus_delivery_review_required", retryable: false, request_id: requestId }, 409);
       }
     }

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { useNavigate } from 'react-router-dom';
 import { useToast } from './use-toast';
 import { retryQuery, withRetry } from '@/lib/supabase-retry';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
@@ -11,6 +12,7 @@ type ProjectUpdate = TablesUpdate<'projects'>;
 
 export function useProjects() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -44,7 +46,8 @@ export function useProjects() {
       );
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
+      navigate(`/business-profile?project=${created.id}`);
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       toast({
         title: 'Projeto criado!',

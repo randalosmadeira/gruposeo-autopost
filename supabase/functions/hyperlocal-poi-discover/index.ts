@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 /**
  * hyperlocal-poi-discover — Descoberta semiautomática de POIs (fóruns, delegacias, polos)
  * usando Serper.dev (BYOK em user_settings.serper_api_key).
@@ -96,7 +98,7 @@ function extractNeighborhood(address?: string): string | null {
   return null;
 }
 
-Deno.serve(async (req) => {
+paidLockedServe(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {

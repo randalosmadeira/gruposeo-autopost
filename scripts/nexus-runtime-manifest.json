@@ -1,0 +1,530 @@
+[
+  {
+    "name": "ai-api",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 3,
+    "deployed_entry_sha256": "daec8da46bb6c91e4877293d649161230d7bcf8e70633591146a37aa035b8f84",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "ai-chat",
+    "verify_jwt": false,
+    "paid_endpoint_locked": true,
+    "previous_version": 2,
+    "deployed_entry_sha256": "dc75fcbc1c2d66d7857f4a1e3f99eaa174a17fae8e368dbc4689efaa5f0b2b9a",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "ai-geo-audit-proxy",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 1,
+    "deployed_entry_sha256": "726cd03113fdf8987def2d830268ed50d69943d1c4c42e6c5e8b0761c325ceef",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "analyze-electoral-video-context",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 3,
+    "deployed_entry_sha256": "f08ce4e18d4db63b573bdb42af0b930953a06a3629e51a1e6c820da6b93bd822",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "analyze-file",
+    "verify_jwt": false,
+    "paid_endpoint_locked": true,
+    "previous_version": 3,
+    "deployed_entry_sha256": "0cc7995d2449c3ccf8b3bac44491fdf11276d74afed0c12155a57f7eec993295",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "analyze-seo-advanced",
+    "verify_jwt": false,
+    "paid_endpoint_locked": true,
+    "previous_version": 7,
+    "deployed_entry_sha256": "4afc8c792dad11e097574cc858756ad3440cbd1a10e2a4cd61605cb0b3d601d7",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "analyze-url-content",
+    "verify_jwt": false,
+    "paid_endpoint_locked": true,
+    "previous_version": 3,
+    "deployed_entry_sha256": "eb4386dda04dd2f84364e19d7ed47b7e7dc274d674697a8b2752278eb9c90d52",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "analyze-wp-articles",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 1,
+    "deployed_entry_sha256": "992fddb891421f4fadfa7ef1eba9ba7d107b385e5dd5a585d22726e78489da84",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "approve-supporter-avatar-final",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 4,
+    "deployed_entry_sha256": "e8626d53aa340aed39b115305af89e0d4028c742ad2e54eeb1ed49e6a436be15",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "articles-api",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 2,
+    "deployed_entry_sha256": "b45e0d37c3c98079d2478781478e48cc4d15f637e499835c4da5e28c5e5d5a6f",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "auto-process-rss",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 10,
+    "deployed_entry_sha256": "00b7dc67aa5e169496878ac9db9a61c55ac886b8b3075c9e2dded065982224fa",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "auto-publish-article",
+    "verify_jwt": true,
+    "paid_endpoint_locked": false,
+    "previous_version": 2,
+    "deployed_entry_sha256": "b3a9bf065be0ae32f6951511b3d946054754d04d19b54bad0b97c0de8aba491a",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "electoral-agent-context",
+    "verify_jwt": true,
+    "paid_endpoint_locked": false,
+    "previous_version": 2,
+    "deployed_entry_sha256": "94d08a7b0dbb9bed55799f089c75909eeffc858190c39b673bc19954b2be57e3",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "electoral-analytics-public-config",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 3,
+    "deployed_entry_sha256": "3c46c5b46ffa4184397be80ff0fad672aaebbf107f01ec6f49b05f5b5ae51acc",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "electoral-content-variations",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 4,
+    "deployed_entry_sha256": "7164e90884a25ae8bba19177ae221930b8a4fd6dfc7f6f149545bb518445e1cb",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "electoral-editorial-action",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 3,
+    "deployed_entry_sha256": "6ac79a9b7ad46d85782f70e4f34303ede9492df3f909c547d29ba6f6057eda7c",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "electoral-optin-public",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 1,
+    "deployed_entry_sha256": "6787512c6870754f5e128d17e31e3674066223f763aba1a65e84be108abb3a0a",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "execute-migration-remote",
+    "verify_jwt": true,
+    "paid_endpoint_locked": false,
+    "previous_version": 2,
+    "deployed_entry_sha256": "87a5651f259b5c25998a6ef328182d317a08382a9a3a3e210faef1295ef4c208",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "execute-news-agents",
+    "verify_jwt": false,
+    "paid_endpoint_locked": true,
+    "previous_version": 5,
+    "deployed_entry_sha256": "d26437e37685196e5a3d06179e3272cf47dc5dc3b493b72f9643865f83de9186",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "externalize-legacy-images",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 3,
+    "deployed_entry_sha256": "f8dc6afcfe3bb23203491cf28f0d55da568ccf82d500c7a3fb9959cec2afe4cc",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "gbp-audit",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 2,
+    "deployed_entry_sha256": "191d80a0f2c2fe9afefd5cf54a22a6e8b680ac5664a96c69aefd363470d758e5",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "gbp-snapshot-cron",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 1,
+    "deployed_entry_sha256": "e7b23fd6080fc14e99d94c5fa131232177b1134f2a9e0122c4db0a4569aeeefa",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "generate-article",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 30,
+    "deployed_entry_sha256": "35d9e16d7876f9dbe300a50300825f0c1ad9d17e656719790d5682cdf6936f3e",
+    "source": "local_feature"
+  },
+  {
+    "name": "generate-authority-plan-stream",
+    "verify_jwt": false,
+    "paid_endpoint_locked": true,
+    "previous_version": 1,
+    "deployed_entry_sha256": "d4dfc69893658a1d5f3751c336bb30e4f7181636c49d8263b5e3908238daa73e",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "generate-authority-plan",
+    "verify_jwt": false,
+    "paid_endpoint_locked": true,
+    "previous_version": 3,
+    "deployed_entry_sha256": "685ec65d23fc63379b8e592db14b9eccdaec30d38763b960fa24ab0b2f53271d",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "generate-content-variations",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 2,
+    "deployed_entry_sha256": "8c75220f8bb4b55b7ad1fb17fc645992a0435704fa6e410fe2fe505f2ec71f74",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "generate-electoral-content",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 6,
+    "deployed_entry_sha256": "a6d6ae5a6a8fefef3e86f1939646427078a022d42369f0a17cf7e8c0294dbc68",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "generate-electoral-image",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 2,
+    "deployed_entry_sha256": "49915e5360367c0b8c3a90d4ad81afb78acbeca69b39f2df2cbd09f5e1d24d3b",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "generate-image",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 17,
+    "deployed_entry_sha256": "ac6c14c78ff0a9cbbd8c40a20dda6d35110382b77bc021d96ddc131fdbf4e533",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "generate-landing-page",
+    "verify_jwt": false,
+    "paid_endpoint_locked": true,
+    "previous_version": 1,
+    "deployed_entry_sha256": "a553492708e6cabbc41606ea746cc45a39a7c8a7aa43ac49fb5e5773fccb22bf",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "generate-secondary-keywords",
+    "verify_jwt": false,
+    "paid_endpoint_locked": true,
+    "previous_version": 2,
+    "deployed_entry_sha256": "193c69e00ee0b94c3a2fa4ca0c49707f54d92b882be18cf294260bdc6d7632ae",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "generate-supporter-avatar",
+    "verify_jwt": false,
+    "paid_endpoint_locked": true,
+    "previous_version": 21,
+    "deployed_entry_sha256": "652e224bbd7975b5c50b6161106bfa18ac0792b4ff6d90bb9ba0f55339b0abf8",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "hyperlocal-poi-discover",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 1,
+    "deployed_entry_sha256": "0da202ff8de829280dd15cdec32ac9b6a25c5c13872e00debbc8d83009640f60",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "indexnow-notify",
+    "verify_jwt": true,
+    "paid_endpoint_locked": false,
+    "previous_version": 2,
+    "deployed_entry_sha256": "dd0409163b70295fad9341c93f05a2a95b6941b4a774ece378277da17fd75e71",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "manage-article-translation",
+    "verify_jwt": true,
+    "paid_endpoint_locked": false,
+    "previous_version": 1,
+    "deployed_entry_sha256": "ee4d8823d5c0ce0835f390e740335743161942fc965e32193470a69b89261427",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "migrate-sql",
+    "verify_jwt": true,
+    "paid_endpoint_locked": false,
+    "previous_version": 1,
+    "deployed_entry_sha256": "2ae4b374dc3e8d8dfb2917df00ee15219388fdd8abd9cb45741db8ba3cc4d6b8",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "monitor-portals",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 1,
+    "deployed_entry_sha256": "348823cc68f258dfd87ae4bf7834fcf85fc33340037fe1107b336085f14c9bff",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "news-agent",
+    "verify_jwt": false,
+    "paid_endpoint_locked": true,
+    "previous_version": 2,
+    "deployed_entry_sha256": "a5b7c6a65ef38a37d102979dacf789c5206ae76f5021d8f1d3c344aff4ee4eae",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "nexus-editorial-approval",
+    "verify_jwt": true,
+    "paid_endpoint_locked": false,
+    "previous_version": 1,
+    "deployed_entry_sha256": "fa1128f2c174d886916383a72739fd2e294130b74a9106d0dcc7ce2599865f0b",
+    "source": "local_feature"
+  },
+  {
+    "name": "nexus-intelligence",
+    "verify_jwt": true,
+    "paid_endpoint_locked": false,
+    "previous_version": 3,
+    "deployed_entry_sha256": "2f24a268f3781c0449a58bc2b4f496424df6dd894e9b07425611d3fca3583931",
+    "source": "local_feature"
+  },
+  {
+    "name": "noop-audit-marker",
+    "verify_jwt": true,
+    "paid_endpoint_locked": false,
+    "previous_version": 4,
+    "deployed_entry_sha256": "26498fa4913605f6f3e98a1f5099ac0698762195062b9e3df1cdc89bcece2caf",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "normalize-image-pool",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 2,
+    "deployed_entry_sha256": "a75165d7e03b3c54b5efb1e2b11e0333a22a29740d1ea2a6d9766caa4dd3f32c",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "organization-console",
+    "verify_jwt": true,
+    "paid_endpoint_locked": false,
+    "previous_version": 3,
+    "deployed_entry_sha256": "0f27c5f57673ce6d13eec118dc885220f4b0a6b357524e307daf7b439745a34f",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "pair-wordpress-site",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 2,
+    "deployed_entry_sha256": "f28669e25b3aa768d2525686accd22c805d540df9d8f41e987d84d59c1d2a23d",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "parse-rss",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 2,
+    "deployed_entry_sha256": "9ba15e2a33c9761b19ffa3d8177db92a35b7f7544452e8dea1b8361d0a1c4f2c",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "provider-health",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 2,
+    "deployed_entry_sha256": "7a6987ef351d7e3594b3d3a6daca23042d6cab8d60e3d21d3d30c9a8b5cd852e",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "publish-to-wordpress",
+    "verify_jwt": true,
+    "paid_endpoint_locked": false,
+    "previous_version": 21,
+    "deployed_entry_sha256": "d910a189bcd97f507c691a05badb02666b041ce699918e440dcadcb4a4747f6b",
+    "source": "local_feature"
+  },
+  {
+    "name": "rdm-asset-seed",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 4,
+    "deployed_entry_sha256": "dac557c1c8091169e942a01fc242c2dfa69b2090a0245904a90e8b0f8dee867d",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "regenerate-content",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 8,
+    "deployed_entry_sha256": "387fe55e7792c8fd410c7dff9779d3a8f5d8f1a2aa51c28de154e7858d6b400a",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "reprocess-article-images",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 1,
+    "deployed_entry_sha256": "d3fc2d52b3104e8c356b4503dfd0d6db1add9e74b6487832e4732ef2c33b4f85",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "rewrite-news",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 24,
+    "deployed_entry_sha256": "23a395592a96295f461b013d291f6a8ae9f6f419d4ddafc76ebe4ae6f2f0830a",
+    "source": "local_feature"
+  },
+  {
+    "name": "seo-agent",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 32,
+    "deployed_entry_sha256": "91e08da98edace9f7a5124528d1ca7f7db9e5687b2dab09ca865fd0dcd3771f9",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "supporter-avatar-admin",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 4,
+    "deployed_entry_sha256": "73bc2dc7f558bfec9f2ffadfa486465cee429935bc16a32cd82de887d5308628",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "supporter-avatar-candidate-assets",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 3,
+    "deployed_entry_sha256": "4acd36cd01c8a4757d955bfef296d62e2f3dcbaec434ac826b44b45970d2a985",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "supporter-avatar-e2e-smoke",
+    "verify_jwt": true,
+    "paid_endpoint_locked": false,
+    "previous_version": 4,
+    "deployed_entry_sha256": "b0cbba74eeb5a267c054fca84af0e8514288e64fa0be050b44175b33d3aef3c4",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "supporter-avatar-public-v2",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 10,
+    "deployed_entry_sha256": "7970e798ba5fa10476d86f2d84f4ee60c457913242e84e4f445ee171f8e3d23e",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "supporter-avatar-public",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 6,
+    "deployed_entry_sha256": "6dddecb1edfc8d5a476a67c07b48e9aa0d477267425f010a35a41c0b97af2364",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "sync-homepage-schema",
+    "verify_jwt": true,
+    "paid_endpoint_locked": false,
+    "previous_version": 1,
+    "deployed_entry_sha256": "76c06964f4fff1d63e7c0586672e81162605e9e3a2c2c07b69391ed9386477bb",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "sync-wordpress-stats",
+    "verify_jwt": true,
+    "paid_endpoint_locked": false,
+    "previous_version": 2,
+    "deployed_entry_sha256": "01117c6b24af92db1e883bdd3d06fe9983d47defcd417e103184b1f012fb6aa6",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "test-wordpress-connection",
+    "verify_jwt": true,
+    "paid_endpoint_locked": false,
+    "previous_version": 5,
+    "deployed_entry_sha256": "3db2ccbb892e7c6f98b55e544e87fb271810c69ea11b76babc14816d6048be76",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "validate-ai-key",
+    "verify_jwt": true,
+    "paid_endpoint_locked": true,
+    "previous_version": 7,
+    "deployed_entry_sha256": "e0bc80b812532914209a5fe184eb19cb40dfde61a34b07c6dde96d8f0f2f6c6c",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "webhooks",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 2,
+    "deployed_entry_sha256": "4c4be9a4ed08e649526636308a6aeb647d0d425c36f582480d1fb232f29e4e14",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "wordpress-api",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 2,
+    "deployed_entry_sha256": "eaca2179f751538a1895b9515fde94c9325649b27366cd59c9e48e6a1d795738",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "wordpress-operations",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 3,
+    "deployed_entry_sha256": "1cdf886d35b8f3c57e2a85f54c5fcd3b2fcf6a519860a17fc9c2174e3071652f",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "zica-ai-provider-health",
+    "verify_jwt": false,
+    "paid_endpoint_locked": true,
+    "previous_version": 3,
+    "deployed_entry_sha256": "3acfb3f1590f3926151da3dcc36d689d779de376f275a73346896b8cd67ae91d",
+    "source": "live_source_plus_lock"
+  },
+  {
+    "name": "zica-brain-tick",
+    "verify_jwt": false,
+    "paid_endpoint_locked": false,
+    "previous_version": 14,
+    "deployed_entry_sha256": "fbd61b0946b761db2a20fed9533ef63bad7d8ef748bf3809a9695961c54f14c3",
+    "source": "live_source_plus_lock"
+  }
+]

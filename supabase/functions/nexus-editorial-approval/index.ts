@@ -1,3 +1,4 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
@@ -28,6 +29,7 @@ Deno.serve(async req => {
     const audit = normalizeEditorialHtml(String(article.content || ""));
     const issues = [...audit.fatalIssues, ...(config.needs_primary_source ? ["Fonte primária pendente"] : []), ...(config.review_pass === false ? ["Revisão anterior reprovada"] : [])];
     if (body.action === "inspect") return json({ hash, issues, metrics: audit.metrics, approval: config.nexus_approval || null });
+    if (body.action === "approve") return json({ error: "Aprovação autônoma obrigatória. Revisão por IA pendente enquanto serviços pagos estão bloqueados.", code: "autonomous_review_required" }, 409);
     if (body.expectedHash !== hash) return json({ error: "A versão mudou. Reabra a revisão antes de aprovar." }, 409);
     if (issues.length) return json({ error: "Resolva as pendências antes de aprovar", issues }, 409);
     if (!["facts", "benefits", "urgency", "destination"].every(name => body.checks?.[name] === true)) return json({ error: "Conclua o checklist de revisão" }, 422);

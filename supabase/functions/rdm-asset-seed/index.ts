@@ -1,0 +1,2 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import "jsr:@supabase/functions-js/edge-runtime.d.ts"; Deno.serve(()=>new Response(JSON.stringify({success:false,error:"disabled"}),{status:410,headers:{"content-type":"application/json","cache-control":"no-store"}}));

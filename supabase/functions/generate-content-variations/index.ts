@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { fetchUserKeys } from "../_shared/byok-resolver.ts";
 
@@ -238,7 +240,7 @@ Responda em JSON:
   return parsed.variations || [];
 }
 
-Deno.serve(async (req) => {
+paidLockedServe(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

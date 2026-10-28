@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 // deno-lint-ignore-file no-explicit-any
 // Daily snapshot of tracked GBP competitors — invoked via pg_cron.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
@@ -17,7 +19,7 @@ async function serperPlaces(query: string, apiKey: string, country: string, lang
   return await res.json();
 }
 
-Deno.serve(async (req) => {
+paidLockedServe(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

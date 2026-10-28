@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { NexusGlobalStatus } from '@/components/NexusGlobalStatus';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
@@ -16,6 +17,7 @@ export const Layout = memo(function Layout() {
       <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header />
         <ElectoralOperationsDock />
+        <NexusGlobalStatus />
         <main className="flex-1 overflow-y-auto scrollbar-thin">
           <Outlet />
         </main>

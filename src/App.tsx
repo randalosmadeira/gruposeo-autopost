@@ -17,6 +17,7 @@ const BulkArticleGenerator = lazy(() => import("./pages/BulkArticleGenerator"));
 const ArticlesList = lazy(() => import("./pages/ArticlesList"));
 const ArticleViewPage = lazy(() => import("./pages/ArticleViewPage"));
 const ArticleEditPage = lazy(() => import("./pages/ArticleEditPage"));
+const BusinessProfile = lazy(() => import("./pages/BusinessProfile"));
 const ProjectsList = lazy(() => import("./pages/ProjectsList"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const AuthorityPlanner = lazy(() => import("./pages/AuthorityPlanner"));
@@ -102,6 +103,7 @@ const App = () => (
                 <Route path="/news-agents" element={<NewsAgents />} />
                 <Route path="/news-agents/new" element={<CreateNewsAgent />} />
                 <Route path="/projects" element={<ProjectsList />} />
+                <Route path="/business-profile" element={<BusinessProfile />} />
                 <Route path="/internal-linking" element={<InternalLinking />} />
                 <Route path="/nexus-intelligence" element={<NexusIntelligence />} />
                 <Route path="/internal-links" element={<InternalLinking />} />

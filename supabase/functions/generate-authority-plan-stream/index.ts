@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
@@ -30,7 +32,7 @@ function createSSEMessage(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-Deno.serve(async (req) => {
+paidLockedServe(async (req) => {
   const requestId = createRequestId();
   const log = createLogger(FUNCTION_NAME, requestId);
   const startTime = Date.now();

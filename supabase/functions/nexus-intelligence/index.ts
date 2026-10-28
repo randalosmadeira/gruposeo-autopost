@@ -1,4 +1,6 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import {PAID_SERVICES_BLOCKED} from '../_shared/nexus-spend-lock.ts';
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveRequestActor, RequestAuthError } from "../_shared/request-auth.ts";
 import { parseSerp, parseAiObservation, SAMPLING_METHOD, AUTONOMOUS_REVIEW_PROMPT, validateAutonomousReview, validateLinkDestination, topicGroups, insertDraftLink } from "../_shared/nexus-intelligence.ts";
@@ -15,7 +17,7 @@ Deno.serve(async req=>{
  const admin=createClient(Deno.env.get('SUPABASE_URL')||'',key,{auth:{persistSession:false,autoRefreshToken:false}});
  try{
   const body=await req.json(); const actor=await resolveRequestActor(req,body.userId);
-  const {data:project,error:projectError}=await admin.from('projects').select('id,name,description,nicho,compliance_rules,domain,wordpress_url,organization_id,user_id,editorial_identity,commercial_info,social_links,cta_leads,cta_conclusao,social_instagram,social_linkedin,social_youtube,social_twitter,social_tiktok,social_google_maps').eq('id',body.projectId).eq('user_id',actor.userId).maybeSingle();
+  const {data:project,error:projectError}=await admin.from('projects').select('id,name,description,nicho,compliance_rules,domain,wordpress_url,organization_id,user_id,editorial_identity,commercial_info,social_links,cta_leads,cta_conclusao,social_instagram,social_linkedin,social_youtube,social_twitter,social_tiktok,social_google_maps,nexus_strategy,nexus_strategy_version,nexus_profile_status').eq('id',body.projectId).eq('user_id',actor.userId).maybeSingle();
   if(projectError||!project?.organization_id)return json({error:'project_forbidden'},403);
   const org=project.organization_id;
   const host=new URL(project.wordpress_url||`https://${project.domain}`).hostname;
@@ -125,7 +127,7 @@ Deno.serve(async req=>{
   operationId=operation.id;
   if(operation.kind==='pilot')return json({error:'pilot_is_a_batch_plan_prepare_individual_steps'},409);
   const {data:program}=await admin.from('nexus_programs').select('*').eq('organization_id',org).maybeSingle();
-  if(!program?.execution_enabled||program.budget_usd_micros===0)return json({error:'budget_paused',executed:false},402);
+  if(PAID_SERVICES_BLOCKED||!program?.execution_enabled||program.budget_usd_micros===0)return json({error:'budget_paused',executed:false},402);
   const provider=operation.kind==='serp'?'serper':'openai';
   const {data:credential,error:credentialError}=await admin.rpc('nexus_provider_secret',{p_org:org,p_actor:actor.userId,p_provider:provider});
   if(credentialError||!credential)return json({error:'organization_credential_required',executed:false},409);
@@ -147,7 +149,7 @@ Deno.serve(async req=>{
    }
    const snapshot=article?await editorialFingerprint(article,project):null;
    const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${credential}`,'Content-Type':'application/json'},body:JSON.stringify({model,max_output_tokens:4000,store:false,
-    ...(article?{instructions:AUTONOMOUS_REVIEW_PROMPT,text:{format:{type:'json_object'}},input:JSON.stringify({article:{title:article.title,content:String(article.content||'').slice(0,50000)},sources:String(article.config?.sourcesContext||'').slice(0,8000),project:{identity:project.editorial_identity,sector:project.nicho,description:project.description,compliance:project.compliance_rules},offer:project.commercial_info,brief:article.config?.conversionBrief,segment:article.config?.segment,intent:article.config?.intentType,goal:article.config?.goal})}:{tools:[{type:'web_search',user_location:{type:'approximate',country:String(input.country).toUpperCase(),city:input.city||undefined}}],input:input.query})}),signal:AbortSignal.timeout(90000)});
+    ...(article?{instructions:AUTONOMOUS_REVIEW_PROMPT,text:{format:{type:'json_object'}},input:JSON.stringify({article:{title:article.title,content:String(article.content||'').slice(0,50000)},sources:String(article.config?.sourcesContext||'').slice(0,8000),project:{strategy:project.nexus_strategy,strategy_version:project.nexus_strategy_version,identity:project.editorial_identity,sector:project.nicho,description:project.description,compliance:project.compliance_rules},offer:project.commercial_info,brief:article.config?.conversionBrief,segment:article.config?.segment,intent:article.config?.intentType,goal:article.config?.goal})}:{tools:[{type:'web_search',user_location:{type:'approximate',country:String(input.country).toUpperCase(),city:input.city||undefined}}],input:input.query})}),signal:AbortSignal.timeout(90000)});
    if(!response.ok)throw new Error('provider_request_failed');
    const raw=await response.json();
    if(!article)output={...parseAiObservation(raw,host,input.variants),raw,collected_at:new Date().toISOString(),query:input.query,context:input,provider:'openai',method:SAMPLING_METHOD};
@@ -157,7 +159,7 @@ Deno.serve(async req=>{
     const audit=normalizeEditorialHtml(String(article.content||''));
     output={...verdict,pass:verdict.pass&&audit.pass,method:'autonomous_model_review_plus_deterministic_gates',evaluated_at:new Date().toISOString(),raw};
     if(output.pass&&program.review_mode==='autonomous'){
-     const receipt=await signEditorialReceipt(snapshot!,actor.userId,key);
+     const receipt=await signEditorialReceipt(snapshot!,actor.userId,key,"autonomous");
      const {data:saved,error}=await admin.from('articles').update({config:{...article.config,nexus_approval_required:true,nexus_approval:receipt,nexus_review_mode:'autonomous',review_pass:true,needs_primary_source:false}}).eq('id',article.id).eq('user_id',actor.userId).eq('updated_at',article.updated_at).select('id').maybeSingle();
      if(error||!saved)throw new Error('article_changed_during_review');
     }

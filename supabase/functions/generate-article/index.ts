@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
@@ -173,7 +175,7 @@ INSTRUÇÕES ADICIONAIS:
 ${customInstructions || "Nenhuma."}`;
 }
 
-Deno.serve(async (req: Request) => {
+paidLockedServe(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   const requestId = crypto.randomUUID();
@@ -222,11 +224,13 @@ Deno.serve(async (req: Request) => {
       if (provider === "openai" || provider === "anthropic") preferredProvider = provider;
       dualProvider = provider === "dual";
       if (config.projectId) {
-        const { data: project } = await admin.from("projects").select("id,name,description,commercial_info,social_links,editorial_identity,social_instagram,social_linkedin,social_youtube,social_twitter,social_tiktok,social_google_maps,cta_leads,cta_conclusao").eq("id", config.projectId).eq("user_id", userId).maybeSingle();
+        const { data: project } = await admin.from("projects").select("id,name,description,commercial_info,social_links,editorial_identity,social_instagram,social_linkedin,social_youtube,social_twitter,social_tiktok,social_google_maps,cta_leads,cta_conclusao,nexus_strategy,nexus_strategy_version,nexus_profile_status").eq("id", config.projectId).eq("user_id", userId).maybeSingle();
         if (!project) return json({ error: "Projeto não encontrado ou acesso negado", request_id: requestId }, 403);
         resolvedProject = project as Record<string, unknown>;
         config.projectConfig = {
           ...(config.projectConfig || {}),
+          nexus_strategy: JSON.stringify(project.nexus_strategy || {}),
+          nexus_strategy_version: String(project.nexus_strategy_version || 0),
           project_name: String(project.name || ""),
           project_description: String(project.description || ""),
           commercial_info: JSON.stringify(project.commercial_info || {}),
