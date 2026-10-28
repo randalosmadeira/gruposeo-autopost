@@ -37,3 +37,6 @@ lerna-debug.log*
 
 # renders locais de preview do gerador de apoiadores
 services/zica-orchestrator/.preview/
+
+# Local Supabase CLI cache
+supabase/.temp/

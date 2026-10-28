@@ -15,6 +15,7 @@ const clientItems: NavItem[] = [
   { label: 'Publicar em massa', icon: Layers3, href: '/keywords/bulk' },
   { label: 'Calendário Editorial', icon: Calendar, href: '/calendar' },
   { label: 'Meus Blogs', icon: Globe2, href: '/integrations' },
+  { label: 'NEXUS · Inteligência', icon: Network, href: '/nexus-intelligence' },
   { label: 'Minha Conta', icon: UserRound, href: '/account' },
 ];
 

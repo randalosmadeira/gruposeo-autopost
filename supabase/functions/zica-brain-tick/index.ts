@@ -1,3 +1,4 @@
+import { dispatchAutonomousReview } from "../_shared/nexus-review-dispatch.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { fetchUserKeys } from "../_shared/byok-resolver.ts";
@@ -293,6 +294,7 @@ Deno.serve(async (req: Request) => {
             await admin.from("articles").update({
               content, status: "ready", word_count: wordCount, error_message: null, updated_at: new Date().toISOString(),
             }).eq("id", job.article_id).eq("user_id", job.user_id);
+            if (job.project_id) await dispatchAutonomousReview(job.user_id, job.project_id, job.article_id).catch(() => console.warn("[brain] autonomous_review_preparation_pending"));
             await enqueue(admin, {
               user_id: job.user_id, project_id: job.project_id, article_id: job.article_id,
               job_type: "image_generate", status: "queued", priority: 70, max_attempts: 3,
@@ -359,6 +361,16 @@ Deno.serve(async (req: Request) => {
       await state(admin, userId, "brain", dead > 0 ? "degraded" : "healthy", { requestId, enqueued, claimed: (jobs || []).length, deadLetter: dead, retry, durationMs: Date.now() - started }, dead > 0 ? `${dead} job(s) em dead letter` : undefined);
     }
 
+    if (Date.now() - started < 20000) {
+      const { data: enabledPrograms } = await admin.from("nexus_programs").select("organization_id").eq("execution_enabled", true).gt("budget_usd_micros", 0).limit(10);
+      for (const program of enabledPrograms || []) {
+        const { data: pending } = await admin.from("nexus_operations").select("id,project_id,user_id").eq("organization_id", program.organization_id).eq("status", "prepared").eq("kind", "editorial_review").order("created_at").limit(1).maybeSingle();
+        if (pending) {
+          await edgeCall(url, serviceKey, "nexus-intelligence", { userId: pending.user_id, projectId: pending.project_id, action: "execute", operationId: pending.id }, 100000);
+          break;
+        }
+      }
+    }
     return json({ success: true, request_id: requestId, users: users.length, enqueued, claimed: (jobs || []).length, results, duration_ms: Date.now() - started });
   } catch (error) {
     const message = error instanceof Error

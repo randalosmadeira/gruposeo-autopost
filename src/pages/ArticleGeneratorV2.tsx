@@ -578,6 +578,7 @@ export default function ArticleGeneratorV2() {
       language: config.language,
         sourcesContext: config.sourcesContext,
         conversionBrief: config.conversionBrief,
+        segment: config.segment, contentType: config.contentType, goal: config.goal, intentType: config.intentType,
       projectId: config.projectId,
     });
     
@@ -889,6 +890,7 @@ export default function ArticleGeneratorV2() {
                   language: config.language,
         sourcesContext: config.sourcesContext,
         conversionBrief: config.conversionBrief,
+        segment: config.segment, contentType: config.contentType, goal: config.goal, intentType: config.intentType,
                   projectId: config.projectId,
                 });
               }}
@@ -903,7 +905,7 @@ export default function ArticleGeneratorV2() {
           {appState === 'editing-article' && (
             <div className="space-y-4">
             {articleId && <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 text-sm">
-              <p className="mb-3">O novo padrão NEXUS exige revisão desta versão antes da publicação. Salve suas alterações e confira fatos, benefícios e a próxima ação.</p>
+              <p className="mb-3">O NEXUS prepara a avaliação autônoma desta versão. Com orçamento zero, nenhuma IA paga é acionada e a publicação continua pendente da avaliação.</p>
               <Button variant="outline" onClick={() => navigate(`/articles/${articleId}`)}>Abrir revisão editorial</Button>
             </div>}
             <ArticleEditor

@@ -12,6 +12,7 @@ import { ArticleContentRenderer } from '@/components/articles/ArticleContentRend
 import { ArticleLoadError, ArticleLoadErrorCode, getArticleById, isValidUuid } from '@/services/articles';
 
 interface Article {
+  project_id: string;
   id: string;
   title: string | null;
   keyword: string;
@@ -188,7 +189,7 @@ export default function ArticleViewPage() {
       </div>
 
       <div className="max-w-6xl mx-auto p-6">
-        <NexusEditorialReview key={article.id} articleId={article.id} updatedAt={article.updated_at} />
+        <NexusEditorialReview key={article.id} articleId={article.id} updatedAt={article.updated_at} projectId={article.project_id} />
         <ArticleContentRenderer
           content={article.content || ''}
           rawMarkdown={article.content || ''}

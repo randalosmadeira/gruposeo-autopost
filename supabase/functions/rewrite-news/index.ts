@@ -1,3 +1,4 @@
+import { dispatchAutonomousReview } from "../_shared/nexus-review-dispatch.ts";
 import { buildNexusEditorialPolicy, NEXUS_EDITORIAL_VERSION } from "../_shared/nexus-editorial.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
@@ -241,6 +242,7 @@ Deno.serve(async (req: Request) => {
       config: {
         source_url: input.sourceUrl || null,
         source_name: input.sourceName || null,
+        sourcesContext: String(input.sourceContent || "").slice(0, 8000),
         prompt_template: template.templateName,
         auto_pilot: input.autoPilot !== false,
         generation_provider: generation.provider,
@@ -266,6 +268,8 @@ Deno.serve(async (req: Request) => {
 
     const { data: article, error } = await admin.from("articles").insert(payload).select().single();
     if (error || !article) return json({ success: false, error: error?.message || "Falha ao salvar artigo", request_id: requestId }, 500);
+
+    await dispatchAutonomousReview(userId, input.projectId, article.id).catch(() => console.warn("[rewrite-news] autonomous_review_preparation_pending"));
 
     if (input.autoPilot !== false && draft.image_prompt) {
       const { error: imageQueueError } = await admin.from("zica_brain_jobs").upsert({
