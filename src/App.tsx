@@ -42,6 +42,7 @@ const SupportersAdminPage = lazy(() => import("./pages/SupportersAdminPage"));
 const AuditoriaGBP = lazy(() => import("./pages/AuditoriaGBP"));
 const Hiperlocal = lazy(() => import("./pages/Hiperlocal"));
 const AdminOrganizations = lazy(() => import("./pages/AdminOrganizations"));
+const NexusIntelligence = lazy(() => import("./pages/NexusIntelligence"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -102,6 +103,7 @@ const App = () => (
                 <Route path="/news-agents/new" element={<CreateNewsAgent />} />
                 <Route path="/projects" element={<ProjectsList />} />
                 <Route path="/internal-linking" element={<InternalLinking />} />
+                <Route path="/nexus-intelligence" element={<NexusIntelligence />} />
                 <Route path="/internal-links" element={<InternalLinking />} />
                 <Route path="/topical-maps" element={<Dashboard />} />
                 <Route path="/settings" element={<Navigate to="/account" replace />} />

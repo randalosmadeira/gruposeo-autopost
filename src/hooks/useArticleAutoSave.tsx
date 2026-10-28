@@ -11,6 +11,10 @@ interface OutlineSectionData {
 }
 
 interface AutoSaveConfig {
+  segment?: string;
+  contentType?: string;
+  goal?: string;
+  intentType?: string;
   sourcesContext?: string;
   conversionBrief?: ConversionBrief;
   keyword: string;
@@ -52,6 +56,10 @@ export function useArticleAutoSave(options: UseArticleAutoSaveOptions = {}) {
       // Convert to JSON-compatible format
       const configJson: Json = {
         sourcesContext: config.sourcesContext || '',
+        segment: config.segment || 'general',
+        contentType: config.contentType || 'how-to',
+        goal: config.goal || 'inform',
+        intentType: config.intentType || 'informational',
         conversionBrief: JSON.parse(JSON.stringify(config.conversionBrief || {})),
         editorial_contract_version: '1.0.0',
         nexus_approval_required: true,
@@ -179,12 +187,16 @@ export function useArticleAutoSave(options: UseArticleAutoSaveOptions = {}) {
         updateData.excerpt = generatedExcerpt;
       }
 
-      const { error } = await supabase
+      const { data: savedRow, error } = await supabase
         .from('articles')
         .update(updateData)
-        .eq('id', articleId);
+        .eq('id', articleId).select('project_id').maybeSingle();
 
       if (error) throw error;
+      if (savedRow?.project_id) {
+        void supabase.functions.invoke('nexus-intelligence', { body: { action: 'prepare', kind: 'editorial_review', articleId, projectId: savedRow.project_id } })
+          .catch(() => console.warn('Avaliação autônoma ainda não preparada.'));
+      }
       setLastSaved(new Date());
       
       toast({
