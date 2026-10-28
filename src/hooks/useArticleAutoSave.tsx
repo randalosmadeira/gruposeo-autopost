@@ -1,3 +1,4 @@
+import type { ConversionBrief } from '@/lib/nexus-editorial';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './use-toast';
@@ -10,6 +11,8 @@ interface OutlineSectionData {
 }
 
 interface AutoSaveConfig {
+  sourcesContext?: string;
+  conversionBrief?: ConversionBrief;
   keyword: string;
   title: string;
   aiModel: string;
@@ -48,6 +51,10 @@ export function useArticleAutoSave(options: UseArticleAutoSaveOptions = {}) {
 
       // Convert to JSON-compatible format
       const configJson: Json = {
+        sourcesContext: config.sourcesContext || '',
+        conversionBrief: JSON.parse(JSON.stringify(config.conversionBrief || {})),
+        editorial_contract_version: '1.0.0',
+        nexus_approval_required: true,
         outline: outline.map(s => ({ id: s.id, title: s.title, level: s.level })),
         aiModel: config.aiModel,
         size: config.size,

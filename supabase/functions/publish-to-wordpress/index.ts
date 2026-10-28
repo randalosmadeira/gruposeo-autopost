@@ -1,3 +1,4 @@
+import { editorialFingerprint, verifyEditorialReceipt } from "../_shared/nexus-approval.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
@@ -270,6 +271,12 @@ Deno.serve(async (req: Request) => {
     if (status === "publish" && article.scheduled_at && Date.parse(article.scheduled_at) > Date.now() + 1000) {
       return json({ success: false, error: "Publicação agendada ainda não venceu", code: "scheduled_not_due", scheduled_at: article.scheduled_at, retryable: true, request_id: requestId }, 409);
     }
+    if (status === "publish" && config.nexus_approval_required === true) {
+      const fingerprint = await editorialFingerprint(article, project);
+      if (!await verifyEditorialReceipt(config.nexus_approval, fingerprint, serviceKey)) {
+        return json({ success: false, error: "Revise e aprove esta versão na visualização do artigo antes de publicar.", code: "nexus_approval_required", retryable: false, request_id: requestId }, 409);
+      }
+    }
     if (status === "publish" && (config.needs_primary_source || config.review_pass === false)) {
       return json({ success: false, error: "Publicação bloqueada: revisão/fonte primária pendente", code: "editorial_gate", retryable: false, request_id: requestId }, 409);
     }
@@ -416,7 +423,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const normalizedAt = new Date().toISOString();
-    const normalizedConfig = {
+    const normalizedConfig: typeof config = {
       ...config,
       seo_description: metaDescription,
       meta_description_auto: true,
@@ -446,6 +453,15 @@ Deno.serve(async (req: Request) => {
       updated_at: normalizedAt,
     }).eq("id", article.id).eq("organization_id", article.organization_id);
     if (normalizeError) throw normalizeError;
+
+    // Formatting is canonicalized in the fingerprint. Material automatic repairs
+    // are saved above but must be reviewed again before any WordPress request.
+    if (status === "publish" && config.nexus_approval_required === true) {
+      const deliveredFingerprint = await editorialFingerprint(normalizedArticle, project);
+      if (!await verifyEditorialReceipt(config.nexus_approval, deliveredFingerprint, serviceKey)) {
+        return json({ success: false, error: "O preparo editorial ajustou esta versão. Reabra o artigo e aprove o conteúdo atualizado antes de publicar.", code: "nexus_delivery_review_required", retryable: false, request_id: requestId }, 409);
+      }
+    }
 
     const categories = Array.isArray(body.categories) ? body.categories : [];
     const tags = Array.isArray(body.tags) ? body.tags : [];

@@ -1,3 +1,4 @@
+import type { ConversionBrief } from '@/lib/nexus-editorial';
 import { useState, useCallback } from 'react';
 import { useToast } from './use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,6 +8,8 @@ import { removeCodeBlockMarkers, improveContentStructure } from '@/lib/sanitize'
 const GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-article`;
 
 interface ArticleConfig {
+  conversionBrief?: ConversionBrief;
+  articleId?: string;
   keyword: string;
   title?: string;
   secondaryKeywords: string;
@@ -161,9 +164,9 @@ export function useArticleGeneration() {
 
       // Estimate progress based on word count target
       const wordTargets = {
-        short: 800,
+        short: 500,
         medium: 1500,
-        long: 2500,
+        long: 2000,
         'very-long': 4000,
       };
       const targetWords = wordTargets[config.wordCount];

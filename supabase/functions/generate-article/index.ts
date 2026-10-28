@@ -6,6 +6,8 @@ import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.t
 import { distributeProjectCtas } from "../_shared/editorial-cta.ts";
 import { runAgentPipeline } from "../_shared/agents/agent-pipeline.ts";
 
+import { buildNexusEditorialPolicy, normalizeWordProfile, EDITORIAL_WORD_BANDS, NEXUS_EDITORIAL_VERSION, type ConversionBrief } from "../_shared/nexus-editorial.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -15,6 +17,7 @@ const corsHeaders = {
 type WordProfile = "short" | "medium" | "long" | "very-long";
 interface ArticleConfig {
   keyword: string;
+  conversionBrief?: ConversionBrief;
   batchId?: string;
   title?: string;
   secondaryKeywords?: string;
@@ -98,7 +101,7 @@ function sse(content: string, provider: string, model: string, promptVersion?: n
 }
 
 function bandFor(value?: WordProfile): Band {
-  switch (value) {
+  switch (normalizeWordProfile(value || "medium")) {
     case "short": return { label: "300 a 500 palavras", min: 300, max: 500, purpose: "bloco curto, transacional ou resposta ultraespecífica" };
     case "long": return { label: "1.400 a 2.000 palavras", min: 1400, max: 2000, purpose: "artigo aprofundado, sem preencher espaço artificialmente" };
     case "very-long": return { label: "2.500 a 4.000 palavras", min: 2500, max: 4000, purpose: "conteúdo pilar/cornerstone que realmente exija profundidade" };
@@ -253,7 +256,7 @@ Deno.serve(async (req: Request) => {
       if (!customTemplateApplied) {
         const templateQuery = admin.from("prompt_templates").select("prompt,version,project_id")
           .eq("user_id", userId).eq("name", "editor-seo-geo").eq("is_active", true)
-          .order("updated_at", { ascending: false }).limit(1);
+          .order("updated_at", { ascending: false });
         const { data: templates } = config.projectId
           ? await templateQuery.or(`project_id.eq.${config.projectId},project_id.is.null`)
           : await templateQuery.is("project_id", null);
@@ -266,7 +269,8 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const band = bandFor(config.wordCount);
+    const band = { ...bandFor(config.wordCount), ...EDITORIAL_WORD_BANDS[normalizeWordProfile(config.wordCount || "medium")] };
+    systemPrompt += "\n\n" + buildNexusEditorialPolicy(config);
     const prompt = buildPrompt(config, band);
     const orchestrator = await getOrchestratorForUser(userId);
     const generationMessages = [
@@ -285,6 +289,11 @@ Deno.serve(async (req: Request) => {
       const secondaryKeywords = String(config.secondaryKeywords || "")
         .split(",").map((item) => item.trim()).filter(Boolean);
       const pipelineResult = await runAgentPipeline({
+        sourcesContext: config.sourcesContext,
+        customInstructions: config.customInstructions || config.additionalInfo,
+        projectConfig: config.projectConfig,
+        conversionBrief: config.conversionBrief,
+        templatePrompt: systemPrompt,
         keyword: config.keyword,
         title: config.title,
         secondaryKeywords,
@@ -349,7 +358,7 @@ Deno.serve(async (req: Request) => {
     let words = countWords(content);
     if (words < Math.floor(band.min * 0.85) && band.min >= 1000) {
       const expanded = await orchestrator.callWithMeta("content_editing", [
-        { role: "system", content: "Aprofunde sem inventar fatos, sem repetir ideias e sem alterar a tese central. Não insira marcadores de revisão, comentários técnicos ou metadados no corpo." },
+        { role: "system", content: buildNexusEditorialPolicy(config) + "\nAprofunde sem inventar fatos, sem repetir ideias e sem alterar a tese central. Não insira marcadores de revisão, comentários técnicos ou metadados no corpo." },
         { role: "user", content: `Faixa editorial: ${band.label}. O rascunho possui ${words} palavras. Acrescente apenas explicações, critérios, exemplos hipotéticos claramente identificados, listas ou comparações sustentadas pelo próprio contexto. Se uma fonte primária indispensável estiver ausente, retorne somente ZICA_NEEDS_PRIMARY_SOURCE: <fonte necessária>.\n\nRASCUNHO:\n${content}` },
       ], { preferredProvider: generation.provider, maxTokens: 32000, temperature: 0.2 });
       const expandedContent = expanded.content.trim();
@@ -372,9 +381,20 @@ Deno.serve(async (req: Request) => {
 
     content = distributeProjectCtas(content, resolvedProject || {});
     words = countWords(content);
+    if (config.articleId) {
+      const { data: existing } = await admin.from("articles").select("id,config,project_id,updated_at").eq("id", config.articleId).eq("user_id", userId).maybeSingle();
+      if (!existing || (config.projectId && existing.project_id !== config.projectId)) return json({ error: "Artigo não encontrado no projeto", request_id: requestId }, 403);
+      const { data: saved, error: saveError } = await admin.from("articles").update({ config: {
+        ...(existing.config || {}), editorial_contract_version: NEXUS_EDITORIAL_VERSION,
+        nexus_approval_required: true, nexus_approval: null,
+        sourcesContext: String(config.sourcesContext || "").slice(0, 8000),
+        conversionBrief: config.conversionBrief || {},
+      } }).eq("id", existing.id).eq("user_id", userId).eq("updated_at", existing.updated_at).select("id").maybeSingle();
+      if (saveError || !saved) return json({ error: "O rascunho mudou durante a geração. Atualize e tente novamente.", request_id: requestId }, 409);
+    }
     console.log(`[generate-article] request=${requestId} provider=${generation.provider} model=${generation.model} words=${words} band=${band.min}-${band.max}`);
     if (body?.responseFormat === "json") {
-      return json({ success: true, content, provider: generation.provider, model: generation.model, providerMode: generation.providerMode || 'single', providersUsed: generation.providersUsed || [generation.provider], words, promptVersion, request_id: requestId });
+      return json({ success: true, content, provider: generation.provider, model: generation.model, providerMode: generation.providerMode || 'single', providersUsed: generation.providersUsed || [generation.provider], words, promptVersion, editorial_contract_version: NEXUS_EDITORIAL_VERSION, request_id: requestId });
     }
     return sse(content, generation.provider, generation.model, promptVersion);
   } catch (error) {

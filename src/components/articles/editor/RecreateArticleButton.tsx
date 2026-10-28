@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 interface ArticleConfig {
+  segment?: string;
   type?: string;
   source_url?: string;
   source_name?: string;

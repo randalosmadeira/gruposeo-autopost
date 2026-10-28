@@ -8,7 +8,7 @@ The Zica.ai source and control plane must remain restricted to infrastructure co
 2. GitHub Actions only for CI and the dedicated VPS deployment workflow.
 3. Supabase project `Autopublic-prod` for database, storage, authentication, Vault and Edge Functions.
 4. Dedicated VPS/cPanel infrastructure serving the approved Zica.ai domain/subdomain.
-5. Production frontend/orchestrator deployment only through `.github/workflows/zica-ai-vps-deploy.yml`.
+5. Production frontend/orchestrator deployment through the dedicated VPS workflow. On 2026-10-28 the owner explicitly authorized direct PowerShell/SSH deployment when GitHub Actions is unavailable for billing reasons. The manual frontend path is `scripts/Deploy-NexusFrontend.ps1`: same isolated account and directory, archive hash verification, previous-release backup and rollback. It does not rotate credentials, restart other products or change the orchestrator.
 
 ## Prohibited deployment and builder channels
 

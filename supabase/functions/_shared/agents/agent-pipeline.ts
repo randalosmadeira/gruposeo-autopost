@@ -9,7 +9,8 @@
 
 import { type TaskType } from "../ai-orchestrator.ts";
 import { getOrchestratorForUser } from "../byok-resolver.ts";
-import { type SectorConfig, SECTOR_CONFIGS, mapSegmentToSector, buildSectorPromptSection } from "../sector-config.ts";
+import { buildNexusEditorialPolicy, buildNexusEvidenceContext, normalizeWordProfile, EDITORIAL_WORD_BANDS, type ConversionBrief } from "../nexus-editorial.ts";
+import { type SectorType, type SectorConfig, SECTOR_CONFIGS, mapSegmentToSector, buildSectorPromptSection } from "../sector-config.ts";
 
 export interface AgentPipelineConfig {
   keyword: string;
@@ -23,6 +24,12 @@ export interface AgentPipelineConfig {
   contentType?: string;
   goal?: string;
   intentType?: string;
+
+  sourcesContext?: string;
+  customInstructions?: string;
+  projectConfig?: unknown;
+  templatePrompt?: string;
+  conversionBrief?: ConversionBrief;
 
   // Company data
   companyName?: string;
@@ -85,257 +92,60 @@ export interface AgentPipelineResult {
 
 // =================== AGENT PROMPTS ===================
 
-function getStrategistPrompt(config: AgentPipelineConfig, sectorConfig: SectorConfig): string {
-  return `Você é um ESTRATEGISTA DE CONTEÚDO COMERCIAL especializado em converter leitores em leads.
-
-SUA MISSÃO:
-Analisar a keyword e o setor para criar uma estratégia de conteúdo que:
-1. VENDA o serviço de forma consultiva (não agressiva)
-2. EDUQUE enquanto posiciona a empresa como autoridade
-3. REMOVA OBJEÇÕES antes que o leitor as tenha
-4. GUIE para a CONVERSÃO de forma natural
-
-ENTRADAS:
-- Keyword: "${config.keyword}"
-- Setor: ${sectorConfig.displayName} (${sectorConfig.sector})
-- Compliance: ${sectorConfig.complianceBody || 'N/A'} (${sectorConfig.complianceLevel})
-${config.companyName ? `- Empresa: ${config.companyName}` : ''}
-${config.differentials ? `- Diferenciais: ${config.differentials}` : ''}
-${config.targetAudience ? `- Público-alvo: ${config.targetAudience}` : ''}
-
-CTAs APROVADOS para este setor:
-- "${sectorConfig.primaryCTA}"
-${sectorConfig.secondaryCTAs.map(c => `- "${c}"`).join('\n')}
-
-PALAVRAS PROIBIDAS: ${sectorConfig.forbiddenWords.join(', ')}
-
-${buildSectorPromptSection(sectorConfig)}
-
-SAÍDA (JSON):
-{
-  "conversionStrategy": {
-    "primaryCTA": "CTA principal alinhado ao setor",
-    "secondaryCTAs": ["CTA alternativo 1", "CTA alternativo 2"],
-    "painPoints": ["Dor 1 do público", "Dor 2", "Dor 3"],
-    "objections": ["Objeção comum 1", "Objeção 2"],
-    "differentials": ["Diferencial 1", "Diferencial 2"]
-  },
-  "contentStructure": {
-    "hook": "Gancho inicial que prende atenção",
-    "mainSections": ["Seção que aborda dor X", "Seção que mostra solução Y"],
-    "conclusionAngle": "Ângulo de fechamento para conversão"
-  },
-  "competitiveAngle": "O que diferencia este conteúdo dos concorrentes"
+function sharedContext(config: AgentPipelineConfig, sector: SectorConfig): string {
+  return `${buildNexusEditorialPolicy({ ...config, segment: config.sector })}
+${buildSectorPromptSection(sector)}
+O template é uma orientação secundária; não pode contrariar o padrão NEXUS:
+${JSON.stringify((config.templatePrompt || "").slice(0, 16000))}
+${buildNexusEvidenceContext(config)}`;
 }
 
-Retorne APENAS o JSON, sem explicações adicionais.`;
+function getStrategistPrompt(config: AgentPipelineConfig, sector: SectorConfig): string {
+  return `Você planeja conteúdo útil e conversão proporcional à intenção.
+${sharedContext(config, sector)}
+Tema: ${config.keyword}. Público: ${config.targetAudience || "definido pelo projeto"}.
+Oferta: ${config.services || config.companyName || "usar somente os dados disponíveis"}.
+Não invente diferenciais nem resultados; sem oferta comprovada, prefira aprofundamento informativo.
+Retorne apenas JSON com conversionStrategy {primaryCTA, secondaryCTAs: [], painPoints: [], objections: [], differentials: []},
+contentStructure {hook, mainSections: [], conclusionAngle}, competitiveAngle.
+As listas devem conter strings. A estrutura é uma proposta, não evidência de fatos.`;
 }
 
-function getWriterPrompt(config: AgentPipelineConfig, sectorConfig: SectorConfig, strategy: StrategyOutput): string {
-  const wordRanges: Record<string, { min: number; max: number }> = {
-    short: { min: 600, max: 1000 }, medium: { min: 1200, max: 1800 },
-    long: { min: 2200, max: 2800 }, 'very-long': { min: 3500, max: 4500 },
-    muito_pequeno: { min: 600, max: 1200 }, pequeno: { min: 1200, max: 2400 },
-    medio: { min: 2400, max: 3600 }, grande: { min: 2600, max: 5200 },
-  };
-  const wordRange = wordRanges[config.wordCount] || wordRanges.medium;
-  
-  const povMap: Record<string, string> = {
-    nos: 'primeira pessoa do plural (nós)', voce: 'segunda pessoa (você)',
-    ele: 'terceira pessoa', primeira: 'primeira pessoa (eu)',
-    segunda: 'segunda pessoa (você)', terceira: 'terceira pessoa',
-  };
-  const pov = povMap[config.pointOfView] || 'segunda pessoa (você)';
-
-  return `Você é um REDATOR COMERCIAL ESPECIALISTA que escreve para VENDER SEM PARECER VENDEDOR.
-
-REGRAS INEGOCIÁVEIS:
-1. META-DESCRIPTION OBRIGATÓRIA: Sempre gere <!-- META_DESCRIPTION: [145-160 chars] --> no início
-2. LEGIBILIDADE FLESCH 70-100: Sentenças de no máx 15-18 palavras. Linguagem simples. Um adolescente de 14 anos deve entender.
-3. LINKS EXTERNOS: Inclua 2-3 links para fontes autoritativas (.gov, .edu, instituições reconhecidas)
-4. FORMATAÇÃO LIMPA: Sem espaços duplos, sem pontuação duplicada, hierarquia H2>H3 correta
-5. LINGUAGEM ACESSÍVEL: Sem jargões. Explique termos técnicos entre parênteses.
-
-FILOSOFIA DE ESCRITA:
-- Cada parágrafo deve ter um PROPÓSITO de conversão
-- Use a técnica AIDA: Atenção → Interesse → Desejo → Ação
-- Inclua PROVA SOCIAL em cada seção (números, cases, estatísticas)
-- REMOVA OBJEÇÕES antes que o leitor as pense
-- CTAs distribuídos naturalmente, não apenas no final
-
-ESPECIFICAÇÕES:
-- Keyword: "${config.keyword}"
-- Setor: ${sectorConfig.displayName}
-- Tom: ${config.tone}
-- Ponto de vista: ${pov}
-- Idioma: ${config.language}
-- Extensão: ${wordRange.min}-${wordRange.max} palavras
-
-${buildSectorPromptSection(sectorConfig)}
-
-ESTRATÉGIA DE CONTEÚDO (definida pelo Estrategista):
-- Hook: ${strategy.contentStructure.hook}
-- Seções: ${strategy.contentStructure.mainSections.join(' | ')}
-- Fechamento: ${strategy.contentStructure.conclusionAngle}
-- CTA Principal: ${strategy.conversionStrategy.primaryCTA}
-- Dores do público: ${strategy.conversionStrategy.painPoints.join(', ')}
-- Objeções a remover: ${strategy.conversionStrategy.objections.join(', ')}
-- Ângulo competitivo: ${strategy.competitiveAngle}
-
-${config.internalLinks && config.internalLinks.length > 0 ? `
-LINKS INTERNOS OBRIGATÓRIOS — ZERO TOLERÂNCIA:
-Inserir no MÍNIMO 4 e no MÁXIMO 10 dos links abaixo DENTRO do HTML.
-Artigo SEM links internos <a href="..."> será REJEITADO.
-
-${config.internalLinks.slice(0, 20).map((l, i) => `${i + 1}. "${l.anchor}" → ${l.url}`).join('\n')}
-
-DISTRIBUIÇÃO: 1-2 na introdução, 4-6 no corpo, 1-2 na conclusão.
-Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto âncora descritivo</a>
-NUNCA usar "clique aqui". VARIE os anchor texts.
-` : `
-LINKS INTERNOS OBRIGATÓRIOS — ZERO TOLERÂNCIA:
-Mesmo sem links fornecidos, inclua MÍNIMO 2 links externos para fontes oficiais (.gov, .edu).
-`}
-
-ESTRUTURA OBRIGATÓRIA:
-1. <!-- META_DESCRIPTION: [máx 160 chars] -->
-2. <!-- TITLE_SEO: [máx 60 chars] -->
-3. <h1>Título</h1>
-4. ABERTURA (2 parágrafos): Gancho emocional/estatística + validação
-5. DESENVOLVIMENTO: 5-7 H2, cada um resolvendo UMA dor
-6. Micro-CTAs após cada seção
-${config.includeFaq ? `7. FAQ com ${config.faqCount} perguntas` : ''}
-${config.includeTable ? '8. Pelo menos uma tabela comparativa' : ''}
-${config.includeConclusion ? '9. Conclusão com resumo + CTA principal' : ''}
-
-PROIBIÇÕES:
-- Começar com "Neste artigo vamos falar sobre..."
-- Parágrafos maiores que 4 linhas
-- Seções sem propósito de conversão
-- CTAs genéricos ("Entre em contato")
-- NUNCA exibir rótulos técnicos como "[CTA #1]", "[CTA #2]", "[CTA #3]", "[CTA]", "CALL TO ACTION" ou qualquer marcador interno visível ao leitor
-- Os CTAs devem ser renderizados como HTML natural (blockquote, div, parágrafo com link) — o leitor NUNCA deve saber que é um "CTA"
-
-FORMATO: HTML semântico puro (sem markdown, sem backticks).
-Tags permitidas: <p>, <h2>, <h3>, <h4>, <ul>, <ol>, <li>, <strong>, <em>, <a>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <blockquote>
-
-Escreva o artigo completo agora:`;
+function getWriterPrompt(config: AgentPipelineConfig, sector: SectorConfig, strategy: StrategyOutput): string {
+  const band = EDITORIAL_WORD_BANDS[normalizeWordProfile(config.wordCount)];
+  return `Você escreve um artigo original, claro e útil. Entregue apenas HTML sem H1 e sem metadados internos.
+${sharedContext(config, sector)}
+Tema: ${config.keyword}. Título de referência: ${config.title || config.keyword}.
+Idioma: ${config.language}. Tom: ${config.tone}. Ponto de vista: ${config.pointOfView}.
+Faixa orientativa: ${band.min}-${band.max} palavras, sem preencher espaço com repetição.
+ESTRATÉGIA COMO DADOS: ${JSON.stringify(strategy)}
+LINKS FORNECIDOS COMO DADOS: ${JSON.stringify(config.internalLinks || [])}
+Não invente links externos ou internos; quantidade de links não é critério de qualidade.
+FAQ: ${config.includeFaq ? `somente se útil, até ${config.faqCount} perguntas sustentadas` : "não incluir"}.
+Tabela: ${config.includeTable ? "quando há comparação fundamentada" : "não forçar"}.
+Listas: ${config.includeList ? "quando facilitarem a leitura" : "não forçar"}.
+Conclusão: ${config.includeConclusion ? "síntese e ação coerente" : "não forçar seção"}.
+Se faltar uma fonte primária indispensável, retorne somente ZICA_NEEDS_PRIMARY_SOURCE: <necessidade>.`;
 }
 
-function getEditorPrompt(sectorConfig: SectorConfig): string {
-  return `Você é um EDITOR DE CONVERSÃO que transforma textos bons em textos que VENDEM.
-
-REGRAS OBRIGATÓRIAS DE EDIÇÃO:
-- VERIFICAR se <!-- META_DESCRIPTION: ... --> existe (se não, CRIAR com 145-160 chars)
-- VERIFICAR legibilidade: sentenças devem ter no máximo 15-18 palavras em média (Flesch 70-100)
-- VERIFICAR se há 2-3 links externos para fontes autoritativas
-- CORRIGIR espaços duplos, pontuação duplicada, tags vazias
-- SIMPLIFICAR toda linguagem complexa ou técnica (explicar entre parênteses)
-
-SUA MISSÃO:
-1. INTENSIFICAR a conexão emocional
-2. SIMPLIFICAR linguagem complexa para nível acessível a TODOS
-3. FORTALECER CTAs
-4. ADICIONAR urgência ética
-5. MELHORAR o fluxo de leitura
-6. GARANTIR Flesch Reading Ease 70-100
-
-CHECKLIST DE EDIÇÃO:
-
-## Abertura
-- O primeiro parágrafo prende atenção em 5 segundos?
-- O leitor se identifica com o problema apresentado?
-- Há promessa clara de valor?
-
-## Corpo
-- Cada seção resolve uma dor específica?
-- Há prova social (números, cases) em cada seção?
-- Os parágrafos têm no máximo 3-4 linhas?
-- Há transições suaves entre seções?
-
-## Persuasão
-- Objeções foram antecipadas e removidas?
-- Benefícios estão acima de features?
-- Há escassez ou urgência ética?
-- CTAs são específicos e acionáveis?
-
-## Fechamento
-- Resumo reforça a transformação prometida?
-- CTA final é impossível de ignorar?
-- Há múltiplas formas de contato?
-
-TÉCNICAS DE MELHORIA:
-- Features → Benefícios: "Sistema 24h" → "Resolva seu problema a qualquer hora"
-- Números vagos → Específicos: "muitos clientes" → "mais de 500 clientes em 3 anos"
-- Voz passiva → Ativa
-- Parágrafos longos → Quebrados
-
-IMPORTANTE: Retorne o artigo COMPLETO editado em HTML. Mantenha a estrutura, melhore a persuasão.
-REMOVA qualquer marcador técnico visível como "[CTA #1]", "[CTA #2]", "[CTA]", "CALL TO ACTION" — substituir por HTML natural.
-NÃO adicione comentários sobre as mudanças. Retorne APENAS o HTML editado.
-
-## COMPLIANCE ${sectorConfig.complianceBody || 'GERAL'} — NÃO REINTRODUZIR NA EDIÇÃO
-Ao intensificar persuasão e simplificar linguagem, NUNCA introduza estas expressões proibidas no setor ${sectorConfig.displayName}:
-${sectorConfig.forbiddenWords.map(w => `- "${w}"`).join('\n')}
-${sectorConfig.requiredDisclaimer ? `\nDisclaimer obrigatório que deve permanecer no texto (não remover nem reescrever de forma a descaracterizá-lo): "${sectorConfig.requiredDisclaimer}"` : ''}`;
+function getEditorPrompt(config: AgentPipelineConfig, sector: SectorConfig): string {
+  return `Revise clareza, utilidade, precisão, benefício e próxima ação. Retorne o artigo completo em HTML.
+${sharedContext(config, sector)}
+Mantenha os fatos e links sustentados. Não transforme números vagos em números específicos.
+Responda objeções com condições e alternativas; urgência só com suporte factual.
+Não alegue Flesch calculado ou qualidade medida por impressão subjetiva.
+Se faltar fonte indispensável, retorne somente ZICA_NEEDS_PRIMARY_SOURCE: <necessidade>.
+Remova marcadores técnicos visíveis e metadados internos, sem H1.`;
 }
 
-function getSEOReviewerPrompt(keyword: string, sectorConfig: SectorConfig): string {
-  return `Você é um REVISOR DE QUALIDADE SEO E COMPLIANCE para o setor ${sectorConfig.displayName}.
-
-CHECKLIST TÉCNICO SEO (TODOS DEVEM PASSAR):
-
-## Meta-Description (OBRIGATÓRIO - INEGOCIÁVEL)
-- <!-- META_DESCRIPTION: ... --> PRESENTE no início? Se NÃO, CRIAR AGORA
-- Tem entre 145-160 caracteres?
-- Contém a keyword e um CTA sutil?
-
-## LIMPEZA DE MARCADORES TÉCNICOS (OBRIGATÓRIO - INEGOCIÁVEL)
-- Verificar e REMOVER qualquer ocorrência de "[CTA #1]", "[CTA #2]", "[CTA #3]", "[CTA #4]", "[CTA #5]", "[CTA]" ou variações
-- Verificar e REMOVER textos como "CALL TO ACTION", "CTA DE URGÊNCIA", "CTA DE AUTORIDADE" visíveis ao leitor
-- Os blocos de conversão devem existir como HTML natural (blockquote, div, parágrafo) SEM rótulos técnicos
-- Se encontrar QUALQUER marcador "[CTA", REMOVER o rótulo e manter apenas o conteúdo útil
-
-## Keyword "${keyword}"
-- Keyword principal no H1? (OBRIGATÓRIO)
-- Keyword nos primeiros 100 palavras? (OBRIGATÓRIO)
-- Densidade entre 1-2%?
-- Keywords secundárias distribuídas?
-
-## Estrutura
-- Apenas 1 H1?
-- Hierarquia correta (H2 > H3)?
-- TITLE_SEO com keyword? (máx 60 chars)
-- Links internos inseridos naturalmente?
-- Todos os links com target="_blank" rel="noopener noreferrer"?
-
-## Links Externos (OBRIGATÓRIO - MÍNIMO 2)
-- Há pelo menos 2 links para fontes autoritativas (.gov, .edu, instituições)?
-- Se NÃO, ADICIONAR links relevantes ao nicho
-
-## Legibilidade (OBRIGATÓRIO - Flesch 70-100)
-- Sentenças com máximo 15-18 palavras em média?
-- Parágrafos curtos (máx 3-4 linhas)?
-- Linguagem simples e acessível a TODOS os públicos?
-- Termos técnicos explicados entre parênteses?
-- Sem jargões (juridiquês, mediquês, etc.)?
-- FAQ com respostas diretas?
-
-## Formatação SEO
-- Sem espaços duplos entre palavras?
-- Sem pontuação duplicada (.. ,, !!)?
-- Sem tags HTML vazias?
-- Bold apenas em termos-chave (não frases inteiras)?
-
-## COMPLIANCE ${sectorConfig.complianceBody || 'GERAL'}
-${buildSectorPromptSection(sectorConfig)}
-
-INSTRUÇÕES:
-1. Revise o artigo fornecido
-2. REMOVA todos os marcadores técnicos "[CTA #X]" encontrados
-3. Corrija problemas de SEO e compliance
-4. Retorne o artigo CORRIGIDO em HTML completo
-5. NÃO adicione comentários. Retorne APENAS o HTML corrigido.`;
+function getSEOReviewerPrompt(config: AgentPipelineConfig, sector: SectorConfig): string {
+  return `Revise SEO, semântica, evidência e adequação ao setor. Retorne apenas HTML completo corrigido.
+${sharedContext(config, sector)}
+Keyword: ${config.keyword}. Use vocabulário natural; não aplique densidade fixa.
+Verifique HTML sem H1, hierarquia H2/H3, ausência de resíduos técnicos e links sustentados.
+Não acrescente fontes que não recebeu, estatísticas, prova social ou contatos inexistentes.
+Preserve a finalidade de notícia e a intensidade comercial compatível com o tema.
+Se faltar fonte indispensável, retorne somente ZICA_NEEDS_PRIMARY_SOURCE: <necessidade>.`;
 }
 
 // =================== PIPELINE EXECUTION ===================
@@ -362,17 +172,23 @@ export async function runAgentPipeline(config: AgentPipelineConfig): Promise<Age
   let strategy: StrategyOutput;
   
   try {
-    const strategyResult = await orchestrator.call('strategy_planning', [
+    const strategyCall = await orchestrator.callWithMeta('strategy_planning', [
       { role: 'system', content: getStrategistPrompt(config, sectorConfig) },
       { role: 'user', content: `Crie a estratégia de conteúdo para o artigo sobre: "${config.keyword}"` },
     ], { maxTokens: 2000, temperature: 0.7, preferredProvider: 'gemini', ...callOptions });
     
-    providersUsed.push('strategist');
+    providersUsed.push(`${strategyCall.provider}:${strategyCall.model}`);
+    const strategyResult = strategyCall.content;
     
     // Parse JSON from response
     const jsonMatch = strategyResult.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       strategy = JSON.parse(jsonMatch[0]);
+      const lists = [strategy.conversionStrategy?.secondaryCTAs, strategy.conversionStrategy?.painPoints,
+        strategy.conversionStrategy?.objections, strategy.conversionStrategy?.differentials, strategy.contentStructure?.mainSections];
+      if (!lists.every(list => Array.isArray(list) && list.every(item => typeof item === "string"))) {
+        throw new Error("invalid_strategy_shape");
+      }
     } else {
       throw new Error('Estrategista não retornou JSON válido');
     }
@@ -384,20 +200,20 @@ export async function runAgentPipeline(config: AgentPipelineConfig): Promise<Age
         secondaryCTAs: sectorConfig.secondaryCTAs,
         painPoints: ['Problema não resolvido', 'Falta de informação', 'Insegurança na decisão'],
         objections: ['Custo', 'Tempo', 'Complexidade'],
-        differentials: [config.differentials || 'Experiência e especialização'],
+        differentials: config.differentials ? [config.differentials] : [],
       },
       contentStructure: {
-        hook: `Estatística impactante sobre ${config.keyword}`,
+        hook: `Resposta direta à dúvida sobre ${config.keyword}`,
         mainSections: [
           `O que é ${config.keyword}`,
           `Por que ${config.keyword} é importante`,
           `Como resolver com ajuda profissional`,
           'Erros comuns a evitar',
-          'Por que nos escolher',
+          'Critérios para decidir o próximo passo',
         ],
-        conclusionAngle: 'Resumo + urgência ética + CTA',
+        conclusionAngle: 'Síntese útil + próxima ação adequada à intenção',
       },
-      competitiveAngle: 'Conteúdo mais prático e consultivo que os concorrentes',
+      competitiveAngle: 'Clareza e critérios práticos, sem superioridade não demonstrada',
     };
   }
 
@@ -405,57 +221,58 @@ export async function runAgentPipeline(config: AgentPipelineConfig): Promise<Age
   console.log('[AgentPipeline] Agente 2/4: Redator...');
   const writerTaskType: TaskType = sectorConfig.complianceLevel === 'strict' ? 'legal_review' : 'article_generation';
   
-  let content = await orchestrator.call(writerTaskType, [
+  const writerCall = await orchestrator.callWithMeta(writerTaskType, [
     { role: 'system', content: getWriterPrompt(config, sectorConfig, strategy) },
-    { role: 'user', content: `Escreva o artigo completo sobre "${config.keyword}" seguindo a estratégia definida. HTML puro, sem backticks.
-
-⚠️ OBRIGATÓRIO:
-- PRIMEIRA LINHA: <!-- META_DESCRIPTION: [145-160 chars] -->
-- SEGUNDA LINHA: <!-- TITLE_SEO: [máx 60 chars] -->
-- Frases de NO MÁXIMO 15 palavras (Flesch 70-100)
-- Parágrafos de NO MÁXIMO 3 linhas
-- Linguagem SIMPLES (um adolescente de 14 anos deve entender)
-- MÍNIMO 2 links externos para fontes oficiais
-- Comece com <!-- META_DESCRIPTION: ... --> na primeira linha.` },
+    { role: 'user', content: `Escreva o artigo sobre "${config.keyword}". HTML sem H1, sem comentários técnicos. Não crie fatos ou links para preencher requisitos.` },
   ], {
     maxTokens: 8000,
     temperature: 0.5,
     preferredProvider: sectorConfig.preferredAI,
     ...callOptions,
   });
-  providersUsed.push('writer');
+  let content = writerCall.content;
+  providersUsed.push(`${writerCall.provider}:${writerCall.model}`);
 
   // ====== AGENT 3: EDITOR ======
   console.log('[AgentPipeline] Agente 3/4: Editor...');
   try {
-    const editedContent = await orchestrator.call('content_editing', [
-      { role: 'system', content: getEditorPrompt(sectorConfig) },
+    const editorCall = await orchestrator.callWithMeta('content_editing', [
+      { role: 'system', content: getEditorPrompt(config, sectorConfig) },
       { role: 'user', content: `Edite e melhore o seguinte artigo para máxima conversão:\n\n${content}` },
     ], { maxTokens: 8000, temperature: 0.3, preferredProvider: 'anthropic', ...callOptions });
     
-    // Only use edited content if it's substantial
+    const editedContent = editorCall.content;
+    if (!editedContent?.trim()) throw new Error('empty_editor_review');
+    if (/^ZICA_NEEDS_PRIMARY_SOURCE\s*:/im.test(editedContent)) return { content: editedContent, strategy, providersUsed };
+    // A reviewer must return the entire article, not a partial fragment.
     if (editedContent && editedContent.length > content.length * 0.5) {
       content = editedContent;
     }
-    providersUsed.push('editor');
+    else throw new Error('incomplete_editor_review');
+    providersUsed.push(`${editorCall.provider}:${editorCall.model}`);
   } catch (error) {
-    console.warn('[AgentPipeline] Editor falhou, mantendo versão do redator:', error);
+    console.warn('[AgentPipeline] Revisão editorial não concluída');
+    throw new Error('editorial_review_incomplete');
   }
 
   // ====== AGENT 4: SEO REVIEWER ======
   console.log('[AgentPipeline] Agente 4/4: Revisor SEO...');
   try {
-    const reviewedContent = await orchestrator.call('content_review', [
-      { role: 'system', content: getSEOReviewerPrompt(config.keyword, sectorConfig) },
+    const reviewerCall = await orchestrator.callWithMeta('content_review', [
+      { role: 'system', content: getSEOReviewerPrompt(config, sectorConfig) },
       { role: 'user', content: `Revise o SEO e compliance do seguinte artigo:\n\n${content}` },
     ], { maxTokens: 8000, temperature: 0.2, preferredProvider: 'gemini', ...callOptions });
     
+    const reviewedContent = reviewerCall.content;
+    if (/^ZICA_NEEDS_PRIMARY_SOURCE\s*:/im.test(reviewedContent)) return { content: reviewedContent, strategy, providersUsed };
     if (reviewedContent && reviewedContent.length > content.length * 0.5) {
       content = reviewedContent;
     }
-    providersUsed.push('seo_reviewer');
+    else throw new Error('incomplete_seo_review');
+    providersUsed.push(`${reviewerCall.provider}:${reviewerCall.model}`);
   } catch (error) {
-    console.warn('[AgentPipeline] Revisor SEO falhou, mantendo versão do editor:', error);
+    console.warn('[AgentPipeline] Revisão SEO não concluída');
+    throw new Error('editorial_review_incomplete');
   }
 
   console.log(`[AgentPipeline] Pipeline completo. Agentes executados: ${providersUsed.join(' → ')}`);

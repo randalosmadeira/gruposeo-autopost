@@ -136,10 +136,10 @@ export function BulkPublishModal({ isOpen, onClose, selectedArticles, projects, 
     let cancelled = false;
     setLoadingProjects(true);
     setProjectLoadError('');
-    void supabase
+    void Promise.resolve(supabase
       .from('projects')
       .select('id,name,domain,wordpress_url')
-      .order('name', { ascending: true })
+      .order('name', { ascending: true }))
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) {
