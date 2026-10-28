@@ -73,8 +73,8 @@ Deno.serve(async req=>{
     const slug=`nexus-term-${group.term}`;
     const {data:existing}=await admin.from('topic_clusters').select('id').eq('project_id',project.id).eq('user_id',actor.userId).eq('slug',slug).maybeSingle();
     let id=existing?.id;
-    if(!id){const {data:cluster,error}=await admin.from('topic_clusters').insert({project_id:project.id,user_id:actor.userId,name:`Tema: ${group.term}`,slug,description:'Agrupamento inicial por ocorrência de termos; não é avaliação semântica por IA.',pillar_article_id:group.articles[0].id,primary_keywords:[group.term],article_count:group.articles.length,is_auto_generated:true}).select('id').single();if(error)throw error;id=cluster.id;}
-    const {error}=await admin.from('nexus_cluster_members').upsert(group.articles.map(a=>({cluster_id:id,article_id:a.id,organization_id:org,project_id:project.id})),{onConflict:'cluster_id,article_id',ignoreDuplicates:true});if(error)throw error;
+    if(!id){const {data:cluster,error}=await admin.from('topic_clusters').insert({project_id:project.id,user_id:actor.userId,name:`Tema: ${group.term}`,slug,description:'Agrupamento inicial por ocorrência de termos; não é avaliação semântica por IA.',primary_keywords:[group.term],article_count:group.articles.length,is_auto_generated:true}).select('id').single();if(error)throw error;id=cluster.id;}
+    const {error}=await admin.from('nexus_cluster_members').upsert(group.articles.map(a=>({cluster_id:id,article_id:a.id,is_pillar:a.id===group.articles[0].id,organization_id:org,project_id:project.id})),{onConflict:'cluster_id,article_id',ignoreDuplicates:true});if(error)throw error;
     saved.push({id,term:group.term,articles:group.articles.length});
    }
    return json({clusters:saved,method:'deterministic_keyword_overlap',corpus_limit:200,semantic_review:'not_executed'});
@@ -88,18 +88,18 @@ Deno.serve(async req=>{
     let validation;try{validation=await validateLinkDestination(target.published_url,host,async h=>await Deno.resolveDns(h,'A'));}catch{continue;}
     if(!validation.valid)continue;
     for(const source of sources||[]){if(source.id===target.id||!insertDraftLink(source.content,anchor,target.published_url).applied)continue;
-     const {error}=await admin.from('internal_link_suggestions').upsert({user_id:actor.userId,project_id:project.id,source_article_id:source.id,target_article_id:target.id,target_url:validation.url,anchor_text:anchor,relevance_score:100,position_suggestion:'body',status:'pending',anchor_context:'Correspondência literal da expressão no corpo; índice lexical 100 = expressão completa encontrada, não nota de SEO.',destination_checked_at:validation.checked_at,destination_status:validation.status},{onConflict:'source_article_id,target_url',ignoreDuplicates:true});if(error)throw error;count++;
+     const {error}=await admin.from('nexus_link_suggestions').upsert({user_id:actor.userId,project_id:project.id,organization_id:org,source_article_id:source.id,target_article_id:target.id,target_url:validation.url,anchor_text:anchor,relevance_score:100,position_suggestion:'body',status:'pending',anchor_context:'Correspondência literal da expressão no corpo; índice lexical 100 = expressão completa encontrada, não nota de SEO.',destination_checked_at:validation.checked_at,destination_status:validation.status},{onConflict:'source_article_id,target_url',ignoreDuplicates:true});if(error)throw error;count++;
     }
    }
    return json({candidate_pairs:count,applied:false,method:'literal_phrase_in_body_with_verified_destination',source_limit:20,target_limit:10});
   }
   if(body.action==='apply_link'){
-   const {data:suggestion}=await admin.from('internal_link_suggestions').select('*').eq('id',body.suggestionId).eq('user_id',actor.userId).eq('project_id',project.id).eq('status','pending').maybeSingle();if(!suggestion)return json({error:'suggestion_not_found'},404);
+   const {data:suggestion}=await admin.from('nexus_link_suggestions').select('*').eq('id',body.suggestionId).eq('user_id',actor.userId).eq('project_id',project.id).eq('status','pending').maybeSingle();if(!suggestion)return json({error:'suggestion_not_found'},404);
    const {data:article}=await admin.from('articles').select('*').eq('id',suggestion.source_article_id).eq('user_id',actor.userId).eq('project_id',project.id).in('status',['draft','ready']).maybeSingle();if(!article)return json({error:'only_unpublished_articles_can_be_changed'},409);
    const checked=await validateLinkDestination(suggestion.target_url,host,async h=>await Deno.resolveDns(h,'A'));if(!checked.valid)return json({error:'destination_not_valid'},409);
    const linked=insertDraftLink(article.content||'',suggestion.anchor_text,suggestion.target_url);if(!linked.applied)return json({error:'anchor_no_longer_matches'},409);
    const {data:saved,error}=await admin.from('articles').update({content:linked.content,status:'draft',config:{...article.config,nexus_approval_required:true,nexus_approval:null},updated_at:new Date().toISOString()}).eq('id',article.id).eq('user_id',actor.userId).eq('updated_at',article.updated_at).select('id').maybeSingle();if(error||!saved)return json({error:'article_changed'},409);
-   await admin.from('internal_link_suggestions').update({status:'applied',applied_at:new Date().toISOString()}).eq('id',suggestion.id).eq('user_id',actor.userId);
+   await admin.from('nexus_link_suggestions').update({status:'applied',applied_at:new Date().toISOString()}).eq('id',suggestion.id).eq('user_id',actor.userId);
    return json({success:true,published:false,new_editorial_review_required:true});
   }
   if(body.action==='validate_destinations'){
