@@ -1,5 +1,5 @@
 import {describe,it,expect,vi} from 'vitest';
-import {cleanStrategy,profileGaps,planTerms} from '../../supabase/functions/_shared/nexus-business';
+import {cleanStrategy,profileGaps,planTerms,legacyStrategy} from '../../supabase/functions/_shared/nexus-business';
 import {outboundAllowed,installSpendLock,paidLockResponse} from '../../supabase/functions/_shared/nexus-spend-lock';
 import {editorialFingerprint,signEditorialReceipt,verifyEditorialReceipt} from '../../supabase/functions/_shared/nexus-approval';
 describe('global administrative spend lock',()=>{
@@ -19,6 +19,7 @@ describe('global administrative spend lock',()=>{
  });
 });
 describe('business profile and waves',()=>{
+ it('imports declared data only from the selected project, without universal defaults',()=>{expect(legacyStrategy({name:'A',social_instagram:'https://instagram.com/a',editorial_identity:{target_audience:'Audience A'}})).toMatchObject({instagram:'https://instagram.com/a',audience:'Audience A'});expect(legacyStrategy({name:'B'})).toMatchObject({instagram:'',audience:'',regions:''});});
  it('retains only profile fields and treats unknown goals as gaps',()=>{
   const clean=cleanStrategy({sector:' Beauty ',apiKey:'secret',offer:7,primaryGoal:'unknown'});expect(clean.sector).toBe('Beauty');expect(clean).not.toHaveProperty('apiKey');expect(profileGaps(clean)).toContain('primaryGoal');expect(clean.offer).toBe('');
  });
