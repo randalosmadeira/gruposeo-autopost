@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
@@ -225,7 +227,7 @@ async function authenticatedUser(req: Request, anonKey: string, supabaseUrl: str
   return data.user || null;
 }
 
-Deno.serve(async (req: Request) => {
+paidLockedServe(async (req: Request) => {
   const requestId = createRequestId();
   const log = createLogger(FUNCTION_NAME, requestId);
   const started = Date.now();

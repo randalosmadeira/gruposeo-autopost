@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import type {Tables,TablesUpdate} from '@/integrations/supabase/types';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,6 +36,7 @@ import { useWordPressStats } from '@/hooks/useWordPressStats';
 import { cn } from '@/lib/utils';
 
 export default function ProjectsList() {
+  const navigate = useNavigate();
   const { projects, isLoading, createProject, updateProject, deleteProject } = useProjects();
   const { allStats } = useWordPressStats();
   const [search, setSearch] = useState('');
@@ -96,7 +99,7 @@ export default function ProjectsList() {
     setEditingName(project.name);
   };
 
-  const handleSaveEdit = async (e: React.MouseEvent, projectId: string) => {
+  const handleSaveEdit = async (e: Pick<React.SyntheticEvent,'stopPropagation'>, projectId: string) => {
     e.stopPropagation();
     if (!editingName.trim()) return;
     
@@ -108,7 +111,7 @@ export default function ProjectsList() {
     setEditingName('');
   };
 
-  const handleCancelEdit = (e: React.MouseEvent) => {
+  const handleCancelEdit = (e: Pick<React.SyntheticEvent,'stopPropagation'>) => {
     e.stopPropagation();
     setEditingProjectId(null);
     setEditingName('');
@@ -185,12 +188,13 @@ export default function ProjectsList() {
         <Button 
           variant="outline" 
           className="w-full justify-start gap-2 border-primary/30 text-primary hover:bg-primary/5 hover:text-primary"
-          onClick={() => setSelectedProjectId(null)}
+          onClick={() => navigate("/business-profile")}
         >
           <Plus className="w-4 h-4" />
           Novo projeto
         </Button>
 
+        <Button variant="outline" asChild><Link to="/business-profile">Configurar negócios e estratégias existentes</Link></Button>
         {/* Projects List */}
         <div className="flex-1 flex flex-col gap-3">
           <div className="flex items-center justify-between">
@@ -243,8 +247,8 @@ export default function ProjectsList() {
                           className="h-7 text-sm"
                           onClick={(e) => e.stopPropagation()}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveEdit(e as any, project.id);
-                            if (e.key === 'Escape') handleCancelEdit(e as any);
+                            if (e.key === 'Enter') handleSaveEdit(e, project.id);
+                            if (e.key === 'Escape') handleCancelEdit(e);
                           }}
                           autoFocus
                         />
@@ -487,8 +491,8 @@ function EditProjectForm({
   isUpdating,
   stats 
 }: { 
-  project: any;
-  onUpdate: (data: any) => Promise<any>;
+  project: Tables<'projects'> & {editorial_identity?:Record<string,string>};
+  onUpdate: (data: TablesUpdate<'projects'> & {id:string;editorial_identity?:Record<string,string>}) => Promise<unknown>;
   isUpdating: boolean;
   stats: { total: number; published: number; draft: number };
 }) {
@@ -504,12 +508,12 @@ function EditProjectForm({
   const [ctaComunidade, setCtaComunidade] = useState(project.cta_comunidade || '');
   const [ctaConclusao, setCtaConclusao] = useState(project.cta_conclusao || '');
   const [ctaLeads, setCtaLeads] = useState(project.cta_leads || '');
-  const [phone, setPhone] = useState(project.commercial_info?.phone || '');
-  const [whatsapp, setWhatsapp] = useState(project.commercial_info?.whatsapp || '');
-  const [email, setEmail] = useState(project.commercial_info?.email || '');
-  const [address, setAddress] = useState(project.commercial_info?.address || '');
-  const [defaultCtaText, setDefaultCtaText] = useState(project.commercial_info?.default_cta_text || 'Fale com nossa equipe pelo WhatsApp');
-  const [defaultCtaUrl, setDefaultCtaUrl] = useState(project.commercial_info?.default_cta_url || '');
+  const [phone, setPhone] = useState((project.commercial_info as Record<string,string> | null)?.phone || '');
+  const [whatsapp, setWhatsapp] = useState((project.commercial_info as Record<string,string> | null)?.whatsapp || '');
+  const [email, setEmail] = useState((project.commercial_info as Record<string,string> | null)?.email || '');
+  const [address, setAddress] = useState((project.commercial_info as Record<string,string> | null)?.address || '');
+  const [defaultCtaText, setDefaultCtaText] = useState((project.commercial_info as Record<string,string> | null)?.default_cta_text || 'Fale com nossa equipe pelo WhatsApp');
+  const [defaultCtaUrl, setDefaultCtaUrl] = useState((project.commercial_info as Record<string,string> | null)?.default_cta_url || '');
   const [targetAudience, setTargetAudience] = useState(project.editorial_identity?.target_audience || '');
   const [primaryGeo, setPrimaryGeo] = useState(project.editorial_identity?.primary_geo || '');
   const [authorName, setAuthorName] = useState(project.editorial_identity?.author_name || 'Redação');
@@ -529,12 +533,12 @@ function EditProjectForm({
     setCtaComunidade(project.cta_comunidade || '');
     setCtaConclusao(project.cta_conclusao || '');
     setCtaLeads(project.cta_leads || '');
-    setPhone(project.commercial_info?.phone || '');
-    setWhatsapp(project.commercial_info?.whatsapp || '');
-    setEmail(project.commercial_info?.email || '');
-    setAddress(project.commercial_info?.address || '');
-    setDefaultCtaText(project.commercial_info?.default_cta_text || 'Fale com nossa equipe pelo WhatsApp');
-    setDefaultCtaUrl(project.commercial_info?.default_cta_url || '');
+    setPhone((project.commercial_info as Record<string,string> | null)?.phone || '');
+    setWhatsapp((project.commercial_info as Record<string,string> | null)?.whatsapp || '');
+    setEmail((project.commercial_info as Record<string,string> | null)?.email || '');
+    setAddress((project.commercial_info as Record<string,string> | null)?.address || '');
+    setDefaultCtaText((project.commercial_info as Record<string,string> | null)?.default_cta_text || 'Fale com nossa equipe pelo WhatsApp');
+    setDefaultCtaUrl((project.commercial_info as Record<string,string> | null)?.default_cta_url || '');
     setTargetAudience(project.editorial_identity?.target_audience || '');
     setPrimaryGeo(project.editorial_identity?.primary_geo || '');
     setAuthorName(project.editorial_identity?.author_name || 'Redação');
@@ -575,7 +579,7 @@ function EditProjectForm({
         instagram: socialInstagram,
         linkedin: socialLinkedin,
         youtube: socialYoutube,
-        facebook: project.social_links?.facebook || '',
+        facebook: (project.social_links as Record<string,string> | null)?.facebook || '',
         twitter: socialTwitter,
       },
       editorial_identity: {

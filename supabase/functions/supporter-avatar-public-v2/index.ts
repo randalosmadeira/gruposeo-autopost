@@ -1,3 +1,4 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { PIPELINE_VERSION, SUPPORT_SOCIAL_OUTPUTS, SUPPORT_SOCIAL_PACK, SUPPORT_STYLES, SUPPORT_TEXTS } from "../_shared/supporter-avatar-prompt.ts";

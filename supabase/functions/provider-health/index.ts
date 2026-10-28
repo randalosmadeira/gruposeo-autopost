@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { classifyProviderFailure, PROVIDER_CAPABILITIES, ProviderName, ProviderStatus, safeStatusMessage } from "../_shared/provider-health.ts";
 
@@ -46,7 +48,7 @@ async function probe(provider: ProviderName, key: string): Promise<Probe> {
   }
 }
 
-Deno.serve(async (req) => {
+paidLockedServe(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405, headers: corsHeaders });
 

@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 import { dispatchAutonomousReview } from "../_shared/nexus-review-dispatch.ts";
 import { buildNexusEditorialPolicy, NEXUS_EDITORIAL_VERSION } from "../_shared/nexus-editorial.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -162,7 +164,7 @@ FONTE URL: ${url || "texto fornecido"}
 MATÉRIA: ${JSON.stringify(article).slice(0, 70000)}`;
 }
 
-Deno.serve(async (req: Request) => {
+paidLockedServe(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ success: false, error: "Method not allowed" }, 405);
   const requestId = crypto.randomUUID();
@@ -182,7 +184,7 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
     const { data: project } = await admin.from("projects")
-      .select("id,name,description,commercial_info,social_links,editorial_identity,social_instagram,social_linkedin,social_youtube,social_twitter,social_tiktok,social_google_maps,cta_leads,cta_conclusao")
+      .select("id,name,description,commercial_info,social_links,editorial_identity,social_instagram,social_linkedin,social_youtube,social_twitter,social_tiktok,social_google_maps,cta_leads,cta_conclusao,nexus_strategy,nexus_strategy_version,nexus_profile_status")
       .eq("id", input.projectId).eq("user_id", userId).maybeSingle();
     if (!project) return json({ success: false, error: "Projeto não encontrado ou acesso negado", request_id: requestId }, 403);
 
@@ -197,7 +199,7 @@ Deno.serve(async (req: Request) => {
     const template = await resolveTemplate(admin, userId, input.projectId, input.promptTemplate);
     const orchestrator = await getOrchestratorForUser(userId);
     const generation = await orchestrator.callWithMeta("news_rewrite", [
-      { role: "system", content: `Você é ${template.agentName}. Entregue somente JSON válido e HTML semântico sem H1.\n${buildNexusEditorialPolicy({ contentType: "news" })}` },
+      { role: "system", content: `Você é ${template.agentName}. Entregue somente JSON válido e HTML semântico sem H1.\n${buildNexusEditorialPolicy({ contentType: "news", projectConfig: project })}` },
       { role: "user", content: generationPrompt(input, template.prompt, project as ProjectContext) },
     ], { preferredProvider: "openai", maxTokens: 14000, temperature: 0.25 });
 
@@ -207,7 +209,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const reviewCall = await orchestrator.callWithMeta("content_review", [
-      { role: "system", content: "Revisão factual e editorial rigorosa, adequada ao nicho do projeto. JSON apenas.\n" + buildNexusEditorialPolicy({ contentType: "news" }) },
+      { role: "system", content: "Revisão factual e editorial rigorosa, adequada ao nicho do projeto. JSON apenas.\n" + buildNexusEditorialPolicy({ contentType: "news", projectConfig: project }) },
       { role: "user", content: reviewPrompt(draft, input.sourceContent || "", input.sourceUrl || "") },
     ], { preferredProvider: generation.provider === "openai" ? "anthropic" : "openai", maxTokens: 10000, temperature: 0.1 });
     const review = parseJson<Review>(reviewCall.content) || { pass: false, needs_primary_source: true, issues: ["Resposta de revisão inválida"] };
