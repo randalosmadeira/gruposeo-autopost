@@ -11,11 +11,14 @@ Deno.serve(async req=>{
  try{
  const actor=await resolveRequestActor(req);if(actor.mode!=='user')return json({error:'user_session_required'},403);
  const body=await req.json();const admin=createClient(Deno.env.get('SUPABASE_URL')||'',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||Deno.env.get('SUPABASE_SECRET_KEY')||'',{auth:{persistSession:false}});
+ const {data:members,error:memberError}=await admin.from('organization_members').select('organization_id').eq('user_id',actor.userId).eq('status','active');
+ if(memberError)throw memberError;const allowedOrgs=new Set((members||[]).map(m=>m.organization_id));
  if(body.action==='bootstrap'){
   const [p,b]=await Promise.all([admin.from('projects').select('id,name,domain,organization_id,nexus_business_id,nexus_strategy,nexus_strategy_version,nexus_profile_status,wordpress_url,nicho,social_instagram,social_linkedin,social_tiktok,social_youtube,social_links,editorial_identity,commercial_info,compliance_rules').eq('user_id',actor.userId).order('name'),admin.from('nexus_businesses').select('id,name,organization_id,entity_type').eq('user_id',actor.userId)]);
-  if(p.error||b.error)throw new Error('load_failed');return json({projects:p.data.map(p=>({id:p.id,name:p.name,domain:p.domain,organization_id:p.organization_id,nexus_business_id:p.nexus_business_id,nexus_strategy:p.nexus_strategy,nexus_strategy_version:p.nexus_strategy_version,nexus_profile_status:p.nexus_profile_status,legacy_strategy:legacyStrategy(p)})),businesses:b.data,paid_services_blocked:true,review_mode:'autonomous'});
+  if(p.error||b.error)throw new Error('load_failed');return json({projects:p.data.filter(p=>allowedOrgs.has(p.organization_id)).map(p=>({id:p.id,name:p.name,domain:p.domain,organization_id:p.organization_id,nexus_business_id:p.nexus_business_id,nexus_strategy:p.nexus_strategy,nexus_strategy_version:p.nexus_strategy_version,nexus_profile_status:p.nexus_profile_status,legacy_strategy:legacyStrategy(p)})),businesses:b.data.filter(b=>allowedOrgs.has(b.organization_id)),paid_services_blocked:true,review_mode:'autonomous'});
  }
  const {data:project,error}=await admin.from('projects').select('*').eq('id',body.projectId).eq('user_id',actor.userId).maybeSingle();if(error)throw error;if(!project)return json({error:'project_not_found'},404);
+ if(!allowedOrgs.has(project.organization_id))return json({error:'organization_membership_required'},403);
  if(body.action==='save'){
   if(!project.organization_id)return json({error:'organization_required'},409);
   const strategy=cleanStrategy(body.strategy);let businessId=project.nexus_business_id;

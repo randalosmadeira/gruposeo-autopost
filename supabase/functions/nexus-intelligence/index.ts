@@ -20,6 +20,8 @@ Deno.serve(async req=>{
   const {data:project,error:projectError}=await admin.from('projects').select('id,name,description,nicho,compliance_rules,domain,wordpress_url,organization_id,user_id,editorial_identity,commercial_info,social_links,cta_leads,cta_conclusao,social_instagram,social_linkedin,social_youtube,social_twitter,social_tiktok,social_google_maps,nexus_strategy,nexus_strategy_version,nexus_profile_status').eq('id',body.projectId).eq('user_id',actor.userId).maybeSingle();
   if(projectError||!project?.organization_id)return json({error:'project_forbidden'},403);
   const org=project.organization_id;
+  const {data:membership,error:membershipError}=await admin.from('organization_members').select('organization_id').eq('organization_id',org).eq('user_id',actor.userId).eq('status','active').maybeSingle();
+  if(membershipError||!membership)return json({error:'organization_membership_required'},403);
   const host=new URL(project.wordpress_url||`https://${project.domain}`).hostname;
   if(body.action==='status'){
    const [program,operations,credentials,jobs]=await Promise.all([

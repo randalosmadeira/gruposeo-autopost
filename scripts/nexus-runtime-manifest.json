@@ -316,7 +316,7 @@
     "verify_jwt": true,
     "paid_endpoint_locked": false,
     "previous_version": 3,
-    "deployed_entry_sha256": "81e3bf0d5cc3efc37228d08c0661f539697cccb97dacd3f4efd94819d52e7ece",
+    "deployed_entry_sha256": "db27f098599ececd56db3606c752008e6292ed60d113fa9c1b92651d9f4a8eee",
     "source": "local_feature"
   },
   {
