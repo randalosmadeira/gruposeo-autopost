@@ -316,7 +316,7 @@
     "verify_jwt": true,
     "paid_endpoint_locked": false,
     "previous_version": 3,
-    "deployed_entry_sha256": "2f24a268f3781c0449a58bc2b4f496424df6dd894e9b07425611d3fca3583931",
+    "deployed_entry_sha256": "81e3bf0d5cc3efc37228d08c0661f539697cccb97dacd3f4efd94819d52e7ece",
     "source": "local_feature"
   },
   {
@@ -372,7 +372,7 @@
     "verify_jwt": true,
     "paid_endpoint_locked": false,
     "previous_version": 21,
-    "deployed_entry_sha256": "d910a189bcd97f507c691a05badb02666b041ce699918e440dcadcb4a4747f6b",
+    "deployed_entry_sha256": "c90c3945666936d246bc83e3ba683fcf5c4193c893c2d83287494495a10cdc9b",
     "source": "local_feature"
   },
   {

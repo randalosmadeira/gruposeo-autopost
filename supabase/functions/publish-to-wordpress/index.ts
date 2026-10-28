@@ -275,7 +275,7 @@ Deno.serve(async (req: Request) => {
     if (status === "publish") {
       const fingerprint = await editorialFingerprint(article, project);
       if (project.nexus_profile_status !== "complete" || config.nexus_approval?.review_mode !== "autonomous" || !await verifyEditorialReceipt(config.nexus_approval, fingerprint, serviceKey)) {
-        return json({ success: false, error: "Revise e aprove esta versão na visualização do artigo antes de publicar.", code: "nexus_approval_required", retryable: false, request_id: requestId }, 409);
+        return json({ success: false, error: "Publicação aguarda perfil completo e revisão autônoma válida para esta versão. Serviços pagos estão bloqueados.", code: "nexus_approval_required", retryable: false, request_id: requestId }, 409);
       }
     }
     if (status === "publish" && (config.needs_primary_source || config.review_pass === false)) {
@@ -460,7 +460,7 @@ Deno.serve(async (req: Request) => {
     if (status === "publish") {
       const deliveredFingerprint = await editorialFingerprint(normalizedArticle, project);
       if (config.nexus_approval?.review_mode !== "autonomous" || !await verifyEditorialReceipt(config.nexus_approval, deliveredFingerprint, serviceKey)) {
-        return json({ success: false, error: "O preparo editorial ajustou esta versão. Reabra o artigo e aprove o conteúdo atualizado antes de publicar.", code: "nexus_delivery_review_required", retryable: false, request_id: requestId }, 409);
+        return json({ success: false, error: "O preparo editorial ajustou esta versão. É necessária nova revisão autônoma antes da publicação.", code: "nexus_delivery_review_required", retryable: false, request_id: requestId }, 409);
       }
     }
 

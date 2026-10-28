@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { NexusGlobalStatus } from '@/components/NexusGlobalStatus';
+import { NexusFirstBusiness } from '@/components/NexusFirstBusiness';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
@@ -10,6 +11,7 @@ import { ElectoralOperationsDock } from '@/components/electoral/ElectoralOperati
 export const Layout = memo(function Layout() {
   return (
     <div className="neural-shell relative flex h-dvh min-h-screen overflow-hidden bg-background">
+      <NexusFirstBusiness />
       <NeuralEnergy variant="ambient" className="fixed inset-0 z-0" />
       <div className="relative z-20 hidden h-full shrink-0 md:block">
         <Sidebar />

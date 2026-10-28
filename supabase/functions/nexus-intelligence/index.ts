@@ -47,13 +47,14 @@ Deno.serve(async req=>{
     articleId:text(body.articleId,36),branded:body.branded===true,repetition:Math.min(5,Math.max(1,Number(body.repetition)||1)),method_version:SAMPLING_METHOD.version};
    if(typeof body.branded!=='boolean')input.branded=input.variants.some((v:string)=>v.trim().length>=3&&input.query.toLocaleLowerCase().includes(v.trim().toLocaleLowerCase()));
    if(['serp','ai_observation'].includes(body.kind)&&!input.query)return json({error:'query_required'},400);
-   let requestKey:string=crypto.randomUUID();
+   const requestKey:string=crypto.randomUUID();
    if(body.kind==='editorial_review'){
     const {data:article}=await admin.from('articles').select('*').eq('id',input.articleId).eq('project_id',project.id).eq('user_id',actor.userId).maybeSingle();
     if(!article)return json({error:'article_forbidden'},403);
-    requestKey=`editorial-review:${article.id}:${await editorialFingerprint(article,project)}`;
-    const {data:existing}=await admin.from('nexus_operations').select('id').eq('organization_id',org).eq('request_key',requestKey).maybeSingle();
-    if(existing)return json({success:true,operation:existing,executed:false});
+    const {data:id,error:prepareError}=await admin.rpc('nexus_prepare_article_review',{p_article:article.id});
+    if(prepareError)throw prepareError;
+    if(!id)return json({error:'article_content_required',executed:false},409);
+    return json({success:true,operation:{id},executed:false});
    }
    const {data,error}=await admin.from('nexus_operations').insert({organization_id:org,project_id:project.id,user_id:actor.userId,kind:body.kind,request_key:requestKey,input}).select('id').single();
    if(error)throw error;return json({success:true,operation:data,executed:false});
