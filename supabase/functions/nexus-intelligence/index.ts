@@ -43,6 +43,7 @@ Deno.serve(async req=>{
    const input={query:text(body.query,500),country:text(body.country,2)||'br',language:text(body.language,10)||'pt-BR',city:text(body.city,100),
     variants:Array.isArray(body.variants)?body.variants.filter((v:unknown)=>typeof v==='string').slice(0,8).map((v:string)=>v.slice(0,120)):[],
     articleId:text(body.articleId,36),branded:body.branded===true,repetition:Math.min(5,Math.max(1,Number(body.repetition)||1)),method_version:SAMPLING_METHOD.version};
+   if(typeof body.branded!=='boolean')input.branded=input.variants.some((v:string)=>v.trim().length>=3&&input.query.toLocaleLowerCase().includes(v.trim().toLocaleLowerCase()));
    if(['serp','ai_observation'].includes(body.kind)&&!input.query)return json({error:'query_required'},400);
    let requestKey:string=crypto.randomUUID();
    if(body.kind==='editorial_review'){
