@@ -5,7 +5,7 @@ import { useToast } from './use-toast';
 import { retryQuery, withRetry } from '@/lib/supabase-retry';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
-type Project = Tables<'projects'>;
+type Project = Tables<'projects'> & { wordpress_credential_ref?: string | null };
 type ProjectInsert = TablesInsert<'projects'>;
 type ProjectUpdate = TablesUpdate<'projects'>;
 

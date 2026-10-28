@@ -1,3 +1,4 @@
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -1006,7 +1007,7 @@ export function PromptTemplatesCard() {
       targetFunction?: string | null;
       description?: string | null;
     }) => {
-      const updates: Record<string, any> = {};
+      const updates: TablesUpdate<'prompt_templates'> = {};
       if (name !== undefined) updates.name = name;
       if (prompt !== undefined) updates.prompt = prompt;
       if (agentName !== undefined) updates.agent_name = agentName;

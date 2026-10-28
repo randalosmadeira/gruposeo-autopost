@@ -2248,6 +2248,9 @@ export type Database = {
       }
     }
     Functions: {
+      // Present in the committed 2026-09 governance/queue migrations.
+      is_ceo: { Args: never; Returns: boolean }
+      control_zica_brain_batch: { Args: { p_batch_id: string; p_action: string }; Returns: Json }
       can_manage_electoral_campaign: { Args: never; Returns: boolean }
       exec_sql: { Args: { sql_query: string }; Returns: Json }
     }

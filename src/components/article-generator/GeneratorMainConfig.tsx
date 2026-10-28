@@ -56,10 +56,10 @@ const defaultPointsOfView: PointOfViewOption[] = [
 ];
 
 const defaultArticleSizes: ArticleSizeOption[] = [
-  { value: 'muito_pequeno', label: 'Muito Pequeno', words: '600-1.200 palavras' },
-  { value: 'pequeno', label: 'Pequeno', words: '1.200-2.400 palavras' },
-  { value: 'medio', label: 'Médio', words: '2.400-3.600 palavras' },
-  { value: 'grande', label: 'Grande', words: '2.600-5.200 palavras' },
+  { value: 'muito_pequeno', label: 'Muito Pequeno', words: '300-500 palavras' },
+  { value: 'pequeno', label: 'Pequeno', words: '1.000-1.500 palavras' },
+  { value: 'medio', label: 'Médio', words: '1.400-2.000 palavras' },
+  { value: 'grande', label: 'Grande', words: '2.500-4.000 palavras' },
 ];
 
 export function GeneratorMainConfig({

@@ -1,3 +1,5 @@
+import { NexusEditorialBrief } from '@/components/article-generator/NexusEditorialBrief';
+import { normalizeWordProfile, type ConversionBrief } from '@/lib/nexus-editorial';
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -77,6 +79,8 @@ type AppState =
   | 'publishing';         // Publishing
 
 interface ArticleConfig {
+  sourcesContext: string;
+  conversionBrief: ConversionBrief;
   keyword: string;
   title: string;
   tone: string;
@@ -106,6 +110,8 @@ interface ArticleConfig {
 }
 
 const defaultConfig: ArticleConfig = {
+  sourcesContext: '',
+  conversionBrief: { stage: 'discovery' },
   keyword: '',
   title: '',
   tone: 'profissional',
@@ -253,7 +259,7 @@ export default function ArticleGeneratorV2() {
   }, [searchParams, templateApplied, toast]);
 
   const updateConfig = <K extends keyof ArticleConfig>(key: K, value: ArticleConfig[K]) => {
-    setConfig(prev => ({ ...prev, [key]: value }));
+    setConfig(prev => ({ ...prev, [key]: value, ...(key === 'projectId' && value !== prev.projectId ? { sourcesContext: '', conversionBrief: { stage: 'discovery' as const } } : {}) }));
     if (validationErrors.length > 0) {
       setValidationErrors([]);
     }
@@ -386,13 +392,16 @@ export default function ArticleGeneratorV2() {
     const articlePromise = (async () => {
       await simulateGeneration();
       return await generateArticle({
+        articleId: articleId || undefined,
         keyword: config.keyword,
         title: config.title,
         secondaryKeywords: '',
-        wordCount: config.size as 'short' | 'medium' | 'long' | 'very-long',
+        wordCount: normalizeWordProfile(config.size),
         tone: config.tone,
         pointOfView: config.pointOfView,
         language: config.language,
+        sourcesContext: config.sourcesContext,
+        conversionBrief: config.conversionBrief,
         type: config.contentType === 'review' ? 'review' : (config.contentType === 'comparative' ? 'comparison' : 'blog'),
         contentType: config.contentType as 'how-to' | 'listicle' | 'pillar' | 'comparative' | 'review' | 'opinion' | 'news',
         segment: config.segment as 'legal' | 'health' | 'fintech' | 'ecommerce' | 'b2b-saas' | 'education' | 'general',
@@ -567,6 +576,8 @@ export default function ArticleGeneratorV2() {
       tone: config.tone,
       pointOfView: config.pointOfView,
       language: config.language,
+        sourcesContext: config.sourcesContext,
+        conversionBrief: config.conversionBrief,
       projectId: config.projectId,
     });
     
@@ -696,6 +707,11 @@ export default function ArticleGeneratorV2() {
                       </p>
                     </div>
                   </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="nexus-editorial" className="border rounded-lg px-4 mt-4 border-primary/30">
+                  <AccordionTrigger className="py-4"><div className="flex items-center gap-2"><Target className="w-5 h-5 text-primary" /><span className="font-semibold">NEXUS · Fontes e conversão</span></div></AccordionTrigger>
+                  <AccordionContent className="pb-4"><NexusEditorialBrief value={config.conversionBrief} sources={config.sourcesContext} onChange={value => updateConfig('conversionBrief', value)} onSourcesChange={value => updateConfig('sourcesContext', value)} /></AccordionContent>
                 </AccordionItem>
 
                 {/* SEO Advanced Config Section */}
@@ -871,6 +887,8 @@ export default function ArticleGeneratorV2() {
                   tone: config.tone,
                   pointOfView: config.pointOfView,
                   language: config.language,
+        sourcesContext: config.sourcesContext,
+        conversionBrief: config.conversionBrief,
                   projectId: config.projectId,
                 });
               }}
@@ -883,6 +901,11 @@ export default function ArticleGeneratorV2() {
 
           {/* Show Article Editor when complete */}
           {appState === 'editing-article' && (
+            <div className="space-y-4">
+            {articleId && <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 text-sm">
+              <p className="mb-3">O novo padrão NEXUS exige revisão desta versão antes da publicação. Salve suas alterações e confira fatos, benefícios e a próxima ação.</p>
+              <Button variant="outline" onClick={() => navigate(`/articles/${articleId}`)}>Abrir revisão editorial</Button>
+            </div>}
             <ArticleEditor
               title={articleData.title}
               intro={articleData.intro}
@@ -926,6 +949,7 @@ export default function ArticleGeneratorV2() {
               selectedProjectId={config.projectId}
               publishedUrl={publishedUrl || undefined}
             />
+            </div>
           )}
 
           {/* Show Preview in form mode */}
