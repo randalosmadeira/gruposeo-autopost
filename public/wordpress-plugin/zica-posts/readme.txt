@@ -4,10 +4,16 @@ Tags: seo, geo, llms, indexnow, schema, wordpress, automation, queue
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.16.0
+Stable tag: 3.16.1
 License: GPLv2 or later
 
 Agente WordPress leve oficial da Zica.ai. Publica, registra eventos duráveis, serve discovery files e conversa com o Zica Orchestrator sem executar IA pesada durante save_post.
+
+== 3.16.1 ==
+
+* Auditor de IA: a checagem "Schema JSON-LD da homepage" agora lê o JSON-LD que a página realmente publica (tema, Rank Math ou plugin), junta `@graph`, ignora blocos inválidos e aponta o que falta (endereço, telefone, sameAs). O schema configurado no plugin continua sendo contado como fonte adicional.
+* Auditor de IA: a checagem de schema dos artigos amostra os 6 posts mais recentes e, quando não há `_zica_posts_json_ld`, lê a permalink renderizada em busca de Article/NewsArticle/BlogPosting.
+* As duas checagens de schema ficam em cache de 6 horas (`zica_posts_audit_schema_cache`). "Rodar Auditor de IA Agora" ignora o cache e `POST /homepage-schema/inject` o invalida.
 
 == 3.16.0 ==
 

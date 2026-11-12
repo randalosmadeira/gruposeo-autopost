@@ -171,6 +171,42 @@ export function buildSignalsSnippet(siteId: string, endpoint: string, appOrigin:
   return `<script src="${escapeAttr(origin)}/zica-signals.js" data-site="${escapeAttr(siteId)}" data-endpoint="${escapeAttr(endpoint)}" defer></script>`;
 }
 
+const ERROR_MESSAGES: Record<string, string> = {
+  allowed_origins_invalid: 'Informe só o endereço do site, por exemplo https://exemplo.com.br',
+  operation_failed: 'Falha inesperada no servidor. Tente de novo; se persistir, avise o suporte.',
+  forbidden: 'Só proprietário ou administrador da organização pode criar a chave.',
+  signals_key_exists_use_rotate: 'Já existe uma chave para este projeto. Use Girar chave.',
+  schema_profile_missing: 'Este projeto ainda não tem perfil de schema cadastrado. Cadastre o perfil e tente de novo.',
+  plugin_not_configured: 'O plugin do WordPress ainda não está configurado neste projeto. Configure o plugin e tente de novo.',
+  plugin_unreachable: 'Não foi possível falar com o plugin do site. Nada foi alterado. Confira se o site está no ar e tente de novo.',
+};
+
+/** Traduz códigos de erro do `nexus-intelligence` (ou um Error que os carregue) para mensagens em pt-BR. Códigos desconhecidos passam como vieram. */
+export function nexusErrorMessage(error: unknown): string {
+  const raw = (error instanceof Error ? error.message : typeof error === 'string' ? error : '').trim();
+  if (!raw) return 'Falha inesperada.';
+  if (raw in ERROR_MESSAGES) return ERROR_MESSAGES[raw];
+  const profile = /^profile_invalid:(.+)$/.exec(raw);
+  if (profile) return `O perfil de schema deste projeto é inválido (campo: ${profile[1].trim()}). Corrija o perfil e tente de novo.`;
+  return raw;
+}
+
+/** Texto do diálogo de confirmação ao aplicar o schema da homepage. */
+export function buildSchemaApplyConfirmText(site: string | null | undefined): string {
+  const label = site && site.trim() ? `de ${site.trim()}` : 'do projeto selecionado';
+  return `Isto altera o schema público da homepage ${label}. Pode ser desfeito aplicando outro perfil.`;
+}
+
+export function formatSchemaPreview(schemas: Array<Record<string, unknown>>): string {
+  return JSON.stringify(schemas, null, 2);
+}
+
+/** Mensagem de sucesso da aplicação; usa a contagem do plugin e, na falta dela, o que foi enviado. */
+export function schemaAppliedMessage(result: { count?: number; schemas: unknown[] }): string {
+  const n = typeof result.count === 'number' && Number.isFinite(result.count) ? result.count : result.schemas.length;
+  return `Aplicado: ${n} schema(s)`;
+}
+
 export function isoDate(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;

@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { rangeForDays } from '@/lib/nexus-observatory';
 import {
   NexusBlockedError,
+  type NexusHomepageSchemaResult,
   type NexusManualObservation,
   type NexusObservatorySummary,
   type NexusPrepareRunResult,
@@ -37,6 +38,11 @@ export async function invokeNexus<T>(projectId: string, body: Record<string, unk
     throw new Error(code || error.message || 'Falha ao consultar o NEXUS');
   }
   return data as T;
+}
+
+/** Pré-visualiza (`dryRun:true`) ou aplica (`dryRun:false`) o schema da homepage a partir do perfil do projeto. */
+export function homepageSchemaSync(projectId: string, opts: { dryRun: boolean }): Promise<NexusHomepageSchemaResult> {
+  return invokeNexus<NexusHomepageSchemaResult>(projectId, { action: 'homepage_schema_sync', dryRun: opts.dryRun });
 }
 
 export const observatoryKey = (projectId: string | undefined, from: string, to: string) =>
@@ -104,6 +110,12 @@ export function useNexusObservatoryActions(projectId: string | undefined) {
     createSignalsKey: useMutation({
       mutationFn: (allowedOrigins?: string[]) => run<NexusSiteSignalsKey>({ action: 'signals_key_create', ...(allowedOrigins ? { allowedOrigins } : {}) }),
       onSuccess: () => qc.invalidateQueries({ queryKey: ['nexus-observatory', projectId, 'signals-status'] }),
+    }),
+    homepageSchemaSync: useMutation({
+      mutationFn: (v: { dryRun: boolean }) => {
+        if (!projectId) throw new Error('Selecione um projeto.');
+        return homepageSchemaSync(projectId, v);
+      },
     }),
     rotateSignalsKey: useMutation({
       mutationFn: () => run<NexusSiteSignalsKey>({ action: 'signals_key_rotate' }),

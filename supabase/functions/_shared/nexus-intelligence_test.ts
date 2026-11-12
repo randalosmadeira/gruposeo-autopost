@@ -4,7 +4,7 @@
  */
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  buildSignalsSnippet, engineKind, generateSiteId, generateSiteSecret, manualRequestKey, normalizeObservation, normalizeOrigins, normalizePrompt,
+  buildHomepageSchemaFromProfile, buildSignalsSnippet, engineKind, generateSiteId, generateSiteSecret, manualRequestKey, normalizeObservation, normalizeOrigins, normalizePrompt,
   normalizePromptSet, parseAiObservation, parseClaudeObservation, parseGeminiObservation, parsePerplexityObservation, runRequestKey,
 } from "./nexus-intelligence.ts";
 
@@ -122,8 +122,88 @@ Deno.test("chave de sinais: site_id, segredo, origens e snippet", () => {
   assert(generateSiteSecret() !== generateSiteSecret());
   assertEquals(normalizeOrigins(["https://Site.com/", "https://site.com", "https://b.example.org:8443"]), { ok: true, value: ["https://site.com", "https://b.example.org:8443"] });
   assertEquals(normalizeOrigins(["http://site.com"]), { ok: false, error: "allowed_origins_invalid" });
-  assertEquals(normalizeOrigins(["https://site.com/path"]), { ok: false, error: "allowed_origins_invalid" });
+  // Endereço colado com caminho/query/hash é canonicalizado para a origem.
+  assertEquals(normalizeOrigins(["https://rdmadvogados.com.br/advogado-criminalista/"]), { ok: true, value: ["https://rdmadvogados.com.br"] });
+  assertEquals(normalizeOrigins(["https://Site.com/a/b?x=1#h", "https://site.com/", "https://b.example.org:8443/p"]), { ok: true, value: ["https://site.com", "https://b.example.org:8443"] });
+  // Continua recusando http, credenciais, host sem ponto e lixo.
+  assertEquals(normalizeOrigins(["http://site.com/path"]), { ok: false, error: "allowed_origins_invalid" });
+  assertEquals(normalizeOrigins(["https://user:pw@site.com/path"]), { ok: false, error: "allowed_origins_invalid" });
+  assertEquals(normalizeOrigins(["https://localhost/x"]), { ok: false, error: "allowed_origins_invalid" });
+  assertEquals(normalizeOrigins(["não é url"]), { ok: false, error: "allowed_origins_invalid" });
   assertEquals(normalizeOrigins(undefined), { ok: true, value: [] });
   assertEquals(buildSignalsSnippet("https://app.example/zica-signals.js", "abc123abc123", "https://p.supabase.co/functions/v1/zica-signals"),
     '<script src="https://app.example/zica-signals.js" data-site="abc123abc123" data-endpoint="https://p.supabase.co/functions/v1/zica-signals" defer></script>');
+});
+
+// -- schema da homepage ---------------------------------------------------------------------------
+const PAULISTA = { streetAddress: "Av. Paulista, 1842 - Torre Norte - conj. 155", addressLocality: "São Paulo", addressRegion: "SP", postalCode: "01310-200", addressCountry: "BR" };
+const SOCIAL = ["https://www.facebook.com/rdmadvogadosassociados/", "https://www.instagram.com/rdmadvogados/", "https://x.com/rdmadvogados", "https://www.tiktok.com/@rdmadvogados.podcast"];
+const rdmProfile = () => ({ type: "LegalService", id: "https://rdmadvogados.com.br/blog/#organization", name: "RDM Advogados Associados", url: "https://rdmadvogados.com.br/blog",
+  telephone: "+55-11-95173-0074", address: { ...PAULISTA },
+  locations: [{ name: "RDM Advogados - Av. Paulista", address: { ...PAULISTA } },
+    { name: "RDM Advogados - Tatuapé", address: { streetAddress: "Rua Bom Sucesso, 220 - Platina Office 220", addressLocality: "São Paulo", addressRegion: "SP", addressCountry: "BR" } }],
+  areaServed: [{ type: "State", name: "São Paulo" }], sameAs: [...SOCIAL] });
+const dnProfile = () => ({ type: "NewsMediaOrganization", id: "https://direitonews.rdmadvogados.com.br/blog/#organization", name: "Direito News | RDM Advogados",
+  url: "https://direitonews.rdmadvogados.com.br/blog/", sameAs: [...SOCIAL],
+  parentOrganization: { type: "LegalService", id: "https://rdmadvogados.com.br/blog/#organization", name: "RDM Advogados Associados" } });
+const schemaErr = (profile: unknown, host?: string) => { const r = buildHomepageSchemaFromProfile(profile, host); return r.ok ? "ok" : r.error; };
+// deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Node = Record<string, any>;
+
+Deno.test("buildHomepageSchemaFromProfile — RDM completo gera um único nó com o @id do site", () => {
+  const r = buildHomepageSchemaFromProfile(rdmProfile(), "rdmadvogados.com.br");
+  assert(r.ok); if (!r.ok) return;
+  assertEquals(r.schemas.length, 1);
+  const n = r.schemas[0] as Node;
+  assertEquals(n["@context"], "https://schema.org"); assertEquals(n["@type"], "LegalService");
+  assertEquals(n["@id"], "https://rdmadvogados.com.br/blog/#organization"); assertEquals(n.url, "https://rdmadvogados.com.br/blog");
+  assertEquals(n.name, "RDM Advogados Associados"); assertEquals(n.telephone, "+55-11-95173-0074");
+  assertEquals(n.address, { "@type": "PostalAddress", ...PAULISTA });
+  assertEquals(n.location.length, 2); assertEquals(n.location[0]["@type"], "Place"); assertEquals(n.location[1].name, "RDM Advogados - Tatuapé");
+  assertEquals(n.areaServed, [{ "@type": "State", name: "São Paulo" }]);
+  assertEquals(n.sameAs, SOCIAL); assert(!("parentOrganization" in n)); assert(!("logo" in n));
+});
+
+Deno.test("buildHomepageSchemaFromProfile — postalCode ausente permanece ausente (nunca fabricado)", () => {
+  const r = buildHomepageSchemaFromProfile(rdmProfile(), "rdmadvogados.com.br");
+  assert(r.ok); if (!r.ok) return;
+  const n = r.schemas[0] as Node;
+  assertEquals(n.address.postalCode, "01310-200");
+  assert(!("postalCode" in n.location[1].address));
+  assertEquals(Object.keys(n.location[1].address), ["@type", "streetAddress", "addressLocality", "addressRegion", "addressCountry"]);
+});
+
+Deno.test("buildHomepageSchemaFromProfile — Direitos News com parentOrganization em outro host", () => {
+  const r = buildHomepageSchemaFromProfile(dnProfile(), "direitonews.rdmadvogados.com.br");
+  assert(r.ok); if (!r.ok) return;
+  const n = r.schemas[0] as Node;
+  assertEquals(n["@type"], "NewsMediaOrganization"); assertEquals(n["@id"], "https://direitonews.rdmadvogados.com.br/blog/#organization");
+  assertEquals(n.parentOrganization, { "@type": "LegalService", "@id": "https://rdmadvogados.com.br/blog/#organization", name: "RDM Advogados Associados" });
+  assert(!("address" in n) && !("telephone" in n) && !("location" in n) && !("areaServed" in n));
+});
+
+Deno.test("buildHomepageSchemaFromProfile — rejeições", () => {
+  assertEquals(schemaErr(null), "profile_invalid:profile");
+  assertEquals(schemaErr({ ...rdmProfile(), id: "http://rdmadvogados.com.br/blog/#organization" }), "profile_invalid:id");
+  assertEquals(schemaErr({ ...rdmProfile(), url: "https://user:pw@rdmadvogados.com.br/blog" }), "profile_invalid:url");
+  assertEquals(schemaErr({ ...rdmProfile(), type: "Person" }), "profile_invalid:type");
+  assertEquals(schemaErr({ ...rdmProfile(), name: "" }), "profile_invalid:name");
+  assertEquals(schemaErr({ ...rdmProfile(), name: "x".repeat(301) }), "profile_invalid:name");
+  assertEquals(schemaErr({ ...rdmProfile(), sameAs: ["https://x.com/a", "http://facebook.com/b"] }), "profile_invalid:sameAs[1]");
+  assertEquals(schemaErr({ ...rdmProfile(), sameAs: Array.from({ length: 13 }, (_, i) => `https://x.com/${i}`) }), "profile_invalid:sameAs");
+  assertEquals(schemaErr({ ...rdmProfile(), locations: Array.from({ length: 6 }, () => ({ name: "L", address: PAULISTA })) }), "profile_invalid:locations");
+  assertEquals(schemaErr({ ...rdmProfile(), areaServed: [{ type: "Planet", name: "Terra" }] }), "profile_invalid:areaServed[0].type");
+  assertEquals(schemaErr({ ...rdmProfile(), address: { ...PAULISTA, addressLocality: undefined } }), "profile_invalid:address.addressLocality");
+  assertEquals(schemaErr({ ...dnProfile(), parentOrganization: { type: "LegalService", id: "http://rdmadvogados.com.br/#o", name: "RDM" } }), "profile_invalid:parentOrganization.id");
+});
+
+Deno.test("buildHomepageSchemaFromProfile — @id/url devem pertencer ao host do projeto", () => {
+  assertEquals(schemaErr(rdmProfile(), "outro.com.br"), "profile_invalid:id_host");
+  assertEquals(schemaErr({ ...rdmProfile(), id: "https://outro.com.br/#o" }, "rdmadvogados.com.br"), "profile_invalid:id_host");
+  assertEquals(schemaErr({ ...rdmProfile(), url: "https://outro.com.br/blog" }, "rdmadvogados.com.br"), "profile_invalid:url_host");
+  assertEquals(schemaErr(rdmProfile(), "www.rdmadvogados.com.br"), "ok");
+  assertEquals(schemaErr(dnProfile(), "rdmadvogados.com.br"), "ok"); // subdomínio do host do projeto
+  assertEquals(schemaErr(rdmProfile(), ""), "ok"); // host desconhecido: sem checagem
+  assertEquals(schemaErr(rdmProfile()), "ok");
 });

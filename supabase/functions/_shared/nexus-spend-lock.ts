@@ -31,7 +31,7 @@ export function wordpressConnectorAllowed(url:string,method:string,headers:Heade
  }catch{return false;}
 }
 /** Non-billable plugin routes: publishing, media and the signals key hand-off (12/11/2026). */
-const CONNECTOR_PATHS=['/zica-posts/v1/articles','/zica-posts/v1/media','/zica-posts/v1/signals/configure'];
+const CONNECTOR_PATHS=['/zica-posts/v1/articles','/zica-posts/v1/media','/zica-posts/v1/signals/configure','/zica-posts/v1/homepage-schema/inject'];
 /** Bases approved at request time by a function that already verified project ownership. https only. */
 const approvedBases=new Set<string>();
 export function allowWordPressBase(baseUrl:string):boolean {

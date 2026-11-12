@@ -4,7 +4,7 @@ import {PAID_SERVICES_BLOCKED, allowWordPressBase} from '../_shared/nexus-spend-
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveRequestActor, RequestAuthError } from "../_shared/request-auth.ts";
 import { parseSerp, parseAiObservation, SAMPLING_METHOD, AUTONOMOUS_REVIEW_PROMPT, validateAutonomousReview, validateLinkDestination, topicGroups, insertDraftLink } from "../_shared/nexus-intelligence.ts";
-import { isObservationEngine, isExecutableEngine, engineKind, ENGINE_PROVIDER, normalizeObservation, manualRequestKey, runRequestKey, normalizePromptSet, normalizePrompt, normalizeOrigins, generateSiteId, generateSiteSecret, buildSignalsSnippet, parseGeminiObservation, parseClaudeObservation, parsePerplexityObservation } from "../_shared/nexus-intelligence.ts";
+import { isObservationEngine, isExecutableEngine, engineKind, ENGINE_PROVIDER, normalizeObservation, manualRequestKey, runRequestKey, normalizePromptSet, normalizePrompt, normalizeOrigins, buildHomepageSchemaFromProfile, generateSiteId, generateSiteSecret, buildSignalsSnippet, parseGeminiObservation, parseClaudeObservation, parsePerplexityObservation } from "../_shared/nexus-intelligence.ts";
 import { isPluginModeProject, resolvePluginKey, resolvePluginNamespace, pluginRequest } from "../_shared/wordpress-plugin-client.ts";
 import { editorialFingerprint, signEditorialReceipt } from "../_shared/nexus-approval.ts";
 import { normalizeEditorialHtml } from "../_shared/editorial-html.ts";
@@ -24,7 +24,7 @@ Deno.serve(async req=>{
   const org=project.organization_id;
   const {data:membership,error:membershipError}=await admin.from('organization_members').select('organization_id').eq('organization_id',org).eq('user_id',actor.userId).eq('status','active').maybeSingle();
   if(membershipError||!membership)return json({error:'organization_membership_required'},403);
-  const host=new URL(project.wordpress_url||`https://${project.domain}`).hostname;
+  let host='';try{host=new URL(project.wordpress_url||(project.domain?`https://${project.domain}`:'')).hostname;}catch{host='';}
   if(body.action==='status'){
    const [program,operations,credentials,jobs]=await Promise.all([
     admin.from('nexus_programs').select('*').eq('organization_id',org).maybeSingle(),
@@ -178,9 +178,27 @@ Deno.serve(async req=>{
    const {data:keyRow}=await admin.from('nexus_site_keys').select('allowed_origins').eq('project_id',project.id).maybeSingle();
    return json({site_id:siteId,secret,endpoint,snippet:buildSignalsSnippet(scriptUrl,siteId,endpoint),allowed_origins:keyRow?.allowed_origins||[],plugin_configured:pluginConfigured,secret_shown_once:true});
   }
+  if(body.action==='homepage_schema_sync'){
+   if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
+   const {data:adminMember}=await admin.from('organization_members').select('role').eq('organization_id',org).eq('user_id',actor.userId).eq('status','active').in('role',['owner','admin']).maybeSingle();
+   const {data:ownerOrg}=adminMember?{data:true}:await admin.from('organizations').select('id').eq('id',org).eq('owner_user_id',actor.userId).maybeSingle();
+   if(!adminMember&&!ownerOrg)return json({error:'forbidden'},403);
+   const profile=project.commercial_info?.schema_profile;
+   if(!profile)return json({error:'schema_profile_missing'},409);
+   const built=buildHomepageSchemaFromProfile(profile,host||undefined);if(!built.ok)return json({error:built.error},400);
+   if(body.dryRun===true)return json({dry_run:true,applied:false,schemas:built.schemas,site:project.wordpress_url||null});
+   if(!isPluginModeProject(project)||!project.wordpress_url)return json({error:'plugin_not_configured'},409);
+   try{
+    const {apiKey}=await resolvePluginKey(admin,project);
+    if(!allowWordPressBase(String(project.wordpress_url)))throw new Error('wordpress_base_not_https');
+    const {data:pluginData}=await pluginRequest(String(project.wordpress_url),apiKey,'homepage-schema/inject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({schemas:built.schemas})},resolvePluginNamespace(project));
+    const count=Number(pluginData?.count);
+    return json({dry_run:false,applied:true,count:Number.isFinite(count)?count:built.schemas.length,schemas:built.schemas});
+   }catch{return json({error:'plugin_unreachable',applied:false},502);}
+  }
   if(['validate_destinations','suggest_links','apply_link'].includes(body.action)){
    const {data:allowed}=await admin.from('nexus_programs').select('settings').eq('organization_id',org).maybeSingle();
-   if(!Array.isArray(allowed?.settings?.destination_hosts)||!allowed.settings.destination_hosts.includes(host))return json({error:'destination_host_not_authorized'},409);
+   if(!host||!Array.isArray(allowed?.settings?.destination_hosts)||!allowed.settings.destination_hosts.includes(host))return json({error:'destination_host_not_authorized'},409);
   }
   if(body.action==='prepare_clusters'){
    const {data:articles,error}=await admin.from('articles').select('id,title,keyword').eq('user_id',actor.userId).eq('project_id',project.id).eq('status','published').order('id').limit(200);if(error)throw error;

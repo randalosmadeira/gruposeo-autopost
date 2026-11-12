@@ -149,6 +149,17 @@ export interface NexusSignalsStatus {
   totals_30d?: { ai_bot_hits?: number; ai_referrals?: number; search_referrals?: number; human_pageviews?: number } | null;
 }
 
+/** Resposta de `homepage_schema_sync`. `dry_run:true` = pré-visualização, nada foi enviado ao site. */
+export interface NexusHomepageSchemaResult {
+  dry_run: boolean;
+  applied: boolean;
+  schemas: Array<Record<string, unknown>>;
+  /** Só no sucesso real: quantidade de schemas gravados, informada pelo plugin. */
+  count?: number;
+  /** Só na pré-visualização: URL do WordPress do projeto (ou null). */
+  site?: string | null;
+}
+
 export interface NexusPrepareRunResult { prepared: number; skipped: number; executed: false }
 
 /** Resultado de leitura que distingue o estado "bloqueado" (402/423) de erro. */

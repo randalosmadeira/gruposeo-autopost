@@ -215,7 +215,7 @@ export function generateSiteId() {
   return id;
 }
 export const generateSiteSecret = () => [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2, '0')).join('');
-/** Origins must be https://host[:port] (no path). Returns canonical origins or an error. */
+/** Origins must be https://host[:port]. A pasted page URL (path/query/hash) is canonicalized to its origin; http, credentials and junk are refused. */
 export function normalizeOrigins(raw: unknown): { ok: true; value: string[] } | { ok: false; error: string } {
   if (raw === undefined || raw === null) return { ok: true, value: [] };
   if (!Array.isArray(raw) || raw.length > 20) return { ok: false, error: 'allowed_origins_invalid' };
@@ -223,7 +223,7 @@ export function normalizeOrigins(raw: unknown): { ok: true; value: string[] } | 
   for (const item of raw) {
     try {
       const u = new URL(String(item).trim());
-      if (u.protocol !== 'https:' || u.username || u.password || (u.pathname !== '/' && u.pathname !== '') || u.search || u.hash || !u.hostname.includes('.')) return { ok: false, error: 'allowed_origins_invalid' };
+      if (u.protocol !== 'https:' || u.username || u.password || !u.hostname.includes('.')) return { ok: false, error: 'allowed_origins_invalid' };
       out.add(u.origin);
     } catch { return { ok: false, error: 'allowed_origins_invalid' }; }
   }
@@ -280,4 +280,84 @@ export function parsePerplexityObservation(data: unknown, domain: string, varian
   if (!results.length || !answer.trim()) throw new Error('observation_response_empty');
   const citations = results.flatMap(x => { const url = safePublicUrl(x.url); return url ? [{ url, title: String(x.title || '') }] : []; });
   return buildObservation(answer, citations, domain, variants, null, 'literal_variant_in_search_results_and_urls');
+}
+
+// -- homepage schema (JSON-LD) built from projects.commercial_info.schema_profile ---------------------
+export const SCHEMA_ORG_TYPES = ['LegalService', 'Organization', 'NewsMediaOrganization', 'LocalBusiness'] as const;
+export const SCHEMA_AREA_TYPES = ['State', 'Country', 'City', 'AdministrativeArea'] as const;
+type SchemaResult = { ok: true; schemas: Array<Record<string, unknown>> } | { ok: false; error: string };
+const SCHEMA_STR_MAX = 300;
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+/** Required string field: trimmed, non-empty, <= 300 chars. Optional ones are returned as undefined when absent. */
+function schemaStr(v: unknown, field: string, required: boolean): { ok: true; value?: string } | { ok: false; error: string } {
+  if (v === undefined || v === null || v === '') return required ? { ok: false, error: `profile_invalid:${field}` } : { ok: true };
+  if (typeof v !== 'string' || !v.trim() || v.trim().length > SCHEMA_STR_MAX) return { ok: false, error: `profile_invalid:${field}` };
+  return { ok: true, value: v.trim() };
+}
+/** https URL without credentials and with a dotted hostname; returns the href or null. */
+function schemaHttps(v: unknown): string | null {
+  if (typeof v !== 'string' || v.trim().length > 2000) return null;
+  try { const u = new URL(v.trim()); return u.protocol === 'https:' && !u.username && !u.password && u.hostname.includes('.') ? u.href : null; } catch { return null; }
+}
+const sameSite = (host: string, project: string) => { const h = host.toLowerCase().replace(/^www\./, ''), p = project.toLowerCase().replace(/^www\./, ''); return !!h && !!p && (h === p || h.endsWith(`.${p}`)); };
+function buildPostalAddress(raw: unknown, field: string): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  if (!isObj(raw)) return { ok: false, error: `profile_invalid:${field}` };
+  const out: Record<string, unknown> = { '@type': 'PostalAddress' };
+  for (const [key, required] of [['streetAddress', true], ['addressLocality', true], ['addressRegion', true], ['postalCode', false], ['addressCountry', true]] as const) {
+    const r = schemaStr(raw[key], `${field}.${key}`, required); if ('error' in r) return { ok: false, error: r.error };
+    if (r.value !== undefined) out[key] = r.value;
+  }
+  return { ok: true, value: out };
+}
+/** Builds ONE JSON-LD node for the homepage with the same @id the site already serves. Never invents data: optional fields stay absent. */
+export function buildHomepageSchemaFromProfile(profile: unknown, projectHost?: string): SchemaResult {
+  if (!isObj(profile)) return { ok: false, error: 'profile_invalid:profile' };
+  const P = profile;
+  if (typeof P.type !== 'string' || !(SCHEMA_ORG_TYPES as readonly string[]).includes(P.type)) return { ok: false, error: 'profile_invalid:type' };
+  const id = schemaHttps(P.id); if (!id) return { ok: false, error: 'profile_invalid:id' };
+  const url = schemaHttps(P.url); if (!url) return { ok: false, error: 'profile_invalid:url' };
+  if (projectHost) {
+    if (!sameSite(new URL(id).hostname, projectHost)) return { ok: false, error: 'profile_invalid:id_host' };
+    if (!sameSite(new URL(url).hostname, projectHost)) return { ok: false, error: 'profile_invalid:url_host' };
+  }
+  const name = schemaStr(P.name, 'name', true); if ('error' in name) return { ok: false, error: name.error };
+  const telephone = schemaStr(P.telephone, 'telephone', false); if ('error' in telephone) return { ok: false, error: telephone.error };
+  const node: Record<string, unknown> = { '@context': 'https://schema.org', '@type': P.type, '@id': id, name: name.value, url };
+  if (telephone.value) node.telephone = telephone.value;
+  if (P.address !== undefined) { const a = buildPostalAddress(P.address, 'address'); if ('error' in a) return { ok: false, error: a.error }; node.address = a.value; }
+  if (P.locations !== undefined) {
+    if (!Array.isArray(P.locations) || P.locations.length > 5) return { ok: false, error: 'profile_invalid:locations' };
+    const places: Array<Record<string, unknown>> = [];
+    for (const [i, loc] of P.locations.entries()) {
+      if (!isObj(loc)) return { ok: false, error: `profile_invalid:locations[${i}]` };
+      const n = schemaStr(loc.name, `locations[${i}].name`, true); if ('error' in n) return { ok: false, error: n.error };
+      const a = buildPostalAddress(loc.address, `locations[${i}].address`); if ('error' in a) return { ok: false, error: a.error };
+      places.push({ '@type': 'Place', name: n.value, address: a.value });
+    }
+    if (places.length) node.location = places;
+  }
+  if (P.areaServed !== undefined) {
+    if (!Array.isArray(P.areaServed) || P.areaServed.length > 20) return { ok: false, error: 'profile_invalid:areaServed' };
+    const areas: Array<Record<string, unknown>> = [];
+    for (const [i, a] of P.areaServed.entries()) {
+      if (!isObj(a) || typeof a.type !== 'string' || !(SCHEMA_AREA_TYPES as readonly string[]).includes(a.type)) return { ok: false, error: `profile_invalid:areaServed[${i}].type` };
+      const n = schemaStr(a.name, `areaServed[${i}].name`, true); if ('error' in n) return { ok: false, error: n.error };
+      areas.push({ '@type': a.type, name: n.value });
+    }
+    if (areas.length) node.areaServed = areas;
+  }
+  if (P.sameAs !== undefined) {
+    if (!Array.isArray(P.sameAs) || P.sameAs.length > 12) return { ok: false, error: 'profile_invalid:sameAs' };
+    const links: string[] = [];
+    for (const [i, l] of P.sameAs.entries()) { const href = schemaHttps(l); if (!href) return { ok: false, error: `profile_invalid:sameAs[${i}]` }; if (!links.includes(href)) links.push(href); }
+    if (links.length) node.sameAs = links;
+  }
+  if (P.parentOrganization !== undefined) {
+    const po = P.parentOrganization;
+    if (!isObj(po) || typeof po.type !== 'string' || !(SCHEMA_ORG_TYPES as readonly string[]).includes(po.type)) return { ok: false, error: 'profile_invalid:parentOrganization.type' };
+    const poId = schemaHttps(po.id); if (!poId) return { ok: false, error: 'profile_invalid:parentOrganization.id' };
+    const poName = schemaStr(po.name, 'parentOrganization.name', true); if ('error' in poName) return { ok: false, error: poName.error };
+    node.parentOrganization = { '@type': po.type, '@id': poId, name: poName.value };
+  }
+  return { ok: true, schemas: [node] };
 }

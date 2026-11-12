@@ -15,12 +15,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { HomepageSchemaSection } from '@/components/nexus-observatory/HomepageSchemaSection';
 import { useToast } from '@/hooks/use-toast';
 import { useProjects } from '@/hooks/useProjects';
 import { useNexusObservatoryActions, useObservatorySummary, usePromptSets, useSignalsStatus } from '@/hooks/useNexusObservatory';
 import {
   INTENT_LABELS, SIGNAL_KIND_LABELS, buildEngineCountryMatrix, filterSummary, buildSignalsSnippet, countryLabel, deriveGaps,
-  engineLabel, formatCount, formatRate, gapKey, isoDate, marketsToText, parseCitationLines, parseCompetitorLines,
+  engineLabel, formatCount, formatRate, gapKey, isoDate, marketsToText, nexusErrorMessage, parseCitationLines, parseCompetitorLines,
   parseMarkets, rangeForDays, rateTone, summaryToKpis,
 } from '@/lib/nexus-observatory';
 import {
@@ -35,7 +36,7 @@ const BAR_COLOR = 'hsl(42, 100%, 55%)';
 type PeriodPreset = '7' | '30' | '90' | 'custom';
 
 function isBlocked(...errors: unknown[]) { return errors.some((e) => e instanceof NexusBlockedError); }
-function messageOf(e: unknown) { return e instanceof Error ? e.message : 'Falha inesperada.'; }
+function messageOf(e: unknown) { return nexusErrorMessage(e); }
 
 /** Gráfico com rótulo acessível e tabela equivalente visível sob demanda. */
 function ChartFigure({ label, config, table, children }: { label: string; config: ChartConfig; table: ReactNode; children: React.ReactElement }) {
@@ -75,6 +76,7 @@ export default function NexusObservatory() {
 
   const [projectId, setProjectId] = useState('');
   const selected = projectId || projects[0]?.id || '';
+  const selectedProject = projects.find((p) => p.id === selected);
   const [preset, setPreset] = useState<PeriodPreset>('30');
   const [customFrom, setCustomFrom] = useState(() => rangeForDays(30).from);
   const [customTo, setCustomTo] = useState(() => rangeForDays(30).to);
@@ -440,6 +442,16 @@ export default function NexusObservatory() {
           actions={actions}
           onError={handleError}
           toastInfo={(title, description) => toast({ title, description })}
+        />
+      )}
+
+      {/* 8. Schema da homepage */}
+      {selected && (
+        <HomepageSchemaSection
+          key={selected}
+          sync={actions.homepageSchemaSync.mutateAsync}
+          siteFallback={selectedProject?.wordpress_url || (selectedProject?.domain ? `https://${selectedProject.domain}` : null)}
+          onBlocked={(e) => setBlocked(e.message)}
         />
       )}
     </div>

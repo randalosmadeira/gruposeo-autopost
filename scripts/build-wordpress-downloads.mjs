@@ -11,11 +11,11 @@ const packages = [
   {
     name: 'zica-posts',
     folderName: 'zica-posts',
-    version: '3.16.0',
-    outputName: 'zica-posts-3.16.0.zip',
+    version: '3.16.1',
+    outputName: 'zica-posts-3.16.1.zip',
     source: path.join(ROOT, 'public', 'wordpress-plugin', 'zica-posts'),
     entry: 'zica-posts.php',
-    expected: ['Version: 3.16.0', "ZICA_POSTS_VERSION', '3.16.0"],
+    expected: ['Version: 3.16.1', "ZICA_POSTS_VERSION', '3.16.1"],
     required: [
       'zica-posts.php', 'readme.txt', 'version.json', 'assets/admin.css', 'assets/zica-signals.js',
       'includes/class-zica-posts-auth.php', 'includes/class-zica-posts-discovery.php',
