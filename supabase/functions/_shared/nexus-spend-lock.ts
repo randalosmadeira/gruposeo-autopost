@@ -20,13 +20,23 @@ export function outboundAllowed(url:string,method:string,headers:Headers,ownHost
  if(/(^api\.|openai|anthropic|generativelanguage|googleapis|serper|serpapi|dataforseo|replicate|fal\.ai|openrouter|perplexity|tavily|exa\.ai|firecrawl|rapidapi|apify|scrapingbee|scraperapi)/i.test(parsed.hostname))return false;
  return true;
 }
-export function installSpendLock(){
+/** Narrow non-billable CMS exception; never permits provider APIs or redirects. */
+export function wordpressConnectorAllowed(url:string,method:string,headers:Headers,baseUrl:string):boolean {
+ try {
+  const u=new URL(url),base=new URL(baseUrl);
+  if(base.protocol!=='https:'||u.origin!==base.origin||u.username||u.password||method.toUpperCase()!=='POST'||!headers.has('X-ZICA-POSTS-Key'))return false;
+  const prefix=base.pathname.replace(/\/$/,'');
+  if(u.pathname===prefix+'/wp-json/zica-posts/v1/articles'||u.pathname===prefix+'/wp-json/zica-posts/v1/media')return !u.search;
+  return (u.pathname===prefix+'/'||u.pathname===prefix)&&[...u.searchParams.keys()].length===1&&['/zica-posts/v1/articles','/zica-posts/v1/media'].includes(u.searchParams.get('rest_route')||'');
+ }catch{return false;}
+}
+export function installSpendLock(approvedWordPressBase=''){
  const original=globalThis.fetch.bind(globalThis);
  let host='';try{host=new URL(runtime().env.get('SUPABASE_URL')||'').hostname;}catch{/* fail closed */}
  globalThis.fetch=((input:RequestInfo|URL,init?:RequestInit)=>{
   const req=input instanceof Request?input:null;const url=req?.url||String(input);
   const method=init?.method||req?.method||'GET';const headers=new Headers(init?.headers||req?.headers);
-  if(!outboundAllowed(url,method,headers,host))throw new Error('global_paid_services_blocked');
+  if(!outboundAllowed(url,method,headers,host)&&!wordpressConnectorAllowed(url,method,headers,approvedWordPressBase))throw new Error('global_paid_services_blocked');
   // No implicit external redirects: prevents a public URL redirecting to a billable API.
   return original(input,{...init,redirect:'manual'});
  }) as typeof fetch;
