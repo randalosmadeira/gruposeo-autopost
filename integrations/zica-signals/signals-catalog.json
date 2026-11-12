@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "description": "Lista canonica de robos de IA e referrers usada pelo snippet, plugin WordPress, Worker, middleware Node e shipper. Edite aqui e rode: node integrations/zica-signals/generate-catalog.mjs",
+  "ai_bots": [
+    "OAI-SearchBot", "ChatGPT-User", "GPTBot",
+    "PerplexityBot", "Perplexity-User",
+    "Claude-SearchBot", "ClaudeBot", "Claude-User", "anthropic-ai",
+    "Google-Extended", "Googlebot-Image", "Googlebot-Video", "Googlebot", "Bingbot",
+    "Applebot-Extended", "Applebot", "DuckAssistBot", "CCBot", "cohere-ai",
+    "meta-externalagent", "Bytespider", "Amazonbot"
+  ],
+  "ai_referrers": [
+    { "agent": "chatgpt.com", "hosts": ["chatgpt.com", "chat.openai.com", "openai.com"] },
+    { "agent": "perplexity.ai", "hosts": ["perplexity.ai"] },
+    { "agent": "gemini.google.com", "hosts": ["gemini.google.com", "bard.google.com"] },
+    { "agent": "copilot.microsoft.com", "hosts": ["copilot.microsoft.com"] },
+    { "agent": "claude.ai", "hosts": ["claude.ai"] },
+    { "agent": "you.com", "hosts": ["you.com"] },
+    { "agent": "poe.com", "hosts": ["poe.com"] },
+    { "agent": "meta.ai", "hosts": ["meta.ai"] },
+    { "agent": "grok.com", "hosts": ["grok.com", "x.ai"] }
+  ],
+  "ai_referrers_conditional": [
+    { "host": "duckduckgo.com", "agent": "duckduckgo.com", "query": { "ia": "chat" } },
+    { "host": "bing.com", "agent": "copilot.microsoft.com", "path_prefixes": ["/chat", "/copilot"] }
+  ],
+  "utm_sources": {
+    "chatgpt.com": "chatgpt.com",
+    "perplexity": "perplexity.ai",
+    "gemini": "gemini.google.com",
+    "copilot": "copilot.microsoft.com",
+    "claude": "claude.ai"
+  },
+  "search_referrers": [
+    { "agent": "google", "pattern": "(^|\\.)google\\.[a-z.]{2,6}$" },
+    { "agent": "bing", "pattern": "(^|\\.)bing\\.com$" },
+    { "agent": "duckduckgo", "pattern": "(^|\\.)duckduckgo\\.com$" },
+    { "agent": "yahoo", "pattern": "(^|\\.)yahoo\\.[a-z.]{2,6}$" },
+    { "agent": "yandex", "pattern": "(^|\\.)yandex\\.[a-z.]{2,6}$" },
+    { "agent": "ecosia", "pattern": "(^|\\.)ecosia\\.org$" },
+    { "agent": "baidu", "pattern": "(^|\\.)baidu\\.com$" }
+  ]
+}

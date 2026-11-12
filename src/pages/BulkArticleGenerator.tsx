@@ -50,11 +50,15 @@ import { ToneVoiceConfig, AIModelSelector, ContentStructureConfig, ArticleListMa
 import { BulkGenerationHistory } from '@/components/bulk-generator';
 import type { ArticleItem } from '@/components/shared/ArticleListManager';
 import { initialArticleTitle, isValidEditorialKeyword } from '@/lib/keyword-import';
+import { NexusGapBrief, type NexusGapPauta } from '@/components/article-generator/NexusGapBrief';
+import type { NexusGapSelection } from '@/types/nexus-observatory';
 
 // Extended article type for generation tracking
 interface ArticleRow extends ArticleItem {
   articleId?: string;
   error?: string;
+  // Origem NEXUS Observatório (lacuna que motivou a pauta); gravada em config.nexus_gap ao gerar.
+  nexusGap?: NexusGapSelection;
 }
 
 const articleSizes = [
@@ -206,6 +210,32 @@ export default function BulkArticleGenerator() {
     });
   }, [articles, toast]);
 
+  // Pautas vindas das lacunas do NEXUS Observatório: mesma validação da importação de palavras-chave.
+  const handleAddGapPautas = useCallback((pautas: NexusGapPauta[]) => {
+    setArticles(prev => {
+      const have = new Set(prev.map(a => a.keyword.trim().toLowerCase()));
+      const items: ArticleRow[] = [];
+      for (const p of pautas) {
+        const key = p.keyword.trim().toLowerCase();
+        if (!isValidEditorialKeyword(p.keyword) || have.has(key)) continue;
+        have.add(key);
+        items.push({
+          id: crypto.randomUUID(),
+          keyword: p.keyword,
+          title: initialArticleTitle(p.title),
+          size: 'medio',
+          status: 'pending',
+          nexusGap: p.nexusGap,
+        });
+      }
+      return items.length ? [...prev, ...items] : prev;
+    });
+    toast({
+      title: 'Pauta adicionada',
+      description: 'Vinda das lacunas do NEXUS Observatório. Ajuste o tamanho e clique em Iniciar.',
+    });
+  }, [toast]);
+
   // Start generation
   const handleStartGeneration = useCallback(async () => {
     const toGenerate = filledArticles.filter(a => a.status === 'pending');
@@ -252,6 +282,7 @@ export default function BulkArticleGenerator() {
             config: { 
               size: article.size, 
               bulkGenerated: true,
+              ...(article.nexusGap ? { nexus_gap: { query: article.nexusGap.query, country: article.nexusGap.country, engines_missing: [...article.nexusGap.engines_missing] } } : {}),
               ...globalConfig,
             },
           })
@@ -490,6 +521,12 @@ export default function BulkArticleGenerator() {
           </AccordionItem>
         </Accordion>
 
+        <NexusGapBrief
+          projectId={globalConfig.projectId || connectedProjects[0]?.id || projects[0]?.id}
+          existingKeywords={articles.map(a => a.keyword)}
+          onAdd={handleAddGapPautas}
+        />
+
         {/* Article List Manager - Replaces manual table */}
         <ArticleListManager
           items={articles.map(a => ({
@@ -508,6 +545,7 @@ export default function BulkArticleGenerator() {
                   ...item,
                   articleId: existing?.articleId,
                   error: existing?.error,
+                  nexusGap: existing?.nexusGap,
                 };
               });
               return merged;

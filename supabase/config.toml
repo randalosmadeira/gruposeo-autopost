@@ -114,3 +114,6 @@ verify_jwt = true
 
 [functions.nexus-intelligence]
 verify_jwt = true
+
+[functions.zica-signals]
+verify_jwt = false

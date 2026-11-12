@@ -44,6 +44,7 @@ const AuditoriaGBP = lazy(() => import("./pages/AuditoriaGBP"));
 const Hiperlocal = lazy(() => import("./pages/Hiperlocal"));
 const AdminOrganizations = lazy(() => import("./pages/AdminOrganizations"));
 const NexusIntelligence = lazy(() => import("./pages/NexusIntelligence"));
+const NexusObservatory = lazy(() => import("./pages/NexusObservatory"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -106,6 +107,7 @@ const App = () => (
                 <Route path="/business-profile" element={<BusinessProfile />} />
                 <Route path="/internal-linking" element={<InternalLinking />} />
                 <Route path="/nexus-intelligence" element={<NexusIntelligence />} />
+                <Route path="/nexus/observatorio" element={<NexusObservatory />} />
                 <Route path="/internal-links" element={<InternalLinking />} />
                 <Route path="/topical-maps" element={<Dashboard />} />
                 <Route path="/settings" element={<Navigate to="/account" replace />} />

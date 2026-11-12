@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { cn } from '@/lib/utils';
-import { Activity, Building2, Calendar, Cpu, FileCode2, FileText, Globe2, Layers3, LayoutDashboard, ListChecks, Network, UserRound, Users, Vote } from 'lucide-react';
+import { Activity, Building2, Calendar, Cpu, FileCode2, FileText, Globe2, Layers3, LayoutDashboard, ListChecks, Network, Radar, UserRound, Users, Vote } from 'lucide-react';
 import { ZicaLogo } from '@/components/brand/ZicaLogo';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
 import { useElectoralAccess } from '@/hooks/useElectoralAccess';
@@ -17,6 +17,7 @@ const clientItems: NavItem[] = [
   { label: 'Meus Blogs', icon: Globe2, href: '/integrations' },
   { label: 'Negócios & Estratégia', icon: Building2, href: '/business-profile' },
   { label: 'NEXUS · Inteligência', icon: Network, href: '/nexus-intelligence' },
+  { label: 'NEXUS · Observatório', icon: Radar, href: '/nexus/observatorio' },
   { label: 'Minha Conta', icon: UserRound, href: '/account' },
 ];
 

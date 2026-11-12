@@ -104,3 +104,180 @@ export function insertDraftLink(content:string,anchor:string,url:string) {
   return part.replace(pattern,match=>{applied=true;return `<a href="${url.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" rel="noopener noreferrer">${match}</a>`;});
  }).join('');return {content:html,applied};
 }
+
+// ---------------------------------------------------------------------------
+// Observatory (2026-11-12): engines, manual observations, multi-engine parsers, signal-key helpers.
+// ---------------------------------------------------------------------------
+export const OBSERVATION_ENGINES = ['chatgpt_web','chatgpt_api','gemini_web','gemini_api','claude_web','claude_api','perplexity_web','perplexity_api','copilot_web','google_aio','google_serp','bing_serp'] as const;
+export type ObservationEngine = typeof OBSERVATION_ENGINES[number];
+export const OBSERVATION_INTENTS = ['informational','discovery','transactional','international','branded'] as const;
+export const isObservationEngine = (v: unknown): v is ObservationEngine => typeof v === 'string' && (OBSERVATION_ENGINES as readonly string[]).includes(v);
+/** Engines that have an automatable collector (execution is still gated by PAID_SERVICES_BLOCKED and the budget). */
+export const EXECUTABLE_ENGINES: readonly ObservationEngine[] = ['chatgpt_api','gemini_api','claude_api','perplexity_api','google_serp'];
+export const isExecutableEngine = (v: unknown): v is ObservationEngine => EXECUTABLE_ENGINES.includes(v as ObservationEngine);
+export const engineKind = (engine: string): 'serp' | 'ai_observation' => engine === 'google_serp' || engine === 'bing_serp' ? 'serp' : 'ai_observation';
+export const ENGINE_PROVIDER: Record<string, string> = { chatgpt_api: 'openai', gemini_api: 'gemini', claude_api: 'anthropic', perplexity_api: 'perplexity', google_serp: 'serper' };
+
+export async function sha256Hex(value: string | Uint8Array) {
+  const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value;
+  const digest = await crypto.subtle.digest('SHA-256', bytes as BufferSource);
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+const clip = (v: unknown, max: number) => typeof v === 'string' ? v.trim().slice(0, max) : '';
+const hostOf = (url: string) => { try { return new URL(url).hostname.toLowerCase().replace(/^www\./, ''); } catch { return ''; } };
+/** Manual citations may be http(s); credentials are refused and the fragment is dropped. */
+function manualUrl(raw: unknown): string | null {
+  try {
+    const u = new URL(String(raw).trim());
+    if (!['https:', 'http:'].includes(u.protocol) || u.username || u.password || !u.hostname.includes('.')) return null;
+    u.hash = ''; const href = u.href; return href.length <= 2000 ? href : null;
+  } catch { return null; }
+}
+
+export type NormalizedObservation = { engine: ObservationEngine; kind: 'serp' | 'ai_observation'; observedAt: string; input: Record<string, unknown>; output: Record<string, unknown> };
+export function normalizeObservation(raw: unknown, nowMs: number = Date.now()): { ok: true; value: NormalizedObservation } | { ok: false; error: string } {
+  const o = raw as Record<string, unknown> | null;
+  if (!o || typeof o !== 'object') return { ok: false, error: 'observation_required' };
+  if (!isObservationEngine(o.engine)) return { ok: false, error: 'engine_invalid' };
+  const country = clip(o.country, 10).toLowerCase(); if (!/^[a-z]{2}$/.test(country)) return { ok: false, error: 'country_invalid' };
+  const language = clip(o.language, 10); if (!/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$/.test(language)) return { ok: false, error: 'language_invalid' };
+  const query = clip(o.query, 500); if (!query) return { ok: false, error: 'query_required' };
+  const topic = clip(o.topic, 120); if (!topic) return { ok: false, error: 'topic_required' };
+  if (!(OBSERVATION_INTENTS as readonly string[]).includes(o.intent as string)) return { ok: false, error: 'intent_invalid' };
+  if (typeof o.rdm_mentioned !== 'boolean' || typeof o.rdm_cited !== 'boolean') return { ok: false, error: 'mention_flags_required' };
+  const ms = typeof o.observed_at === 'string' ? Date.parse(o.observed_at) : NaN;
+  if (!Number.isFinite(ms) || ms > nowMs + 86_400_000) return { ok: false, error: 'observed_at_invalid' };
+  const observedAt = new Date(ms).toISOString();
+  if (o.citations !== undefined && !Array.isArray(o.citations)) return { ok: false, error: 'citations_invalid' };
+  if (o.competitors !== undefined && !Array.isArray(o.competitors)) return { ok: false, error: 'competitors_invalid' };
+  const citations: Array<{ url: string; title: string }> = [];
+  for (const c of ((o.citations as unknown[]) || []).slice(0, 50)) {
+    const url = manualUrl(typeof c === 'string' ? c : (c as { url?: unknown })?.url);
+    if (!url) return { ok: false, error: 'citation_url_invalid' };
+    citations.push({ url, title: clip(typeof c === 'string' ? '' : (c as { title?: unknown }).title, 500) });
+  }
+  const competitors: Array<{ name: string; host?: string; source: string }> = [];
+  for (const c of ((o.competitors as unknown[]) || []).slice(0, 30)) {
+    const name = clip(typeof c === 'string' ? c : (c as { name?: unknown })?.name, 200); if (!name) return { ok: false, error: 'competitor_name_invalid' };
+    const obj = typeof c === 'object' && c ? c as { host?: unknown; source?: unknown } : {};
+    const host = clip(obj.host, 255).toLowerCase().replace(/^www\./, '');
+    const source = ['citation', 'mention', 'map_pack', 'organic'].includes(obj.source as string) ? obj.source as string : 'mention';
+    competitors.push({ name, ...(host ? { host } : {}), source });
+  }
+  const engine = o.engine;
+  const input: Record<string, unknown> = { engine, engine_surface: clip(o.engine_surface, 120) || undefined, country, language, query, topic, intent: o.intent,
+    branded: o.branded === true, observed_at: observedAt, method: 'manual_product_ui', method_version: 'manual-1.1' };
+  const output: Record<string, unknown> = { mentioned: o.rdm_mentioned, cited: o.rdm_cited, citations, competitors,
+    answer_excerpt: clip(o.answer_excerpt, 4000), note: clip(o.note, 2000) || undefined, observer: clip(o.observer, 120) || undefined,
+    evidence_path: clip(o.evidence_path, 500) || undefined, session_state: clip(o.session_state, 200) || undefined, collected_at: observedAt };
+  return { ok: true, value: { engine, kind: engineKind(engine), observedAt, input: JSON.parse(JSON.stringify(input)), output: JSON.parse(JSON.stringify(output)) } };
+}
+export async function manualRequestKey(engine: string, query: string, country: string, observedAt: string) {
+  return `manual:${engine}:${(await sha256Hex(query)).slice(0, 12)}:${country}:${observedAt.slice(0, 10)}`;
+}
+export function runRequestKey(setId: string, promptId: string, engine: string, country: string, day: string) {
+  return `run:${setId}:${promptId}:${engine}:${country}:${day}`;
+}
+
+export function normalizeMarkets(raw: unknown): { ok: true; value: Array<{ country: string; language: string; city?: string }> } | { ok: false; error: string } {
+  if (!Array.isArray(raw) || raw.length > 20) return { ok: false, error: 'markets_invalid' };
+  const out: Array<{ country: string; language: string; city?: string }> = [];
+  for (const m of raw) {
+    const country = clip((m as { country?: unknown })?.country, 10).toLowerCase(); const language = clip((m as { language?: unknown })?.language, 10);
+    if (!/^[a-z]{2}$/.test(country) || !/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$/.test(language)) return { ok: false, error: 'market_invalid' };
+    const city = clip((m as { city?: unknown }).city, 100); out.push({ country, language, ...(city ? { city } : {}) });
+  }
+  return { ok: true, value: out };
+}
+export function normalizePromptSet(raw: unknown): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  const s = raw as Record<string, unknown> | null; if (!s || typeof s !== 'object') return { ok: false, error: 'set_required' };
+  const name = clip(s.name, 120); if (!name) return { ok: false, error: 'name_required' };
+  const markets = normalizeMarkets(s.markets ?? []); if ('error' in markets) return { ok: false, error: markets.error };
+  if (s.engines !== undefined && !Array.isArray(s.engines)) return { ok: false, error: 'engines_invalid' };
+  const engines = [...new Set(((s.engines as unknown[]) || []))]; if (!engines.every(isObservationEngine)) return { ok: false, error: 'engines_invalid' };
+  const cadence = s.cadence === undefined ? 'manual' : s.cadence; if (!['manual', 'weekly', 'daily'].includes(cadence as string)) return { ok: false, error: 'cadence_invalid' };
+  const status = s.status === undefined ? 'active' : s.status; if (!['active', 'paused'].includes(status as string)) return { ok: false, error: 'status_invalid' };
+  return { ok: true, value: { name, description: clip(s.description, 2000) || null, markets: markets.value, engines, cadence, status } };
+}
+export function normalizePrompt(raw: unknown): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  const p = raw as Record<string, unknown> | null; if (!p || typeof p !== 'object') return { ok: false, error: 'prompt_required' };
+  const topic = clip(p.topic, 120); const query = clip(p.query, 500);
+  if (!topic) return { ok: false, error: 'topic_required' }; if (!query) return { ok: false, error: 'query_required' };
+  if (!(OBSERVATION_INTENTS as readonly string[]).includes(p.intent as string)) return { ok: false, error: 'intent_invalid' };
+  const position = p.position === undefined ? 0 : Number(p.position); if (!Number.isInteger(position) || position < 0 || position > 10000) return { ok: false, error: 'position_invalid' };
+  return { ok: true, value: { topic, query, intent: p.intent, branded: p.branded === true, position, active: p.active !== false } };
+}
+
+// -- signal key helpers -------------------------------------------------------
+export function generateSiteId() {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789'; let id = '';
+  while (id.length < 12) for (const b of crypto.getRandomValues(new Uint8Array(24))) { if (b < 252 && id.length < 12) id += alphabet[b % 36]; }
+  return id;
+}
+export const generateSiteSecret = () => [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2, '0')).join('');
+/** Origins must be https://host[:port] (no path). Returns canonical origins or an error. */
+export function normalizeOrigins(raw: unknown): { ok: true; value: string[] } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, value: [] };
+  if (!Array.isArray(raw) || raw.length > 20) return { ok: false, error: 'allowed_origins_invalid' };
+  const out = new Set<string>();
+  for (const item of raw) {
+    try {
+      const u = new URL(String(item).trim());
+      if (u.protocol !== 'https:' || u.username || u.password || (u.pathname !== '/' && u.pathname !== '') || u.search || u.hash || !u.hostname.includes('.')) return { ok: false, error: 'allowed_origins_invalid' };
+      out.add(u.origin);
+    } catch { return { ok: false, error: 'allowed_origins_invalid' }; }
+  }
+  return { ok: true, value: [...out] };
+}
+export const buildSignalsSnippet = (scriptUrl: string, siteId: string, endpoint: string) =>
+  `<script src="${scriptUrl}" data-site="${siteId}" data-endpoint="${endpoint}" defer></script>`;
+
+// -- parsers (same output shape as parseAiObservation) -------------------------
+function literalMention(text: string, variants: string[]) {
+  return variants.filter(v => v.trim().length >= 3).some(v => new RegExp(`(?<![\\p{L}\\p{N}])${v.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'iu').test(text));
+}
+function dedupeCitations(list: Array<{ url: string; title: string }>) {
+  const seen = new Set<string>(); return list.filter(c => !seen.has(c.url) && seen.add(c.url));
+}
+function buildObservation(answer: string, citations: Array<{ url: string; title: string }>, domain: string, variants: string[], model: unknown, classification: string) {
+  const target = domain.toLowerCase().replace(/^www\./, '');
+  const unique = dedupeCitations(citations);
+  return { answer, citations: unique, mentioned: literalMention(answer, variants), cited: unique.some(c => hostOf(c.url) === target),
+    recommended: null, rank: null, model: typeof model === 'string' ? model : null, classification, surface: SAMPLING_METHOD.surface };
+}
+const DOMAIN_TITLE = /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i;
+/** Gemini grounding: groundingChunks[].web.uri is usually a vertexaisearch redirect; its title is the source domain, which is what we keep. */
+export function parseGeminiObservation(data: unknown, domain: string, variants: string[]) {
+  const r = data as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; groundingMetadata?: { groundingChunks?: Array<{ web?: { uri?: string; title?: string } }> } }>; modelVersion?: string };
+  const cand = r?.candidates?.[0];
+  const answer = (cand?.content?.parts || []).map(p => p.text || '').join('\n');
+  if (!answer.trim()) throw new Error('observation_response_empty');
+  const citations = (cand?.groundingMetadata?.groundingChunks || []).flatMap(ch => {
+    const uri = ch.web?.uri; const title = String(ch.web?.title || '');
+    const redirect = uri ? hostOf(uri) === 'vertexaisearch.cloud.google.com' : false;
+    const url = safePublicUrl(redirect && DOMAIN_TITLE.test(title) ? `https://${title.toLowerCase()}/` : uri);
+    return url ? [{ url, title }] : [];
+  });
+  return buildObservation(answer, citations, domain, variants, r.modelVersion, 'literal_variant_and_grounding_chunks');
+}
+/** Anthropic Messages + web_search tool: only URLs cited by text blocks count as citations (retrieved-but-uncited results are ignored). */
+export function parseClaudeObservation(data: unknown, domain: string, variants: string[]) {
+  const r = data as { content?: Array<{ type?: string; text?: string; citations?: Array<{ type?: string; url?: string; title?: string }> }>; model?: string };
+  const blocks = (r?.content || []).filter(b => b.type === 'text');
+  const answer = blocks.map(b => b.text || '').join('\n');
+  if (!answer.trim()) throw new Error('observation_response_empty');
+  const citations = blocks.flatMap(b => b.citations || []).filter(c => c.type === 'web_search_result_location' || (c.url && !c.type)).flatMap(c => {
+    const url = safePublicUrl(c.url); return url ? [{ url, title: String(c.title || '') }] : [];
+  });
+  return buildObservation(answer, citations, domain, variants, r.model, 'literal_variant_and_text_block_citations');
+}
+/** Perplexity Search API: no generated answer; mention is matched in titles/snippets of the ranked results. */
+export function parsePerplexityObservation(data: unknown, domain: string, variants: string[]) {
+  const r = data as { results?: Array<{ title?: string; url?: string; snippet?: string }> };
+  if (!Array.isArray(r?.results)) throw new Error('observation_response_invalid');
+  const results = r.results.filter(x => x && typeof x === 'object');
+  const answer = results.map(x => `${x.title || ''}\n${x.snippet || ''}`.trim()).join('\n\n');
+  if (!results.length || !answer.trim()) throw new Error('observation_response_empty');
+  const citations = results.flatMap(x => { const url = safePublicUrl(x.url); return url ? [{ url, title: String(x.title || '') }] : []; });
+  return buildObservation(answer, citations, domain, variants, null, 'literal_variant_in_search_results_and_urls');
+}

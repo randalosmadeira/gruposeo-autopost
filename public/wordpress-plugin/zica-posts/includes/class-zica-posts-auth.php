@@ -15,7 +15,8 @@ final class Zica_Posts_Auth {
         foreach ($candidates as $candidate) if (is_string($candidate) && '' !== trim($candidate)) return trim($candidate); return '';
     }
     public function verify_api_key($request) { $stored=(string)get_option('zica_posts_api_key',''); $provided=$this->api_key_from_request($request); return (!$stored||!$provided||!hash_equals($stored,$provided)) ? new WP_Error('zica_posts_unauthorized',__('API Key inválida ou ausente.','zica-posts'),array('status'=>401)) : true; }
-    public function sign_body($body,$nonce,$timestamp) { return hash_hmac('sha256',$timestamp."\n".$nonce."\n".hash('sha256',$body),(string)get_option('zica_posts_hub_secret','')); }
+    /** Assina corpo+nonce+timestamp. $secret opcional: sem ele usa o segredo do Hub (compatível com chamadas antigas). */
+    public function sign_body($body,$nonce,$timestamp,$secret=null) { $key=(null===$secret)?(string)get_option('zica_posts_hub_secret',''):(string)$secret; return hash_hmac('sha256',$timestamp."\n".$nonce."\n".hash('sha256',$body),$key); }
     public function verify_hmac($request) {
         $timestamp=trim((string)$request->get_header('X-Zica-Timestamp')); $nonce=trim((string)$request->get_header('X-Zica-Nonce')); $signature=strtolower(trim((string)$request->get_header('X-Zica-Signature')));
         if(!$timestamp||!ctype_digit($timestamp)||!$nonce||!$signature)return new WP_Error('zica_hmac_missing','Assinatura HMAC incompleta.',array('status'=>401));
