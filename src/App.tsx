@@ -45,6 +45,7 @@ const Hiperlocal = lazy(() => import("./pages/Hiperlocal"));
 const AdminOrganizations = lazy(() => import("./pages/AdminOrganizations"));
 const NexusIntelligence = lazy(() => import("./pages/NexusIntelligence"));
 const NexusObservatory = lazy(() => import("./pages/NexusObservatory"));
+const NexusProviders = lazy(() => import("./pages/NexusProviders"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -108,6 +109,7 @@ const App = () => (
                 <Route path="/internal-linking" element={<InternalLinking />} />
                 <Route path="/nexus-intelligence" element={<NexusIntelligence />} />
                 <Route path="/nexus/observatorio" element={<NexusObservatory />} />
+                <Route path="/nexus/motores" element={<NexusProviders />} />
                 <Route path="/internal-links" element={<InternalLinking />} />
                 <Route path="/topical-maps" element={<Dashboard />} />
                 <Route path="/settings" element={<Navigate to="/account" replace />} />

@@ -4,7 +4,7 @@
  */
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  buildHomepageSchemaFromProfile, buildSignalsSnippet, engineKind, generateSiteId, generateSiteSecret, manualRequestKey, normalizeObservation, normalizeOrigins, normalizePrompt,
+  buildHomepageSchemaFromProfile, buildSignalsSnippet, ENGINE_PROVIDER, engineKind, EXECUTABLE_ENGINES, generateSiteId, isExecutableEngine, isObservationEngine, OBSERVATION_ENGINES, generateSiteSecret, manualRequestKey, normalizeObservation, normalizeOrigins, normalizePrompt,
   normalizePromptSet, parseAiObservation, parseClaudeObservation, parseGeminiObservation, parsePerplexityObservation, runRequestKey,
 } from "./nexus-intelligence.ts";
 
@@ -206,4 +206,20 @@ Deno.test("buildHomepageSchemaFromProfile — @id/url devem pertencer ao host do
   assertEquals(schemaErr(dnProfile(), "rdmadvogados.com.br"), "ok"); // subdomínio do host do projeto
   assertEquals(schemaErr(rdmProfile(), ""), "ok"); // host desconhecido: sem checagem
   assertEquals(schemaErr(rdmProfile()), "ok");
+});
+
+Deno.test("motores SERP novos — registrados como observáveis, executáveis, kind serp e com provedor", () => {
+  const novos = ["dataforseo_google", "dataforseo_bing", "serpapi_google", "serpapi_bing", "brave_search"] as const;
+  const provedor = { dataforseo_google: "dataforseo", dataforseo_bing: "dataforseo", serpapi_google: "serpapi", serpapi_bing: "serpapi", brave_search: "brave" } as const;
+  for (const id of novos) {
+    assert(isObservationEngine(id)); assert((OBSERVATION_ENGINES as readonly string[]).includes(id));
+    assert(isExecutableEngine(id)); assert(EXECUTABLE_ENGINES.includes(id));
+    assertEquals(engineKind(id), "serp"); assertEquals(ENGINE_PROVIDER[id], provedor[id]);
+  }
+  // os motores anteriores continuam iguais
+  assertEquals(ENGINE_PROVIDER.google_serp, "serper"); assertEquals(ENGINE_PROVIDER.chatgpt_api, "openai");
+  assertEquals(engineKind("bing_serp"), "serp"); assertEquals(engineKind("claude_api"), "ai_observation");
+  assert(!isExecutableEngine("bing_serp")); assert(!isExecutableEngine("brave_web"));
+  const manual = normalizeObservation({ engine: "serpapi_bing", country: "BR", language: "pt-BR", query: "q", topic: "t", intent: "discovery", rdm_mentioned: false, rdm_cited: false, observed_at: "2026-11-12T10:00:00Z" }, Date.parse("2026-11-12T20:00:00Z"));
+  assert(manual.ok); if (manual.ok) assertEquals(manual.value.kind, "serp");
 });

@@ -108,15 +108,16 @@ export function insertDraftLink(content:string,anchor:string,url:string) {
 // ---------------------------------------------------------------------------
 // Observatory (2026-11-12): engines, manual observations, multi-engine parsers, signal-key helpers.
 // ---------------------------------------------------------------------------
-export const OBSERVATION_ENGINES = ['chatgpt_web','chatgpt_api','gemini_web','gemini_api','claude_web','claude_api','perplexity_web','perplexity_api','copilot_web','google_aio','google_serp','bing_serp'] as const;
+export const OBSERVATION_ENGINES = ['chatgpt_web','chatgpt_api','gemini_web','gemini_api','claude_web','claude_api','perplexity_web','perplexity_api','copilot_web','google_aio','google_serp','bing_serp','dataforseo_google','dataforseo_bing','serpapi_google','serpapi_bing','brave_search'] as const;
 export type ObservationEngine = typeof OBSERVATION_ENGINES[number];
 export const OBSERVATION_INTENTS = ['informational','discovery','transactional','international','branded'] as const;
 export const isObservationEngine = (v: unknown): v is ObservationEngine => typeof v === 'string' && (OBSERVATION_ENGINES as readonly string[]).includes(v);
 /** Engines that have an automatable collector (execution is still gated by PAID_SERVICES_BLOCKED and the budget). */
-export const EXECUTABLE_ENGINES: readonly ObservationEngine[] = ['chatgpt_api','gemini_api','claude_api','perplexity_api','google_serp'];
+export const EXECUTABLE_ENGINES: readonly ObservationEngine[] = ['chatgpt_api','gemini_api','claude_api','perplexity_api','google_serp','dataforseo_google','dataforseo_bing','serpapi_google','serpapi_bing','brave_search'];
 export const isExecutableEngine = (v: unknown): v is ObservationEngine => EXECUTABLE_ENGINES.includes(v as ObservationEngine);
-export const engineKind = (engine: string): 'serp' | 'ai_observation' => engine === 'google_serp' || engine === 'bing_serp' ? 'serp' : 'ai_observation';
-export const ENGINE_PROVIDER: Record<string, string> = { chatgpt_api: 'openai', gemini_api: 'gemini', claude_api: 'anthropic', perplexity_api: 'perplexity', google_serp: 'serper' };
+const SERP_ENGINES: readonly string[] = ['google_serp', 'bing_serp', 'dataforseo_google', 'dataforseo_bing', 'serpapi_google', 'serpapi_bing', 'brave_search'];
+export const engineKind = (engine: string): 'serp' | 'ai_observation' => SERP_ENGINES.includes(engine) ? 'serp' : 'ai_observation';
+export const ENGINE_PROVIDER: Record<string, string> = { chatgpt_api: 'openai', gemini_api: 'gemini', claude_api: 'anthropic', perplexity_api: 'perplexity', google_serp: 'serper', dataforseo_google: 'dataforseo', dataforseo_bing: 'dataforseo', serpapi_google: 'serpapi', serpapi_bing: 'serpapi', brave_search: 'brave' };
 
 export async function sha256Hex(value: string | Uint8Array) {
   const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value;

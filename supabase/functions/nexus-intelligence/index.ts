@@ -1,16 +1,22 @@
+import { providerFetch } from '../_shared/nexus-provider-fetch.ts';
 import '../_shared/nexus-runtime-bootstrap.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import {PAID_SERVICES_BLOCKED, allowWordPressBase} from '../_shared/nexus-spend-lock.ts';
+import {allowWordPressBase} from '../_shared/nexus-spend-lock.ts';
+import { PROVIDER_CATALOG, isProviderId, isCatalogId, validateCredentialFormat, secretFormatError, MAX_SECRET_LENGTH, runHealthChecks, buildProvidersOverview, executionGate, validateExecutionSettings, providersEnabledFrom, COST_HEALTH_PROVIDERS } from '../_shared/nexus-providers.ts';
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveRequestActor, RequestAuthError } from "../_shared/request-auth.ts";
 import { parseSerp, parseAiObservation, SAMPLING_METHOD, AUTONOMOUS_REVIEW_PROMPT, validateAutonomousReview, validateLinkDestination, topicGroups, insertDraftLink } from "../_shared/nexus-intelligence.ts";
 import { isObservationEngine, isExecutableEngine, engineKind, ENGINE_PROVIDER, normalizeObservation, manualRequestKey, runRequestKey, normalizePromptSet, normalizePrompt, normalizeOrigins, buildHomepageSchemaFromProfile, generateSiteId, generateSiteSecret, buildSignalsSnippet, parseGeminiObservation, parseClaudeObservation, parsePerplexityObservation } from "../_shared/nexus-intelligence.ts";
 import { isPluginModeProject, resolvePluginKey, resolvePluginNamespace, pluginRequest } from "../_shared/wordpress-plugin-client.ts";
+import { runCollector } from "../_shared/nexus-collectors.ts";
+import { syncSearchPerformance } from "../_shared/nexus-search-sync.ts";
 import { editorialFingerprint, signEditorialReceipt } from "../_shared/nexus-approval.ts";
 import { normalizeEditorialHtml } from "../_shared/editorial-html.ts";
 const cors = { "Access-Control-Allow-Origin":"*", "Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods":"POST, OPTIONS", "Content-Type":"application/json" };
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:cors});
 const text=(value:unknown,max=2000)=>typeof value==='string'?value.trim().slice(0,max):'';
+// Chamadas a provedores: fetch original (capturado antes do spend lock), URL montada pelo servidor, sem redirecionamento automático.
+const pf=((input:RequestInfo|URL,init?:RequestInit)=>providerFetch(input,{...init,redirect:'manual'})) as typeof fetch;
 Deno.serve(async req=>{
  if(req.method==='OPTIONS')return new Response(null,{headers:cors});
  if(req.method!=='POST')return json({error:'method_not_allowed'},405);
@@ -25,6 +31,12 @@ Deno.serve(async req=>{
   const {data:membership,error:membershipError}=await admin.from('organization_members').select('organization_id').eq('organization_id',org).eq('user_id',actor.userId).eq('status','active').maybeSingle();
   if(membershipError||!membership)return json({error:'organization_membership_required'},403);
   let host='';try{host=new URL(project.wordpress_url||(project.domain?`https://${project.domain}`:'')).hostname;}catch{host='';}
+  const isOrgAdmin=async()=>{
+   const {data:adminMember}=await admin.from('organization_members').select('role').eq('organization_id',org).eq('user_id',actor.userId).eq('status','active').in('role',['owner','admin']).maybeSingle();
+   if(adminMember)return true;
+   const {data:ownerOrg}=await admin.from('organizations').select('id').eq('id',org).eq('owner_user_id',actor.userId).maybeSingle();
+   return !!ownerOrg;
+  };
   if(body.action==='status'){
    const [program,operations,credentials,jobs]=await Promise.all([
     admin.from('nexus_programs').select('*').eq('organization_id',org).maybeSingle(),
@@ -40,9 +52,95 @@ Deno.serve(async req=>{
   }
   if(body.action==='store_credential'){
    if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
-   const {data,error}=await admin.rpc('nexus_provider_secret',{p_org:org,p_actor:actor.userId,p_provider:text(body.provider,20),p_secret:text(body.secret,4096)});
+   const provider=text(body.provider,20);
+   if(!isProviderId(provider))return json({error:'unsupported_provider'},400);
+   if(typeof body.secret==='string'&&body.secret.length>MAX_SECRET_LENGTH)return json({error:secretFormatError('tamanho_maximo_4096')},400);
+   const checked=validateCredentialFormat(provider,body.secret);
+   if(!checked.ok)return json({error:secretFormatError(checked.hint)},400);
+   const {data,error}=await admin.rpc('nexus_provider_secret',{p_org:org,p_actor:actor.userId,p_provider:provider,p_secret:checked.secret});
    if(error)return json({error:'credential_not_stored_check_role_and_value'},403);
-   return json({success:true,status:data});
+   // Teste gratuito logo após salvar; provedores com custo ficam "stored_unverified" até um teste confirmado.
+   let health=null;
+   if(PROVIDER_CATALOG[provider].health_cost==='free'){
+    const [result]=await runHealthChecks(admin,{organizationId:org,triggeredBy:actor.userId,providers:[provider],confirmCost:false,fetchFn:pf});
+    health=result||null;
+   }
+   const {data:stored}=await admin.from('organization_provider_credentials').select('status,secret_last_four').eq('organization_id',org).eq('provider',provider).maybeSingle();
+   return json({success:true,status:stored?.status||data,last_four:stored?.secret_last_four||null,health});
+  }
+  // ---- Motores & APIs (12/11/2026): visão geral, remoção, saúde e liberação da execução paga ----
+  if(body.action==='providers_overview'){
+   if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
+   const {data,error}=await admin.rpc('nexus_providers_overview',{p_org:org});
+   if(error)throw error;
+   return json({...buildProvidersOverview(data,org),viewer_is_admin:await isOrgAdmin()});
+  }
+  if(body.action==='provider_credential_remove'){
+   if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
+   if(!await isOrgAdmin())return json({error:'forbidden'},403);
+   const provider=text(body.provider,20);
+   if(!isProviderId(provider))return json({error:'unsupported_provider'},400);
+   const {error}=await admin.rpc('nexus_provider_secret_remove',{p_org:org,p_actor:actor.userId,p_provider:provider});
+   if(error)return json({error:'credential_not_removed'},500);
+   const {data:current}=await admin.from('nexus_programs').select('settings').eq('organization_id',org).maybeSingle();
+   const enabled=providersEnabledFrom(current?.settings);
+   if(current&&enabled.includes(provider)){
+    const {error:settingsError}=await admin.from('nexus_programs').update({settings:{...current.settings,providers_enabled:enabled.filter(p=>p!==provider)},updated_at:new Date().toISOString()}).eq('organization_id',org);
+    if(settingsError)throw settingsError;
+   }
+   return json({success:true});
+  }
+  if(body.action==='provider_health_check'){
+   if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
+   const requested=text(body.provider,20);
+   if(requested&&!isCatalogId(requested))return json({error:'unsupported_provider'},400);
+   const confirmCost=body.confirmCost===true;
+   // Teste com custo gasta crédito da organização: só dono/admin.
+   if(requested&&confirmCost&&(COST_HEALTH_PROVIDERS as readonly string[]).includes(requested)&&!await isOrgAdmin())return json({error:'forbidden'},403);
+   const results=await runHealthChecks(admin,{organizationId:org,triggeredBy:actor.userId,providers:requested?[requested]:undefined,confirmCost,fetchFn:pf});
+   return json({results});
+  }
+  if(body.action==='execution_settings_set'){
+   if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
+   if(!await isOrgAdmin())return json({error:'forbidden'},403);
+   const [{data:creds},{data:current}]=await Promise.all([
+    admin.from('organization_provider_credentials').select('provider,status').eq('organization_id',org),
+    admin.from('nexus_programs').select('budget_usd_micros,settings').eq('organization_id',org).maybeSingle(),
+   ]);
+   const connected=(creds||[]).filter((c:{status:string})=>['stored_unverified','active'].includes(c.status)).map((c:{provider:string})=>c.provider);
+   // Desligar é sempre permitido: sem orçamento/lista na entrada, mantém os valores atuais.
+   const input={...body};
+   if(body.executionEnabled===false){
+    if(typeof input.budgetUsd!=='number')input.budgetUsd=Number(current?.budget_usd_micros||0)/1_000_000;
+    if(input.providersEnabled===undefined)input.providersEnabled=providersEnabledFrom(current?.settings);
+   }
+   const checked=validateExecutionSettings(input,connected);
+   if(!checked.ok)return json({error:checked.error},400);
+   const {data:saved,error}=await admin.from('nexus_programs').upsert({organization_id:org,execution_enabled:checked.value.executionEnabled,budget_usd_micros:checked.value.budgetUsdMicros,settings:{...(current?.settings||{}),providers_enabled:checked.value.providersEnabled,...(checked.value.executionEnabled?{cost_ceilings_usd_micros:{serp:20000,ai_observation:60000,editorial_review:100000,...(current?.settings?.cost_ceilings_usd_micros||{})},pricing_verified_at:new Date().toISOString()}:{})},updated_at:new Date().toISOString()},{onConflict:'organization_id'}).select('execution_enabled,budget_usd_micros,reserved_usd_micros,consumed_usd_micros,settings').single();
+   if(error)throw error;
+   return json({program:{execution_enabled:saved.execution_enabled,budget_usd_micros:Number(saved.budget_usd_micros),reserved_usd_micros:Number(saved.reserved_usd_micros),consumed_usd_micros:Number(saved.consumed_usd_micros),providers_enabled:providersEnabledFrom(saved.settings)}});
+  }
+  if(body.action==='search_performance_sync'){
+   if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
+   if(!await isOrgAdmin())return json({error:'forbidden'},403);
+   const source=['gsc','bing','all'].includes(body.source)?body.source:'all';
+   const days=Math.min(90,Math.max(1,Math.trunc(Number(body.days))||28));
+   const property=text(project.commercial_info?.gsc_property,200)||undefined;
+   const resolveSecret=async(prov:string)=>{const {data}=await admin.rpc('nexus_provider_secret_read',{p_org:org,p_provider:prov});return data?String(data):null;};
+   const out=await syncSearchPerformance(admin,{organizationId:org,projectId:project.id,source,days,fetchFn:pf,resolveSecret,domain:host||String(project.domain||''),property});
+   const okOnes=out.results.filter(r=>r.ok);
+   const total=out.results.reduce((n:number,r:{rows_upserted:number})=>n+r.rows_upserted,0);
+   const view={property:property||(host?`sc-domain:${host.replace(/^www\./,'')}`:null),from:out.results[0]?.from,to:out.results[0]?.to,rows_upserted:total,truncated:out.results.some(r=>r.truncated===true),results:out.results};
+   if(!okOnes.length&&out.results.length){const err=String(out.results[0].error||'sync_failed');return json({...view,error:err},err.endsWith('not_configured')?409:err.endsWith('forbidden')?403:502);}
+   return json(view);
+  }
+  if(body.action==='search_performance'){
+   const isDay=(v:unknown):v is string=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v));
+   const to=isDay(body.to)?body.to:new Date().toISOString().slice(0,10);
+   const from=isDay(body.from)?body.from:new Date(Date.parse(to)-27*86400000).toISOString().slice(0,10);
+   if(from>to||Date.parse(to)-Date.parse(from)>366*86400000)return json({error:'period_invalid'},400);
+   const {data,error}=await admin.rpc('nexus_search_performance_summary',{p_project:project.id,p_from:from,p_to:to});
+   if(error)throw error;return json(data);
   }
   if(body.action==='prepare'){
    if(!['serp','ai_observation','editorial_review','pilot'].includes(body.kind))return json({error:'unsupported_operation'},400);
@@ -70,7 +168,7 @@ Deno.serve(async req=>{
    const {data,error:saveError}=await admin.from('nexus_operations').upsert((articles||[]).map(article=>({organization_id:org,project_id:project.id,user_id:actor.userId,kind:'pilot',request_key:`pilot-v1:${project.id}:${article.id}`,input:{baseline_article:article.id,title:article.title,keyword:article.keyword,review_mode:'autonomous',workflow:['research','strategy','writer','factual_review','conversion_review','delivery_gate'],state:'baseline_selected_not_evaluated'}})),{onConflict:'organization_id,request_key',ignoreDuplicates:true}).select('id');
    if(saveError)throw saveError;return json({success:true,prepared:data?.length||0,executed:false});
   }
-  // ---- Observatory actions (2026-11-12). Execution of paid collectors stays behind PAID_SERVICES_BLOCKED + budget. ----
+  // ---- Observatory actions (2026-11-12). Paid execution is gated per organization (executionGate): program on + budget + provider enabled. ----
   if(body.action==='observatory'){
    const isDay=(v:unknown):v is string=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v));
    const to=isDay(body.to)?body.to:new Date().toISOString().slice(0,10);
@@ -264,8 +362,10 @@ Deno.serve(async req=>{
    if(engineKind(engine)!==operation.kind)return json({error:'engine_kind_mismatch',executed:false},409);
   }
   const {data:program}=await admin.from('nexus_programs').select('*').eq('organization_id',org).maybeSingle();
-  if(PAID_SERVICES_BLOCKED||!program?.execution_enabled||program.budget_usd_micros===0)return json({error:'budget_paused',executed:false},402);
   const provider=operation.kind==='editorial_review'?'openai':ENGINE_PROVIDER[engine]||'openai';
+  // Portão por organização (substitui o bloqueio global neste endpoint): programa ligado + orçamento + provedor habilitado.
+  const gate=executionGate(program,provider);
+  if(gate)return json({error:gate.error,executed:false},402);
   const {data:credential,error:credentialError}=await admin.rpc('nexus_provider_secret',{p_org:org,p_actor:actor.userId,p_provider:provider});
   if(credentialError||!credential)return json({error:'organization_credential_required',executed:false},409);
   const model=['gemini_api','claude_api'].includes(engine)?text(program.settings?.observation_models?.[engine],100):text(program.settings?.observation_model,100);
@@ -273,18 +373,21 @@ Deno.serve(async req=>{
   const {error:reserveError}=await admin.rpc('nexus_reserve_operation',{p_operation:operation.id});
   if(reserveError)return json({error:'budget_or_pricing_gate',executed:false},402);
   reserved=true;
-  const input=operation.input;let output:Record<string,unknown>;
-  if(operation.kind==='serp'){
-   const response=await fetch('https://google.serper.dev/search',{method:'POST',headers:{'X-API-KEY':credential,'Content-Type':'application/json'},body:JSON.stringify({q:input.query,gl:input.country,hl:input.language.split('-')[0],location:input.city||undefined,num:10}),signal:AbortSignal.timeout(30000)});
+  const input=operation.input;let output:Record<string,unknown>;const startedAt=Date.now();
+  if(operation.kind==='serp'&&provider!=='serper'){
+   const collected=await runCollector(engine,String(credential),{engine,query:String(input.query||''),country:String(input.country||'br'),language:String(input.language||'pt-BR'),city:String(input.city||''),domain:host,variants:Array.isArray(input.variants)?input.variants:[]},pf);
+   output={...collected.output,raw:collected.raw};
+  }else if(operation.kind==='serp'){
+   const response=await pf('https://google.serper.dev/search',{method:'POST',headers:{'X-API-KEY':credential,'Content-Type':'application/json'},body:JSON.stringify({q:input.query,gl:input.country,hl:input.language.split('-')[0],location:input.city||undefined,num:10}),signal:AbortSignal.timeout(30000)});
    if(!response.ok)throw new Error('provider_request_failed');
    const raw=await response.json();output={...parseSerp(raw,host),raw,collected_at:new Date().toISOString(),query:input.query,context:input,provider:'serper'};
   }else if(operation.kind==='ai_observation'&&['gemini_api','claude_api','perplexity_api'].includes(engine)){
    const variants:string[]=Array.isArray(input.variants)?input.variants:[];
    const country=String(input.country||'br').toUpperCase();
    let response:Response;
-   if(engine==='gemini_api')response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:'POST',headers:{'x-goog-api-key':credential,'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:input.query}]}],tools:[{google_search:{}}]}),signal:AbortSignal.timeout(90000)});
-   else if(engine==='claude_api')response=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':credential,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model,max_tokens:4000,messages:[{role:'user',content:input.query}],tools:[{type:'web_search_20250305',name:'web_search',max_uses:3,user_location:{type:'approximate',country,city:input.city||undefined}}]}),signal:AbortSignal.timeout(90000)});
-   else response=await fetch('https://api.perplexity.ai/search',{method:'POST',headers:{Authorization:`Bearer ${credential}`,'Content-Type':'application/json'},body:JSON.stringify({query:input.query,country,max_results:10}),signal:AbortSignal.timeout(30000)});
+   if(engine==='gemini_api')response=await pf(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:'POST',headers:{'x-goog-api-key':credential,'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:input.query}]}],tools:[{google_search:{}}]}),signal:AbortSignal.timeout(90000)});
+   else if(engine==='claude_api')response=await pf('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':credential,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model,max_tokens:4000,messages:[{role:'user',content:input.query}],tools:[{type:'web_search_20250305',name:'web_search',max_uses:3,user_location:{type:'approximate',country,city:input.city||undefined}}]}),signal:AbortSignal.timeout(90000)});
+   else response=await pf('https://api.perplexity.ai/search',{method:'POST',headers:{Authorization:`Bearer ${credential}`,'Content-Type':'application/json'},body:JSON.stringify({query:input.query,country,max_results:10}),signal:AbortSignal.timeout(30000)});
    if(!response.ok)throw new Error('provider_request_failed');
    const raw=await response.json();
    const parsed=engine==='gemini_api'?parseGeminiObservation(raw,host,variants):engine==='claude_api'?parseClaudeObservation(raw,host,variants):parsePerplexityObservation(raw,host,variants);
@@ -296,7 +399,7 @@ Deno.serve(async req=>{
     if(!article)throw new Error('article_forbidden');
    }
    const snapshot=article?await editorialFingerprint(article,project):null;
-   const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${credential}`,'Content-Type':'application/json'},body:JSON.stringify({model,max_output_tokens:4000,store:false,
+   const response=await pf('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${credential}`,'Content-Type':'application/json'},body:JSON.stringify({model,max_output_tokens:4000,store:false,
     ...(article?{instructions:AUTONOMOUS_REVIEW_PROMPT,text:{format:{type:'json_object'}},input:JSON.stringify({article:{title:article.title,content:String(article.content||'').slice(0,50000)},sources:String(article.config?.sourcesContext||'').slice(0,8000),project:{strategy:project.nexus_strategy,strategy_version:project.nexus_strategy_version,identity:project.editorial_identity,sector:project.nicho,description:project.description,compliance:project.compliance_rules},offer:project.commercial_info,brief:article.config?.conversionBrief,segment:article.config?.segment,intent:article.config?.intentType,goal:article.config?.goal})}:{tools:[{type:'web_search',user_location:{type:'approximate',country:String(input.country).toUpperCase(),city:input.city||undefined}}],input:input.query})}),signal:AbortSignal.timeout(90000)});
    if(!response.ok)throw new Error('provider_request_failed');
    const raw=await response.json();
@@ -313,6 +416,7 @@ Deno.serve(async req=>{
     }
    }
   }
+  output.latency_ms=Date.now()-startedAt;
   output.accounting='configured_ceiling_debit_not_provider_invoice';
   const {error:finishError}=await admin.rpc('nexus_finish_operation',{p_operation:operation.id,p_output:output});if(finishError)throw finishError;
   return json({success:true,output});
