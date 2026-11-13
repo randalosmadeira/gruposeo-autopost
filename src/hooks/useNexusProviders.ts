@@ -16,7 +16,18 @@ const REALTIME_DEBOUNCE_MS = 400;
  * (ele pode carregar a credencial em `store_credential`).
  */
 export async function invokeEdge<T>(fn: 'nexus-intelligence' | 'nexus-audit' | 'nexus-visibility', projectId: string, body: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.functions.invoke(fn, { body: { projectId, ...body } });
+  const payload = { projectId, ...body };
+  let { data, error } = await supabase.functions.invoke(fn, { body: payload });
+  if (fn === 'nexus-visibility' && error?.context instanceof Response && error.context.status === 401) {
+    const refreshed = await supabase.auth.refreshSession();
+    const token = refreshed.data.session?.access_token;
+    if (!refreshed.error && token) {
+      ({ data, error } = await supabase.functions.invoke(fn, {
+        body: payload,
+        headers: { Authorization: `Bearer ${token}` },
+      }));
+    }
+  }
   if (error) {
     let status = 0;
     let code = '';
