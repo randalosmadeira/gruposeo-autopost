@@ -166,18 +166,22 @@ export function normalizeObservation(raw: unknown, nowMs: number = Date.now()): 
     competitors.push({ name, ...(host ? { host } : {}), source });
   }
   const engine = o.engine;
-  const input: Record<string, unknown> = { engine, engine_surface: clip(o.engine_surface, 120) || undefined, country, language, query, topic, intent: o.intent,
+  const input: Record<string, unknown> = { engine, engine_surface: clip(o.engine_surface, 120) || undefined, country, language, city: clip(o.city, 100) || undefined, query, topic, intent: o.intent,
     branded: o.branded === true, observed_at: observedAt, method: 'manual_product_ui', method_version: 'manual-1.1' };
   const output: Record<string, unknown> = { mentioned: o.rdm_mentioned, cited: o.rdm_cited, citations, competitors,
     answer_excerpt: clip(o.answer_excerpt, 4000), note: clip(o.note, 2000) || undefined, observer: clip(o.observer, 120) || undefined,
     evidence_path: clip(o.evidence_path, 500) || undefined, session_state: clip(o.session_state, 200) || undefined, collected_at: observedAt };
   return { ok: true, value: { engine, kind: engineKind(engine), observedAt, input: JSON.parse(JSON.stringify(input)), output: JSON.parse(JSON.stringify(output)) } };
 }
-export async function manualRequestKey(engine: string, query: string, country: string, observedAt: string) {
-  return `manual:${engine}:${(await sha256Hex(query)).slice(0, 12)}:${country}:${observedAt.slice(0, 10)}`;
+function originKey(country: string, city: string, language: string) {
+  if (!city.trim() && (!language || language.toLowerCase() === 'pt-br')) return country.toLowerCase();
+  return [country, city, language].map(part => encodeURIComponent(part.normalize('NFC').trim().toLowerCase().replace(/\s+/g, ' '))).join(':');
 }
-export function runRequestKey(setId: string, promptId: string, engine: string, country: string, day: string) {
-  return `run:${setId}:${promptId}:${engine}:${country}:${day}`;
+export async function manualRequestKey(engine: string, query: string, country: string, observedAt: string, city = '', language = '') {
+  return `manual:${engine}:${(await sha256Hex(query)).slice(0, 12)}:${originKey(country, city, language)}:${observedAt.slice(0, 10)}`;
+}
+export function runRequestKey(setId: string, promptId: string, engine: string, country: string, day: string, city = '', language = '') {
+  return `run:${setId}:${promptId}:${engine}:${originKey(country, city, language)}:${day}`;
 }
 
 export function normalizeMarkets(raw: unknown): { ok: true; value: Array<{ country: string; language: string; city?: string }> } | { ok: false; error: string } {

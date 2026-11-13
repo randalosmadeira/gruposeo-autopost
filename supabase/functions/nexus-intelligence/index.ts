@@ -1,3 +1,4 @@
+import { serperRequest, serperRegionalInputs } from "../_shared/serper-request.ts";
 import { providerFetch } from '../_shared/nexus-provider-fetch.ts';
 import '../_shared/nexus-runtime-bootstrap.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -226,13 +227,18 @@ Deno.serve(async req=>{
   }
   if(body.action==='prepare'){
    if(!['serp','ai_observation','editorial_review','pilot'].includes(body.kind))return json({error:'unsupported_operation'},400);
-   const input:Record<string,unknown>&{query:string;variants:string[];branded:boolean}={query:text(body.query,500),country:text(body.country,2)||'br',language:text(body.language,10)||'pt-BR',city:text(body.city,100),
+   const input:Record<string,unknown>&{query:string;variants:string[];branded:boolean}={query:text(body.query,body.kind==="serp"&&body.serperType==="resolve"?100001:500),country:text(body.country,2)||'br',language:text(body.language,10)||'pt-BR',city:text(body.city,100),
     variants:Array.isArray(body.variants)?body.variants.filter((v:unknown)=>typeof v==='string').slice(0,8).map((v:string)=>v.slice(0,120)):[],
     articleId:text(body.articleId,36),branded:body.branded===true,repetition:Math.min(5,Math.max(1,Number(body.repetition)||1)),method_version:SAMPLING_METHOD.version};
    if(isObservationEngine(body.engine))input.engine=body.engine;
    if(typeof body.branded!=='boolean')input.branded=input.variants.some((v:string)=>v.trim().length>=3&&input.query.toLocaleLowerCase().includes(v.trim().toLocaleLowerCase()));
    if(['serp','ai_observation'].includes(body.kind)&&!input.query)return json({error:'query_required'},400);
-   const requestKey:string=crypto.randomUUID();
+   if(body.kind==='serp'){
+    input.serperType=body.serperType??'search';
+    input.page=body.page??1;
+   }
+   const inputs=body.kind==='serp'?serperRegionalInputs(input,body.regions):[input];
+   if(!inputs)return json({error:'invalid_serper_parameters'},400);
    if(body.kind==='editorial_review'){
     const {data:article}=await admin.from('articles').select('*').eq('id',input.articleId).eq('project_id',project.id).eq('user_id',actor.userId).maybeSingle();
     if(!article)return json({error:'article_forbidden'},403);
@@ -241,8 +247,8 @@ Deno.serve(async req=>{
     if(!id)return json({error:'article_content_required',executed:false},409);
     return json({success:true,operation:{id},executed:false});
    }
-   const {data,error}=await admin.from('nexus_operations').insert({organization_id:org,project_id:project.id,user_id:actor.userId,kind:body.kind,request_key:requestKey,input}).select('id').single();
-   if(error)throw error;return json({success:true,operation:data,executed:false});
+   const {data,error}=await admin.from('nexus_operations').insert(inputs.map(input=>({organization_id:org,project_id:project.id,user_id:actor.userId,kind:body.kind,request_key:crypto.randomUUID(),input}))).select('id');
+   if(error)throw error;return json({success:true,operation:data?.[0],prepared:data?.length??0,executed:false});
   }
   if(body.action==='prepare_pilot'){
    const {data:articles,error}=await admin.from('articles').select('id,title,keyword,project_id').eq('user_id',actor.userId).eq('project_id',project.id).eq('status','published').order('id').limit(10);
@@ -295,7 +301,7 @@ Deno.serve(async req=>{
   if(body.action==='import_observation'){
    const parsed=normalizeObservation(body.observation);if(!parsed.ok)return json({error:parsed.error},400);
    const o=parsed.value;
-   const requestKey=await manualRequestKey(o.engine,String(o.input.query),String(o.input.country),o.observedAt);
+   const requestKey=await manualRequestKey(o.engine,String(o.input.query),String(o.input.country),o.observedAt,String(o.input.city||''),String(o.input.language||''));
    const {data,error}=await admin.from('nexus_operations').upsert({organization_id:org,project_id:project.id,user_id:actor.userId,kind:o.kind,request_key:requestKey,status:'succeeded',reserved_usd_micros:0,input:o.input,output:o.output,updated_at:new Date().toISOString()},{onConflict:'organization_id,request_key'}).select('id').single();
    if(error)throw error;return json({operation:{id:data.id}});
   }
@@ -312,7 +318,7 @@ Deno.serve(async req=>{
    const day=new Date().toISOString().slice(0,10);const rows:Record<string,unknown>[]=[];
    for(const prompt of prompts||[])for(const engine of engines)for(const market of markets as Array<{country:string;language:string;city?:string}>){
     const query=String(prompt.query);
-    rows.push({organization_id:org,project_id:project.id,user_id:actor.userId,kind:engineKind(engine),request_key:runRequestKey(set.id,prompt.id,engine,market.country,day),
+    rows.push({organization_id:org,project_id:project.id,user_id:actor.userId,kind:engineKind(engine),request_key:runRequestKey(set.id,prompt.id,engine,market.country,day,market.city,market.language),
      input:{engine,query,country:market.country,language:market.language,city:market.city||'',topic:prompt.topic,intent:prompt.intent,variants,
       branded:prompt.branded===true||prompt.intent==='branded'||variants.some(v=>query.toLocaleLowerCase().includes(v.toLocaleLowerCase())),repetition:1,method_version:SAMPLING_METHOD.version,prompt_set_id:set.id,prompt_id:prompt.id}});
    }
@@ -451,6 +457,9 @@ Deno.serve(async req=>{
   if(credentialError||!credential)return json({error:'organization_credential_required',executed:false},409);
   const model=['gemini_api','claude_api'].includes(engine)?text(program.settings?.observation_models?.[engine],100):text(program.settings?.observation_model,100);
   if(['openai','gemini','anthropic'].includes(provider)&&!model)return json({error:'model_not_configured',executed:false},409);
+  const serper=operation.kind==='serp'&&provider==='serper'?serperRequest(operation.input):null;
+  if(operation.kind==='serp'&&provider==='serper'&&!serper)return json({error:'invalid_serper_parameters'},400);
+  if(serper&&serper.type!=='search')return json({error:'serper_credit_execution_paused',executed:false},402);
   const {error:reserveError}=await admin.rpc('nexus_reserve_operation',{p_operation:operation.id});
   if(reserveError)return json({error:'budget_or_pricing_gate',executed:false},402);
   reserved=true;
@@ -459,7 +468,7 @@ Deno.serve(async req=>{
    const collected=await runCollector(engine,String(credential),{engine,query:String(input.query||''),country:String(input.country||'br'),language:String(input.language||'pt-BR'),city:String(input.city||''),domain:host,variants:Array.isArray(input.variants)?input.variants:[]},pf);
    output={...collected.output,raw:collected.raw};
   }else if(operation.kind==='serp'){
-   const response=await pf('https://google.serper.dev/search',{method:'POST',headers:{'X-API-KEY':credential,'Content-Type':'application/json'},body:JSON.stringify({q:input.query,gl:input.country,hl:input.language.split('-')[0],location:input.city||undefined,num:10}),signal:AbortSignal.timeout(30000)});
+   const response=await pf(serper!.url,{method:'POST',headers:{'X-API-KEY':credential,'Content-Type':'application/json'},body:JSON.stringify(serper!.payload),signal:AbortSignal.timeout(30000)});
    if(!response.ok)throw new Error('provider_request_failed');
    const raw=await response.json();output={...parseSerp(raw,host),raw,collected_at:new Date().toISOString(),query:input.query,context:input,provider:'serper'};
   }else if(operation.kind==='ai_observation'&&['gemini_api','claude_api','perplexity_api'].includes(engine)){
