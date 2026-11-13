@@ -1,0 +1,830 @@
+{
+ "versao": "rdm-prompts-1",
+ "gerado_em": "2026-11-12",
+ "observacao": "Sementes para nexus_prompt_sets/nexus_prompts. NAO gravado em producao. Gravar so com aprovacao do dono (acoes prompt_set_upsert e prompt_upsert).",
+ "sets": [
+  {
+   "name": "RDM · Criminal (Estado de SP; urgência na Zona Leste, Norte, Sul e Guarulhos)",
+   "description": "Defesa criminal. Estado de SP; plantão/urgência: Zona Leste, Zona Norte, Zona Sul, Guarulhos e região metropolitana.",
+   "markets": [
+    {
+     "country": "br",
+     "language": "pt-BR",
+     "city": "São Paulo"
+    },
+    {
+     "country": "br",
+     "language": "pt-BR",
+     "city": "Guarulhos"
+    }
+   ],
+   "engines": [
+    "google_serp",
+    "google_aio",
+    "chatgpt_web",
+    "gemini_web",
+    "chatgpt_api",
+    "gemini_api",
+    "claude_api",
+    "perplexity_api"
+   ],
+   "cadence": "manual",
+   "status": "active",
+   "prompts": [
+    {
+     "topic": "flagrante",
+     "intent": "informational",
+     "query": "o que fazer quando um familiar é preso em flagrante em São Paulo",
+     "branded": false,
+     "position": 1
+    },
+    {
+     "topic": "flagrante",
+     "intent": "informational",
+     "query": "audiência de custódia: como funciona e quanto tempo demora",
+     "branded": false,
+     "position": 2
+    },
+    {
+     "topic": "flagrante",
+     "intent": "informational",
+     "query": "prisão em flagrante pode ser relaxada? quando",
+     "branded": false,
+     "position": 3
+    },
+    {
+     "topic": "liberdade",
+     "intent": "informational",
+     "query": "diferença entre prisão preventiva e prisão temporária",
+     "branded": false,
+     "position": 4
+    },
+    {
+     "topic": "liberdade",
+     "intent": "informational",
+     "query": "como pedir liberdade provisória com fiança",
+     "branded": false,
+     "position": 5
+    },
+    {
+     "topic": "liberdade",
+     "intent": "informational",
+     "query": "habeas corpus: quando cabe e como funciona",
+     "branded": false,
+     "position": 6
+    },
+    {
+     "topic": "inquerito",
+     "intent": "informational",
+     "query": "fui intimado para depor na delegacia o que devo fazer",
+     "branded": false,
+     "position": 7
+    },
+    {
+     "topic": "inquerito",
+     "intent": "informational",
+     "query": "preciso de advogado para depor como investigado",
+     "branded": false,
+     "position": 8
+    },
+    {
+     "topic": "drogas",
+     "intent": "informational",
+     "query": "tráfico de drogas ou uso pessoal: qual a diferença na lei",
+     "branded": false,
+     "position": 9
+    },
+    {
+     "topic": "lei maria da penha",
+     "intent": "informational",
+     "query": "medida protetiva da Lei Maria da Penha: o que acontece com o acusado",
+     "branded": false,
+     "position": 10
+    },
+    {
+     "topic": "crimes patrimoniais",
+     "intent": "informational",
+     "query": "pena para furto e roubo e como funciona a defesa",
+     "branded": false,
+     "position": 11
+    },
+    {
+     "topic": "crimes digitais",
+     "intent": "informational",
+     "query": "estelionato e golpe pela internet: o que fazer para se defender",
+     "branded": false,
+     "position": 12
+    },
+    {
+     "topic": "execucao penal",
+     "intent": "informational",
+     "query": "progressão de regime: como calcular e como pedir",
+     "branded": false,
+     "position": 13
+    },
+    {
+     "topic": "flagrante",
+     "intent": "discovery",
+     "query": "melhor advogado criminalista em São Paulo",
+     "branded": false,
+     "position": 14
+    },
+    {
+     "topic": "flagrante",
+     "intent": "discovery",
+     "query": "advogado criminalista plantão 24 horas Zona Leste São Paulo",
+     "branded": false,
+     "position": 15
+    },
+    {
+     "topic": "flagrante",
+     "intent": "discovery",
+     "query": "advogado criminalista urgente Guarulhos prisão em flagrante",
+     "branded": false,
+     "position": 16
+    },
+    {
+     "topic": "flagrante",
+     "intent": "discovery",
+     "query": "advogado criminal Zona Norte São Paulo plantão",
+     "branded": false,
+     "position": 17
+    },
+    {
+     "topic": "flagrante",
+     "intent": "discovery",
+     "query": "advogado criminal Zona Sul São Paulo preso em flagrante",
+     "branded": false,
+     "position": 18
+    },
+    {
+     "topic": "drogas",
+     "intent": "discovery",
+     "query": "advogado especialista em tráfico de drogas em São Paulo",
+     "branded": false,
+     "position": 19
+    },
+    {
+     "topic": "lei maria da penha",
+     "intent": "discovery",
+     "query": "advogado para defesa em Lei Maria da Penha em São Paulo",
+     "branded": false,
+     "position": 20
+    },
+    {
+     "topic": "tribunal do juri",
+     "intent": "discovery",
+     "query": "advogado para tribunal do júri em São Paulo",
+     "branded": false,
+     "position": 21
+    },
+    {
+     "topic": "crimes digitais",
+     "intent": "discovery",
+     "query": "advogado criminalista para crimes digitais e estelionato em SP",
+     "branded": false,
+     "position": 22
+    },
+    {
+     "topic": "honorarios",
+     "intent": "transactional",
+     "query": "quanto custa um advogado criminalista em São Paulo",
+     "branded": false,
+     "position": 23
+    },
+    {
+     "topic": "honorarios",
+     "intent": "transactional",
+     "query": "contratar advogado criminalista para audiência de custódia hoje",
+     "branded": false,
+     "position": 24
+    },
+    {
+     "topic": "liberdade",
+     "intent": "transactional",
+     "query": "contratar advogado para pedir habeas corpus urgente",
+     "branded": false,
+     "position": 25
+    },
+    {
+     "topic": "rdm",
+     "intent": "branded",
+     "query": "RDM Advogados criminal São Paulo é confiável",
+     "branded": true,
+     "position": 26
+    },
+    {
+     "topic": "rdm",
+     "intent": "branded",
+     "query": "RDM Advogados Associados Guarulhos advogado criminalista",
+     "branded": true,
+     "position": 27
+    }
+   ]
+  },
+  {
+   "name": "RDM · Consumidor (Estado de SP)",
+   "description": "Direito do consumidor: bancos, telecom, planos de saúde, voos, negativação, golpes.",
+   "markets": [
+    {
+     "country": "br",
+     "language": "pt-BR",
+     "city": "São Paulo"
+    }
+   ],
+   "engines": [
+    "google_serp",
+    "google_aio",
+    "chatgpt_web",
+    "gemini_web",
+    "chatgpt_api",
+    "gemini_api",
+    "claude_api",
+    "perplexity_api"
+   ],
+   "cadence": "manual",
+   "status": "active",
+   "prompts": [
+    {
+     "topic": "negativacao",
+     "intent": "informational",
+     "query": "nome negativado indevidamente: tenho direito a indenização por danos morais",
+     "branded": false,
+     "position": 1
+    },
+    {
+     "topic": "banco",
+     "intent": "informational",
+     "query": "desconto indevido na conta bancária o que fazer e como pedir o dinheiro de volta",
+     "branded": false,
+     "position": 2
+    },
+    {
+     "topic": "banco",
+     "intent": "informational",
+     "query": "golpe do pix: o banco é obrigado a devolver o dinheiro",
+     "branded": false,
+     "position": 3
+    },
+    {
+     "topic": "banco",
+     "intent": "informational",
+     "query": "empréstimo consignado não contratado como cancelar e ser indenizado",
+     "branded": false,
+     "position": 4
+    },
+    {
+     "topic": "telecom",
+     "intent": "informational",
+     "query": "cobrança indevida de operadora de telefone e internet: como reclamar na Justiça",
+     "branded": false,
+     "position": 5
+    },
+    {
+     "topic": "plano de saude",
+     "intent": "informational",
+     "query": "plano de saúde negou cobertura de tratamento o que fazer",
+     "branded": false,
+     "position": 6
+    },
+    {
+     "topic": "plano de saude",
+     "intent": "informational",
+     "query": "reajuste abusivo do plano de saúde como contestar",
+     "branded": false,
+     "position": 7
+    },
+    {
+     "topic": "voo",
+     "intent": "informational",
+     "query": "voo cancelado ou atrasado: direito a indenização por danos morais",
+     "branded": false,
+     "position": 8
+    },
+    {
+     "topic": "produto",
+     "intent": "informational",
+     "query": "produto com defeito: prazo de garantia e direito de troca no Código de Defesa do Consumidor",
+     "branded": false,
+     "position": 9
+    },
+    {
+     "topic": "compra online",
+     "intent": "informational",
+     "query": "loja online não entregou o produto o que fazer",
+     "branded": false,
+     "position": 10
+    },
+    {
+     "topic": "cobranca",
+     "intent": "informational",
+     "query": "cobrança de dívida prescrita: o que a lei diz",
+     "branded": false,
+     "position": 11
+    },
+    {
+     "topic": "juizado",
+     "intent": "informational",
+     "query": "como entrar com ação no Juizado Especial Cível sem advogado e quando precisa de advogado",
+     "branded": false,
+     "position": 12
+    },
+    {
+     "topic": "banco",
+     "intent": "discovery",
+     "query": "advogado consumidor para golpe do pix em São Paulo",
+     "branded": false,
+     "position": 13
+    },
+    {
+     "topic": "negativacao",
+     "intent": "discovery",
+     "query": "advogado para limpar nome e pedir indenização por negativação indevida em SP",
+     "branded": false,
+     "position": 14
+    },
+    {
+     "topic": "plano de saude",
+     "intent": "discovery",
+     "query": "advogado especialista em plano de saúde em São Paulo",
+     "branded": false,
+     "position": 15
+    },
+    {
+     "topic": "banco",
+     "intent": "discovery",
+     "query": "advogado para revisão de contrato bancário e juros abusivos em SP",
+     "branded": false,
+     "position": 16
+    },
+    {
+     "topic": "voo",
+     "intent": "discovery",
+     "query": "advogado para indenização de voo cancelado em São Paulo",
+     "branded": false,
+     "position": 17
+    },
+    {
+     "topic": "honorarios",
+     "intent": "transactional",
+     "query": "quanto custa um advogado de direito do consumidor",
+     "branded": false,
+     "position": 18
+    },
+    {
+     "topic": "honorarios",
+     "intent": "transactional",
+     "query": "advogado do consumidor que cobra só no êxito em São Paulo",
+     "branded": false,
+     "position": 19
+    },
+    {
+     "topic": "rdm",
+     "intent": "branded",
+     "query": "RDM Advogados direito do consumidor avaliações",
+     "branded": true,
+     "position": 20
+    }
+   ]
+  },
+  {
+   "name": "RDM · Empresarial (Estado de SP)",
+   "description": "Direito empresarial: contratos, societário, recuperação de crédito, compliance, LGPD.",
+   "markets": [
+    {
+     "country": "br",
+     "language": "pt-BR",
+     "city": "São Paulo"
+    }
+   ],
+   "engines": [
+    "google_serp",
+    "google_aio",
+    "chatgpt_web",
+    "gemini_web",
+    "chatgpt_api",
+    "gemini_api",
+    "claude_api",
+    "perplexity_api"
+   ],
+   "cadence": "manual",
+   "status": "active",
+   "prompts": [
+    {
+     "topic": "contratos",
+     "intent": "informational",
+     "query": "o que não pode faltar em um contrato de prestação de serviços entre empresas",
+     "branded": false,
+     "position": 1
+    },
+    {
+     "topic": "societario",
+     "intent": "informational",
+     "query": "como fazer um acordo de sócios e evitar conflito entre sócios",
+     "branded": false,
+     "position": 2
+    },
+    {
+     "topic": "societario",
+     "intent": "informational",
+     "query": "dissolução parcial de sociedade: como funciona e quais os custos",
+     "branded": false,
+     "position": 3
+    },
+    {
+     "topic": "societario",
+     "intent": "informational",
+     "query": "diferença entre MEI, ltda e sociedade limitada unipessoal",
+     "branded": false,
+     "position": 4
+    },
+    {
+     "topic": "cobranca",
+     "intent": "informational",
+     "query": "como cobrar judicialmente uma dívida de cliente empresarial inadimplente",
+     "branded": false,
+     "position": 5
+    },
+    {
+     "topic": "recuperacao",
+     "intent": "informational",
+     "query": "recuperação judicial: quem pode pedir e como funciona",
+     "branded": false,
+     "position": 6
+    },
+    {
+     "topic": "lgpd",
+     "intent": "informational",
+     "query": "LGPD para pequenas empresas: o que é obrigatório fazer",
+     "branded": false,
+     "position": 7
+    },
+    {
+     "topic": "propriedade",
+     "intent": "informational",
+     "query": "como registrar marca no INPI e proteger a propriedade intelectual",
+     "branded": false,
+     "position": 8
+    },
+    {
+     "topic": "franquia",
+     "intent": "informational",
+     "query": "contrato de franquia: cláusulas e riscos para o franqueado",
+     "branded": false,
+     "position": 9
+    },
+    {
+     "topic": "compliance",
+     "intent": "informational",
+     "query": "compliance empresarial para pequenas e médias empresas",
+     "branded": false,
+     "position": 10
+    },
+    {
+     "topic": "contratos",
+     "intent": "discovery",
+     "query": "advogado empresarial para elaborar contratos em São Paulo",
+     "branded": false,
+     "position": 11
+    },
+    {
+     "topic": "societario",
+     "intent": "discovery",
+     "query": "advogado societário para conflito entre sócios em São Paulo",
+     "branded": false,
+     "position": 12
+    },
+    {
+     "topic": "cobranca",
+     "intent": "discovery",
+     "query": "advogado para cobrança de inadimplência empresarial em SP",
+     "branded": false,
+     "position": 13
+    },
+    {
+     "topic": "recuperacao",
+     "intent": "discovery",
+     "query": "advogado para recuperação judicial e extrajudicial em São Paulo",
+     "branded": false,
+     "position": 14
+    },
+    {
+     "topic": "lgpd",
+     "intent": "discovery",
+     "query": "advogado especialista em LGPD para empresas em São Paulo",
+     "branded": false,
+     "position": 15
+    },
+    {
+     "topic": "assessoria",
+     "intent": "discovery",
+     "query": "escritório de advocacia empresarial consultivo mensal para pequenas empresas SP",
+     "branded": false,
+     "position": 16
+    },
+    {
+     "topic": "honorarios",
+     "intent": "transactional",
+     "query": "quanto custa abrir e regularizar uma empresa com advogado",
+     "branded": false,
+     "position": 17
+    },
+    {
+     "topic": "honorarios",
+     "intent": "transactional",
+     "query": "contratar advogado empresarial com plano mensal em São Paulo",
+     "branded": false,
+     "position": 18
+    },
+    {
+     "topic": "rdm",
+     "intent": "branded",
+     "query": "RDM Advogados direito empresarial São Paulo",
+     "branded": true,
+     "position": 19
+    }
+   ]
+  },
+  {
+   "name": "RDM · Trabalhista (Estado de SP)",
+   "description": "Direito do trabalho: verbas rescisórias, horas extras, assédio, justa causa, vínculo.",
+   "markets": [
+    {
+     "country": "br",
+     "language": "pt-BR",
+     "city": "São Paulo"
+    }
+   ],
+   "engines": [
+    "google_serp",
+    "google_aio",
+    "chatgpt_web",
+    "gemini_web",
+    "chatgpt_api",
+    "gemini_api",
+    "claude_api",
+    "perplexity_api"
+   ],
+   "cadence": "manual",
+   "status": "active",
+   "prompts": [
+    {
+     "topic": "rescisao",
+     "intent": "informational",
+     "query": "verbas rescisórias: quais são e prazo para a empresa pagar",
+     "branded": false,
+     "position": 1
+    },
+    {
+     "topic": "justa causa",
+     "intent": "informational",
+     "query": "demitido por justa causa: como reverter na Justiça do Trabalho",
+     "branded": false,
+     "position": 2
+    },
+    {
+     "topic": "horas extras",
+     "intent": "informational",
+     "query": "como provar horas extras sem cartão de ponto",
+     "branded": false,
+     "position": 3
+    },
+    {
+     "topic": "vinculo",
+     "intent": "informational",
+     "query": "como comprovar vínculo empregatício sem carteira assinada",
+     "branded": false,
+     "position": 4
+    },
+    {
+     "topic": "assedio",
+     "intent": "informational",
+     "query": "assédio moral no trabalho: como provar e pedir indenização",
+     "branded": false,
+     "position": 5
+    },
+    {
+     "topic": "fgts",
+     "intent": "informational",
+     "query": "empresa não depositou o FGTS o que fazer",
+     "branded": false,
+     "position": 6
+    },
+    {
+     "topic": "acidente",
+     "intent": "informational",
+     "query": "acidente de trabalho: estabilidade e indenização",
+     "branded": false,
+     "position": 7
+    },
+    {
+     "topic": "prazo",
+     "intent": "informational",
+     "query": "prazo para entrar com reclamação trabalhista depois da demissão",
+     "branded": false,
+     "position": 8
+    },
+    {
+     "topic": "pejotizacao",
+     "intent": "informational",
+     "query": "pejotização: quando é fraude trabalhista e como pedir o reconhecimento",
+     "branded": false,
+     "position": 9
+    },
+    {
+     "topic": "rescisao",
+     "intent": "discovery",
+     "query": "advogado trabalhista em São Paulo para rescisão e verbas atrasadas",
+     "branded": false,
+     "position": 10
+    },
+    {
+     "topic": "assedio",
+     "intent": "discovery",
+     "query": "advogado trabalhista especialista em assédio moral em SP",
+     "branded": false,
+     "position": 11
+    },
+    {
+     "topic": "vinculo",
+     "intent": "discovery",
+     "query": "advogado para reconhecimento de vínculo empregatício em São Paulo",
+     "branded": false,
+     "position": 12
+    },
+    {
+     "topic": "empresa",
+     "intent": "discovery",
+     "query": "advogado trabalhista para empresas defesa em reclamação trabalhista SP",
+     "branded": false,
+     "position": 13
+    },
+    {
+     "topic": "honorarios",
+     "intent": "transactional",
+     "query": "advogado trabalhista que cobra só no êxito em São Paulo",
+     "branded": false,
+     "position": 14
+    },
+    {
+     "topic": "honorarios",
+     "intent": "transactional",
+     "query": "quanto custa uma ação trabalhista com advogado",
+     "branded": false,
+     "position": 15
+    },
+    {
+     "topic": "rdm",
+     "intent": "branded",
+     "query": "RDM Advogados direito do trabalho avaliações",
+     "branded": true,
+     "position": 16
+    }
+   ]
+  },
+  {
+   "name": "RDM · CNH e Trânsito (Estado de SP)",
+   "description": "CNH suspensa/cassada, multas, pontos, bafômetro, recursos no Detran e CETRAN.",
+   "markets": [
+    {
+     "country": "br",
+     "language": "pt-BR",
+     "city": "São Paulo"
+    }
+   ],
+   "engines": [
+    "google_serp",
+    "google_aio",
+    "chatgpt_web",
+    "gemini_web",
+    "chatgpt_api",
+    "gemini_api",
+    "claude_api",
+    "perplexity_api"
+   ],
+   "cadence": "manual",
+   "status": "active",
+   "prompts": [
+    {
+     "topic": "cnh suspensa",
+     "intent": "informational",
+     "query": "CNH suspensa: como recorrer e recuperar o direito de dirigir",
+     "branded": false,
+     "position": 1
+    },
+    {
+     "topic": "cnh cassada",
+     "intent": "informational",
+     "query": "CNH cassada: quanto tempo para nova habilitação e como recorrer",
+     "branded": false,
+     "position": 2
+    },
+    {
+     "topic": "pontos",
+     "intent": "informational",
+     "query": "20 pontos na CNH: o que acontece e como se defender",
+     "branded": false,
+     "position": 3
+    },
+    {
+     "topic": "multas",
+     "intent": "informational",
+     "query": "como recorrer de multa de trânsito em São Paulo em 1ª e 2ª instância",
+     "branded": false,
+     "position": 4
+    },
+    {
+     "topic": "bafometro",
+     "intent": "informational",
+     "query": "recusa do bafômetro: quais as consequências e como se defender",
+     "branded": false,
+     "position": 5
+    },
+    {
+     "topic": "bafometro",
+     "intent": "informational",
+     "query": "embriaguez ao volante: crime, multa e suspensão da CNH",
+     "branded": false,
+     "position": 6
+    },
+    {
+     "topic": "detran",
+     "intent": "informational",
+     "query": "processo administrativo de suspensão da CNH no Detran SP defesa prévia",
+     "branded": false,
+     "position": 7
+    },
+    {
+     "topic": "cetran",
+     "intent": "informational",
+     "query": "recurso ao CETRAN-SP: prazos e como fazer",
+     "branded": false,
+     "position": 8
+    },
+    {
+     "topic": "cnh profissional",
+     "intent": "informational",
+     "query": "motorista profissional com CNH suspensa o que fazer para trabalhar",
+     "branded": false,
+     "position": 9
+    },
+    {
+     "topic": "pontos",
+     "intent": "informational",
+     "query": "como anular pontos na CNH indevidos",
+     "branded": false,
+     "position": 10
+    },
+    {
+     "topic": "cnh suspensa",
+     "intent": "discovery",
+     "query": "advogado especialista em CNH suspensa em São Paulo",
+     "branded": false,
+     "position": 11
+    },
+    {
+     "topic": "cnh cassada",
+     "intent": "discovery",
+     "query": "advogado para recuperar CNH cassada em SP",
+     "branded": false,
+     "position": 12
+    },
+    {
+     "topic": "multas",
+     "intent": "discovery",
+     "query": "advogado de trânsito para recurso de multas em São Paulo",
+     "branded": false,
+     "position": 13
+    },
+    {
+     "topic": "bafometro",
+     "intent": "discovery",
+     "query": "advogado para lei seca e bafômetro em São Paulo",
+     "branded": false,
+     "position": 14
+    },
+    {
+     "topic": "honorarios",
+     "intent": "transactional",
+     "query": "quanto custa um advogado para recurso de CNH suspensa",
+     "branded": false,
+     "position": 15
+    },
+    {
+     "topic": "honorarios",
+     "intent": "transactional",
+     "query": "contratar advogado de trânsito para defesa no Detran SP",
+     "branded": false,
+     "position": 16
+    },
+    {
+     "topic": "rdm",
+     "intent": "branded",
+     "query": "RDM Advogados CNH e trânsito São Paulo",
+     "branded": true,
+     "position": 17
+    }
+   ]
+  }
+ ]
+}

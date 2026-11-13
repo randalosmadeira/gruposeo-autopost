@@ -121,3 +121,7 @@ verify_jwt = false
 # nexus-audit: o cron envia x-zica-automation-key (hash em automation_ingress_keys); chamadas de usuário validam o JWT dentro da função.
 [functions.nexus-audit]
 verify_jwt = false
+
+# nexus-visibility: painel de visibilidade (ZVI); só usuário logado (o JWT é validado no gateway e dentro da função).
+[functions.nexus-visibility]
+verify_jwt = true
