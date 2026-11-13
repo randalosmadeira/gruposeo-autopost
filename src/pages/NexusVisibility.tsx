@@ -19,6 +19,7 @@ import '@/components/nexus-visibility/visibility.css';
 import { useToast } from '@/hooks/use-toast';
 import { useOrganizationConsole } from '@/hooks/useOrganizationConsole';
 import { useProjects } from '@/hooks/useProjects';
+import { usePreferredProject } from '@/hooks/usePreferredProject';
 import { useNexusProviders, useNow } from '@/hooks/useNexusProviders';
 import {
   useCompetitorActions, useSeenOptions, useVisibilityCompetitors, useVisibilityHistory, useVisibilityKeywords, useVisibilityMethodology,
@@ -61,8 +62,8 @@ export default function NexusVisibility() {
     }, { replace: true });
   }, [setParams]);
 
-  const [projectId, setProjectId] = useState('');
-  const selected = projectId || projects[0]?.id || '';
+  // Projeto padrão: o último escolhido ou o mais pronto (perfil completo + site conectado), não o primeiro da lista.
+  const { selected, select: setProjectId } = usePreferredProject(projects);
   const selectedProject = projects.find((p) => p.id === selected);
   const [requestDialog, setRequestDialog] = useState<{ kind: RequestKind; message: string } | null>(null);
   const [sourceType, setSourceType] = useState<SourceType | ''>('');

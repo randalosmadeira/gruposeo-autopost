@@ -28,6 +28,8 @@ import { useOrganizationConsole } from '@/hooks/useOrganizationConsole';
 import { useGa4Actions, useGa4Summary, useProjectIntegrations } from '@/hooks/useNexusAnalytics';
 import { useNexusRequestActions, useNexusRequests, useNexusRequestsRealtime } from '@/hooks/useNexusRequests';
 import { useProjects } from '@/hooks/useProjects';
+import { usePreferredProject } from '@/hooks/usePreferredProject';
+import { SerperPlans } from '@/components/nexus/SerperPlans';
 import { useNexusProviderActions, useNexusProviders, useNexusRealtime, useNow, useSearchPerformance } from '@/hooks/useNexusProviders';
 import { rangeForDays } from '@/lib/nexus-observatory';
 import {
@@ -50,8 +52,8 @@ export default function NexusProviders() {
   const { projects } = useProjects();
   const consoleQuery = useOrganizationConsole();
 
-  const [projectId, setProjectId] = useState('');
-  const selected = projectId || projects[0]?.id || '';
+  // Projeto padrão: o último escolhido ou o mais pronto (perfil completo + site conectado), não o primeiro da lista.
+  const { selected, select: setProjectId } = usePreferredProject(projects);
   const selectedProject = projects.find((p) => p.id === selected);
   const [tab, setTab] = useState<TabValue>('all');
   const [connectId, setConnectId] = useState<ProviderId | null>(null);
@@ -368,7 +370,8 @@ export default function NexusProviders() {
             </TabsContent>
           </Tabs>
 
-          {/* Execução paga é decisão do gestor: o cliente nem vê o painel. */}
+          {/* Planejamento de coletas e execução paga são decisões do gestor: o cliente nem vê esses painéis. */}
+          {canManage && <SerperPlans projectId={selected || undefined} />}
           {canManage && (
             <ExecutionPanel
               program={overview.program ?? EMPTY_PROGRAM} connected={connected} canAdmin={canManage}
