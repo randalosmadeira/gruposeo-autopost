@@ -8,7 +8,7 @@ import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { buildProvidersOverview } from "./nexus-providers.ts";
 import {
   canManagerOperateOnForeignProject, checkActionPolicy, findingsForViewer, ga4ErrorStatus, integrationsRpcError, integrationsView, isManagerOnlyAction, isSystemRuleId,
-  isTechnicalAction, isUuid, loadViewer, MANAGER_ONLY_ACTIONS, MEMBER_ACTIONS, makeManagementStore, normalizeGscProperty, parseIntegrationsInput, parseRequestCreate,
+  isCollectionPlanning, isTechnicalAction, isUuid, loadViewer, MANAGER_ONLY_ACTIONS, MEMBER_ACTIONS, makeManagementStore, normalizeGscProperty, parseIntegrationsInput, parseRequestCreate,
   parseRequestsFilter, parseRequestUpdate, redactFindingForClient, redactOverviewForClient, requestRpcError, resolveViewer, simpleStatus, TECHNICAL_ACTIONS,
   type ManagementStore, type Viewer,
 } from "./nexus-management.ts";
@@ -304,4 +304,14 @@ Deno.test("erros do RPC de integrações e do ga4_sync mapeiam para HTTP estáve
   assertEquals(integrationsRpcError("project_forbidden"), { error: "project_forbidden", status: 403 });
   assertEquals(integrationsRpcError("boom"), { error: "integrations_not_saved", status: 500 });
   assertEquals(["ga4_not_configured", "ga4_property_required", "ga4_forbidden", "ga4_quota", "ga4_unreachable", "ga4_request_failed", "upsert_failed:x", "secret_unavailable"].map(ga4ErrorStatus), [409, 409, 403, 429, 502, 502, 502, 502]);
+});
+
+Deno.test("planejar coleta paga: prepare de serp/ai_observation/pilot, prepare_pilot e prepare_prompt_run são da gestão; editorial não", () => {
+  for (const kind of ["serp", "ai_observation", "pilot"]) assert(isCollectionPlanning("prepare", kind), kind);
+  assert(isCollectionPlanning("prepare_pilot"));
+  assert(isCollectionPlanning("prepare_prompt_run"));
+  assertFalse(isCollectionPlanning("prepare", "editorial_review"), "revisão editorial do cliente segue livre");
+  assertFalse(isCollectionPlanning("prepare"));
+  assertFalse(isCollectionPlanning("prepare", 3));
+  for (const a of ["execute", "status", "observatory", "import_observation", "prepare_clusters", "providers_overview", undefined, 7]) assertFalse(isCollectionPlanning(a, "serp"), String(a));
 });

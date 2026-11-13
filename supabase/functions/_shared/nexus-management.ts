@@ -98,6 +98,16 @@ export const MANAGER_PROJECT_ACTIONS: readonly string[] = [...TECHNICAL_ACTIONS,
 const has = (list: readonly string[], v: unknown) => typeof v === 'string' && list.includes(v);
 export const isTechnicalAction = (v: unknown) => has(TECHNICAL_ACTIONS, v);
 export const isManagerOnlyAction = (v: unknown) => has(MANAGER_ONLY_ACTIONS, v);
+
+/**
+ * Planejar coleta paga é da conta de gerenciamento, como executar (decisão do dono, 13/11/2026): `prepare` de operações `serp`,
+ * `ai_observation` ou `pilot`, `prepare_pilot` e `prepare_prompt_run`. `prepare` de `editorial_review` (revisão do cliente) não é afetado.
+ * Usa a mesma regra `execute_collection`. Não faz chamada paga: só decide quem pode preparar.
+ */
+export function isCollectionPlanning(action: unknown, kind?: unknown): boolean {
+  if (action === 'prepare_pilot' || action === 'prepare_prompt_run') return true;
+  return action === 'prepare' && (kind === 'serp' || kind === 'ai_observation' || kind === 'pilot');
+}
 export const canManagerOperateOnForeignProject = (v: unknown) => has(MANAGER_PROJECT_ACTIONS, v);
 
 export type PolicyDecision = { ok: true } | { ok: false; error: 'manager_required' };

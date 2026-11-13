@@ -560,6 +560,7 @@ export function providerHealthMessage(h: Pick<HealthCheckResult, 'ok' | 'skipped
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
+  provider_not_connected: 'Algum provedor marcado não está conectado ou está com a chave recusada. Desmarque-o ou troque a chave e tente de novo.',
   forbidden: 'Só proprietário ou administrador da organização pode fazer esta ação.',
   provider_invalid: 'Provedor desconhecido.',
   provider_not_configured: 'Este provedor ainda não tem credencial guardada.',
@@ -767,8 +768,10 @@ export function filterByCategory(items: ProviderOverviewItem[], category: Provid
 }
 
 /** Provedores que podem ser habilitados para execução paga: credencial guardada e não manual. */
+/** Provedores que podem ser habilitados para execução paga: credencial guardada E aceita (ativa ou ainda não testada). Chave inválida, revogada ou pausada fica de fora, como no servidor. */
 export function connectedProviderIds(items: ProviderOverviewItem[]): ProviderId[] {
-  return items.filter((i) => i.credential.stored && i.category !== 'manual').map((i) => i.id);
+  const usable = (status: string | null | undefined) => status == null || status === 'active' || status === 'stored_unverified';
+  return items.filter((i) => i.credential.stored && i.category !== 'manual' && usable(i.credential.status)).map((i) => i.id);
 }
 
 /** O cartão "Ativação guiada dos gratuitos" some quando GSC e Bing estão conectados e saudáveis. */

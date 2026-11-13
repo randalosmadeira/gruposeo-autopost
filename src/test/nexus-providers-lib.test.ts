@@ -312,6 +312,18 @@ describe('visão geral', () => {
     expect(connectedProviderIds(items)).toEqual(['openai']);
   });
 
+  it('connectedProviderIds só oferece chave aceita (ativa ou não testada): inválida, revogada e pausada ficam de fora, como no servidor', () => {
+    const com = (id: string, status: string | null) => (i: ReturnType<typeof mergeCatalogWithOverview>[number]) => (i.id === id ? { ...i, credential: { ...i.credential, stored: true, status } } : i);
+    let items = mergeCatalogWithOverview(undefined);
+    for (const [id, status] of [['openai', 'active'], ['anthropic', 'stored_unverified'], ['dataforseo', 'invalid'], ['serper', 'paused'], ['brave', 'revoked'], ['gemini', null]] as const) items = items.map(com(id, status));
+    expect(connectedProviderIds(items).sort()).toEqual(['anthropic', 'gemini', 'openai']);
+    expect(connectedProviderIds(items)).not.toContain('dataforseo');
+  });
+
+  it('o erro provider_not_connected vira mensagem em português (não o código cru)', () => {
+    expect(providerErrorMessage(new Error('provider_not_connected'))).toMatch(/não está conectado ou está com a chave recusada/);
+  });
+
   it('latestCheckAt e healthStripText', () => {
     const a = item('openai', { health: { last: { checked_at: '2026-11-12T11:59:00Z', ok: true }, checks_7d: 1, ok_7d: 1, avg_latency_ms_7d: 10 } });
     const b = item('gemini', { health: { last: { checked_at: '2026-11-12T12:00:00Z', ok: true }, checks_7d: 1, ok_7d: 1, avg_latency_ms_7d: 10 } });

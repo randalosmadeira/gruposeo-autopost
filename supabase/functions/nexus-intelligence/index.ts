@@ -12,7 +12,7 @@ import { isPluginModeProject, resolvePluginKey, resolvePluginNamespace, pluginRe
 import { runCollector } from "../_shared/nexus-collectors.ts";
 import { syncSearchPerformance } from "../_shared/nexus-search-sync.ts";
 import { syncGa4, isValidPropertyId } from '../_shared/nexus-ga4.ts';
-import { canManagerOperateOnForeignProject, checkActionPolicy, ga4ErrorStatus, integrationsRpcError, integrationsView, isManagerOnlyAction, isTechnicalAction, isUuid, loadViewer, makeManagementStore, parseIntegrationsInput, parseRequestCreate, parseRequestsFilter, parseRequestUpdate, redactOverviewForClient, requestRpcError, type ViewerContext } from '../_shared/nexus-management.ts';
+import { canManagerOperateOnForeignProject, checkActionPolicy, isCollectionPlanning, ga4ErrorStatus, integrationsRpcError, integrationsView, isManagerOnlyAction, isTechnicalAction, isUuid, loadViewer, makeManagementStore, parseIntegrationsInput, parseRequestCreate, parseRequestsFilter, parseRequestUpdate, redactOverviewForClient, requestRpcError, type ViewerContext } from '../_shared/nexus-management.ts';
 import { editorialFingerprint, signEditorialReceipt } from "../_shared/nexus-approval.ts";
 import { normalizeEditorialHtml } from "../_shared/editorial-html.ts";
 const cors = { "Access-Control-Allow-Origin":"*", "Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods":"POST, OPTIONS", "Content-Type":"application/json" };
@@ -59,6 +59,11 @@ Deno.serve(async req=>{
    if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
    const decision=checkActionPolicy(action,(await getViewer()).viewer);
    if(!decision.ok)return json({error:decision.error},403);
+  }
+  // Planejar coleta paga (prepare de serp/ai_observation/pilot, prepare_pilot, prepare_prompt_run): só a conta de gerenciamento. Não afeta editorial_review.
+  if(actor.mode==='user'&&isCollectionPlanning(action,body.kind)){
+   const planningPolicy=checkActionPolicy('execute_collection',(await getViewer()).viewer);
+   if(!planningPolicy.ok)return json({error:planningPolicy.error,executed:false},403);
   }
   if(body.action==='status'){
    const [program,operations,credentials,jobs]=await Promise.all([
