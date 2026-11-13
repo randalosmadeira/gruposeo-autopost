@@ -2,7 +2,8 @@ import '../_shared/nexus-runtime-bootstrap.ts';
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { editorialFingerprint, signEditorialReceipt, verifyEditorialReceipt } from '../_shared/nexus-approval.ts';
-import { importedReviewIssues, sha256, tokenMatches } from '../_shared/nexus-review-import.ts';
+import { importedReviewComplianceWarnings, importedReviewIssues, sha256, tokenMatches } from '../_shared/nexus-review-import.ts';
+import { resolveComplianceMode } from '../_shared/compliance-mode.ts';
 const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': 'https://app.zica.posts.zicajuris.com.br', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
 Deno.serve(async req => {
@@ -22,13 +23,15 @@ Deno.serve(async req => {
     if (!Array.isArray(job.manifest) || !job.manifest.length || job.manifest.length > 25) return json({ error: 'manifest_invalid' }, 422);
     const { data: articles, error } = await admin.from('articles').select('*').eq('project_id', job.project_id).eq('user_id', job.user_id).eq('organization_id', job.organization_id).in('id', job.manifest.map((i: any) => i.article_id));
     if (error || articles?.length !== job.manifest.length) return json({ error: 'scope_incomplete' }, 409);
+    const complianceMode = await resolveComplianceMode(admin, job.organization_id);
     const results = [];
     for (const item of job.manifest) {
       const article = articles.find((a: any) => a.id === item.article_id)!;
       const hash = await editorialFingerprint(article, project);
       const valid = article.config?.nexus_approval?.review_mode === 'autonomous' && await verifyEditorialReceipt(article.config.nexus_approval, hash, key);
-      const issues = await importedReviewIssues(item, article, project, job, valid);
-      results.push({ article_id: article.id, hash, valid, issues });
+      const issues = await importedReviewIssues(item, article, project, job, valid, complianceMode);
+      // Modo aviso: o achado de publicidade não reprova a importação; fica registrado no resultado.
+      results.push({ article_id: article.id, hash, valid, issues, compliance_warnings: importedReviewComplianceWarnings(article, project, complianceMode) });
     }
     if (body.action === 'inspect') return json({ results, paid_execution: false, published: false, scheduled: false });
     if (results.some(r => r.issues.length)) return json({ error: 'review_import_rejected', results }, 409);

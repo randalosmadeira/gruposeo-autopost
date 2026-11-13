@@ -1,7 +1,9 @@
 import { normalizeEditorialHtml } from './editorial-html.ts';
 import { publicationWordMinimum } from './nexus-word-floor.ts';
 import { findPublicationResidues } from './publication-safety.ts';
-import { findComplianceViolations, findBrokenContactCtas } from './publication-quality.ts';
+import { findBrokenContactCtas } from './publication-quality.ts';
+import { DEFAULT_COMPLIANCE_MODE, runComplianceCheck, type ComplianceMode } from './compliance-mode.ts';
+import type { QualityIssue } from './publication-quality.ts';
 export async function sha256(value: string): Promise<string> {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map(b => b.toString(16).padStart(2, '0')).join('');
 }
@@ -15,8 +17,13 @@ export interface ImportedReview {
   approved_vector_sha256?: string;
   verdict: { dimensions: Record<string, boolean>; unsupported_claims: string[]; issues: string[]; notes: string; provenance: string };
 }
+/** Achados do Provimento 205/2021 segundo o modo da organização: strict bloqueia (via importedReviewIssues), advisory só avisa, off ignora. */
+export function importedReviewComplianceWarnings(article: Record<string, unknown>, project: Record<string, unknown>, complianceMode: ComplianceMode = DEFAULT_COMPLIANCE_MODE): QualityIssue[] {
+  const text = (value: unknown) => (typeof value === 'string' ? value : null);
+  return runComplianceCheck(complianceMode, { title: text(article.title), content: text(article.content), excerpt: text(article.excerpt), brand: text(project.empresa_nome) }).warnings;
+}
 /** Only called on a manifest loaded from the service-only inbox, never request JSON or article.config. */
-export async function importedReviewIssues(item: ImportedReview, article: Record<string, any>, project: Record<string, any>, job: Record<string, any>, alreadyApproved = false): Promise<string[]> {
+export async function importedReviewIssues(item: ImportedReview, article: Record<string, any>, project: Record<string, any>, job: Record<string, any>, alreadyApproved = false, complianceMode: ComplianceMode = DEFAULT_COMPLIANCE_MODE): Promise<string[]> {
   const issues: string[] = []; const c = article.config || {}; const v = item.verdict;
   if (article.id !== item.article_id || article.project_id !== job.project_id || article.user_id !== job.user_id || article.organization_id !== job.organization_id || project.organization_id !== job.organization_id || project.user_id !== job.user_id) issues.push('scope_mismatch');
   if (project.nexus_profile_status !== 'complete') issues.push('profile_incomplete');
@@ -26,7 +33,7 @@ export async function importedReviewIssues(item: ImportedReview, article: Record
   if (article.status !== 'ready' || article.scheduled_at || article.published_at) issues.push('not_unscheduled_finalized');
   const audit = normalizeEditorialHtml(String(article.content || '')); issues.push(...audit.fatalIssues);
   if (audit.metrics.wordCount < publicationWordMinimum(c)) issues.push('article_below_word_minimum');
-  if (findPublicationResidues(article).length || findBrokenContactCtas(article.content).length || findComplianceViolations({ ...article, brand: project.empresa_nome }).length) issues.push('publication_quality_failure');
+  if (findPublicationResidues(article).length || findBrokenContactCtas(article.content).length || runComplianceCheck(complianceMode, { ...article, brand: project.empresa_nome }).blocking) issues.push('publication_quality_failure');
   if (c.needs_primary_source || c.review_pass === false) issues.push('existing_editorial_failure');
   // Legacy waves store claim locators in primary_sources and the URL catalog in sourcesContext.
   const sources = [...(Array.isArray(c.primary_sources) ? c.primary_sources : []), ...Object.values(c.sourcesContext && typeof c.sourcesContext === 'object' ? c.sourcesContext : {})];

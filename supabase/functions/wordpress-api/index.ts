@@ -17,6 +17,7 @@ type Input = {
   perPage?: number;
   categories?: Array<number | string>;
   allowCrossProject?: boolean;
+  acknowledgeCompliance?: boolean;
   publishStatus?: "draft" | "publish";
 };
 
@@ -142,7 +143,7 @@ Deno.serve(async (req: Request) => {
       const response = await fetch(`${supabaseUrl}/functions/v1/publish-to-wordpress`, {
         method: "POST",
         headers: { Authorization: req.headers.get("Authorization") || "", apikey: req.headers.get("apikey") || "", "Content-Type": "application/json" },
-        body: JSON.stringify({ articleId: input.articleId, projectId: project.id, publishStatus: input.publishStatus || "publish", allowCrossProject: input.allowCrossProject === true, categories: input.categories || [] }),
+        body: JSON.stringify({ articleId: input.articleId, projectId: project.id, publishStatus: input.publishStatus || "publish", allowCrossProject: input.allowCrossProject === true, categories: input.categories || [], acknowledgeCompliance: input.acknowledgeCompliance === true }),
         signal: AbortSignal.timeout(90000),
       });
       const { data } = await readBody(response);

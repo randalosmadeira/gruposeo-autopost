@@ -23,7 +23,7 @@ export function useWordPressPublish() {
   const [publishedArticles, setPublishedArticles] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
-  const publishArticle = useCallback(async (article: Article): Promise<PublishResult> => {
+  const publishArticle = useCallback(async (article: Article, options?: { acknowledgeCompliance?: boolean }): Promise<PublishResult> => {
     if (!article.project_id) {
       toast({
         title: 'Erro',
@@ -40,6 +40,7 @@ export function useWordPressPublish() {
         projectId: article.project_id,
         publishStatus: 'publish',
         scheduledAt: article.scheduled_at || null,
+        acknowledgeCompliance: options?.acknowledgeCompliance === true,
       }) as PublishResult;
 
       if (data.scheduled) {

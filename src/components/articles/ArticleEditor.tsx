@@ -9,6 +9,9 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useComplianceMode } from '@/hooks/useComplianceMode';
+import { runComplianceCheck, type QualityIssue } from '@/lib/compliance-mode';
+import { ComplianceAdvisoryDialog } from './ComplianceAdvisoryDialog';
 import { sanitizeHTML } from '@/lib/sanitize';
 import { ArticleEditorToolbar } from './editor/ArticleEditorToolbar';
 import { ArticleEditorContent } from './editor/ArticleEditorContent';
@@ -51,7 +54,7 @@ interface Article {
 interface ArticleEditorProps {
   article: Article;
   onSave?: (article: Article) => void | Promise<void>;
-  onPublish?: (article: Article) => void | Promise<void>;
+  onPublish?: (article: Article, options?: { acknowledgeCompliance?: boolean }) => void | Promise<void>;
   isPublishing?: boolean;
 }
 
@@ -116,6 +119,8 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
   const [isRegenerating, setIsRegenerating] = useState<'title' | 'excerpt' | 'image' | 'content' | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
+  const [pendingComplianceIssues, setPendingComplianceIssues] = useState<QualityIssue[]>([]);
+  const { mode: complianceMode } = useComplianceMode();
   const { toast } = useToast();
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -256,7 +261,7 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
     };
   }, [editedArticle, hasChanges, isSaving]);
 
-  const handlePublish = async () => {
+  const handlePublish = async (acknowledgeCompliance = false) => {
     const contentText = (editedArticle.content || '').replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, ' ').trim();
     if (!contentText || contentText.length < 50) {
       toast({
@@ -267,9 +272,18 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
       return;
     }
 
+    // Modo aviso: mostra os pontos de publicidade antes de publicar; "Publicar mesmo assim (ciente)" segue em frente.
+    if (!acknowledgeCompliance && complianceMode === 'advisory') {
+      const { warnings } = runComplianceCheck(complianceMode, { title: editedArticle.title, content: editedArticle.content, excerpt: editedArticle.excerpt });
+      if (warnings.length > 0) {
+        setPendingComplianceIssues(warnings);
+        return;
+      }
+    }
+
     try {
       const articleToPublish = hasChanges ? await persistArticle(false) : editedArticle;
-      await onPublish?.(articleToPublish);
+      await onPublish?.(articleToPublish, acknowledgeCompliance ? { acknowledgeCompliance: true } : undefined);
     } catch (error) {
       console.error('Publish preparation error:', error);
       toast({
@@ -429,7 +443,7 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
           </Button>
           <Button
             size="sm"
-            onClick={() => void handlePublish()}
+            onClick={() => void handlePublish(false)}
             disabled={isPublishing || isSaving}
             className="gap-2"
           >
@@ -458,6 +472,12 @@ export function ArticleEditor({ article, onSave, onPublish, isPublishing }: Arti
         articleId={editedArticle.id}
         articleTitle={editedArticle.title}
         articleKeyword={editedArticle.keyword}
+      />
+
+      <ComplianceAdvisoryDialog
+        issues={pendingComplianceIssues}
+        onRevise={() => setPendingComplianceIssues([])}
+        onPublishAnyway={() => { setPendingComplianceIssues([]); void handlePublish(true); }}
       />
 
       <div className="flex flex-1 overflow-hidden">

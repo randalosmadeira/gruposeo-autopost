@@ -5,7 +5,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 import { ensureEditorialHeadingStructure, normalizeEditorialHtml } from "../_shared/editorial-html.ts";
 import { findPublicationResidues, repairPublicationResidues, resolveMetaDescription } from "../_shared/publication-safety.ts";
-import { evaluateTitleQuality, findBrokenContactCtas, findComplianceViolations, lookupPublishedSlug, normalizeSlugForLookup, repairBrokenContactCtas, repairCommonTitleTypos, repairSolicitationCtas } from "../_shared/publication-quality.ts";
+import { evaluateTitleQuality, findBrokenContactCtas, lookupPublishedSlug, normalizeSlugForLookup, repairBrokenContactCtas, repairCommonTitleTypos, repairSolicitationCtas } from "../_shared/publication-quality.ts";
+import { buildComplianceAdvisoryRecord, resolveComplianceMode, runComplianceCheck } from "../_shared/compliance-mode.ts";
 import { buildArticleJsonLd } from "../_shared/schema-builder.ts";
 import { mapSegmentToSector } from "../_shared/sector-config.ts";
 import { isPluginModeProject, pluginRequest, resolvePluginKey, resolvePluginNamespace } from "../_shared/wordpress-plugin-client.ts";
@@ -28,6 +29,8 @@ type PublishRequest = {
   categories?: Array<number | string>;
   tags?: Array<number | string>;
   automated?: boolean;
+  /** O usuário viu os avisos de publicidade (modo aviso) e escolheu publicar mesmo assim. */
+  acknowledgeCompliance?: boolean;
 };
 
 function json(body: unknown, status = 200) {
@@ -325,17 +328,24 @@ Deno.serve(async (req: Request) => {
         request_id: requestId,
       }, 409);
     }
-    const complianceViolations = findComplianceViolations({ title: article.title, content: article.content, excerpt: article.excerpt || config.seo_description, brand: project.empresa_nome });
-    if (complianceViolations.length > 0) {
+    // Modo de conformidade da organização (off | advisory | strict). Só o rígido bloqueia, como antes.
+    const complianceMode = await resolveComplianceMode(admin, article.organization_id);
+    const compliance = runComplianceCheck(complianceMode, { title: article.title, content: article.content, excerpt: article.excerpt || config.seo_description, brand: project.empresa_nome });
+    if (compliance.blocking) {
       return json({
         success: false,
         error: "Publicação bloqueada: texto viola o padrão de publicidade (promessa de resultado, superlativo, comparação, urgência comercial ou captação direta).",
         code: "compliance_gate",
-        issues: complianceViolations,
+        issues: compliance.warnings,
         retryable: false,
         request_id: requestId,
       }, 409);
     }
+    const complianceAdvisory = buildComplianceAdvisoryRecord({
+      mode: complianceMode,
+      warnings: compliance.warnings,
+      acknowledgedBy: body.acknowledgeCompliance === true && body.automated !== true ? userId : null,
+    });
     if (status === "publish" && !article.published_url) {
       const slugForLookup = normalizeSlugForLookup(article.slug, article.title);
       const existing = await lookupPublishedSlug(String(project.wordpress_url), slugForLookup);
@@ -438,6 +448,8 @@ Deno.serve(async (req: Request) => {
       editorial_structure_inserted_headings: structureRepair.insertedHeadings,
       broken_contact_cta_auto_repaired: ctaRepair.repaired,
     };
+    if (complianceAdvisory) normalizedConfig.compliance_advisory = complianceAdvisory;
+    else delete normalizedConfig.compliance_advisory;
     const normalizedArticle = {
       ...article,
       content: audit.html,
@@ -558,6 +570,8 @@ Deno.serve(async (req: Request) => {
       endpointMode: result.endpointMode,
       credentialSource,
       metaDescription,
+      compliance_mode: complianceMode,
+      compliance_warnings: complianceAdvisory ? complianceAdvisory.issues : [],
       editorial: { version: "2.1.0", issues: audit.issues, metrics: audit.metrics },
       hreflangSync,
       request_id: requestId,

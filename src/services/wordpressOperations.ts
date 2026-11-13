@@ -74,6 +74,8 @@ export async function publishWordPressArticle(params: {
   projectId: string;
   publishStatus?: 'draft' | 'publish';
   scheduledAt?: string | null;
+  /** Modo aviso de publicidade: o usuário viu os avisos e confirmou "publicar mesmo assim". */
+  acknowledgeCompliance?: boolean;
 }) {
   return invoke<Record<string, unknown>>({ action: 'publish', ...params });
 }

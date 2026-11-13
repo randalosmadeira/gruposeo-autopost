@@ -48,6 +48,7 @@ type PublicationRow = {
   status: PublishState;
   error?: string;
   url?: string;
+  complianceWarnings?: number;
 };
 
 interface BulkPublishModalProps {
@@ -249,7 +250,7 @@ export function BulkPublishModal({ isOpen, onClose, selectedArticles, projects, 
         setRows((current) => current.map((item) => item.key === row.key ? { ...item, status: 'error', error: message } : item));
         return false;
       }
-      setRows((current) => current.map((item) => item.key === row.key ? { ...item, status: 'success', url: data.postUrl } : item));
+      setRows((current) => current.map((item) => item.key === row.key ? { ...item, status: 'success', url: data.postUrl, complianceWarnings: Array.isArray(data.compliance_warnings) ? data.compliance_warnings.length : 0 } : item));
       return true;
     } catch (error) {
       setRows((current) => current.map((item) => item.key === row.key ? { ...item, status: 'error', error: error instanceof Error ? error.message : 'Erro inesperado' } : item));
@@ -387,7 +388,7 @@ export function BulkPublishModal({ isOpen, onClose, selectedArticles, projects, 
           {step === 'publishing' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between"><div><p className="font-semibold">Execução por destino</p><p className="text-sm text-muted-foreground">Cada publicação possui status próprio. Uma falha em um site não cancela os demais.</p></div><div className="flex gap-2"><Badge className="bg-emerald-500/10 text-emerald-400">{successCount} sucesso</Badge><Badge className="bg-red-500/10 text-red-400">{failedCount} falha</Badge></div></div>
-              {rows.map((row) => <div key={row.key} className="rounded-xl border border-border p-3"><div className="flex items-start gap-3"><div className="mt-0.5">{row.status === 'publishing' ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : row.status === 'success' ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : row.status === 'error' ? <AlertCircle className="h-4 w-4 text-red-400" /> : <div className="h-4 w-4 rounded-full border border-border" />}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{row.articleTitle}</p><p className="text-xs text-muted-foreground">{row.projectName}</p>{row.error && <p className="mt-1 whitespace-pre-line break-words text-xs text-red-400">{row.error}</p>}{row.url && <a className="mt-1 block truncate text-xs text-primary hover:underline" href={row.url} target="_blank" rel="noreferrer">{row.url}</a>}</div></div></div>)}
+              {rows.map((row) => <div key={row.key} className="rounded-xl border border-border p-3"><div className="flex items-start gap-3"><div className="mt-0.5">{row.status === 'publishing' ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : row.status === 'success' ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : row.status === 'error' ? <AlertCircle className="h-4 w-4 text-red-400" /> : <div className="h-4 w-4 rounded-full border border-border" />}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{row.articleTitle}</p><p className="text-xs text-muted-foreground">{row.projectName}</p>{row.error && <p className="mt-1 whitespace-pre-line break-words text-xs text-red-400">{row.error}</p>}{row.url && <a className="mt-1 block truncate text-xs text-primary hover:underline" href={row.url} target="_blank" rel="noreferrer">{row.url}</a>}{row.complianceWarnings ? <p className="mt-1 text-xs text-yellow-600">Publicado com {row.complianceWarnings === 1 ? '1 aviso' : `${row.complianceWarnings} avisos`} de publicidade (Provimento 205/2021). O aviso ficou registrado no artigo; revise o texto quando puder.</p> : null}</div></div></div>)}
               {!isPublishing && failedCount > 0 && <Button variant="outline" onClick={() => void startPublishing(true)}><RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente somente as falhas</Button>}
             </div>
           )}
