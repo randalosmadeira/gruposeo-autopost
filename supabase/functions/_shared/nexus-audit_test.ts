@@ -2,7 +2,7 @@
  * Testes do motor de auditoria (regras puras, achados, sondagens seguras, orquestrador e garantia de "nunca chamada paga").
  * Executar com: deno test supabase/functions/_shared/nexus-audit_test.ts
  */
-import { assert, assertEquals, assertFalse, assertRejects } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { assert, assertEquals, assertFalse, assertRejects, assertThrows } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   AUDIT_RULES, AuditBusyError, AuditBudgetExceeded, buildFindingUpdate, buildOverview, buildProjects, compareVersions, ContextUnavailable, createGuardedFetch,
   extractJsonLd, fingerprintOf, hasStrongOrganizationNode, isPaidProviderRequest, isPrivateIp, makeProbe, normalizeCronHealth, normalizeProgram, normalizeProviders,
@@ -10,7 +10,8 @@ import {
   ruleCostBudget80, ruleCostEnabledWithoutProvider, ruleExecutionEnabledInfo, ruleObservatoryNoPrompts, ruleObservatoryStale, rulePluginOutdated, rulePluginUnreachable,
   ruleProviderCheckFailed, ruleProviderFreeNotConnected, ruleProviderLatencyHigh, ruleProviderNeverVerified, ruleProviderQuotaLow, ruleProviderUnused30d,
   ruleRuntimeCronFailing, ruleRuntimeFunctionDown, ruleSearchNoData, ruleSearchSyncStale, ruleSecurityAnonWrite, ruleSecurityRlsOff, ruleSignalsNoBatch,
-  ruleSignalsSnippetMissing, ruleSiteLlmsMissing, ruleSiteSchemaThin,
+  ruleSignalsSnippetMissing, ruleSiteLlmsMissing, ruleSiteSchemaThin, FIX_TYPES, ruleGa4NotConnected, ruleGa4PropertyMissing, ruleGa4SyncStale, ruleGa4NoData,
+  ruleContentInternalLinksLow, ruleContentAreaUnclassifiedHigh,
   type AuditContext, type AuditDeps, type AuditRule, type AuditStore, type BaseData, type FindingPatch, type FindingRow, type NewFindingRow, type ProbeResult,
   type ProjectCtx, type ProviderSnapshot, type RuleEvaluation, type RuleOutput,
 } from './nexus-audit.ts';
@@ -34,7 +35,8 @@ const notStored = (id: string): ProviderSnapshot => provider(id, { credential: {
 const project = (over: Partial<ProjectCtx> = {}): ProjectCtx => ({
   id: PRJ, name: 'Site Teste', domain: 'site.example.com', base_url: 'https://site.example.com/blog', plugin_mode: true, plugin_namespace: 'zica-posts/v1', gsc_property: null,
   prompt_sets: 1, prompts: 3, last_observation_at: daysAgo(1), site_key: null,
-  search: { gsc: { rows: 10, last_day: '2026-11-10', last_synced_at: hoursAgo(1), last_full_sync_at: daysAgo(1) }, bing: { rows: 0, last_day: null, last_synced_at: null, last_full_sync_at: null } }, ...over,
+  search: { gsc: { rows: 10, last_day: '2026-11-10', last_synced_at: hoursAgo(1), last_full_sync_at: daysAgo(1) }, bing: { rows: 0, last_day: null, last_synced_at: null, last_full_sync_at: null } },
+  ga4_property_id: null, analytics: { rows: 0, last_day: null, last_synced_at: null, last_full_sync_at: null }, content_index: { total: 0, avg_internal_links: null, unclassified: 0 }, ...over,
 });
 function ctxOf(over: Partial<AuditContext> = {}): AuditContext {
   return {
@@ -321,9 +323,10 @@ Deno.test('cost.enabled_without_provider e execution.enabled_info', () => {
   assertEquals(ruleExecutionEnabledInfo(ctxOf({ program: prog(false, []) })).findings.length, 0);
 });
 
-Deno.test('catálogo: 23 regras com ids únicos e fix_actions somente da lista branca', () => {
-  assertEquals(AUDIT_RULES.length, 23);
-  assertEquals(new Set(AUDIT_RULES.map((r) => r.id)).size, 23);
+Deno.test('catálogo: 29 regras com ids únicos e fix_actions somente da lista branca', () => {
+  assertEquals(AUDIT_RULES.length, 29);
+  assertEquals(new Set(AUDIT_RULES.map((r) => r.id)).size, 29);
+  assertEquals([...FIX_TYPES], ['provider_health_check', 'search_performance_sync', 'analytics_sync', 'plugin_discovery_refresh', 'open_route']);
   for (const f of [parseFixAction({ type: 'provider_health_check', params: { provider: 'openai' } }), parseFixAction({ type: 'open_route', params: {} })]) assert(f.ok);
   for (const bad of [{ type: 'drop_table', params: {} }, { type: 'run_paid_execution', params: {} }, null, 'x']) assertFalse(parseFixAction(bad).ok);
 });
@@ -622,7 +625,7 @@ class MemStore implements AuditStore {
   loadFindings(_o: string, ruleIds: string[]): Promise<FindingRow[]> { return Promise.resolve(this.findings.filter((f) => ruleIds.includes(f.rule_id))); }
   insertFindings(rows: NewFindingRow[]): Promise<void> { for (const r of rows) this.findings.push({ ...r, id: crypto.randomUUID() }); return Promise.resolve(); }
   updateFinding(id: string, patch: FindingPatch): Promise<void> { const f = this.findings.find((x) => x.id === id)!; Object.assign(f, patch); return Promise.resolve(); }
-  markSync(_o: string, projectId: string, source: 'gsc' | 'bing', full: boolean): Promise<void> { this.marks.push([projectId, source, full]); return Promise.resolve(); }
+  markSync(_o: string, projectId: string, source: 'gsc' | 'bing' | 'ga4', full: boolean): Promise<void> { this.marks.push([projectId, source, full]); return Promise.resolve(); }
 }
 const emptyBase = (over: Partial<BaseData> = {}): BaseData => ({ program: null, projects: [], securityGrants: { anon_write_tables: 0, sample: [], rls_disabled_tables: 0, rls_sample: [] }, cronHealth: [], ...over });
 function depsOf(store: AuditStore, over: Partial<AuditDeps> = {}): AuditDeps {
@@ -808,4 +811,136 @@ Deno.test('runCron: mais antigas primeiro, respeita orçamento total, conta ocup
   assertEquals(r, { organizations: 2, findings_opened: 4, findings_resolved: 2, skipped: 2, errors: 2 }); // skipped = busy + recent; errors = old (status error) + boom
   const none = await runCron({ organizationIds: [], lastRunAt: {}, runOne: () => Promise.reject(new Error('n')), now: () => 0 });
   assertEquals(none, { organizations: 0, findings_opened: 0, findings_resolved: 0, skipped: 0, errors: 0 });
+});
+
+// ---------------------------------------------------------------------------
+// GA4 e conteúdo (13/11/2026)
+// ---------------------------------------------------------------------------
+const emptyState = { rows: 0, last_day: null, last_synced_at: null, last_full_sync_at: null };
+const ga4Project = (over: Partial<ProjectCtx> = {}) => project({ ga4_property_id: '123456789', analytics: { rows: 50, last_day: '2026-11-11', last_synced_at: hoursAgo(2), last_full_sync_at: daysAgo(1) }, ...over });
+
+Deno.test('ga4.not_connected: melhoria; alta quando o GSC está conectado; silêncio com GA4 guardado ou sem site', () => {
+  const withGsc = ruleGa4NotConnected(ctxOf({ providers: [provider('gsc'), notStored('ga4')], projects: [project()] }));
+  assertEquals(ids(withGsc), ['ga4.not_connected|ga4|high']);
+  assertEquals(withGsc.findings[0].category, 'improvement');
+  assertEquals(withGsc.findings[0].fix_action?.type, 'open_route');
+  assertEquals(ids(ruleGa4NotConnected(ctxOf({ providers: [notStored('gsc'), notStored('ga4')], projects: [project()] }))), ['ga4.not_connected|ga4|medium']);
+  assertEquals(ruleGa4NotConnected(ctxOf({ providers: [provider('gsc'), provider('ga4')], projects: [project()] })).findings.length, 0);
+  assertEquals(ruleGa4NotConnected(ctxOf({ providers: [notStored('ga4')], projects: [project({ base_url: null, domain: null })] })).findings.length, 0);
+  assertEquals(ruleGa4NotConnected(ctxOf({ providers: [notStored('ga4')], projects: [] })).findings.length, 0);
+  assertThrows(() => ruleGa4NotConnected(ctxOf({ providers: null })), ContextUnavailable);
+});
+
+Deno.test('ga4.property_missing: corretiva por projeto, só com credencial ativa', () => {
+  const f = ruleGa4PropertyMissing(ctxOf({ providers: [provider('ga4')], projects: [project(), ga4Project({ id: 'p2', name: 'Com ID' })] }));
+  assertEquals(ids(f), [`ga4.property_missing||medium`]);
+  assertEquals(f.findings[0].project_id, PRJ);
+  assertEquals(f.findings[0].category, 'corrective');
+  assertEquals(f.findings[0].fix_action, { type: 'open_route', params: { route: '/nexus/motores', section: 'ga4_property', projectId: PRJ } });
+  assertEquals(ruleGa4PropertyMissing(ctxOf({ providers: [notStored('ga4')], projects: [project()] })).findings.length, 0);
+  assertEquals(ruleGa4PropertyMissing(ctxOf({ providers: [provider('ga4', { credential: { stored: true, last_four: 'a', status: 'invalid', updated_at: daysAgo(9) } })], projects: [project()] })).findings.length, 0);
+});
+
+Deno.test('ga4.sync_stale: > 48 h (alta > 7 d), fix analytics_sync; nunca sincronizado fica para ga4.no_data', () => {
+  const mk = (h: number) => ga4Project({ analytics: { rows: 9, last_day: null, last_synced_at: hoursAgo(h), last_full_sync_at: null } });
+  const ctx = (p: ProjectCtx) => ctxOf({ providers: [provider('ga4')], projects: [p] });
+  assertEquals(ruleGa4SyncStale(ctx(mk(47))).findings.length, 0);
+  const stale = ruleGa4SyncStale(ctx(mk(60)));
+  assertEquals(ids(stale), ['ga4.sync_stale|ga4|medium']);
+  assertEquals(stale.findings[0].fix_action, { type: 'analytics_sync', params: { projectId: PRJ, days: 7 } });
+  assertEquals(stale.findings[0].evidence.hours, 60);
+  assertEquals(ids(ruleGa4SyncStale(ctx(mk(24 * 8)))), ['ga4.sync_stale|ga4|high']);
+  assertEquals(ruleGa4SyncStale(ctx(ga4Project({ analytics: emptyState }))).findings.length, 0);
+  assertEquals(ruleGa4SyncStale(ctx(project())).findings.length, 0, 'sem propriedade: não é desatualizado, é ga4.property_missing');
+  assertEquals(ruleGa4SyncStale(ctxOf({ providers: [notStored('ga4')], projects: [mk(100)] })).findings.length, 0);
+  assert(parseFixAction(stale.findings[0].fix_action).ok, 'analytics_sync está na lista branca');
+});
+
+Deno.test('ga4.no_data: credencial ativa há > 24 h, propriedade informada e 0 linhas', () => {
+  const p = ga4Project({ analytics: emptyState });
+  const f = ruleGa4NoData(ctxOf({ providers: [provider('ga4')], projects: [p] }));
+  assertEquals(ids(f), ['ga4.no_data|ga4|medium']);
+  assertEquals(f.findings[0].category, 'improvement');
+  assertEquals(f.findings[0].fix_action, null);
+  assertEquals(ruleGa4NoData(ctxOf({ providers: [provider('ga4', { credential: { stored: true, last_four: 'a', status: 'active', updated_at: hoursAgo(3) } })], projects: [p] })).findings.length, 0);
+  assertEquals(ruleGa4NoData(ctxOf({ providers: [provider('ga4')], projects: [ga4Project()] })).findings.length, 0);
+  assertEquals(ruleGa4NoData(ctxOf({ providers: [provider('ga4')], projects: [project({ analytics: emptyState })] })).findings.length, 0);
+});
+
+Deno.test('content.internal_links_low: média < 2 com a média e o total como evidência', () => {
+  const mk = (avg: number | null, total: number) => project({ content_index: { total, avg_internal_links: avg, unclassified: 0 } });
+  const f = ruleContentInternalLinksLow(ctxOf({ projects: [mk(1.4, 38), project({ id: 'p2', content_index: { total: 10, avg_internal_links: 2, unclassified: 0 } })] }));
+  assertEquals(ids(f), ['content.internal_links_low||low']);
+  assertEquals(f.findings[0].category, 'improvement');
+  assertEquals(f.findings[0].evidence, { average_internal_links: 1.4, total_contents: 38 });
+  assertEquals(ids(ruleContentInternalLinksLow(ctxOf({ projects: [mk(0.5, 10)] }))), ['content.internal_links_low||medium']);
+  assertEquals(ruleContentInternalLinksLow(ctxOf({ projects: [mk(0, 0), mk(null, 5)] })).findings.length, 0);
+});
+
+Deno.test('content.area_unclassified_high: info quando > 20% do índice está sem área', () => {
+  const mk = (u: number, t: number) => project({ content_index: { total: t, avg_internal_links: 3, unclassified: u } });
+  assertEquals(ruleContentAreaUnclassifiedHigh(ctxOf({ projects: [mk(20, 100)] })).findings.length, 0, '20% exatos não passam');
+  const f = ruleContentAreaUnclassifiedHigh(ctxOf({ projects: [mk(21, 100)] }));
+  assertEquals(ids(f), ['content.area_unclassified_high||info']);
+  assertEquals(f.findings[0].evidence, { unclassified_percent: 21, total_contents: 100 });
+  assertEquals(ruleContentAreaUnclassifiedHigh(ctxOf({ projects: [mk(0, 0)] })).findings.length, 0);
+});
+
+Deno.test('provider.unused_30d ignora o GA4 (consumido por sincronização) e check_failed do GA4 é "high"', () => {
+  assertEquals(ruleProviderUnused30d(ctxOf({ providers: [provider('ga4', { usage: { valid_30d: 0, failed_30d: 0, uncertain_30d: 0, last_success_at: null } })] })).findings.length, 0);
+  const failed = provider('ga4', { last_health: { checked_at: hoursAgo(1), ok: false, latency_ms: 10, http_status: 403, detail: 'Sem acesso', quota: null, cost_micros: 0 } });
+  assertEquals(ids(ruleProviderCheckFailed(ctxOf({ providers: [failed] }))), ['provider.check_failed|ga4|high']);
+});
+
+Deno.test('reconcileFindings com as regras novas: abre, atualiza e resolve sozinho quando o GA4 passa a ter dados', () => {
+  const now = new Date(NOW);
+  const noData = ruleGa4NoData(ctxOf({ providers: [provider('ga4')], projects: [ga4Project({ analytics: emptyState })] }));
+  const first = reconcileFindings(ORG, [], [{ ruleId: 'ga4.no_data', ok: true, output: noData }], now);
+  assertEquals([first.opened, first.inserts[0].fingerprint, first.inserts[0].severity], [1, `ga4.no_data|${PRJ}|ga4`, 'medium']);
+  const existing = [{ ...first.inserts[0], id: 'f1' } as FindingRow];
+  const again = reconcileFindings(ORG, existing, [{ ruleId: 'ga4.no_data', ok: true, output: noData }], now);
+  assertEquals([again.opened, again.inserts.length, again.updates[0].patch.occurrences], [0, 0, 2]);
+  const solved = reconcileFindings(ORG, existing, [{ ruleId: 'ga4.no_data', ok: true, output: ruleGa4NoData(ctxOf({ providers: [provider('ga4')], projects: [ga4Project()] })) }], now);
+  assertEquals([solved.resolved, solved.updates[0].patch.status], [1, 'resolved']);
+  // regra com falha não resolve nada
+  assertEquals(reconcileFindings(ORG, existing, [{ ruleId: 'ga4.no_data', ok: false, error: 'x' }], now).updates.length, 0);
+});
+
+Deno.test('buildProjects lê ga4_property_id, estado do GA4 e índice de conteúdos (com padrões seguros)', () => {
+  const [a, b] = buildProjects(
+    [{ id: PRJ, name: 'A', commercial_info: { ga4_property_id: '123456789' } }, { id: 'p2', name: 'B', commercial_info: { ga4_property_id: 'abc' } }],
+    [{ project_id: PRJ, ga4: { rows: 7, last_day: '2026-11-10', last_synced_at: hoursAgo(1), last_full_sync_at: daysAgo(2) }, content_index: { total: 12, internal_links_avg: '1.25', unclassified: 3 } }],
+    () => false,
+  );
+  assertEquals([a.ga4_property_id, a.analytics.rows, a.analytics.last_synced_at, a.content_index], ['123456789', 7, hoursAgo(1), { total: 12, avg_internal_links: 1.25, unclassified: 3 }]);
+  assertEquals([b.ga4_property_id, b.analytics, b.content_index], [null, emptyState, { total: 0, avg_internal_links: null, unclassified: 0 }]);
+});
+
+Deno.test('executor: sincroniza o GA4 (12 h/7 d; 90 d semanal), marca a sincronização e só com credencial ativa', async () => {
+  const calls: Array<{ projectId: string; days: number; property: string }> = [];
+  const store = new MemStore(emptyBase({ projects: [ga4Project({ analytics: { rows: 3, last_day: null, last_synced_at: hoursAgo(20), last_full_sync_at: daysAgo(1) } }), ga4Project({ id: 'p-new', analytics: emptyState }), project({ id: 'p-none' })] }), [provider('ga4')]);
+  const deps = depsOf(store, { rules: [], syncAnalytics: (call) => { calls.push(call); return Promise.resolve({ ok: true, rows_upserted: 5 }); } });
+  const r = await runAuditForOrganization(deps, ORG, { trigger: 'schedule' });
+  assertEquals(calls, [{ projectId: PRJ, days: 7, property: '123456789' }, { projectId: 'p-new', days: 90, property: '123456789' }]);
+  assertEquals(store.marks, [[PRJ, 'ga4', false], ['p-new', 'ga4', true]]);
+  assertEquals((r.detail.syncs as Array<{ source: string }>).map((x) => x.source), ['ga4', 'ga4']);
+  // sincronizado há menos de 12 h: não repete; credencial não ativa: não sincroniza
+  const recent = new MemStore(emptyBase({ projects: [ga4Project({ analytics: { rows: 3, last_day: null, last_synced_at: hoursAgo(1), last_full_sync_at: daysAgo(1) } })] }), [provider('ga4')]);
+  await runAuditForOrganization(depsOf(recent, { rules: [], syncAnalytics: (c) => { calls.push(c); return Promise.resolve({ ok: true, rows_upserted: 0 }); } }), ORG, { trigger: 'schedule' });
+  const inactive = new MemStore(emptyBase({ projects: [ga4Project()] }), [provider('ga4', { credential: { stored: true, last_four: 'a', status: 'invalid', updated_at: daysAgo(3) } })]);
+  await runAuditForOrganization(depsOf(inactive, { rules: [], syncAnalytics: (c) => { calls.push(c); return Promise.resolve({ ok: true, rows_upserted: 0 }); } }), ORG, { trigger: 'schedule' });
+  assertEquals(calls.length, 2);
+  // falha do GA4 não derruba a execução e não marca a sincronização
+  const failing = new MemStore(emptyBase({ projects: [ga4Project({ analytics: emptyState })] }), [provider('ga4')]);
+  const rf = await runAuditForOrganization(depsOf(failing, { rules: [], syncAnalytics: () => Promise.reject(new Error('boom api_key=SEGREDO')) }), ORG, { trigger: 'schedule' });
+  assertEquals([rf.status, failing.marks.length], ['ok', 0]);
+  assertFalse(JSON.stringify(rf.detail).includes('SEGREDO'));
+});
+
+Deno.test('SEGURANÇA: o executor com GA4 só usa a lista branca e o fetch protegido não bloqueia a GA4 Data API (gratuita)', () => {
+  assertFalse(isPaidProviderRequest('https://analyticsdata.googleapis.com/v1beta/properties/123456789:runReport', 'POST'));
+  assertFalse(isPaidProviderRequest('https://analyticsdata.googleapis.com/v1beta/properties/123456789/metadata', 'GET'));
+  assert(isPaidProviderRequest('https://api.perplexity.ai/search', 'POST'));
+  assertEquals(parseFixAction({ type: 'analytics_sync', params: {} }).ok, true);
+  assertEquals(parseFixAction({ type: 'analytics_sync_all', params: {} }), { ok: false, error: 'fix_type_not_allowed' });
 });

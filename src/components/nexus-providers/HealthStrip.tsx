@@ -2,7 +2,7 @@ import { Loader2, PlugZap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ToneBadge } from '@/components/nexus-providers/badges';
-import { formatRelative, healthStripText, overallLabel, overallTone } from '@/lib/nexus-providers';
+import { fallbackSummary, formatRelative, healthStripText, overallLabel, overallTone } from '@/lib/nexus-providers';
 import type { RealtimeState } from '@/hooks/useNexusProviders';
 import type { ProviderOverviewItem, ProvidersOverview } from '@/types/nexus-providers';
 
@@ -36,7 +36,7 @@ export interface HealthStripProps {
 }
 
 export function HealthStrip({ overview, items, now, updatedAt, realtime, testingAll, onTestAll }: HealthStripProps) {
-  const { summary } = overview;
+  const summary = overview.summary ?? fallbackSummary(items);
   const updated = updatedAt ? formatRelative(new Date(updatedAt).toISOString(), now) : '—';
   return (
     <Card>

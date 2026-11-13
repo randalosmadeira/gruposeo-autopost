@@ -10,20 +10,21 @@
  */
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { gscListSites } from './nexus-gsc.ts';
+import { ga4CheckToken, ga4GetMetadata, isValidPropertyId } from './nexus-ga4.ts';
 
 // ---------------------------------------------------------------------------
 // Catálogo
 // ---------------------------------------------------------------------------
 /** Provedores com credencial (mesma lista do `check` do banco). */
-export const PROVIDER_IDS = ['gsc', 'bing_webmaster', 'serper', 'dataforseo', 'serpapi', 'brave', 'openai', 'gemini', 'anthropic', 'perplexity'] as const;
+export const PROVIDER_IDS = ['gsc', 'bing_webmaster', 'ga4', 'serper', 'dataforseo', 'serpapi', 'brave', 'openai', 'gemini', 'anthropic', 'perplexity'] as const;
 export type ProviderId = typeof PROVIDER_IDS[number];
-/** Catálogo completo exibido no módulo: os 10 provedores + o manual (Copilot). */
+/** Catálogo completo exibido no módulo: os 11 provedores (inclui `ga4`, 13/11/2026) + o manual (Copilot). */
 export const CATALOG_IDS = [...PROVIDER_IDS, 'copilot'] as const;
 export type CatalogId = typeof CATALOG_IDS[number];
 export type ProviderCategory = 'search_truth' | 'serp' | 'ai_citations' | 'manual';
 
 /** Testes gratuitos (rodam sem confirmação de custo). Ordem estável. */
-export const FREE_HEALTH_PROVIDERS = ['gsc', 'bing_webmaster', 'dataforseo', 'serpapi', 'openai', 'gemini', 'anthropic'] as const;
+export const FREE_HEALTH_PROVIDERS = ['gsc', 'bing_webmaster', 'ga4', 'dataforseo', 'serpapi', 'openai', 'gemini', 'anthropic'] as const;
 /** Testes com custo: só com `provider` explícito + `confirmCost: true`. */
 export const COST_HEALTH_PROVIDERS = ['serper', 'brave', 'perplexity'] as const;
 
@@ -31,6 +32,8 @@ export type ProviderInfo = { id: CatalogId; name: string; category: ProviderCate
 export const PROVIDER_CATALOG: Record<CatalogId, ProviderInfo> = {
   gsc: { id: 'gsc', name: 'Google Search Console API', category: 'search_truth', health_cost: 'free', test_cost_micros: 0 },
   bing_webmaster: { id: 'bing_webmaster', name: 'Bing Webmaster Tools API', category: 'search_truth', health_cost: 'free', test_cost_micros: 0 },
+  // GA4 fica em `search_truth` (dado real de tráfego, gratuito) para não criar uma categoria nova que o frontend ainda não conhece.
+  ga4: { id: 'ga4', name: 'Google Analytics 4 (Data API)', category: 'search_truth', health_cost: 'free', test_cost_micros: 0 },
   serper: { id: 'serper', name: 'Serper', category: 'serp', health_cost: 'paid', test_cost_micros: 1000 },
   dataforseo: { id: 'dataforseo', name: 'DataForSEO SERP API', category: 'serp', health_cost: 'free', test_cost_micros: 0 },
   serpapi: { id: 'serpapi', name: 'SerpApi', category: 'serp', health_cost: 'free', test_cost_micros: 0 },
@@ -84,7 +87,8 @@ export function validateCredentialFormat(provider: string, raw: unknown): Format
       if (parts.length !== 2 || !parts[0].trim() || !parts[1].trim()) return { ok: false, hint: 'formato_login_dois_pontos_senha' };
       return { ok: true, secret };
     }
-    case 'gsc': {
+    case 'gsc':
+    case 'ga4': { // mesmo formato: JSON de conta de serviço do Google (pode ser o mesmo arquivo, guardado separado)
       let parsed: unknown;
       try { parsed = JSON.parse(secret); } catch { return { ok: false, hint: 'json_invalido' }; }
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { ok: false, hint: 'json_invalido' };
@@ -150,7 +154,7 @@ export function readBraveQuota(headers: Headers, nowMs: number): ProviderQuota |
 export const HEALTH_TIMEOUT_MS = 15_000;
 /** Hosts que os testes de saúde podem contatar (os URLs completos são montados abaixo, nunca vêm do cliente). */
 export const HEALTH_ALLOWED_HOSTS: readonly string[] = [
-  'oauth2.googleapis.com', 'www.googleapis.com', 'searchconsole.googleapis.com', 'ssl.bing.com', 'google.serper.dev', 'api.dataforseo.com',
+  'oauth2.googleapis.com', 'www.googleapis.com', 'searchconsole.googleapis.com', 'analyticsdata.googleapis.com', 'ssl.bing.com', 'google.serper.dev', 'api.dataforseo.com',
   'serpapi.com', 'api.search.brave.com', 'api.openai.com', 'generativelanguage.googleapis.com', 'api.anthropic.com', 'api.perplexity.ai',
 ];
 export function isAllowedHealthUrl(url: string): boolean {
@@ -217,8 +221,8 @@ const okModels = async (res: Response): Promise<Outcome> => res.ok
   ? { ok: true, http_status: res.status, detail: `Conexão válida (HTTP ${res.status})` }
   : classifyHttp(res.status);
 
-/** Definições fixas dos testes (exceto `gsc`, que usa o assinador JWT do módulo `nexus-gsc.ts`). */
-export const HEALTH_PROBES: Record<Exclude<ProviderId, 'gsc'>, Probe> = {
+/** Definições fixas dos testes (exceto `gsc` e `ga4`, que usam o assinador JWT do módulo `nexus-gsc.ts`). */
+export const HEALTH_PROBES: Record<Exclude<ProviderId, 'gsc' | 'ga4'>, Probe> = {
   bing_webmaster: {
     cost_micros: 0,
     build: (s) => ({ url: `https://ssl.bing.com/webmaster/api.svc/json/GetUserSites?apikey=${encodeURIComponent(s)}`, init: { method: 'GET', headers: { Accept: 'application/json' } } }),
@@ -319,7 +323,7 @@ function guardedFetch(fetchFn: typeof fetch, signal: AbortSignal): typeof fetch 
 }
 
 /** Executa o teste de saúde de um provedor com a credencial dada. Nunca lança: devolve `ok:false` com mensagem fixa. */
-export async function runProviderHealthCheck(provider: ProviderId, secret: string, fetchFn: typeof fetch, opts: { timeoutMs?: number; nowMs?: number; gscList?: typeof gscListSites } = {}): Promise<HealthResult> {
+export async function runProviderHealthCheck(provider: ProviderId, secret: string, fetchFn: typeof fetch, opts: { timeoutMs?: number; nowMs?: number; gscList?: typeof gscListSites; ga4Property?: string | null } = {}): Promise<HealthResult> {
   const timeoutMs = opts.timeoutMs ?? HEALTH_TIMEOUT_MS;
   const nowMs = opts.nowMs ?? Date.now();
   const costMicros = PROVIDER_CATALOG[provider].test_cost_micros;
@@ -337,6 +341,15 @@ export async function runProviderHealthCheck(provider: ProviderId, secret: strin
       }
       if (r.status === 403) return { ok: false, http_status: 403, detail: 'Acesso negado: ative a Search Console API no projeto do Google Cloud (HTTP 403)', credential_invalid: true };
       if (r.status === 400 || r.status === 401) return { ok: false, http_status: r.status, detail: `Conta de serviço recusada pelo Google (HTTP ${r.status})`, credential_invalid: true };
+      return classifyHttp(r.status);
+    }
+    if (provider === 'ga4') {
+      const property = isValidPropertyId(opts.ga4Property) ? opts.ga4Property : '';
+      const r = property ? await ga4GetMetadata(f, secret, property) : await ga4CheckToken(f, secret);
+      if (r.ok) return { ok: true, http_status: 200, detail: property ? 'Conexão válida: a conta de serviço enxerga a propriedade GA4 informada' : 'Credencial válida. Informe a propriedade GA4 de um projeto para testar o acesso aos dados' };
+      if (r.status === 0) return { ok: false, detail: 'Falha de rede ao consultar o provedor' };
+      if (r.error === 'ga4_forbidden') return { ok: false, http_status: r.status, detail: `Sem acesso: ative a Google Analytics Data API no projeto do Google Cloud e adicione o e-mail da conta de serviço como leitor da propriedade GA4 (HTTP ${r.status})` };
+      if (r.error === 'ga4_credential_invalid' || r.error === 'ga4_auth_failed') return { ok: false, http_status: r.status, detail: `Conta de serviço recusada pelo Google (HTTP ${r.status})`, credential_invalid: true };
       return classifyHttp(r.status);
     }
     const probe = HEALTH_PROBES[provider];
@@ -373,6 +386,19 @@ function secretParts(secret: string): string[] {
 }
 
 type CredentialRow = { provider: string; status: string | null };
+
+/** Propriedade GA4 usada no teste de saúde: a informada ou a primeira configurada em algum projeto da organização. Nunca lança. */
+async function resolveGa4Property(admin: SupabaseClient, organizationId: string, given?: string | null): Promise<string | null> {
+  if (isValidPropertyId(given)) return given;
+  try {
+    const { data } = await admin.from('projects').select('commercial_info').eq('organization_id', organizationId).limit(100);
+    for (const row of (data || []) as Array<{ commercial_info?: Record<string, unknown> | null }>) {
+      const id = row?.commercial_info?.ga4_property_id;
+      if (isValidPropertyId(id)) return id;
+    }
+  } catch { /* sem propriedade: o teste valida só o token */ }
+  return null;
+}
 const TESTABLE_STATUSES = ['stored_unverified', 'active', 'invalid'];
 
 /**
@@ -383,7 +409,7 @@ const TESTABLE_STATUSES = ['stored_unverified', 'active', 'invalid'];
  */
 export async function runHealthChecks(
   admin: SupabaseClient,
-  opts: { organizationId: string; triggeredBy: string | null; providers?: string[]; confirmCost?: boolean; fetchFn: typeof fetch; timeoutMs?: number },
+  opts: { organizationId: string; triggeredBy: string | null; providers?: string[]; confirmCost?: boolean; fetchFn: typeof fetch; timeoutMs?: number; ga4Property?: string | null },
 ): Promise<HealthResult[]> {
   const explicit = Array.isArray(opts.providers) && opts.providers.length > 0;
   const targets = explicit ? [...new Set(opts.providers!)].filter(isCatalogId) : [...FREE_HEALTH_PROVIDERS];
@@ -405,7 +431,8 @@ export async function runHealthChecks(
     jobs.push((async () => {
       const { data: secret, error } = await admin.rpc('nexus_provider_secret_read', { p_org: opts.organizationId, p_provider: provider });
       if (error || typeof secret !== 'string' || !secret) { slots[index] = { provider, ok: false, skipped: 'not_configured', cost_micros: 0 }; return; }
-      const result = await runProviderHealthCheck(provider as ProviderId, secret, opts.fetchFn, { timeoutMs: opts.timeoutMs });
+      const ga4Property = provider === 'ga4' ? await resolveGa4Property(admin, opts.organizationId, opts.ga4Property) : null;
+      const result = await runProviderHealthCheck(provider as ProviderId, secret, opts.fetchFn, { timeoutMs: opts.timeoutMs, ga4Property });
       slots[index] = result;
       try {
         await admin.from('nexus_provider_health').insert({

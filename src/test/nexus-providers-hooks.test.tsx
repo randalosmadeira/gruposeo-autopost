@@ -201,7 +201,7 @@ describe('canal realtime (mockado)', () => {
 
 describe('página NexusProviders (fumaça)', () => {
   const overview: ProvidersOverview = {
-    generated_at: '2026-11-12T12:00:00Z', organization_id: 'org-1',
+    generated_at: '2026-11-12T12:00:00Z', organization_id: 'org-1', viewer: { role: 'manager', can_manage_technical: true }, viewer_is_admin: true,
     program: { execution_enabled: false, budget_usd_micros: 0, reserved_usd_micros: 0, consumed_usd_micros: 0, providers_enabled: [] },
     summary: { total: 11, connected: 1, healthy: 1, degraded: 0, error: 0, not_configured: 9, manual: 1, overall: 'ok', score: 90 },
     providers: [{
@@ -215,7 +215,7 @@ describe('página NexusProviders (fumaça)', () => {
     return render(<MemoryRouter><W><NexusProviders /></W></MemoryRouter>);
   }
 
-  it('mostra projeto/organização, faixa de saúde, 11 cards, painel de liberação e o item de auditoria', async () => {
+  it('mostra projeto/organização, faixa de saúde, 12 cards, painel de liberação e o item de auditoria', async () => {
     h.invoke.mockImplementation(async (fn: string, { body }: { body: { action: string } }) => {
       if (fn === 'nexus-intelligence' && body.action === 'providers_overview') return { data: overview, error: null };
       if (fn === 'nexus-audit') return { data: { generated_at: '', last_run: null, counts: { open: { corrective: 2, preventive: 1, improvement: 0 }, by_severity: {}, resolved_7d: 0 }, findings: [], runs: [] }, error: null };
@@ -226,7 +226,7 @@ describe('página NexusProviders (fumaça)', () => {
     expect(screen.getByTestId('active-scope').textContent).toContain('Projeto RDM');
     expect(screen.getByTestId('active-scope').textContent).toContain('Organização RDM');
     expect(screen.getByRole('heading', { name: 'Conexões, saúde e custo dos motores' })).toBeTruthy();
-    expect(document.querySelectorAll('[data-testid^="provider-"]')).toHaveLength(11);
+    expect(document.querySelectorAll('[data-testid^="provider-"]')).toHaveLength(12);
     expect(screen.getByRole('heading', { name: 'Ativação guiada dos gratuitos' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Liberação de execução paga' })).toBeTruthy();
     expect(screen.getByTestId('exec-state').textContent).toContain('DESLIGADA');

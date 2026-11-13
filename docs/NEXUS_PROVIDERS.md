@@ -2,26 +2,27 @@
 
 Guia para o dono do escritório, sem linguagem técnica desnecessária. Descreve o módulo `/nexus/motores` do Zica.ai: como conectar cada serviço de dados, como testar, quanto pode custar, como ler os painéis e como o sistema se vigia sozinho.
 
-Fatos verificados em 12/11/2026. Todo preço, plano ou limite citado aqui é **valor de referência — confirmar no site do provedor**, porque esses números mudam sem aviso.
+Fatos verificados em 12/11/2026 (Google Analytics 4 e plano de gerenciamento acrescentados em 13/11/2026). Todo preço, plano ou limite citado aqui é **valor de referência — confirmar no site do provedor**, porque esses números mudam sem aviso.
 
 ## Sumário
 
 1. Visão geral e arquitetura
 2. Tabela dos provedores
 3. Passo a passo por provedor
-4. Ativação dos gratuitos (Google Search Console e Bing)
+4. Ativação dos gratuitos (Google Search Console, Bing e, em documento próprio, Google Analytics 4)
 5. Segurança
 6. Como ler status, pontuação e qualidade
 7. Auditoria contínua
 8. Checklist de ativação em ordem e rollback
 9. Operação
 10. Compliance (Provimento 205/2021 da OAB)
+11. Google Analytics 4 e plano de gerenciamento (gestor × cliente)
 
 ---
 
 ## 1. Visão geral e arquitetura
 
-O módulo reúne, em uma tela só, **10 provedores de API e 1 fonte manual (Copilot)**. Para cada um você vê: link para contratar, documentação, se a conexão está funcionando, a qualidade da conexão, o custo e o uso. Você também controla o orçamento e a liberação de qualquer chamada paga.
+O módulo reúne, em uma tela só, **11 provedores de API (inclui o Google Analytics 4, `ga4`) e 1 fonte manual (Copilot)**. Para cada um você vê: link para contratar, documentação, se a conexão está funcionando, a qualidade da conexão, o custo e o uso. Você também controla o orçamento e a liberação de qualquer chamada paga.
 
 Três ideias para guardar:
 
@@ -70,7 +71,7 @@ Três ideias para guardar:
 
 ## 2. Tabela dos provedores
 
-Categorias: **Verdade dos buscadores** (grátis, dados reais de tráfego), **Posições e SERP**, **Citações em IAs** e **Manual**.
+Categorias: **Verdade dos buscadores** (grátis, dados reais de tráfego; o `ga4` fica nesta categoria), **Posições e SERP**, **Citações em IAs** e **Manual**.
 
 Valores de referência — confirmar no site do provedor.
 
@@ -78,6 +79,7 @@ Valores de referência — confirmar no site do provedor.
 |---|---|---|---|---|---|---|
 | `gsc` | Google Search Console API | Verdade dos buscadores | JSON de conta de serviço | [Search Console](https://search.google.com/search-console) | [Search Analytics: query](https://developers.google.com/webmaster-tools/v1/searchanalytics/query) · [Ativar a API](https://console.cloud.google.com/apis/library/searchconsole.googleapis.com) | Grátis; país nativo |
 | `bing_webmaster` | Bing Webmaster Tools API | Verdade dos buscadores | Chave de API (texto) | [Bing Webmaster](https://www.bing.com/webmasters) | [Acesso à API](https://learn.microsoft.com/en-us/bingwebmaster/getting-access) | Grátis; a API já teve instabilidades |
+| `ga4` | Google Analytics 4 (Data API) | Verdade dos buscadores | JSON de conta de serviço (pode ser o mesmo arquivo do `gsc`; fica guardado separado) | [Google Analytics](https://analytics.google.com) | [Data API: runReport](https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/properties/runReport) · [Ativar a API](https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com) | Grátis (a Data API tem cotas por propriedade) |
 | `serper` | Serper | Posições e SERP | Chave (texto) | [serper.dev](https://serper.dev) | [serper.dev](https://serper.dev) | ~US$ 0,001 a 0,003 por consulta |
 | `dataforseo` | DataForSEO SERP API | Posições e SERP | `login:senha_da_API` | [Cadastro](https://app.dataforseo.com/register) | [user_data](https://docs.dataforseo.com/v3/appendix/user_data/) | ~US$ 0,002 a 0,006 por consulta |
 | `serpapi` | SerpApi | Posições e SERP | Chave (texto) | [Cadastro](https://serpapi.com/users/sign_up) | [Account API](https://serpapi.com/account-api) | A partir de ~US$ 0,01 por consulta |
@@ -96,6 +98,7 @@ O teste usa sempre endereços fixos, definidos no sistema. Nunca é possível ma
 |---|---|---|
 | `gsc` | Troca a chave da conta de serviço por um token em [oauth2.googleapis.com/token](https://oauth2.googleapis.com/token) e lista as propriedades em [webmasters/v3/sites](https://www.googleapis.com/webmasters/v3/sites) | Grátis |
 | `bing_webmaster` | Consulta [GetUserSites](https://ssl.bing.com/webmaster/api.svc/json/GetUserSites) com a chave; a resposta vem no campo `d` | Grátis |
+| `ga4` | Troca a chave da conta de serviço por um token (escopo `analytics.readonly`) e, se algum projeto da organização já tem a propriedade GA4 informada, consulta [getMetadata](https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/properties/getMetadata) dela | Grátis |
 | `serper` | Faz 1 busca em [google.serper.dev/search](https://google.serper.dev/search) | **Com custo** (1 crédito, ~US$ 0,001); pede confirmação |
 | `dataforseo` | Consulta [user_data](https://api.dataforseo.com/v3/appendix/user_data); devolve saldo e limites | Grátis |
 | `serpapi` | Consulta [account.json](https://serpapi.com/account.json); devolve plano e buscas restantes | Grátis |
@@ -123,6 +126,7 @@ Formato aceito de cada credencial (o servidor recusa com `secret_format_invalid`
 | `serper`, `serpapi`, `bing_webmaster`, `brave` | 16 a 200 caracteres, apenas letras, números, `_` e `-` |
 | `dataforseo` | Exatamente um `:`, com login e senha não vazios (`login:senha_da_API`) |
 | `gsc` | JSON válido com `type` igual a `service_account`, `client_email` e `private_key` começando em `-----BEGIN PRIVATE KEY-----` |
+| `ga4` | O mesmo JSON de conta de serviço do `gsc` (pode ser o mesmo arquivo; cada provedor guarda a sua cópia) |
 
 Erros comuns que valem para todos:
 
@@ -247,9 +251,20 @@ Não existe API pública de chat do Copilot, então **não há chave nem teste**
 
 ---
 
+### 3.12 Google Analytics 4 (`ga4`)
+
+O passo a passo completo, o que é medido e os erros comuns estão em **[docs/NEXUS_GA4.md](NEXUS_GA4.md)**. Resumo:
+
+- **Credencial:** o mesmo formato JSON de conta de serviço do Search Console (pode ser o mesmo arquivo). Escopo usado: `https://www.googleapis.com/auth/analytics.readonly`.
+- **Propriedade:** o ID numérico da propriedade GA4 (5 a 15 dígitos) fica **por projeto** (`projects.commercial_info.ga4_property_id`). Cada site tem a sua; o sistema recusa a mesma propriedade em dois projetos da organização (`ga4_property_already_used`).
+- **O teste faz:** valida o token e, havendo propriedade conhecida, consulta `getMetadata` (grátis). Erro 403 na propriedade não invalida a chave: falta adicionar o e-mail da conta de serviço como leitor da propriedade.
+- **Custo:** grátis.
+- **Quem conecta:** só o gestor (ver [docs/NEXUS_MANAGEMENT_PLANE.md](NEXUS_MANAGEMENT_PLANE.md)); o cliente pede por "Solicitar".
+- **Erros comuns:** `ga4_not_configured`, `ga4_property_required`, `ga4_forbidden`, `ga4_quota`, `ga4_unreachable`.
+
 ## 4. Ativação dos gratuitos
 
-Os gratuitos são **Google Search Console** e **Bing Webmaster**. Dependem só de credenciais que você gera. Quando estiverem conectados, o sistema coleta sozinho dados reais de tráfego, sem custo. No topo da aba principal existe o cartão **Ativação guiada dos gratuitos** (com passo a passo, botão Conectar e resultado do primeiro teste e da primeira sincronização); ele some quando os dois estão conectados e saudáveis.
+Os gratuitos de busca são **Google Search Console** e **Bing Webmaster**; o **Google Analytics 4** também é gratuito e tem roteiro próprio em [docs/NEXUS_GA4.md](NEXUS_GA4.md). Dependem só de credenciais que você gera. Quando estiverem conectados, o sistema coleta sozinho dados reais de tráfego, sem custo. No topo da aba principal existe o cartão **Ativação guiada dos gratuitos** (com passo a passo, botão Conectar e resultado do primeiro teste e da primeira sincronização); ele some quando os dois estão conectados e saudáveis.
 
 ### 4.1 Google Search Console com conta de serviço (6 passos)
 
@@ -364,7 +379,7 @@ Mostra cliques, impressões, CTR e posição média do Google Search Console e d
 
 ## 7. Auditoria contínua
 
-A "Saúde do sistema" é uma auditoria automática do módulo e dos recursos ligados a ele. Roda **a cada 15 minutos** e também sob demanda (botão **Auditar agora**, para dono/administrador; no máximo uma execução manual por minuto por organização, senão `audit_rate_limited`).
+A "Saúde do sistema" é uma auditoria automática do módulo e dos recursos ligados a ele. Roda **a cada 15 minutos** (e, a cada 12 h, sincroniza também o GA4 dos projetos que têm propriedade informada) e também sob demanda (botão **Auditar agora**, para o gestor ou dono/admin de organização interna; no máximo uma execução manual por minuto por organização, senão `audit_rate_limited`).
 
 Ela usa **somente verificações gratuitas e leituras**: testes de saúde sem custo, acessos públicos aos seus próprios sites e consultas ao banco. **Nunca faz chamada paga.**
 
@@ -385,13 +400,19 @@ Ela usa **somente verificações gratuitas e leituras**: testes de saúde sem cu
 | Regra | Categoria | Severidade | Quando dispara | O que fazer |
 |---|---|---|---|---|
 | `provider.never_verified` | Corretiva | Média | Credencial guardada sem nenhum teste | Testar (correção de 1 clique) |
-| `provider.check_failed` | Corretiva | Alta (crítica se GSC ou Bing) | Último teste falhou | Reconferir chave e permissões; testar de novo |
+| `provider.check_failed` | Corretiva | Alta (crítica se GSC ou Bing; alta para o GA4) | Último teste falhou | Reconferir chave e permissões; testar de novo |
 | `provider.latency_high` | Preventiva | Baixa | Latência média em 7 dias acima de 4000 ms | Acompanhar |
 | `provider.quota_low` | Preventiva | Alta (abaixo de 10%) ou média (abaixo de 25%) | Quota restante baixa | Recarregar créditos |
-| `provider.unused_30d` | Melhoria | Info | Configurado, sem operações em 30 dias | Usar ou remover |
+| `provider.unused_30d` | Melhoria | Info | Configurado, sem operações em 30 dias (GSC, Bing e GA4 não entram: são consumidos por sincronização) | Usar ou remover |
 | `provider.free_not_connected` | Melhoria | Alta | GSC ou Bing sem credencial | Abrir a Ativação guiada |
 | `search.sync_stale` | Corretiva | Média (alta se passar de 7 dias) | Última sincronização GSC/Bing há mais de 48 h, com credencial ativa | Sincronizar (correção de 1 clique) |
 | `search.no_data` | Melhoria | Média | Credencial ativa e zero linhas | Conferir propriedade e permissão |
+| `ga4.not_connected` | Melhoria | Alta se o GSC está conectado; senão média | Google Analytics 4 sem credencial (e a organização tem projeto com site) | Pedir ao gestor para conectar |
+| `ga4.property_missing` | Corretiva | Média | Credencial do GA4 ativa e projeto sem `ga4_property_id` | Pedir ao gestor para informar a propriedade do site |
+| `ga4.sync_stale` | Corretiva | Média (alta se passar de 7 dias) | Última sincronização do GA4 há mais de 48 h, com credencial ativa | Sincronizar (correção de 1 clique: `analytics_sync`) |
+| `ga4.no_data` | Melhoria | Média | Credencial ativa há mais de 24 h, propriedade informada e zero linhas | Conferir o ID e se a conta de serviço é leitora da propriedade |
+| `content.internal_links_low` | Melhoria | Baixa (média se a média for menor que 1) | Média de links internos por conteúdo do índice menor que 2 | Ligar os artigos entre si |
+| `content.area_unclassified_high` | Melhoria | Info | Mais de 20% do índice de conteúdos está como `nao-classificado` | Revisar a classificação por área |
 | `observatory.stale` | Preventiva | Baixa | Nenhuma observação nova há 14 dias | Registrar ou preparar rodada |
 | `observatory.no_prompts` | Melhoria | Média | Projeto sem conjunto de prompts | Criar conjunto |
 | `signals.no_batch` | Corretiva | Média | Chave de sinais criada há mais de 24 h sem nenhum lote recebido | Conferir o snippet |
@@ -410,16 +431,17 @@ Ela usa **somente verificações gratuitas e leituras**: testes de saúde sem cu
 
 ### 7.4 Correções aplicáveis com um clique
 
-Só quatro tipos de correção existem, e **nenhuma faz chamada paga**:
+Só cinco tipos de correção existem, e **nenhuma faz chamada paga**:
 
 | Tipo | O que faz |
 |---|---|
 | `provider_health_check` | Roda o teste de saúde gratuito do provedor |
 | `search_performance_sync` | Sincroniza Google Search Console e Bing |
+| `analytics_sync` | Sincroniza o Google Analytics 4 do projeto (usa o ID da propriedade já gravado; grátis) |
 | `plugin_discovery_refresh` | Pede ao plugin do WordPress do projeto para recriar os arquivos de descoberta (`llms.txt` e afins) |
 | `open_route` | Abre a tela certa do sistema (por exemplo, a Ativação guiada) |
 
-O botão **Aplicar correção** aparece só quando o achado tem uma correção segura, e é exclusivo de dono/administrador. Pede confirmação, executa, grava o resultado no achado e reavalia a regra. Qualquer outro tipo de correção é rejeitado.
+O botão **Aplicar correção** aparece só quando o achado tem uma correção segura, e é exclusivo do gestor (ou de dono/admin de organização interna); o cliente não vê o botão e a API responde `403 manager_required`. Pede confirmação, executa, grava o resultado no achado e reavalia a regra. Qualquer outro tipo de correção é rejeitado.
 
 ### 7.5 Como interpretar os achados
 
@@ -531,5 +553,13 @@ O Zica.ai atende advogados e este módulo é de **observação e medição**. Ao
 - **Responsabilidade.** O conteúdo final divulgado continua sob responsabilidade do advogado inscrito. Em dúvida sobre uma peça, consulte o responsável por ética e publicidade do escritório.
 
 ---
+---
 
-*Fontes: contrato do módulo "NEXUS · Motores & APIs" e seu adendo (12/11/2026). Em caso de divergência, a fonte é o contrato.*
+## 11. Google Analytics 4 e plano de gerenciamento (gestor × cliente)
+
+- **Google Analytics 4:** [docs/NEXUS_GA4.md](NEXUS_GA4.md) (roteiro de ativação, o que é medido, erros comuns, desempenho por área).
+- **Gestor × cliente:** [docs/NEXUS_MANAGEMENT_PLANE.md](NEXUS_MANAGEMENT_PLANE.md) (quem pode o quê, como testar com "CEO / Gestor" e "Cliente Teste", como o cliente faz solicitações).
+- Resumo: **conectar fontes, trocar chaves, vincular ou atualizar plugin, execução paga e ajustes técnicos são só do gestor.** O cliente vê os próprios dados (status simples, Analytics, tráfego de busca, desempenho por área, auditoria em leitura) e faz **solicitações**.
+
+
+*Fontes: contrato do módulo "NEXUS · Motores & APIs" e seu adendo (12/11/2026) e contrato GA4 + plano de gerenciamento (13/11/2026). Em caso de divergência, a fonte é o contrato.*

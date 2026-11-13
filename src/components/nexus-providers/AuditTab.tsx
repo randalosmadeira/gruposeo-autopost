@@ -96,10 +96,12 @@ export function AuditView({ overview, loading, error, now, canAdmin, running, on
                 ? <>Última auditoria {formatRelative(last.finished_at ?? last.started_at, now)} ({runStatusLabel(last.status)}){next === null ? '' : ` · próxima em ≈ ${next} min`}</>
                 : 'Nenhuma auditoria executada ainda.'}
             </p>
-            <Button onClick={() => { void run(); }} disabled={!canAdmin || running} title={canAdmin ? undefined : 'Só proprietário ou administrador pode auditar agora'}>
-              {running ? <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" /> : <ShieldCheck className="mr-1 h-4 w-4" aria-hidden="true" />}
-              Auditar agora
-            </Button>
+            {canAdmin && (
+              <Button onClick={() => { void run(); }} disabled={running}>
+                {running ? <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" /> : <ShieldCheck className="mr-1 h-4 w-4" aria-hidden="true" />}
+                Auditar agora
+              </Button>
+            )}
           </div>
           <ul className="flex flex-wrap gap-2" aria-label="Achados abertos por categoria">
             {CATEGORY_ORDER_AUDIT.map((c) => (
@@ -110,7 +112,10 @@ export function AuditView({ overview, loading, error, now, canAdmin, running, on
           <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Achados abertos por severidade">
             {SEVERITY_ORDER.map((s) => <li key={s}>{severityLabel(s)}: {overview.counts.by_severity[s] ?? 0}</li>)}
           </ul>
-          <p className="text-xs text-muted-foreground">A auditoria roda a cada 15 minutos e usa só verificações gratuitas e leituras: nunca faz chamadas pagas.</p>
+          <p className="text-xs text-muted-foreground">
+            A auditoria roda a cada 15 minutos e usa só verificações gratuitas e leituras: nunca faz chamadas pagas.
+            {!canAdmin && ' Você pode reconhecer ou adiar um achado; correções técnicas são feitas pela conta de gerenciamento (use Solicitações).'}
+          </p>
           <div aria-live="polite">{actionError && <p role="alert" className="text-sm text-destructive">{actionError}</p>}</div>
         </CardContent>
       </Card>
@@ -155,9 +160,10 @@ export function AuditView({ overview, loading, error, now, canAdmin, running, on
                       </p>
                       {msg && <p role="status" className={`text-sm ${msg.ok ? 'text-emerald-800 dark:text-emerald-200' : 'text-destructive'}`}>{msg.text}</p>}
                       <div className="flex flex-wrap items-center gap-2">
-                        {fixable && (
-                          <Button size="sm" disabled={(!canAdmin && !isRoute) || fixBusy === f.id} onClick={() => startFix(f)}
-                            title={!canAdmin && !isRoute ? 'Só proprietário ou administrador pode aplicar correções' : undefined} aria-label={`${isRoute ? 'Abrir tela' : 'Aplicar correção'}: ${f.title}`}>
+                        {/* Visão cliente: sem Corrigir nem Abrir tela (são ações da conta de gerenciamento). */}
+                        {fixable && canAdmin && (
+                          <Button size="sm" disabled={fixBusy === f.id} onClick={() => startFix(f)}
+                            aria-label={`${isRoute ? 'Abrir tela' : 'Aplicar correção'}: ${f.title}`}>
                             {fixBusy === f.id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" /> : <Wrench className="mr-1 h-4 w-4" aria-hidden="true" />}
                             {isRoute ? 'Abrir tela' : 'Aplicar correção'}
                           </Button>
@@ -193,7 +199,7 @@ export function AuditView({ overview, loading, error, now, canAdmin, running, on
         </details>
       )}
 
-      <section aria-labelledby="audit-runs" className="space-y-2">
+      {canAdmin && <section aria-labelledby="audit-runs" className="space-y-2">
         <h3 id="audit-runs" className="text-lg font-semibold">Histórico de execuções</h3>
         {overview.runs.length === 0 ? <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Nenhuma execução registrada.</p> : (
           <div className="overflow-x-auto rounded-md border">
@@ -212,7 +218,7 @@ export function AuditView({ overview, loading, error, now, canAdmin, running, on
             </Table>
           </div>
         )}
-      </section>
+      </section>}
 
       <AlertDialog open={!!fixTarget} onOpenChange={(open) => { if (!open) setFixTarget(null); }}>
         <AlertDialogContent>

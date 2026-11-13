@@ -557,9 +557,9 @@ describe('SearchTrafficView', () => {
     expect(p.onRetry).toHaveBeenCalled();
   });
 
-  it('não-admin não sincroniza', () => {
+  it('visão cliente: o botão Sincronizar agora nem aparece', () => {
     view({ canAdmin: false });
-    expect(screen.getByRole('button', { name: /Sincronizar agora/ })).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('button', { name: /Sincronizar agora/ })).toBeNull();
   });
 
   it('carregando mostra esqueleto acessível', () => {

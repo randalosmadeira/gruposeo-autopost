@@ -15,7 +15,7 @@ const REALTIME_DEBOUNCE_MS = 400;
  * os demais erros viram `Error(<código do servidor>)` para a camada de tela traduzir. Nunca registra o corpo da requisição
  * (ele pode carregar a credencial em `store_credential`).
  */
-export async function invokeEdge<T>(fn: 'nexus-intelligence' | 'nexus-audit', projectId: string, body: Record<string, unknown>): Promise<T> {
+export async function invokeEdge<T>(fn: 'nexus-intelligence' | 'nexus-audit' | 'nexus-visibility', projectId: string, body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke(fn, { body: { projectId, ...body } });
   if (error) {
     let status = 0;

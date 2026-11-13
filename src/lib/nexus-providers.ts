@@ -1,6 +1,6 @@
 import type {
-  HealthCheckResult, OverallStatus, ProviderCategory, ProviderId, ProviderOverviewItem, ProviderStatus, ProvidersOverview,
-  SearchSyncResponse,
+  Ga4SyncResult, HealthCheckResult, NexusViewer, OverallStatus, ProviderCategory, ProviderId, ProviderOverviewItem, ProviderProgram, ProviderStatus,
+  ProvidersOverview, ProvidersSummary, RawProviderOverviewItem, SearchSyncResponse, SimpleProviderStatus,
 } from '@/types/nexus-providers';
 
 // ---------------------------------------------------------------------------
@@ -122,6 +122,42 @@ const BING: ProviderCatalogEntry = {
   },
 };
 
+const GA4: ProviderCatalogEntry = {
+  id: 'ga4', name: 'Google Analytics 4 (Data API)', category: 'search_truth', credentialKind: 'service_account_json',
+  credentialLabel: 'JSON da conta de serviço', credentialExample: '{ "type": "service_account", "client_email": "…", "private_key": "-----BEGIN PRIVATE KEY-----…" }',
+  formatHint: 'Cole o JSON completo da conta de serviço (pode ser o mesmo arquivo usado no Search Console).',
+  contractUrl: 'https://analytics.google.com/',
+  docsUrl: 'https://developers.google.com/analytics/devguides/reporting/data/v1',
+  keyUrl: 'https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com',
+  extraLinks: [{ label: 'Ativar a Google Analytics Data API', url: 'https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com' }],
+  costLabel: 'Grátis.', testCost: null, hasTest: true,
+  doc: {
+    steps: [
+      'No Google Cloud, ative a Google Analytics Data API no mesmo projeto da conta de serviço (pode ser a mesma do Search Console).',
+      'No Google Analytics, abra Administrador → Acesso à propriedade e adicione o e-mail da conta de serviço (campo client_email do JSON) com a função Leitor.',
+      'No Zica.ai, clique em Conectar e cole o conteúdo completo do JSON. O teste gratuito roda em seguida.',
+      'Informe o ID da propriedade GA4 do projeto (somente números) na aba Analytics. Cada site usa a sua própria propriedade.',
+      'Clique em Sincronizar o Analytics para trazer sessões, engajamento, eventos-chave e tráfego vindo de assistentes de IA.',
+    ],
+    keyLocation: 'Google Cloud → IAM e administrador → Contas de serviço → Chaves → Adicionar chave → JSON. O ID da propriedade fica em Google Analytics → Administrador → Detalhes da propriedade.',
+    credentialFormat: 'JSON com "type": "service_account", "client_email" e "private_key" iniciando em -----BEGIN PRIVATE KEY-----. Tamanho máximo de 4096 caracteres.',
+    endpoints: [
+      { label: 'Troca do token (teste de saúde)', method: 'POST', url: 'https://oauth2.googleapis.com/token', note: 'JWT assinado; escopo analytics.readonly.' },
+      { label: 'Metadados da propriedade (teste de saúde)', method: 'GET', url: 'https://analyticsdata.googleapis.com/v1beta/properties/{propriedade}/metadata', note: 'Gratuito; só roda quando o projeto já tem o ID da propriedade.' },
+      { label: 'Relatório (sincronização)', method: 'POST', url: 'https://analyticsdata.googleapis.com/v1beta/properties/{propriedade}:runReport', note: 'Dimensões: data, página, canal e origem.' },
+    ],
+    params: 'O ID da propriedade GA4 é por projeto (somente dígitos). A janela de sincronização vai de 1 a 90 dias (padrão 28).',
+    limits: 'Uso gratuito, sujeito às cotas da Google Analytics Data API.',
+    commonErrors: [
+      { symptom: 'Acesso negado (ga4_forbidden)', fix: 'A conta de serviço ainda não foi adicionada como Leitor na propriedade do Google Analytics.' },
+      { symptom: 'Propriedade não informada (ga4_property_required)', fix: 'Informe o ID da propriedade GA4 do projeto na aba Analytics.' },
+      { symptom: 'Propriedade já usada em outro projeto', fix: 'Cada site precisa da sua própria propriedade: use o ID correto deste projeto.' },
+      { symptom: 'Cota atingida (ga4_quota)', fix: 'Aguarde a renovação da cota e sincronize de novo.' },
+    ],
+    zicaUsage: 'Traz dados reais de visitas (sessões, engajamento, eventos-chave e tráfego de assistentes de IA) para a aba Analytics e para o Desempenho por área. Só leitura.',
+  },
+};
+
 const SERPER: ProviderCatalogEntry = {
   id: 'serper', name: 'Serper', category: 'serp', credentialKind: 'api_key',
   credentialLabel: 'Chave de API', credentialExample: 'texto de 16 a 200 caracteres',
@@ -152,15 +188,15 @@ const SERPER: ProviderCatalogEntry = {
 const DATAFORSEO: ProviderCatalogEntry = {
   id: 'dataforseo', name: 'DataForSEO SERP API', category: 'serp', credentialKind: 'login_password',
   credentialLabel: 'login:senha da API', credentialExample: 'login:senha_da_API',
-  formatHint: 'Use o formato login:senha_da_API, com exatamente um ":" entre login e senha.',
+  formatHint: 'Use o formato login:senha_da_API, com exatamente um ":" entre login e senha. Na DataForSEO, copie o "Login da API" e a "Senha da API" (clique no olho para ver); não use o campo "Formato Base64" nem a senha de entrada do painel.',
   contractUrl: 'https://app.dataforseo.com/register',
   docsUrl: 'https://docs.dataforseo.com/v3/appendix/user_data/',
   keyUrl: 'https://docs.dataforseo.com/v3/appendix/user_data/', extraLinks: [],
   costLabel: '~US$ 0,002–0,006 por consulta.', testCost: null, hasTest: true,
   doc: {
     steps: [
-      'Crie a conta no DataForSEO e obtenha o login e a senha da API (não é a senha do site).',
-      'No Zica.ai, clique em Conectar e cole no formato login:senha_da_API.',
+      'Crie a conta no DataForSEO, conclua a verificação da conta e abra "Acesso à API": copie o Login da API e a Senha da API (clique no olho). Não é a senha do site, e o campo "Formato Base64" não serve aqui.',
+      'No Zica.ai, clique em Conectar e cole no formato login:senha_da_API (login, um único ":" e a senha).',
       'O teste gratuito consulta o saldo e os limites da conta.',
       'Para usar em execuções pagas, habilite o provedor no painel Liberação de execução paga.',
     ],
@@ -366,12 +402,14 @@ const COPILOT: ProviderCatalogEntry = {
 };
 
 export const PROVIDER_CATALOG: readonly ProviderCatalogEntry[] = [
-  GSC, BING, SERPER, DATAFORSEO, SERPAPI, BRAVE, OPENAI, GEMINI, ANTHROPIC, PERPLEXITY, COPILOT,
+  GSC, BING, GA4, SERPER, DATAFORSEO, SERPAPI, BRAVE, OPENAI, GEMINI, ANTHROPIC, PERPLEXITY, COPILOT,
 ];
 export const PROVIDER_IDS: readonly ProviderId[] = PROVIDER_CATALOG.map((p) => p.id);
 export const COST_TEST_PROVIDERS: readonly ProviderId[] = PROVIDER_CATALOG.filter((p) => p.testCost).map((p) => p.id);
 export const CATEGORY_ORDER: readonly ProviderCategory[] = ['search_truth', 'serp', 'ai_citations', 'manual'];
 export const FREE_SEARCH_PROVIDERS: readonly ProviderId[] = ['gsc', 'bing_webmaster'];
+/** Provedores com teste de saúde gratuito (contrato GA4/gestão): entram na ativação guiada. */
+export const FREE_HEALTH_PROVIDERS: readonly ProviderId[] = ['gsc', 'bing_webmaster', 'ga4'];
 
 export function isProviderId(value: string): value is ProviderId { return PROVIDER_IDS.includes(value as ProviderId); }
 export function getCatalogEntry(id: string): ProviderCatalogEntry | undefined { return PROVIDER_CATALOG.find((p) => p.id === id); }
@@ -535,6 +573,16 @@ const ERROR_MESSAGES: Record<string, string> = {
   providers_required: 'Habilite ao menos um provedor conectado.',
   gsc_not_configured: 'O Google Search Console ainda não está conectado. Guarde o JSON da conta de serviço primeiro.',
   gsc_forbidden: 'A conta de serviço não tem acesso à propriedade. No Search Console, adicione o e-mail da conta de serviço em Configurações → Usuários e permissões.',
+  manager_required: 'Esta ação é técnica e só a conta de gerenciamento pode fazer. Use “Solicitar” para pedir ao gestor.',
+  ga4_not_configured: 'O Google Analytics ainda não está conectado. Peça ao gestor para guardar a credencial primeiro.',
+  ga4_property_required: 'Falta informar o ID da propriedade do Google Analytics deste projeto.',
+  ga4_forbidden: 'A conta de serviço não tem acesso à propriedade do Google Analytics. Adicione o e-mail da conta de serviço como Leitor em Administrador → Acesso à propriedade.',
+  ga4_quota: 'A cota do Google Analytics foi atingida. Tente de novo mais tarde.',
+  ga4_unreachable: 'Não foi possível falar com o Google Analytics agora. Tente de novo em alguns minutos.',
+  ga4_property_already_used: 'Este ID de propriedade já está em uso por outro projeto. Cada site precisa da sua própria propriedade.',
+  ga4_property_invalid: 'O ID da propriedade GA4 deve ter só números (de 5 a 15 dígitos).',
+  too_many_open_requests: 'Já existem muitas solicitações abertas (limite de 20). Aguarde o gestor responder antes de enviar outra.',
+  request_not_found: 'Solicitação não encontrada.',
   gsc_unreachable: 'Não foi possível falar com o Google Search Console agora. Tente de novo em alguns minutos.',
   bing_not_configured: 'O Bing Webmaster ainda não está conectado. Guarde a chave de API primeiro.',
   bing_unreachable: 'O Bing Webmaster está instável ou fora do ar. Tente de novo em alguns minutos.',
@@ -583,7 +631,7 @@ export function validateSecretFormat(providerId: string, rawSecret: string): str
       const parts = secret.split(':');
       return parts.length === 2 && parts[0].trim() && parts[1].trim() ? null : fail;
     }
-    case 'gsc': {
+    case 'gsc': case 'ga4': {
       try {
         const j = JSON.parse(secret) as Record<string, unknown>;
         const ok = j && j.type === 'service_account' && typeof j.client_email === 'string' && j.client_email
@@ -609,10 +657,109 @@ export function emptyOverviewItem(id: ProviderId): ProviderOverviewItem {
   };
 }
 
-/** Sempre devolve os 11 provedores do catálogo, na ordem do catálogo, preenchendo os que o servidor não mandou. */
+/** Status simplificado (cliente) -> status técnico equivalente, para a tela usar um único tipo. */
+const SIMPLE_TO_STATUS: Record<SimpleProviderStatus, ProviderStatus> = { connected: 'healthy', attention: 'degraded', not_connected: 'not_configured' };
+const TECHNICAL_STATUSES: readonly string[] = ['not_configured', 'stored_unverified', 'healthy', 'degraded', 'error', 'manual'];
+
+/** Completa o que o servidor omite (cliente não recebe credencial, saúde nem uso) e converte o status simplificado. */
+export function normalizeOverviewItem(raw: RawProviderOverviewItem): ProviderOverviewItem {
+  const base = emptyOverviewItem(raw.id);
+  const status: ProviderStatus = TECHNICAL_STATUSES.includes(raw.status)
+    ? (raw.status as ProviderStatus)
+    : SIMPLE_TO_STATUS[raw.status as SimpleProviderStatus] ?? base.status;
+  return {
+    ...base, ...raw, status,
+    credential: { ...base.credential, ...(raw.credential ?? {}) },
+    health: { ...base.health, ...(raw.health ?? {}) },
+    usage: { ...base.usage, ...(raw.usage ?? {}) },
+  };
+}
+
+/** Sempre devolve os provedores do catálogo, na ordem do catálogo, preenchendo os que o servidor não mandou. */
 export function mergeCatalogWithOverview(overview: ProvidersOverview | null | undefined): ProviderOverviewItem[] {
   const byId = new Map((overview?.providers ?? []).map((p) => [p.id, p] as const));
-  return PROVIDER_CATALOG.map((c) => byId.get(c.id) ?? emptyOverviewItem(c.id));
+  return PROVIDER_CATALOG.map((c) => {
+    const raw = byId.get(c.id);
+    return raw ? normalizeOverviewItem(raw) : emptyOverviewItem(c.id);
+  });
+}
+
+/**
+ * Defesa em profundidade para a Visão cliente: mesmo que o servidor mande, a tela descarta os últimos 4 dígitos,
+ * o detalhe técnico dos testes e a quota. Fica só o que o cliente pode ver (status, atualização e uso agregado).
+ */
+export function sanitizeItemForClient(item: ProviderOverviewItem): ProviderOverviewItem {
+  const last = item.health.last;
+  return {
+    ...item,
+    enabled: false,
+    credential: { stored: item.credential.stored, last_four: null, status: null, updated_at: item.credential.updated_at },
+    health: { ...item.health, last: last ? { checked_at: last.checked_at, ok: last.ok } : null },
+  };
+}
+
+// ---- Papel de quem consulta (gestor × cliente) ----
+
+export const CLIENT_VIEWER: NexusViewer = { role: 'client', can_manage_technical: false };
+
+/**
+ * Papel de quem consulta. Ordem: `viewer` (contrato novo) -> `viewer_is_admin` (compatibilidade) -> cliente.
+ * Decisão restritiva: sem resposta do servidor NÃO se deduz permissão pelo papel local; o servidor é quem decide.
+ */
+export function resolveViewer(overview: Pick<ProvidersOverview, 'viewer' | 'viewer_is_admin'> | null | undefined): NexusViewer {
+  const v = overview?.viewer;
+  if (v && typeof v.can_manage_technical === 'boolean') {
+    if (!v.can_manage_technical) return CLIENT_VIEWER;
+    return { role: v.role === 'manager' ? 'manager' : 'org_admin', can_manage_technical: true };
+  }
+  if (overview?.viewer_is_admin === true) return { role: 'org_admin', can_manage_technical: true };
+  return CLIENT_VIEWER;
+}
+
+/** Só o gestor da plataforma responde solicitações (contrato, seção A). Admin de org interna gerencia o técnico, mas não triagem. */
+export function canTriageRequests(viewer: NexusViewer): boolean { return viewer.role === 'manager' && viewer.can_manage_technical; }
+
+const SIMPLE_LABELS: Record<SimpleProviderStatus, string> = { connected: 'Conectado', attention: 'Precisa de atenção', not_connected: 'Não conectado' };
+export function simpleStatusOf(status: ProviderStatus | string): SimpleProviderStatus {
+  if (status === 'healthy' || status === 'connected') return 'connected';
+  if (status === 'degraded' || status === 'error' || status === 'stored_unverified' || status === 'attention') return 'attention';
+  return 'not_connected';
+}
+export function simpleStatusLabel(status: SimpleProviderStatus): string { return SIMPLE_LABELS[status]; }
+export function simpleStatusTone(status: SimpleProviderStatus): Tone {
+  return status === 'connected' ? 'success' : status === 'attention' ? 'warning' : 'neutral';
+}
+
+/** Há dados chegando deste provedor (ou ao menos credencial guardada)? Vale para as duas visões. */
+export function providerIsConnected(item: Pick<ProviderOverviewItem, 'status' | 'credential'>): boolean {
+  return item.credential.stored || (item.status !== 'manual' && simpleStatusOf(item.status) !== 'not_connected');
+}
+
+/** Última atualização conhecida do provedor (cliente: `updated_at`; gestor: último teste ou data da credencial). */
+export function providerUpdatedAt(item: ProviderOverviewItem): string | null {
+  return item.updated_at ?? item.health.last?.checked_at ?? item.credential.updated_at ?? null;
+}
+
+export function summarizeItemsSimple(items: ProviderOverviewItem[]): { total: number; connected: number; attention: number; notConnected: number } {
+  const s = items.filter((i) => i.category !== 'manual').map((i) => simpleStatusOf(i.status));
+  return {
+    total: s.length,
+    connected: s.filter((x) => x === 'connected').length,
+    attention: s.filter((x) => x === 'attention').length,
+    notConnected: s.filter((x) => x === 'not_connected').length,
+  };
+}
+
+export const EMPTY_PROGRAM: ProviderProgram = { execution_enabled: false, budget_usd_micros: 0, reserved_usd_micros: 0, consumed_usd_micros: 0, providers_enabled: [] };
+
+/** Resumo de reserva quando o servidor não manda `summary`. */
+export function fallbackSummary(items: ProviderOverviewItem[]): ProvidersSummary {
+  const by = (st: ProviderStatus) => items.filter((i) => i.status === st).length;
+  const connected = items.filter((i) => i.credential.stored).length;
+  return {
+    total: items.length, connected, healthy: by('healthy'), degraded: by('degraded'), error: by('error'),
+    not_configured: by('not_configured'), manual: by('manual'), overall: connected === 0 ? 'empty' : by('error') > 0 ? 'attention' : 'ok', score: null,
+  };
 }
 
 export function filterByCategory(items: ProviderOverviewItem[], category: ProviderCategory | 'all'): ProviderOverviewItem[] {
@@ -626,7 +773,7 @@ export function connectedProviderIds(items: ProviderOverviewItem[]): ProviderId[
 
 /** O cartão "Ativação guiada dos gratuitos" some quando GSC e Bing estão conectados e saudáveis. */
 export function needsGuidedActivation(items: ProviderOverviewItem[]): boolean {
-  return FREE_SEARCH_PROVIDERS.some((id) => {
+  return FREE_HEALTH_PROVIDERS.some((id) => {
     const it = items.find((i) => i.id === id);
     return !it || it.status !== 'healthy';
   });
@@ -643,8 +790,8 @@ export function latestCheckAt(items: ProviderOverviewItem[]): string | null {
 
 /** Linha da faixa de saúde geral. */
 export function healthStripText(overview: ProvidersOverview, items: ProviderOverviewItem[], now: number | Date = Date.now()): string {
-  const s = overview.summary;
-  const p = overview.program;
+  const s = overview.summary ?? fallbackSummary(items);
+  const p = overview.program ?? EMPTY_PROGRAM;
   const total = s.total || PROVIDER_CATALOG.length;
   return [
     `${s.connected} de ${total} conectados`,
@@ -709,6 +856,16 @@ export function normalizeSyncResponse(r: SearchSyncResponse | null | undefined):
     return r.results.map((x) => ({ source: x.source, ok: x.ok, rows: x.rows_upserted ?? 0, truncated: !!x.truncated, ...(x.error ? { error: x.error } : {}) }));
   }
   return [{ source: 'gsc', ok: true, rows: r.rows_upserted ?? 0, truncated: !!r.truncated }];
+}
+
+/** Resumo do `ga4_sync` em uma frase. */
+export function ga4SyncSummaryText(r: Ga4SyncResult | null | undefined): string {
+  const rows = r?.results ?? [];
+  if (!r) return 'Nada foi sincronizado.';
+  if (rows.length === 0) return typeof r.rows_upserted === 'number' ? `Google Analytics: ${r.rows_upserted.toLocaleString('pt-BR')} linha(s) gravada(s)` : 'Nada foi sincronizado.';
+  return rows.map((x) => (x.ok
+    ? `Google Analytics: ${(x.rows_upserted ?? 0).toLocaleString('pt-BR')} linha(s) gravada(s)${r.truncated ? ' (resultado truncado)' : ''}`
+    : `Google Analytics: ${providerErrorMessage(x.error ?? 'operation_failed')}`)).join(' · ');
 }
 
 export function sourceLabel(source: string): string { return source === 'bing' ? 'Bing Webmaster' : 'Google Search Console'; }

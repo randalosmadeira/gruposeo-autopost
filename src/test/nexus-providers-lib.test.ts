@@ -54,9 +54,9 @@ function item(id: ProviderOverviewItem['id'], over: Partial<ProviderOverviewItem
 }
 
 describe('catálogo', () => {
-  it('tem os 11 provedores do contrato, ids únicos e na ordem', () => {
-    expect(PROVIDER_IDS).toEqual(['gsc', 'bing_webmaster', 'serper', 'dataforseo', 'serpapi', 'brave', 'openai', 'gemini', 'anthropic', 'perplexity', 'copilot']);
-    expect(new Set(PROVIDER_IDS).size).toBe(11);
+  it('tem os 12 provedores (11 do contrato + ga4 depois do Bing), ids únicos e na ordem', () => {
+    expect(PROVIDER_IDS).toEqual(['gsc', 'bing_webmaster', 'ga4', 'serper', 'dataforseo', 'serpapi', 'brave', 'openai', 'gemini', 'anthropic', 'perplexity', 'copilot']);
+    expect(new Set(PROVIDER_IDS).size).toBe(12);
   });
 
   it('contém exatamente as URLs de contratar/documentação do contrato', () => {
@@ -294,19 +294,19 @@ describe('visão geral', () => {
   });
   const now = new Date('2026-11-12T12:00:30Z').getTime();
 
-  it('mergeCatalogWithOverview devolve os 11 na ordem do catálogo, completando os ausentes', () => {
+  it('mergeCatalogWithOverview devolve os 12 na ordem do catálogo, completando os ausentes', () => {
     const merged = mergeCatalogWithOverview(overview([item('openai', { status: 'healthy' })]));
     expect(merged.map((m) => m.id)).toEqual([...PROVIDER_IDS]);
     expect(merged.find((m) => m.id === 'openai')?.status).toBe('healthy');
     expect(merged.find((m) => m.id === 'serper')?.status).toBe('not_configured');
     expect(merged.find((m) => m.id === 'copilot')?.status).toBe('manual');
-    expect(mergeCatalogWithOverview(undefined)).toHaveLength(11);
+    expect(mergeCatalogWithOverview(undefined)).toHaveLength(12);
   });
 
   it('filterByCategory e connectedProviderIds (sem manuais)', () => {
     const items = mergeCatalogWithOverview(undefined).map((i) => (i.id === 'openai' || i.id === 'copilot' ? { ...i, credential: { ...i.credential, stored: true } } : i));
-    expect(filterByCategory(items, 'all')).toHaveLength(11);
-    expect(filterByCategory(items, 'search_truth').map((i) => i.id)).toEqual(['gsc', 'bing_webmaster']);
+    expect(filterByCategory(items, 'all')).toHaveLength(12);
+    expect(filterByCategory(items, 'search_truth').map((i) => i.id)).toEqual(['gsc', 'bing_webmaster', 'ga4']);
     expect(filterByCategory(items, 'ai_citations')).toHaveLength(4);
     expect(filterByCategory(items, 'manual').map((i) => i.id)).toEqual(['copilot']);
     expect(connectedProviderIds(items)).toEqual(['openai']);
@@ -322,13 +322,15 @@ describe('visão geral', () => {
     );
   });
 
-  it('needsGuidedActivation some só quando GSC e Bing estão saudáveis', () => {
+  it('needsGuidedActivation some só quando GSC, Bing e GA4 estão saudáveis', () => {
     const base = mergeCatalogWithOverview(undefined);
     expect(needsGuidedActivation(base)).toBe(true);
     const only = base.map((i) => (i.id === 'gsc' ? { ...i, status: 'healthy' as const } : i));
     expect(needsGuidedActivation(only)).toBe(true);
     const both = base.map((i) => (i.id === 'gsc' || i.id === 'bing_webmaster' ? { ...i, status: 'healthy' as const } : i));
-    expect(needsGuidedActivation(both)).toBe(false);
+    expect(needsGuidedActivation(both)).toBe(true); // falta o GA4
+    const all = base.map((i) => (i.id === 'gsc' || i.id === 'bing_webmaster' || i.id === 'ga4' ? { ...i, status: 'healthy' as const } : i));
+    expect(needsGuidedActivation(all)).toBe(false);
   });
 
   it('summarizeHealthResults', () => {

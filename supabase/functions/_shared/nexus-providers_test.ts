@@ -5,6 +5,7 @@
  */
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
+import { clearGoogleTokenCache } from "./nexus-gsc.ts";
 import {
   buildProvidersOverview, CATALOG_IDS, computeProviderScore, computeProviderStatus, executionGate, FREE_HEALTH_PROVIDERS, HEALTH_ALLOWED_HOSTS, isAllowedHealthUrl,
   PROVIDER_IDS, readBraveQuota, readDataForSeoQuota, readSerpApiQuota, redact, runHealthChecks, runProviderHealthCheck, summarizeProviders, validateCredentialFormat,
@@ -46,7 +47,7 @@ const SECRETS: Record<string, string> = {
   perplexity: "pplx-test-00000000000",
 };
 type Fixture = { ok: () => Response; unauthorized: () => Response; urlStart: string; method: string; cost: number; invalidHttp: number; authHeader: (h: Record<string, string>, secret: string) => boolean };
-const FIXTURES: Record<Exclude<ProviderId, "gsc">, Fixture> = {
+const FIXTURES: Record<Exclude<ProviderId, "gsc" | "ga4">, Fixture> = {
   bing_webmaster: {
     ok: () => res({ d: [{ Url: "https://www.exemplo.com.br/", IsVerified: true }] }),
     unauthorized: () => res({ ErrorCode: 3, Message: "ERROR!!! InvalidApiKey" }, 400),
@@ -95,7 +96,7 @@ const FIXTURES: Record<Exclude<ProviderId, "gsc">, Fixture> = {
     urlStart: "https://api.perplexity.ai/search", method: "POST", cost: 5000, invalidHttp: 401, authHeader: (h, s) => h["authorization"] === `Bearer ${s}`,
   },
 };
-const ids = Object.keys(FIXTURES) as Array<Exclude<ProviderId, "gsc">>;
+const ids = Object.keys(FIXTURES) as Array<Exclude<ProviderId, "gsc" | "ga4">>;
 
 // ---------------------------------------------------------------------------
 // Formatos de credencial
@@ -157,10 +158,12 @@ Deno.test("isAllowedHealthUrl — só https e hosts da lista; sem credenciais, p
   assert(HEALTH_ALLOWED_HOSTS.length >= 12);
 });
 
-Deno.test("catálogo — 10 provedores com credencial + copilot; testes grátis e com custo disjuntos", () => {
-  assertEquals(PROVIDER_IDS.length, 10);
-  assertEquals(CATALOG_IDS.length, 11);
-  assertEquals([...FREE_HEALTH_PROVIDERS].sort(), ["anthropic", "bing_webmaster", "dataforseo", "gemini", "gsc", "openai", "serpapi"]);
+Deno.test("catálogo — 11 provedores com credencial (inclui ga4) + copilot; testes grátis e com custo disjuntos", () => {
+  assertEquals(PROVIDER_IDS.length, 11);
+  assertEquals(CATALOG_IDS.length, 12);
+  assertEquals(PROVIDER_IDS.slice(0, 3), ["gsc", "bing_webmaster", "ga4"], "ga4 logo depois de bing_webmaster");
+  assertEquals([...FREE_HEALTH_PROVIDERS].sort(), ["anthropic", "bing_webmaster", "dataforseo", "ga4", "gemini", "gsc", "openai", "serpapi"]);
+  assertEquals(FREE_HEALTH_PROVIDERS.slice(0, 3), ["gsc", "bing_webmaster", "ga4"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -223,7 +226,7 @@ for (const id of ids) {
 }
 
 Deno.test("saúde — quota: DataForSEO (saldo), SerpApi (buscas) e Brave (cabeçalhos); OpenAI/Anthropic sem quota", async () => {
-  const run = async (id: Exclude<ProviderId, "gsc">) => (await runProviderHealthCheck(id, SECRETS[id], recorder(() => FIXTURES[id].ok()).fetchFn, { nowMs: NOW })).quota;
+  const run = async (id: Exclude<ProviderId, "gsc" | "ga4">) => (await runProviderHealthCheck(id, SECRETS[id], recorder(() => FIXTURES[id].ok()).fetchFn, { nowMs: NOW })).quota;
   assertEquals(await run("dataforseo"), { label: "Saldo (US$)", remaining: 12.3457, limit: 50 });
   assertEquals(await run("serpapi"), { label: "Buscas restantes no plano", remaining: 42, limit: 100 });
   assertEquals(await run("brave"), { label: "Requisições restantes no período", remaining: 1999, limit: 2000, reset_at: new Date(NOW + 86400_000).toISOString() });
@@ -442,7 +445,7 @@ Deno.test("summarizeProviders — overall empty/critical/attention/ok e score m�
   assertEquals(summarizeProviders([]).score, null);
 });
 
-Deno.test("buildProvidersOverview — monta os 11 itens, aplica status/score e lê providers_enabled do programa", () => {
+Deno.test("buildProvidersOverview — monta os 12 itens, aplica status/score e lê providers_enabled do programa", () => {
   const raw = {
     providers: [
       { provider: "openai", credential: { stored: true, last_four: "abcd", status: "active", updated_at: ago(30 * H) }, last_health: { checked_at: ago(1 * H), ok: true, latency_ms: 700, http_status: 200, detail: "Conexão válida", quota: null, cost_micros: 0 },
@@ -467,8 +470,8 @@ Deno.test("buildProvidersOverview — monta os 11 itens, aplica status/score e l
   assertEquals(by.gemini.status, "error");
   assertEquals(by.anthropic.status, "not_configured");
   assertEquals(o.program, { execution_enabled: true, budget_usd_micros: 5_000_000, reserved_usd_micros: 1000, consumed_usd_micros: 2000, providers_enabled: ["openai"] });
-  assertEquals(o.summary.total, 11);
-  assertEquals([o.summary.connected, o.summary.healthy, o.summary.error, o.summary.manual, o.summary.not_configured], [3, 1, 1, 1, 7]);
+  assertEquals(o.summary.total, 12);
+  assertEquals([o.summary.connected, o.summary.healthy, o.summary.error, o.summary.manual, o.summary.not_configured], [3, 1, 1, 1, 8]);
   assertEquals(o.summary.overall, "attention");
   // sem dados: tudo "não configurado" e vazio
   const empty = buildProvidersOverview(null, ORG, NOW);
@@ -521,4 +524,106 @@ Deno.test("validateExecutionSettings — limites, confirmação LIBERAR, provedo
   // desligar: sem confirmação, sem provedores, provedor já desconectado é filtrado em silêncio
   assertEquals(validateExecutionSettings({ executionEnabled: false, budgetUsd: 0, providersEnabled: [] }, connected), { ok: true, value: { executionEnabled: false, budgetUsdMicros: 0, providersEnabled: [] } });
   assertEquals(validateExecutionSettings({ executionEnabled: false, budgetUsd: 3, providersEnabled: ["serper", "brave", "copilot"] }, connected), { ok: true, value: { executionEnabled: false, budgetUsdMicros: 3_000_000, providersEnabled: ["serper"] } });
+});
+
+// ---------------------------------------------------------------------------
+// GA4 (13/11/2026): formato da credencial, saúde (token; token + getMetadata) e seleção da propriedade em runHealthChecks
+// ---------------------------------------------------------------------------
+async function ga4Account(): Promise<string> {
+  const pair = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  const der = new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey));
+  const b64 = btoa(String.fromCharCode(...der));
+  return JSON.stringify({ type: "service_account", client_email: "ga4@proj-teste.iam.gserviceaccount.com", private_key: `-----BEGIN PRIVATE KEY-----\n${b64.match(/.{1,64}/g)!.join("\n")}\n-----END PRIVATE KEY-----\n` });
+}
+let ga4Json: string | null = null;
+const ga4Secret = async () => (ga4Json ??= await ga4Account());
+const isTokenCall = (c: { url: string }) => c.url === "https://oauth2.googleapis.com/token";
+
+Deno.test("validateCredentialFormat — ga4 usa o mesmo formato de conta de serviço do gsc (JSON compactado)", async () => {
+  const secret = await ga4Secret();
+  const r = validateCredentialFormat("ga4", JSON.stringify(JSON.parse(secret), null, 2));
+  assertEquals(r.ok, true);
+  assertEquals(r.ok && r.secret, JSON.stringify(JSON.parse(secret)));
+  assertEquals(validateCredentialFormat("ga4", "lixo"), { ok: false, hint: "json_invalido" });
+  assertEquals(validateCredentialFormat("ga4", JSON.stringify({ type: "authorized_user" })), { ok: false, hint: "json_deve_ser_conta_de_servico" });
+});
+
+Deno.test("allowlist de saúde inclui a GA4 Data API (HTTPS, sem porta)", () => {
+  assert(isAllowedHealthUrl("https://analyticsdata.googleapis.com/v1beta/properties/123456789/metadata"));
+  assertFalse(isAllowedHealthUrl("http://analyticsdata.googleapis.com/v1beta/properties/1/metadata"));
+});
+
+Deno.test("saúde ga4 — sem propriedade valida só o token (escopo analytics.readonly)", async () => {
+  clearGoogleTokenCache();
+  const secret = await ga4Secret();
+  const { fetchFn, calls } = recorder((c) => isTokenCall(c) ? res({ access_token: "tok-ga4-a", expires_in: 3599 }) : res({}));
+  const r = await runProviderHealthCheck("ga4", secret, fetchFn, { nowMs: NOW });
+  assertEquals([r.ok, r.http_status, r.cost_micros], [true, 200, 0]);
+  assert(/propriedade GA4/.test(r.detail || ""));
+  assertEquals(calls.length, 1);
+  assert(isTokenCall(calls[0]));
+  const assertion = new URLSearchParams(calls[0].body || "").get("assertion")!;
+  const claims = JSON.parse(atob(assertion.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+  assertEquals(claims.scope, "https://www.googleapis.com/auth/analytics.readonly");
+  assertFalse(JSON.stringify(r).includes("BEGIN PRIVATE KEY"));
+});
+
+Deno.test("saúde ga4 — com propriedade consulta getMetadata (GET gratuito) com Bearer", async () => {
+  clearGoogleTokenCache();
+  const secret = await ga4Secret();
+  const { fetchFn, calls } = recorder((c) => isTokenCall(c) ? res({ access_token: "tok-ga4-b", expires_in: 3599 }) : res({ dimensions: [{}], metrics: [{}, {}] }));
+  const r = await runProviderHealthCheck("ga4", secret, fetchFn, { nowMs: NOW, ga4Property: "123456789" });
+  assertEquals([r.ok, r.http_status], [true, 200]);
+  assert(/enxerga a propriedade/.test(r.detail || ""));
+  const api = calls.find((c) => !isTokenCall(c))!;
+  assertEquals([api.url, api.method], ["https://analyticsdata.googleapis.com/v1beta/properties/123456789/metadata", "GET"]);
+  assertEquals(api.headers["authorization"], "Bearer tok-ga4-b");
+  // propriedade inválida (não só dígitos) é ignorada: nenhuma URL montada com texto do cliente
+  const bad = recorder((c) => isTokenCall(c) ? res({ access_token: "tok-ga4-c", expires_in: 3599 }) : res({}));
+  await runProviderHealthCheck("ga4", secret, bad.fetchFn, { nowMs: NOW, ga4Property: "123/../../x" });
+  assertFalse(bad.calls.some((c) => c.url.includes("analyticsdata")));
+});
+
+Deno.test("saúde ga4 — 403 na propriedade NÃO invalida a credencial; token recusado invalida; 429 e rede viram falha comum", async () => {
+  clearGoogleTokenCache();
+  const secret = await ga4Secret();
+  const forbidden = recorder((c) => isTokenCall(c) ? res({ access_token: "tok-ga4-d", expires_in: 3599 }) : res({ error: { message: "User does not have sufficient permissions" } }, 403));
+  const f = await runProviderHealthCheck("ga4", secret, forbidden.fetchFn, { nowMs: NOW, ga4Property: "123456789" });
+  assertEquals([f.ok, f.http_status, f.credential_invalid], [false, 403, undefined]);
+  assert(/leitor da propriedade GA4/.test(f.detail || ""));
+  assertFalse((f.detail || "").includes("sufficient permissions"), "não repete a mensagem do Google");
+  clearGoogleTokenCache();
+  const refused = recorder((c) => isTokenCall(c) ? res({ error: "invalid_grant", error_description: "Invalid JWT Signature." }, 400) : res({}));
+  const inv = await runProviderHealthCheck("ga4", secret, refused.fetchFn, { nowMs: NOW });
+  assertEquals([inv.ok, inv.credential_invalid, inv.http_status], [false, true, 400]);
+  const bad = await runProviderHealthCheck("ga4", "não é json", recorder(() => res({})).fetchFn, { nowMs: NOW });
+  assertEquals([bad.ok, bad.credential_invalid], [false, true]);
+  clearGoogleTokenCache();
+  const quota = recorder((c) => isTokenCall(c) ? res({ access_token: "tok-ga4-e", expires_in: 3599 }) : res({}, 429));
+  const q = await runProviderHealthCheck("ga4", secret, quota.fetchFn, { nowMs: NOW, ga4Property: "123456789" });
+  assertEquals([q.ok, q.http_status, q.credential_invalid], [false, 429, undefined]);
+  clearGoogleTokenCache();
+  const net = await runProviderHealthCheck("ga4", secret, (() => { throw new TypeError("offline"); }) as unknown as typeof fetch, { nowMs: NOW });
+  assertEquals([net.ok, net.detail], [false, "Falha de rede ao consultar o provedor"]);
+});
+
+Deno.test("runHealthChecks — ga4 usa a propriedade informada; grava histórico sem segredo", async () => {
+  clearGoogleTokenCache();
+  const secret = await ga4Secret();
+  const { admin, inserts, rpcs } = fakeAdmin([{ provider: "ga4", status: "stored_unverified" }], { ga4: secret });
+  const { fetchFn, calls } = recorder((c) => isTokenCall(c) ? res({ access_token: "tok-ga4-f", expires_in: 3599 }) : res({ dimensions: [], metrics: [] }));
+  const results = await runHealthChecks(admin, { organizationId: ORG, triggeredBy: USER, providers: ["ga4"], fetchFn, ga4Property: "987654321" });
+  assertEquals(results.map((r) => [r.provider, r.ok]), [["ga4", true]]);
+  assert(calls.some((c) => c.url.endsWith("/properties/987654321/metadata")));
+  assertEquals(rpcs, ["nexus_provider_secret_read:ga4"]);
+  assertEquals(inserts.length, 1);
+  assertEquals(inserts[0].row.provider, "ga4");
+  assertFalse(JSON.stringify(inserts).includes("PRIVATE KEY"));
+});
+
+Deno.test("buildProvidersOverview — inclui ga4 em search_truth, logo depois de bing_webmaster", () => {
+  const o = buildProvidersOverview({ providers: [{ provider: "ga4", credential: { stored: true, last_four: "ab12", status: "active", updated_at: ago(2 * H) } }] }, ORG, NOW);
+  assertEquals(o.providers.slice(0, 3).map((p) => p.id), ["gsc", "bing_webmaster", "ga4"]);
+  const ga4 = o.providers.find((p) => p.id === "ga4")!;
+  assertEquals([ga4.category, ga4.credential.stored, ga4.status], ["search_truth", true, "stored_unverified"]);
 });

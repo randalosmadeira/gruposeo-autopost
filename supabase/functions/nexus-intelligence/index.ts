@@ -2,7 +2,7 @@ import { providerFetch } from '../_shared/nexus-provider-fetch.ts';
 import '../_shared/nexus-runtime-bootstrap.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {allowWordPressBase} from '../_shared/nexus-spend-lock.ts';
-import { PROVIDER_CATALOG, isProviderId, isCatalogId, validateCredentialFormat, secretFormatError, MAX_SECRET_LENGTH, runHealthChecks, buildProvidersOverview, executionGate, validateExecutionSettings, providersEnabledFrom, COST_HEALTH_PROVIDERS } from '../_shared/nexus-providers.ts';
+import { PROVIDER_CATALOG, isProviderId, isCatalogId, validateCredentialFormat, secretFormatError, MAX_SECRET_LENGTH, runHealthChecks, buildProvidersOverview, executionGate, validateExecutionSettings, providersEnabledFrom } from '../_shared/nexus-providers.ts';
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveRequestActor, RequestAuthError } from "../_shared/request-auth.ts";
 import { parseSerp, parseAiObservation, SAMPLING_METHOD, AUTONOMOUS_REVIEW_PROMPT, validateAutonomousReview, validateLinkDestination, topicGroups, insertDraftLink } from "../_shared/nexus-intelligence.ts";
@@ -10,11 +10,21 @@ import { isObservationEngine, isExecutableEngine, engineKind, ENGINE_PROVIDER, n
 import { isPluginModeProject, resolvePluginKey, resolvePluginNamespace, pluginRequest } from "../_shared/wordpress-plugin-client.ts";
 import { runCollector } from "../_shared/nexus-collectors.ts";
 import { syncSearchPerformance } from "../_shared/nexus-search-sync.ts";
+import { syncGa4, isValidPropertyId } from '../_shared/nexus-ga4.ts';
+import { canManagerOperateOnForeignProject, checkActionPolicy, ga4ErrorStatus, integrationsRpcError, integrationsView, isManagerOnlyAction, isTechnicalAction, isUuid, loadViewer, makeManagementStore, parseIntegrationsInput, parseRequestCreate, parseRequestsFilter, parseRequestUpdate, redactOverviewForClient, requestRpcError, type ViewerContext } from '../_shared/nexus-management.ts';
 import { editorialFingerprint, signEditorialReceipt } from "../_shared/nexus-approval.ts";
 import { normalizeEditorialHtml } from "../_shared/editorial-html.ts";
 const cors = { "Access-Control-Allow-Origin":"*", "Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods":"POST, OPTIONS", "Content-Type":"application/json" };
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:cors});
 const text=(value:unknown,max=2000)=>typeof value==='string'?value.trim().slice(0,max):'';
+const isDay=(v:unknown):v is string=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v));
+/** Período (UTC) de `ga4_summary`/`content_performance`: padrão = últimos 28 dias; no máximo 366 dias. */
+const periodOf=(body:Record<string,unknown>):{from:string;to:string}|null=>{
+ const to=isDay(body.to)?body.to:new Date().toISOString().slice(0,10);
+ const from=isDay(body.from)?body.from:new Date(Date.parse(to)-27*86400000).toISOString().slice(0,10);
+ return from>to||Date.parse(to)-Date.parse(from)>366*86400000?null:{from,to};
+};
+const PROJECT_COLS='id,name,description,nicho,compliance_rules,domain,wordpress_url,organization_id,user_id,editorial_identity,commercial_info,social_links,cta_leads,cta_conclusao,social_instagram,social_linkedin,social_youtube,social_twitter,social_tiktok,social_google_maps,nexus_strategy,nexus_strategy_version,nexus_profile_status,wordpress_connector_mode,wordpress_username,wordpress_credential_ref,wordpress_app_password,wordpress_plugin_namespace';
 // Chamadas a provedores: fetch original (capturado antes do spend lock), URL montada pelo servidor, sem redirecionamento automático.
 const pf=((input:RequestInfo|URL,init?:RequestInit)=>providerFetch(input,{...init,redirect:'manual'})) as typeof fetch;
 Deno.serve(async req=>{
@@ -25,18 +35,30 @@ Deno.serve(async req=>{
  const admin=createClient(Deno.env.get('SUPABASE_URL')||'',key,{auth:{persistSession:false,autoRefreshToken:false}});
  try{
   const body=await req.json(); const actor=await resolveRequestActor(req,body.userId);
-  const {data:project,error:projectError}=await admin.from('projects').select('id,name,description,nicho,compliance_rules,domain,wordpress_url,organization_id,user_id,editorial_identity,commercial_info,social_links,cta_leads,cta_conclusao,social_instagram,social_linkedin,social_youtube,social_twitter,social_tiktok,social_google_maps,nexus_strategy,nexus_strategy_version,nexus_profile_status,wordpress_connector_mode,wordpress_username,wordpress_credential_ref,wordpress_app_password,wordpress_plugin_namespace').eq('id',body.projectId).eq('user_id',actor.userId).maybeSingle();
+  const action=typeof body.action==='string'?body.action:'';
+  const mgmt=makeManagementStore(admin);
+  let {data:project,error:projectError}=await admin.from('projects').select(PROJECT_COLS).eq('id',body.projectId).eq('user_id',actor.userId).maybeSingle();
+  // O gestor (CEO) opera projetos de organizações clientes nas ações de Motores & APIs sem ser o dono do projeto; nenhuma outra ação ganha esse acesso.
+  let foreignManager=false;
+  if(!project&&!projectError&&actor.mode==='user'&&isUuid(body.projectId)&&canManagerOperateOnForeignProject(action)&&await mgmt.isManagerUser(actor.userId)){
+   const foreign=await admin.from('projects').select(PROJECT_COLS).eq('id',body.projectId).maybeSingle();
+   project=foreign.data;projectError=foreign.error;foreignManager=!!foreign.data;
+  }
   if(projectError||!project?.organization_id)return json({error:'project_forbidden'},403);
   const org=project.organization_id;
-  const {data:membership,error:membershipError}=await admin.from('organization_members').select('organization_id').eq('organization_id',org).eq('user_id',actor.userId).eq('status','active').maybeSingle();
-  if(membershipError||!membership)return json({error:'organization_membership_required'},403);
+  if(!foreignManager){
+   const {data:membership,error:membershipError}=await admin.from('organization_members').select('organization_id').eq('organization_id',org).eq('user_id',actor.userId).eq('status','active').maybeSingle();
+   if(membershipError||!membership)return json({error:'organization_membership_required'},403);
+  }
   let host='';try{host=new URL(project.wordpress_url||(project.domain?`https://${project.domain}`:'')).hostname;}catch{host='';}
-  const isOrgAdmin=async()=>{
-   const {data:adminMember}=await admin.from('organization_members').select('role').eq('organization_id',org).eq('user_id',actor.userId).eq('status','active').in('role',['owner','admin']).maybeSingle();
-   if(adminMember)return true;
-   const {data:ownerOrg}=await admin.from('organizations').select('id').eq('id',org).eq('owner_user_id',actor.userId).maybeSingle();
-   return !!ownerOrg;
-  };
+  // Capacidade do visualizador (plano de gerenciamento): gestor, ou dono/admin de organização INTERNA. Dono de organização cliente não passa.
+  let viewerPromise:Promise<ViewerContext>|null=null;
+  const getViewer=()=>(viewerPromise??=loadViewer(mgmt,org,actor.userId));
+  if(isTechnicalAction(action)||isManagerOnlyAction(action)){
+   if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
+   const decision=checkActionPolicy(action,(await getViewer()).viewer);
+   if(!decision.ok)return json({error:decision.error},403);
+  }
   if(body.action==='status'){
    const [program,operations,credentials,jobs]=await Promise.all([
     admin.from('nexus_programs').select('*').eq('organization_id',org).maybeSingle(),
@@ -62,7 +84,7 @@ Deno.serve(async req=>{
    // Teste gratuito logo após salvar; provedores com custo ficam "stored_unverified" até um teste confirmado.
    let health=null;
    if(PROVIDER_CATALOG[provider].health_cost==='free'){
-    const [result]=await runHealthChecks(admin,{organizationId:org,triggeredBy:actor.userId,providers:[provider],confirmCost:false,fetchFn:pf});
+    const [result]=await runHealthChecks(admin,{organizationId:org,triggeredBy:actor.userId,providers:[provider],confirmCost:false,fetchFn:pf,ga4Property:text(project.commercial_info?.ga4_property_id,20)||null});
     health=result||null;
    }
    const {data:stored}=await admin.from('organization_provider_credentials').select('status,secret_last_four').eq('organization_id',org).eq('provider',provider).maybeSingle();
@@ -73,11 +95,12 @@ Deno.serve(async req=>{
    if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
    const {data,error}=await admin.rpc('nexus_providers_overview',{p_org:org});
    if(error)throw error;
-   return json({...buildProvidersOverview(data,org),viewer_is_admin:await isOrgAdmin()});
+   const {viewer}=await getViewer();const overview=buildProvidersOverview(data,org);
+   // Quem não gerencia recebe só o status simplificado: sem últimos 4 dígitos, detalhe de saúde, quota nem orçamento.
+   return json(viewer.can_manage_technical?{...overview,viewer,viewer_is_admin:true}:{...redactOverviewForClient(overview),viewer,viewer_is_admin:false});
   }
   if(body.action==='provider_credential_remove'){
    if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
-   if(!await isOrgAdmin())return json({error:'forbidden'},403);
    const provider=text(body.provider,20);
    if(!isProviderId(provider))return json({error:'unsupported_provider'},400);
    const {error}=await admin.rpc('nexus_provider_secret_remove',{p_org:org,p_actor:actor.userId,p_provider:provider});
@@ -94,15 +117,12 @@ Deno.serve(async req=>{
    if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
    const requested=text(body.provider,20);
    if(requested&&!isCatalogId(requested))return json({error:'unsupported_provider'},400);
-   const confirmCost=body.confirmCost===true;
-   // Teste com custo gasta crédito da organização: só dono/admin.
-   if(requested&&confirmCost&&(COST_HEALTH_PROVIDERS as readonly string[]).includes(requested)&&!await isOrgAdmin())return json({error:'forbidden'},403);
-   const results=await runHealthChecks(admin,{organizationId:org,triggeredBy:actor.userId,providers:requested?[requested]:undefined,confirmCost,fetchFn:pf});
+   const confirmCost=body.confirmCost===true; // o teste com custo (confirmCost) já exige gestor: a ação inteira é técnica
+   const results=await runHealthChecks(admin,{organizationId:org,triggeredBy:actor.userId,providers:requested?[requested]:undefined,confirmCost,fetchFn:pf,ga4Property:text(project.commercial_info?.ga4_property_id,20)||null});
    return json({results});
   }
   if(body.action==='execution_settings_set'){
    if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
-   if(!await isOrgAdmin())return json({error:'forbidden'},403);
    const [{data:creds},{data:current}]=await Promise.all([
     admin.from('organization_provider_credentials').select('provider,status').eq('organization_id',org),
     admin.from('nexus_programs').select('budget_usd_micros,settings').eq('organization_id',org).maybeSingle(),
@@ -122,7 +142,6 @@ Deno.serve(async req=>{
   }
   if(body.action==='search_performance_sync'){
    if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
-   if(!await isOrgAdmin())return json({error:'forbidden'},403);
    const source=['gsc','bing','all'].includes(body.source)?body.source:'all';
    const days=Math.min(90,Math.max(1,Math.trunc(Number(body.days))||28));
    const property=text(project.commercial_info?.gsc_property,200)||undefined;
@@ -141,6 +160,69 @@ Deno.serve(async req=>{
    if(from>to||Date.parse(to)-Date.parse(from)>366*86400000)return json({error:'period_invalid'},400);
    const {data,error}=await admin.rpc('nexus_search_performance_summary',{p_project:project.id,p_from:from,p_to:to});
    if(error)throw error;return json(data);
+  }
+  // ---- GA4 e plano de gerenciamento (13/11/2026). Política por ação: ver _shared/nexus-management.ts ----
+  if(body.action==='ga4_sync'){
+   const days=Math.min(90,Math.max(1,Math.trunc(Number(body.days))||28));
+   const property=text(project.commercial_info?.ga4_property_id,20);
+   const resolveSecret=async(prov:string)=>{const {data}=await admin.rpc('nexus_provider_secret_read',{p_org:org,p_provider:prov});return data?String(data):null;};
+   const result=await syncGa4(admin,{organizationId:org,projectId:project.id,days,fetchFn:pf,resolveSecret,property:isValidPropertyId(property)?property:null});
+   const first=result.results[0];
+   if(first?.ok){
+    await admin.rpc('nexus_audit_mark_sync',{p_org:org,p_project:project.id,p_source:'ga4',p_full:false}).then(()=>null,()=>null);
+    return json({result});
+   }
+   const code=String(first?.error||'ga4_sync_failed');
+   return json({error:code,result},ga4ErrorStatus(code));
+  }
+  if(body.action==='ga4_summary'||body.action==='content_performance'){
+   const period=periodOf(body);if(!period)return json({error:'period_invalid'},400);
+   const summary=body.action==='ga4_summary';
+   const {data,error}=await admin.rpc(summary?'nexus_analytics_summary':'nexus_content_performance',{p_project:project.id,p_from:period.from,p_to:period.to});
+   if(error)throw error;
+   return json(summary?{summary:data}:{performance:data});
+  }
+  if(body.action==='project_integrations_get'){
+   const {viewer}=await getViewer();
+   return json({integrations:integrationsView(project.commercial_info,viewer.can_manage_technical)});
+  }
+  if(body.action==='project_integrations_set'){
+   const parsed=parseIntegrationsInput(body);if(!parsed.ok)return json({error:parsed.error},400);
+   const v=parsed.value;
+   const {data,error}=await admin.rpc('nexus_project_integrations_set',{p_org:org,p_project:project.id,p_ga4:v.ga4,p_set_ga4:v.setGa4,p_gsc:v.gsc,p_set_gsc:v.setGsc});
+   if(error){const m=integrationsRpcError(error.message);return json({error:m.error},m.status);}
+   return json({integrations:{ga4_property_id:data?.ga4_property_id??null,gsc_property:data?.gsc_property??null}});
+  }
+  if(body.action==='request_create'){
+   if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
+   const parsed=parseRequestCreate(body);if(!parsed.ok)return json({error:parsed.error},400);
+   const {data,error}=await admin.rpc('nexus_client_request_create',{p_org:org,p_project:project.id,p_user:actor.userId,p_kind:parsed.value.kind,p_message:parsed.value.message});
+   if(error){const m=requestRpcError(error.message);return json({error:m.error},m.status);}
+   return json({request:data});
+  }
+  if(body.action==='requests_list'){
+   if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
+   const filter=parseRequestsFilter(body);if(!filter.ok)return json({error:filter.error},400);
+   const {viewer}=await getViewer();
+   let query=admin.from('nexus_client_requests').select('*').order('created_at',{ascending:false}).limit(200);
+   if(viewer.role!=='manager')query=query.eq('organization_id',org); // o gestor vê as de todas as organizações; o membro, só as da própria
+   if(filter.value.status)query=query.eq('status',filter.value.status);
+   const {data,error}=await query;if(error)throw error;
+   const rows=(data||[]) as Array<Record<string,unknown>>;
+   if(viewer.role!=='manager')return json({requests:rows});
+   const orgIds=[...new Set(rows.map(r=>String(r.organization_id)))];const projectIds=[...new Set(rows.map(r=>r.project_id).filter((id):id is string=>typeof id==='string'))];
+   const [orgs,projs]=await Promise.all([
+    orgIds.length?admin.from('organizations').select('id,name').in('id',orgIds):Promise.resolve({data:[] as Array<{id:string;name:string}>}),
+    projectIds.length?admin.from('projects').select('id,name').in('id',projectIds):Promise.resolve({data:[] as Array<{id:string;name:string}>}),
+   ]);
+   const orgName=new Map((orgs.data||[]).map((o:{id:string;name:string})=>[o.id,o.name]));const projectName=new Map((projs.data||[]).map((p:{id:string;name:string})=>[p.id,p.name]));
+   return json({requests:rows.map(r=>({...r,organization_name:orgName.get(String(r.organization_id))??null,project_name:typeof r.project_id==='string'?projectName.get(r.project_id)??null:null}))});
+  }
+  if(body.action==='request_update'){
+   const parsed=parseRequestUpdate(body,new Date().toISOString());if(!parsed.ok)return json({error:parsed.error},400);
+   const {data,error}=await admin.from('nexus_client_requests').update(parsed.value.patch).eq('id',parsed.value.id).select('*').maybeSingle();
+   if(error)throw error;if(!data)return json({error:'request_not_found'},404);
+   return json({request:data});
   }
   if(body.action==='prepare'){
    if(!['serp','ai_observation','editorial_review','pilot'].includes(body.kind))return json({error:'unsupported_operation'},400);
@@ -252,9 +334,6 @@ Deno.serve(async req=>{
   }
   if(body.action==='signals_key_create'||body.action==='signals_key_rotate'){
    if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
-   const {data:adminMember}=await admin.from('organization_members').select('role').eq('organization_id',org).eq('user_id',actor.userId).eq('status','active').in('role',['owner','admin']).maybeSingle();
-   const {data:ownerOrg}=adminMember?{data:true}:await admin.from('organizations').select('id').eq('id',org).eq('owner_user_id',actor.userId).maybeSingle();
-   if(!adminMember&&!ownerOrg)return json({error:'forbidden'},403);
    const origins=normalizeOrigins(body.allowedOrigins);if(!origins.ok)return json({error:origins.error},400);
    const {data:existing}=await admin.from('nexus_site_keys').select('site_id').eq('project_id',project.id).maybeSingle();
    if(body.action==='signals_key_create'&&existing)return json({error:'signals_key_exists_use_rotate'},409);
@@ -278,9 +357,6 @@ Deno.serve(async req=>{
   }
   if(body.action==='homepage_schema_sync'){
    if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
-   const {data:adminMember}=await admin.from('organization_members').select('role').eq('organization_id',org).eq('user_id',actor.userId).eq('status','active').in('role',['owner','admin']).maybeSingle();
-   const {data:ownerOrg}=adminMember?{data:true}:await admin.from('organizations').select('id').eq('id',org).eq('owner_user_id',actor.userId).maybeSingle();
-   if(!adminMember&&!ownerOrg)return json({error:'forbidden'},403);
    const profile=project.commercial_info?.schema_profile;
    if(!profile)return json({error:'schema_profile_missing'},409);
    const built=buildHomepageSchemaFromProfile(profile,host||undefined);if(!built.ok)return json({error:built.error},400);
@@ -356,6 +432,11 @@ Deno.serve(async req=>{
   if(!operation)return json({error:'operation_forbidden'},404);
   operationId=operation.id;
   if(operation.kind==='pilot')return json({error:'pilot_is_a_batch_plan_prepare_individual_steps'},409);
+  // Rodada paga de coleta (serp, ai_observation): só a conta de gerenciamento (decisão do dono, 13/11/2026). Não afeta `editorial_review`.
+  if(['serp','ai_observation'].includes(operation.kind)&&actor.mode==='user'){
+   const collectionPolicy=checkActionPolicy('execute_collection',(await getViewer()).viewer);
+   if(!collectionPolicy.ok)return json({error:collectionPolicy.error,executed:false},403);
+  }
   const engine=text(operation.input?.engine,40)||(operation.kind==='serp'?'google_serp':'chatgpt_api');
   if(['serp','ai_observation'].includes(operation.kind)){
    if(!isExecutableEngine(engine))return json({error:'engine_not_executable',engine,executed:false},409);

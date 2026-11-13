@@ -3,12 +3,15 @@
 // Nenhum destes tipos carrega a credencial em claro: o servidor só devolve `last_four`.
 
 export type ProviderId =
-  | 'gsc' | 'bing_webmaster' | 'serper' | 'dataforseo' | 'serpapi' | 'brave'
+  | 'gsc' | 'bing_webmaster' | 'ga4' | 'serper' | 'dataforseo' | 'serpapi' | 'brave'
   | 'openai' | 'gemini' | 'anthropic' | 'perplexity' | 'copilot';
 
 export type ProviderCategory = 'search_truth' | 'serp' | 'ai_citations' | 'manual';
 
 export type ProviderStatus = 'not_configured' | 'stored_unverified' | 'healthy' | 'degraded' | 'error' | 'manual';
+
+/** Status simplificado devolvido a quem não gerencia a parte técnica (contrato GA4/gestão, seção A). */
+export type SimpleProviderStatus = 'connected' | 'attention' | 'not_connected';
 
 export type OverallStatus = 'empty' | 'ok' | 'attention' | 'critical';
 
@@ -48,6 +51,8 @@ export interface ProviderOverviewItem {
   id: ProviderId;
   category: ProviderCategory;
   status: ProviderStatus;
+  /** Última atualização conhecida (a resposta para quem não gerencia traz só isto no lugar do histórico de testes). */
+  updated_at?: string | null;
   /** 0–100; null quando não configurado. */
   score: number | null;
   /** Habilitado para execução paga (`settings.providers_enabled`). */
@@ -82,13 +87,33 @@ export interface ProvidersSummary {
   score: number | null;
 }
 
+/** Papel de quem consulta (contrato GA4/gestão, seção A). */
+export type ViewerRole = 'manager' | 'org_admin' | 'client';
+export interface NexusViewer { role: ViewerRole; can_manage_technical: boolean }
+
 export interface ProvidersOverview {
   generated_at: string;
   organization_id: string;
-  program: ProviderProgram;
-  summary: ProvidersSummary;
-  providers: ProviderOverviewItem[];
+  /** Papel de quem consulta. Ausente em servidores antigos: a tela usa `viewer_is_admin` e, sem ele, trata como cliente. */
+  viewer?: NexusViewer;
+  /** Compatibilidade: mesmo valor de `viewer.can_manage_technical`. */
+  viewer_is_admin?: boolean;
+  /** Orçamento e execução paga: só para quem gerencia (a tela cai em valores zerados se faltar). */
+  program?: ProviderProgram;
+  summary?: ProvidersSummary;
+  providers: RawProviderOverviewItem[];
 }
+
+/**
+ * Item como chega do servidor. Para quem não gerencia o servidor manda `status` simplificado e pode omitir credencial,
+ * saúde e uso; a tela normaliza com `normalizeOverviewItem` (src/lib/nexus-providers.ts).
+ */
+export type RawProviderOverviewItem = Omit<ProviderOverviewItem, 'status' | 'credential' | 'health' | 'usage'> & {
+  status: ProviderStatus | SimpleProviderStatus;
+  credential?: ProviderCredentialInfo | null;
+  health?: ProviderOverviewItem['health'] | null;
+  usage?: ProviderUsage | null;
+};
 
 /** Resultado de um teste de saúde (ação `provider_health_check`). */
 export type HealthSkipReason = 'not_configured' | 'manual' | 'cost_confirmation_required';
@@ -158,13 +183,33 @@ export interface SearchSyncResponse {
   results?: SearchSyncSourceResult[];
 }
 
+/** `ga4_sync`: `{ result: { property, from, to, rows_upserted, truncated, results: [{ source: 'ga4', ok, rows_upserted, error? }] } }`. */
+export interface Ga4SyncResult {
+  property?: string;
+  from?: string;
+  to?: string;
+  rows_upserted?: number;
+  truncated?: boolean;
+  results?: Array<{ source: 'ga4'; ok: boolean; rows_upserted?: number; error?: string }>;
+}
+export interface Ga4SyncResponse { result: Ga4SyncResult }
+
+/** `project_integrations_set/get`. Quem não gerencia recebe só os booleanos `*_configured`. */
+export interface ProjectIntegrations {
+  ga4_property_id?: string | null;
+  gsc_property?: string | null;
+  ga4_configured?: boolean;
+  gsc_configured?: boolean;
+}
+export interface ProjectIntegrationsInput { ga4PropertyId?: string; gscProperty?: string }
+
 // ---- Auditoria contínua ("Saúde do sistema") ----
 
 export type AuditCategory = 'corrective' | 'preventive' | 'improvement';
 export type AuditSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type AuditFindingStatus = 'open' | 'acknowledged' | 'snoozed' | 'resolved';
 
-export type AuditFixType = 'provider_health_check' | 'search_performance_sync' | 'plugin_discovery_refresh' | 'open_route';
+export type AuditFixType = 'provider_health_check' | 'search_performance_sync' | 'analytics_sync' | 'plugin_discovery_refresh' | 'open_route';
 export interface AuditFixAction { type: AuditFixType; params?: Record<string, unknown> }
 
 export interface AuditFinding {
@@ -198,6 +243,8 @@ export interface AuditRun {
 
 export interface AuditOverview {
   generated_at: string;
+  /** Contrato GA4/gestão: quem não gerencia não vê Auditar agora nem Corrigir. */
+  viewer?: { can_manage_technical: boolean };
   last_run: AuditRun | null;
   counts: {
     open: Record<AuditCategory, number>;

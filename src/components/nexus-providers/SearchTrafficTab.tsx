@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
-import { KeyRound, Loader2, RefreshCw } from 'lucide-react';
+import { KeyRound, Loader2, MessageSquarePlus, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,11 +36,13 @@ export interface SearchTrafficViewProps {
   syncText: string | null;
   onSync: () => void;
   onConnectGsc: () => void;
+  /** Visão cliente: pedir a conexão ao gestor (no lugar do passo a passo técnico). */
+  onRequest?: () => void;
   onRetry: () => void;
 }
 
 /** Visão pura (sem hooks de dados) da aba "Tráfego orgânico (Google Search Console)". */
-export function SearchTrafficView({ summary, loading, error, hasCredentials, now, days, onDaysChange, canAdmin, syncing, syncText, onSync, onConnectGsc, onRetry }: SearchTrafficViewProps) {
+export function SearchTrafficView({ summary, loading, error, hasCredentials, now, days, onDaysChange, canAdmin, syncing, syncText, onSync, onConnectGsc, onRequest, onRetry }: SearchTrafficViewProps) {
   const errorCode = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
   const notConfigured = !hasCredentials || errorCode === 'gsc_not_configured';
   const gsc = getCatalogEntry('gsc');
@@ -59,10 +61,13 @@ export function SearchTrafficView({ summary, loading, error, hasCredentials, now
           </SelectContent>
         </Select>
       </div>
-      <Button onClick={onSync} disabled={!canAdmin || syncing || !hasCredentials} title={!canAdmin ? 'Só proprietário ou administrador pode sincronizar' : undefined}>
-        {syncing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="mr-1 h-4 w-4" aria-hidden="true" />}
-        Sincronizar agora
-      </Button>
+      {/* Visão cliente: sincronizar é ação técnica da conta de gerenciamento; o botão nem aparece. */}
+      {canAdmin && (
+        <Button onClick={onSync} disabled={syncing || !hasCredentials}>
+          {syncing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="mr-1 h-4 w-4" aria-hidden="true" />}
+          Sincronizar agora
+        </Button>
+      )}
       <p className="text-sm text-muted-foreground" data-testid="last-synced">
         Última sincronização: {summary?.last_synced_at ? formatRelative(summary.last_synced_at, now) : 'nunca'}
       </p>
@@ -78,7 +83,7 @@ export function SearchTrafficView({ summary, loading, error, hasCredentials, now
       {toolbar}
       <div aria-live="polite">{syncText && <p role="status" className="text-sm text-muted-foreground">{syncText}</p>}</div>
 
-      {notConfigured && (
+      {notConfigured && canAdmin && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Conecte uma conta de serviço do Google para ver o seu tráfego orgânico</CardTitle>
@@ -88,6 +93,20 @@ export function SearchTrafficView({ summary, loading, error, hasCredentials, now
             <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">{gsc?.doc.steps.map((s) => <li key={s}>{s}</li>)}</ol>
             <Button onClick={onConnectGsc}><KeyRound className="mr-1 h-4 w-4" aria-hidden="true" /> Conectar o Google Search Console</Button>
           </CardContent>
+        </Card>
+      )}
+
+      {notConfigured && !canAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Ainda sem dados de busca</CardTitle>
+            <CardDescription>Ainda sem dados: peça ao gestor para conectar o Google Search Console do seu site.</CardDescription>
+          </CardHeader>
+          {onRequest && (
+            <CardContent>
+              <Button onClick={onRequest}><MessageSquarePlus className="mr-1 h-4 w-4" aria-hidden="true" /> Solicitar a conexão ao gestor</Button>
+            </CardContent>
+          )}
         </Card>
       )}
 
@@ -107,7 +126,9 @@ export function SearchTrafficView({ summary, loading, error, hasCredentials, now
 
       {summary && !notConfigured && (
         <>
-          {noData && <EmptyNote>Sem dados no período. Clique em “Sincronizar agora” e confira se a conta de serviço foi adicionada como usuário da propriedade no Search Console.</EmptyNote>}
+          {noData && <EmptyNote>{canAdmin
+            ? 'Sem dados no período. Clique em “Sincronizar agora” e confira se a conta de serviço foi adicionada como usuário da propriedade no Search Console.'
+            : 'Ainda sem dados neste período. Se precisar, peça ao gestor para conferir a conexão.'}</EmptyNote>}
 
           <ul className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Indicadores de busca">
             {[
@@ -229,17 +250,18 @@ export interface SearchTrafficTabProps {
   syncText: string | null;
   onSync: (days: number) => void;
   onConnectGsc: () => void;
+  onRequest?: () => void;
 }
 
 /** Aba com dados: busca o resumo (`search_performance`) para o período escolhido. */
-export function SearchTrafficTab({ projectId, hasCredentials, now, canAdmin, syncing, syncText, onSync, onConnectGsc }: SearchTrafficTabProps) {
+export function SearchTrafficTab({ projectId, hasCredentials, now, canAdmin, syncing, syncText, onSync, onConnectGsc, onRequest }: SearchTrafficTabProps) {
   const [days, setDays] = useState(28);
   const range = rangeForDays(days);
   const query = useSearchPerformance(projectId, range.from, range.to, hasCredentials);
   return (
     <SearchTrafficView
       summary={query.data} loading={query.isLoading} error={query.error} hasCredentials={hasCredentials} now={now} days={days} onDaysChange={setDays}
-      canAdmin={canAdmin} syncing={syncing} syncText={syncText} onSync={() => onSync(days)} onConnectGsc={onConnectGsc} onRetry={() => { void query.refetch(); }}
+      canAdmin={canAdmin} syncing={syncing} syncText={syncText} onSync={() => onSync(days)} onConnectGsc={onConnectGsc} onRequest={onRequest} onRetry={() => { void query.refetch(); }}
     />
   );
 }

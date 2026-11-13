@@ -16,7 +16,7 @@ const TOKEN_TTL_MS = 50 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 30_000;
 
 export type GscOptions = { now?: () => number };
-type ServiceAccount = { client_email: string; private_key: string };
+export type ServiceAccount = { client_email: string; private_key: string };
 
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 export const clearGscTokenCache = () => tokenCache.clear();
@@ -63,28 +63,35 @@ async function keyFingerprint(sa: ServiceAccount): Promise<string> {
 }
 
 const clip = (v: unknown, n: number) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
-function googleErrorDetail(json: unknown): string | undefined {
+export function googleErrorDetail(json: unknown): string | undefined {
   const j = json as { error?: unknown; error_description?: unknown } | null;
   const e = j?.error;
   const msg = typeof e === 'string' ? `${e}${j?.error_description ? `: ${clip(j.error_description, 150)}` : ''}` : clip((e as { message?: unknown } | undefined)?.message, 200);
   return msg || undefined;
 }
 
-async function readJson(res: Response): Promise<unknown> {
+export async function readJson(res: Response): Promise<unknown> {
   try { return JSON.parse(await res.text()); } catch { return null; }
 }
 
-/** Obtém (ou reaproveita) o access token. Nunca lança. */
-export async function getGscAccessToken(fetchFn: typeof fetch, serviceAccountJson: string, opts: GscOptions = {}): Promise<{ ok: true; token: string } | GscFailure> {
+export type GoogleTokenOptions = GscOptions & { scope: string; /** Prefixo dos códigos de erro: `gsc` ou `ga4`. */ errorPrefix: string };
+
+/**
+ * Obtém (ou reaproveita) o access token de uma conta de serviço do Google para o escopo dado. Nunca lança.
+ * Código comum ao Search Console e ao GA4 (13/11/2026): o cache é por e-mail + impressão digital da chave + escopo,
+ * e os códigos de erro levam o prefixo do provedor (`gsc_auth_failed`, `ga4_auth_failed`...).
+ */
+export async function getGoogleAccessToken(fetchFn: typeof fetch, serviceAccountJson: string, opts: GoogleTokenOptions): Promise<{ ok: true; token: string } | GscFailure> {
   const now = opts.now ?? Date.now;
+  const p = opts.errorPrefix;
   const sa = parseServiceAccount(serviceAccountJson);
-  if (!sa) return { ok: false, status: 400, error: 'gsc_credential_invalid' };
+  if (!sa) return { ok: false, status: 400, error: `${p}_credential_invalid` };
   let cacheKey: string;
-  try { cacheKey = `${sa.client_email}|${await keyFingerprint(sa)}`; } catch { return { ok: false, status: 400, error: 'gsc_credential_invalid' }; }
+  try { cacheKey = `${sa.client_email}|${await keyFingerprint(sa)}|${opts.scope}`; } catch { return { ok: false, status: 400, error: `${p}_credential_invalid` }; }
   const hit = tokenCache.get(cacheKey);
   if (hit && hit.expiresAt > now()) return { ok: true, token: hit.token };
   let assertion: string;
-  try { assertion = await signServiceAccountJwt(sa, Math.floor(now() / 1000)); } catch { return { ok: false, status: 400, error: 'gsc_credential_invalid', detail: 'private_key_unreadable' }; }
+  try { assertion = await signServiceAccountJwt(sa, Math.floor(now() / 1000), opts.scope); } catch { return { ok: false, status: 400, error: `${p}_credential_invalid`, detail: 'private_key_unreadable' }; }
   let res: Response;
   try {
     res = await fetchFn(GSC_TOKEN_URL, {
@@ -93,14 +100,22 @@ export async function getGscAccessToken(fetchFn: typeof fetch, serviceAccountJso
       body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }).toString(),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-  } catch { return { ok: false, status: 0, error: 'gsc_unreachable' }; }
+  } catch { return { ok: false, status: 0, error: `${p}_unreachable` }; }
   const json = await readJson(res) as { access_token?: unknown; expires_in?: unknown } | null;
-  if (!res.ok) return { ok: false, status: res.status, error: res.status >= 500 ? 'gsc_unreachable' : 'gsc_auth_failed', detail: googleErrorDetail(json) };
-  if (!json || typeof json.access_token !== 'string' || !json.access_token) return { ok: false, status: res.status, error: 'gsc_auth_failed', detail: 'token_missing' };
+  if (!res.ok) return { ok: false, status: res.status, error: res.status >= 500 ? `${p}_unreachable` : `${p}_auth_failed`, detail: googleErrorDetail(json) };
+  if (!json || typeof json.access_token !== 'string' || !json.access_token) return { ok: false, status: res.status, error: `${p}_auth_failed`, detail: 'token_missing' };
   const ttl = typeof json.expires_in === 'number' && json.expires_in > 0 ? Math.min(TOKEN_TTL_MS, json.expires_in * 1000 - 60_000) : TOKEN_TTL_MS;
   tokenCache.set(cacheKey, { token: json.access_token, expiresAt: now() + Math.max(ttl, 0) });
   return { ok: true, token: json.access_token };
 }
+
+/** Obtém (ou reaproveita) o access token do Search Console. Nunca lança. */
+export function getGscAccessToken(fetchFn: typeof fetch, serviceAccountJson: string, opts: GscOptions = {}): Promise<{ ok: true; token: string } | GscFailure> {
+  return getGoogleAccessToken(fetchFn, serviceAccountJson, { ...opts, scope: GSC_SCOPE, errorPrefix: 'gsc' });
+}
+
+/** Limpa o cache de tokens em memória (todos os escopos). */
+export const clearGoogleTokenCache = () => tokenCache.clear();
 
 async function gscCall(fetchFn: typeof fetch, serviceAccountJson: string, url: string, init: RequestInit, opts: GscOptions): Promise<{ ok: true; json: unknown } | GscFailure> {
   const tok = await getGscAccessToken(fetchFn, serviceAccountJson, opts);

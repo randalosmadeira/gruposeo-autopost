@@ -13,6 +13,7 @@ const SEVERITY_LABELS: Record<AuditSeverity, string> = { critical: 'Crítica', h
 const FIX_LABELS: Record<AuditFixType, string> = {
   provider_health_check: 'Testar as conexões gratuitas agora',
   search_performance_sync: 'Sincronizar os dados de busca agora',
+  analytics_sync: 'Sincronizar os dados do Google Analytics agora',
   plugin_discovery_refresh: 'Atualizar a descoberta (llms.txt e robots) no plugin do site',
   open_route: 'Abrir a tela indicada',
 };
@@ -33,9 +34,9 @@ export function fixLabel(type: AuditFixType | string): string { return FIX_LABEL
 const STATUS_LABELS: Record<string, string> = { open: 'Aberto', acknowledged: 'Reconhecido', snoozed: 'Adiado', resolved: 'Resolvido' };
 export function findingStatusLabel(s: string): string { return STATUS_LABELS[s] ?? s; }
 
-/** Apenas os quatro tipos de correção permitidos pelo contrato aparecem como botão. */
+/** Apenas os tipos de correção permitidos pelo contrato aparecem como botão. */
 export function isApplicableFix(fix: AuditFixAction | null | undefined): fix is AuditFixAction {
-  return !!fix && (['provider_health_check', 'search_performance_sync', 'plugin_discovery_refresh', 'open_route'] as string[]).includes(fix.type);
+  return !!fix && (['provider_health_check', 'search_performance_sync', 'analytics_sync', 'plugin_discovery_refresh', 'open_route'] as string[]).includes(fix.type);
 }
 
 /** `open_route` navega no próprio app (sem chamada ao servidor). Aceita params.route|path|to e params.tab opcional. */

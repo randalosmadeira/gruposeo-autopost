@@ -13,7 +13,7 @@
 export type Category = 'corrective' | 'preventive' | 'improvement';
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type FindingStatus = 'open' | 'acknowledged' | 'snoozed' | 'resolved';
-export const FIX_TYPES = ['provider_health_check', 'search_performance_sync', 'plugin_discovery_refresh', 'open_route'] as const;
+export const FIX_TYPES = ['provider_health_check', 'search_performance_sync', 'analytics_sync', 'plugin_discovery_refresh', 'open_route'] as const;
 export type FixType = typeof FIX_TYPES[number];
 export type FixAction = { type: FixType; params: Record<string, unknown> };
 
@@ -54,6 +54,7 @@ export type ProgramCtx = {
   system_rules: boolean;
 };
 export type SearchSourceState = { rows: number; last_day: string | null; last_synced_at: string | null; last_full_sync_at: string | null };
+export type ContentIndexState = { total: number; avg_internal_links: number | null; unclassified: number };
 export type ProjectCtx = {
   id: string;
   name: string;
@@ -68,6 +69,12 @@ export type ProjectCtx = {
   last_observation_at: string | null;
   site_key: { site_id: string; created_at: string; last_batch_at: string | null } | null;
   search: { gsc: SearchSourceState; bing: SearchSourceState };
+  /** `projects.commercial_info.ga4_property_id` (somente dígitos) ou null. */
+  ga4_property_id: string | null;
+  /** Estado da sincronização do GA4 (`nexus_analytics_daily`). */
+  analytics: SearchSourceState;
+  /** Índice de conteúdos publicados (`wordpress_article_index`): total, média de links internos e quantos sem área. */
+  content_index: ContentIndexState;
 };
 export type SecurityGrants = { anon_write_tables: number; sample: string[]; rls_disabled_tables: number; rls_sample: string[] };
 export type CronJobHealth = { jobname: string; active: boolean; runs: number; failures: number; last_status: string | null; last_run: string | null };
@@ -88,7 +95,8 @@ export type AuditContext = {
 
 export type RuleId =
   | 'provider.never_verified' | 'provider.check_failed' | 'provider.latency_high' | 'provider.quota_low' | 'provider.unused_30d' | 'provider.free_not_connected'
-  | 'search.sync_stale' | 'search.no_data' | 'observatory.stale' | 'observatory.no_prompts'
+  | 'search.sync_stale' | 'search.no_data' | 'ga4.not_connected' | 'ga4.property_missing' | 'ga4.sync_stale' | 'ga4.no_data'
+  | 'content.internal_links_low' | 'content.area_unclassified_high' | 'observatory.stale' | 'observatory.no_prompts'
   | 'signals.no_batch' | 'signals.snippet_missing' | 'plugin.outdated' | 'plugin.unreachable'
   | 'site.llms_missing' | 'site.schema_thin' | 'runtime.function_down' | 'runtime.cron_failing'
   | 'security.anon_write' | 'security.rls_off' | 'cost.budget_80' | 'cost.enabled_without_provider' | 'execution.enabled_info';
@@ -106,10 +114,12 @@ export class AuditBudgetExceeded extends Error {
 // Constantes de catálogo (espelham o contrato; mantidas locais para o módulo ser puro)
 // ---------------------------------------------------------------------------
 export const PROVIDER_NAMES: Record<string, string> = {
-  gsc: 'Google Search Console', bing_webmaster: 'Bing Webmaster Tools', serper: 'Serper', dataforseo: 'DataForSEO', serpapi: 'SerpApi', brave: 'Brave Search',
+  gsc: 'Google Search Console', bing_webmaster: 'Bing Webmaster Tools', ga4: 'Google Analytics 4', serper: 'Serper', dataforseo: 'DataForSEO', serpapi: 'SerpApi', brave: 'Brave Search',
   openai: 'OpenAI', gemini: 'Gemini', anthropic: 'Anthropic', perplexity: 'Perplexity',
 };
 export const SEARCH_TRUTH_PROVIDERS = ['gsc', 'bing_webmaster'] as const;
+/** Provedores consumidos por sincronização (não por operações do Observatório): nunca "sem uso em 30 dias". */
+export const SYNC_PROVIDERS = ['gsc', 'bing_webmaster', 'ga4'] as const;
 /** Testes de saúde que consomem crédito: nunca executados pela auditoria. */
 export const COST_HEALTH_PROVIDERS = ['serper', 'brave', 'perplexity'] as const;
 export const STALE_HEALTH_MS = 24 * 3600_000;
@@ -285,7 +295,7 @@ export function ruleProviderQuotaLow(ctx: AuditContext): RuleOutput {
 export function ruleProviderUnused30d(ctx: AuditContext): RuleOutput {
   const f: Candidate[] = [];
   for (const p of needProviders(ctx)) {
-    if (!p.credential.stored || isSearchTruth(p.id)) continue; // GSC/Bing são consumidos pela sincronização, não por operações
+    if (!p.credential.stored || (SYNC_PROVIDERS as readonly string[]).includes(p.id)) continue; // GSC/Bing/GA4 são consumidos pela sincronização, não por operações
     const used = p.usage.valid_30d + p.usage.failed_30d + p.usage.uncertain_30d;
     if (used > 0) continue;
     const at = ms(p.credential.updated_at);
@@ -362,6 +372,110 @@ export function ruleSearchNoData(ctx: AuditContext): RuleOutput {
         evidence: { rows: 0, source },
       }));
     }
+  }
+  return out(f);
+}
+const ga4Active = (ctx: AuditContext) => activeCred(ctx, 'ga4');
+const hasSite = (pr: ProjectCtx) => !!(pr.base_url || pr.domain);
+export function ruleGa4NotConnected(ctx: AuditContext): RuleOutput {
+  const providers = needProviders(ctx);
+  if (providers.find((p) => p.id === 'ga4')?.credential.stored) return out([]);
+  if (!ctx.projects.some(hasSite)) return out([]);
+  const gscConnected = providers.some((p) => p.id === 'gsc' && p.credential.stored);
+  return out([cand({
+    rule_id: 'ga4.not_connected', subject: 'ga4', category: 'improvement', severity: gscConnected ? 'high' : 'medium',
+    title: 'Google Analytics 4 ainda não está conectado',
+    detail: 'É gratuito e mostra sessões, engajamento, eventos-chave e a origem do tráfego (inclusive vindo de assistentes de IA); o Search Console mostra só a busca.',
+    suggested_action: 'Pedir ao gestor para conectar o GA4 (a conta de serviço do Search Console pode ser reaproveitada) e informar a propriedade de cada site.',
+    fix_action: { type: 'open_route', params: { route: '/nexus/motores', section: 'free_activation', provider: 'ga4' } },
+    evidence: { source: 'ga4' },
+  })]);
+}
+export function ruleGa4PropertyMissing(ctx: AuditContext): RuleOutput {
+  needProviders(ctx);
+  if (!ga4Active(ctx)) return out([]);
+  const f: Candidate[] = [];
+  for (const pr of ctx.projects) {
+    if (!hasSite(pr) || pr.ga4_property_id) continue;
+    f.push(cand({
+      rule_id: 'ga4.property_missing', project_id: pr.id, category: 'corrective', severity: 'medium',
+      title: `${pr.name}: GA4 conectado, mas o projeto não tem a propriedade informada`,
+      detail: 'A credencial do GA4 está ativa, porém este projeto não tem o ID da propriedade GA4 (somente dígitos); sem ele nenhum dado é coletado.',
+      suggested_action: 'Pedir ao gestor para informar o ID da propriedade GA4 deste site (cada site tem a sua; nunca compartilhe uma propriedade entre sites).',
+      fix_action: { type: 'open_route', params: { route: '/nexus/motores', section: 'ga4_property', projectId: pr.id } },
+      evidence: { source: 'ga4' },
+    }));
+  }
+  return out(f);
+}
+export function ruleGa4SyncStale(ctx: AuditContext): RuleOutput {
+  needProviders(ctx);
+  if (!ga4Active(ctx)) return out([]);
+  const f: Candidate[] = [];
+  for (const pr of ctx.projects) {
+    if (!pr.ga4_property_id) continue;
+    const last = ms(pr.analytics.last_synced_at);
+    if (last === null) continue; // nunca sincronizado: tratado por ga4.no_data
+    const age = ctx.now.getTime() - last;
+    if (age <= 48 * HOUR) continue;
+    f.push(cand({
+      rule_id: 'ga4.sync_stale', project_id: pr.id, subject: 'ga4', category: 'corrective', severity: age > 7 * DAY ? 'high' : 'medium',
+      title: `${pr.name}: dados do Google Analytics 4 desatualizados`,
+      detail: `Última sincronização há ${Math.floor(age / HOUR)} h (limite: 48 h).`,
+      suggested_action: 'Sincronizar agora; se falhar, conferir a propriedade e se a conta de serviço é leitora dela.',
+      fix_action: { type: 'analytics_sync', params: { projectId: pr.id, days: 7 } },
+      evidence: { last_synced_at: pr.analytics.last_synced_at, hours: Math.floor(age / HOUR), source: 'ga4' },
+    }));
+  }
+  return out(f);
+}
+export function ruleGa4NoData(ctx: AuditContext): RuleOutput {
+  needProviders(ctx);
+  const cred = ga4Active(ctx);
+  if (!cred) return out([]);
+  const credAt = ms(cred.credential.updated_at);
+  if (credAt !== null && ctx.now.getTime() - credAt < DAY) return out([]); // dá tempo à primeira sincronização agendada
+  const f: Candidate[] = [];
+  for (const pr of ctx.projects) {
+    if (!pr.ga4_property_id || pr.analytics.rows > 0) continue;
+    f.push(cand({
+      rule_id: 'ga4.no_data', project_id: pr.id, subject: 'ga4', category: 'improvement', severity: 'medium',
+      title: `${pr.name}: GA4 conectado, mas sem dados`,
+      detail: 'A credencial está ativa, a propriedade foi informada e nenhuma linha do Google Analytics foi gravada para este projeto.',
+      suggested_action: 'Conferir o ID da propriedade e se o e-mail da conta de serviço foi adicionado como leitor na propriedade GA4 (Administrador → Gerenciamento de acesso à propriedade).',
+      evidence: { rows: 0, source: 'ga4' },
+    }));
+  }
+  return out(f);
+}
+export function ruleContentInternalLinksLow(ctx: AuditContext): RuleOutput {
+  const f: Candidate[] = [];
+  for (const pr of ctx.projects) {
+    const c = pr.content_index;
+    if (!c || c.total <= 0 || c.avg_internal_links === null || !(c.avg_internal_links < 2)) continue;
+    f.push(cand({
+      rule_id: 'content.internal_links_low', project_id: pr.id, category: 'improvement', severity: c.avg_internal_links < 1 ? 'medium' : 'low',
+      title: `${pr.name}: poucos links internos nos conteúdos`,
+      detail: `Média de ${c.avg_internal_links.toFixed(2)} link(s) interno(s) por conteúdo, em ${c.total} conteúdo(s) publicado(s) do índice (referência: pelo menos 2).`,
+      suggested_action: 'Ligar os artigos entre si (links para páginas da mesma área). Os links sugeridos do Observatório ajudam; todo link aplicado passa por revisão.',
+      evidence: { average_internal_links: c.avg_internal_links, total_contents: c.total },
+    }));
+  }
+  return out(f);
+}
+export function ruleContentAreaUnclassifiedHigh(ctx: AuditContext): RuleOutput {
+  const f: Candidate[] = [];
+  for (const pr of ctx.projects) {
+    const c = pr.content_index;
+    if (!c || c.total <= 0 || !(c.unclassified / c.total > 0.2)) continue;
+    const pct = Math.round((c.unclassified / c.total) * 1000) / 10;
+    f.push(cand({
+      rule_id: 'content.area_unclassified_high', project_id: pr.id, category: 'improvement', severity: 'info',
+      title: `${pr.name}: ${pct}% dos conteúdos sem área definida`,
+      detail: `${c.unclassified} de ${c.total} conteúdos do índice estão como "não classificado"; o desempenho por área fica menos fiel.`,
+      suggested_action: 'Revisar a classificação por área dos conteúdos (hoje feita por palavras-chave) ou ajustar as regras de classificação.',
+      evidence: { unclassified_percent: pct, total_contents: c.total },
+    }));
   }
   return out(f);
 }
@@ -615,6 +729,12 @@ export const AUDIT_RULES: AuditRule[] = [
   { id: 'provider.free_not_connected', scope: 'org', run: ruleProviderFreeNotConnected },
   { id: 'search.sync_stale', scope: 'org', run: ruleSearchSyncStale },
   { id: 'search.no_data', scope: 'org', run: ruleSearchNoData },
+  { id: 'ga4.not_connected', scope: 'org', run: ruleGa4NotConnected },
+  { id: 'ga4.property_missing', scope: 'org', run: ruleGa4PropertyMissing },
+  { id: 'ga4.sync_stale', scope: 'org', run: ruleGa4SyncStale },
+  { id: 'ga4.no_data', scope: 'org', run: ruleGa4NoData },
+  { id: 'content.internal_links_low', scope: 'org', run: ruleContentInternalLinksLow },
+  { id: 'content.area_unclassified_high', scope: 'org', run: ruleContentAreaUnclassifiedHigh },
   { id: 'observatory.stale', scope: 'org', run: ruleObservatoryStale },
   { id: 'observatory.no_prompts', scope: 'org', run: ruleObservatoryNoPrompts },
   { id: 'signals.no_batch', scope: 'org', run: ruleSignalsNoBatch },
@@ -949,6 +1069,7 @@ export type HealthCheckOpts = { organizationId: string; triggeredBy: string | nu
 export type HealthCheckResult = { provider: string; ok: boolean; skipped?: string; latency_ms?: number; http_status?: number; detail?: string };
 export type SyncCall = { projectId: string; source: 'gsc' | 'bing'; days: number; domain: string; property?: string };
 export type SyncCallResult = { ok: boolean; rows_upserted: number; error?: string };
+export type AnalyticsSyncCall = { projectId: string; days: number; property: string };
 
 export type BaseData = {
   program: ProgramCtx | null;
@@ -967,7 +1088,7 @@ export interface AuditStore {
   loadFindings(organizationId: string, ruleIds: string[]): Promise<FindingRow[]>;
   insertFindings(rows: NewFindingRow[]): Promise<void>;
   updateFinding(id: string, patch: FindingPatch): Promise<void>;
-  markSync(organizationId: string, projectId: string, source: 'gsc' | 'bing', full: boolean): Promise<void>;
+  markSync(organizationId: string, projectId: string, source: 'gsc' | 'bing' | 'ga4', full: boolean): Promise<void>;
 }
 export type AuditDeps = {
   store: AuditStore;
@@ -978,6 +1099,8 @@ export type AuditDeps = {
   /** `fetchFn` já vem protegido por createGuardedFetch. */
   healthChecks: (opts: HealthCheckOpts) => Promise<HealthCheckResult[]>;
   syncSearch: (call: SyncCall, fetchFn: typeof fetch) => Promise<SyncCallResult>;
+  /** GA4 (gratuito). Opcional: sem ele o executor não sincroniza o GA4. */
+  syncAnalytics?: (call: AnalyticsSyncCall, fetchFn: typeof fetch) => Promise<SyncCallResult>;
   /** Cria a sondagem (cache + concorrência + prazo) para esta execução. */
   makeProbe: (deadlineMs: number) => (url: string) => Promise<ProbeResult>;
   guardedFetch: (deadlineMs: number) => typeof fetch;
@@ -1046,6 +1169,24 @@ export async function runAuditForOrganization(deps: AuditDeps, organizationId: s
             syncs.push({ project_id: pr.id, source, ok: r.ok, rows: r.rows_upserted, days: full ? 90 : 7, error: r.error ?? null });
             if (r.ok) await deps.store.markSync(organizationId, pr.id, source, full);
           } catch (e) { syncs.push({ project_id: pr.id, source, ok: false, rows: 0, error: safeErr(e) }); }
+        }
+      }
+      // 2b) GA4 (gratuito): mesma cadência (12 h com janela de 7 dias; 90 dias uma vez por semana) e o mesmo teto de sincronizações por execução
+      const ga4Cred = providers?.find((p) => p.id === 'ga4' && p.credential.stored && p.credential.status === 'active');
+      if (deps.syncAnalytics && ga4Cred) {
+        for (const pr of base.projects) {
+          if (done >= MAX_SYNCS_PER_RUN || deps.now() > t0 + SYNC_WINDOW_MS) break;
+          if (!pr.ga4_property_id) continue;
+          const last = ms(pr.analytics.last_synced_at);
+          if (last !== null && deps.now() - last < 12 * HOUR) continue;
+          const lastFull = ms(pr.analytics.last_full_sync_at);
+          const full = lastFull === null || deps.now() - lastFull >= 7 * DAY;
+          done++;
+          try {
+            const r = await deps.syncAnalytics({ projectId: pr.id, days: full ? 90 : 7, property: pr.ga4_property_id }, actions);
+            syncs.push({ project_id: pr.id, source: 'ga4', ok: r.ok, rows: r.rows_upserted, days: full ? 90 : 7, error: r.error ?? null });
+            if (r.ok) await deps.store.markSync(organizationId, pr.id, 'ga4', full);
+          } catch (e) { syncs.push({ project_id: pr.id, source: 'ga4', ok: false, rows: 0, error: safeErr(e) }); }
         }
       }
       if (done) base = await deps.store.loadBase(organizationId);
@@ -1185,6 +1326,9 @@ export function buildProjects(
     const key = asRec(st.site_key);
     const search = asRec(st.search);
     const gscProp = asRec(r.commercial_info).gsc_property;
+    const ga4Raw = asRec(r.commercial_info).ga4_property_id ?? st.ga4_property_id;
+    const ga4Id = typeof ga4Raw === 'string' && /^\d{5,15}$/.test(ga4Raw.trim()) ? ga4Raw.trim() : null;
+    const ci = asRec(st.content_index);
     return {
       id, name: typeof r.name === 'string' && r.name ? r.name : 'Projeto', domain: domain || null, base_url: base,
       plugin_mode: isPluginMode(r), plugin_namespace: typeof r.wordpress_plugin_namespace === 'string' && r.wordpress_plugin_namespace ? r.wordpress_plugin_namespace : defaultNamespace,
@@ -1192,6 +1336,9 @@ export function buildProjects(
       prompt_sets: num(st.prompt_sets), prompts: num(st.prompts), last_observation_at: strOrNull(st.last_observation_at),
       site_key: typeof key.site_id === 'string' ? { site_id: key.site_id, created_at: String(key.created_at ?? ''), last_batch_at: strOrNull(key.last_batch_at) } : null,
       search: { gsc: search.gsc ? normalizeSearch(search.gsc) : emptySearch(), bing: search.bing ? normalizeSearch(search.bing) : emptySearch() },
+      ga4_property_id: ga4Id,
+      analytics: st.ga4 ? normalizeSearch(st.ga4) : emptySearch(),
+      content_index: { total: num(ci.total), avg_internal_links: numOrNull(ci.internal_links_avg), unclassified: num(ci.unclassified) },
     };
   });
 }

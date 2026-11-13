@@ -7,6 +7,8 @@ import { isServiceCredential, RequestAuthError, resolveRequestActor } from '../_
 import { PLUGIN_VERSION } from '../_shared/plugin-version.ts';
 import { FREE_HEALTH_PROVIDERS, runHealthChecks } from '../_shared/nexus-providers.ts';
 import { syncSearchPerformance } from '../_shared/nexus-search-sync.ts';
+import { isValidPropertyId, syncGa4 } from '../_shared/nexus-ga4.ts';
+import { findingsForViewer, isSystemRuleId, loadViewer, makeManagementStore, redactFindingForClient, type ManagementStore } from '../_shared/nexus-management.ts';
 import { isPluginModeProject, resolvePluginKey, resolvePluginNamespace } from '../_shared/wordpress-plugin-client.ts';
 import {
   AuditBusyError, buildFindingUpdate, buildOverview, buildProjects, COST_HEALTH_PROVIDERS, createGuardedFetch, makeProbe, normalizeCronHealth, normalizeProgram,
@@ -132,24 +134,33 @@ function buildDeps(admin: SupabaseClient, organizationId: string): AuditDeps {
       const r = results[0];
       return { ok: r?.ok === true, rows_upserted: r?.rows_upserted ?? 0, error: r?.error };
     },
+    syncAnalytics: async (call, fetchFn) => {
+      const out = await syncGa4(admin, {
+        organizationId, projectId: call.projectId, days: call.days, fetchFn, property: call.property,
+        resolveSecret: async (provider) => {
+          const { data, error } = await admin.rpc('nexus_provider_secret_read', { p_org: organizationId, p_provider: provider });
+          return error || typeof data !== 'string' || !data ? null : data;
+        },
+      });
+      const r = out.results[0];
+      return { ok: r?.ok === true, rows_upserted: out.rows_upserted, error: r?.error };
+    },
     makeProbe: (deadlineMs) => makeProbe({ fetchFn: guarded(deadlineMs), deadlineMs, trustedHosts: ownHost ? [ownHost] : [], resolveDns }),
     guardedFetch: guarded,
   };
 }
 
-async function isOrgAdmin(admin: SupabaseClient, org: string, userId: string): Promise<boolean> {
-  const { data: member } = await admin.from('organization_members').select('role').eq('organization_id', org).eq('user_id', userId).eq('status', 'active').in('role', ['owner', 'admin']).maybeSingle();
-  if (member) return true;
-  const { data: owner } = await admin.from('organizations').select('id').eq('id', org).eq('owner_user_id', userId).maybeSingle();
-  return !!owner;
-}
-async function isOrgMember(admin: SupabaseClient, org: string, userId: string): Promise<boolean> {
-  const { data } = await admin.from('organization_members').select('organization_id').eq('organization_id', org).eq('user_id', userId).eq('status', 'active').maybeSingle();
-  return !!data;
+/** Projeto da organização: do usuário; para o gestor (CEO), de qualquer organização (ele opera as organizações clientes). */
+async function loadProject(admin: SupabaseClient, mgmt: ManagementStore, projectId: string, userId: string): Promise<{ id: string; organization_id: string | null } | null> {
+  const own = await admin.from('projects').select('id,organization_id').eq('id', projectId).eq('user_id', userId).maybeSingle();
+  if (own.data) return own.data as { id: string; organization_id: string | null };
+  if (own.error || !(await mgmt.isManagerUser(userId))) return null;
+  const foreign = await admin.from('projects').select('id,organization_id').eq('id', projectId).maybeSingle();
+  return (foreign.data as { id: string; organization_id: string | null } | null) ?? null;
 }
 
 // ---------------------------------------------------------------------------
-// apply_fix: SOMENTE os quatro tipos da lista branca; nenhum faz chamada paga
+// apply_fix: SOMENTE os cinco tipos da lista branca (inclui analytics_sync); nenhum faz chamada paga
 // ---------------------------------------------------------------------------
 type FixOutcome = { ok: boolean; result: Record<string, unknown>; error?: { code: string; status: number }; navigationOnly?: boolean };
 async function executeFix(admin: SupabaseClient, deps: AuditDeps, finding: FindingRow, fix: FixAction, actorUserId: string): Promise<FixOutcome> {
@@ -189,6 +200,18 @@ async function executeFix(admin: SupabaseClient, deps: AuditDeps, finding: Findi
       const r = await deps.syncSearch({ projectId: String(project.id), source, days, domain, property: typeof info.gsc_property === 'string' ? info.gsc_property : undefined }, fetchFn);
       if (r.ok) await deps.store.markSync(org, String(project.id), source, false);
       return { ok: r.ok, result: { source, days, rows_upserted: r.rows_upserted, error: r.error ?? null } };
+    }
+    case 'analytics_sync': {
+      const project = await projectOf(params.projectId);
+      if (!project) return { ok: false, result: {}, error: { code: 'project_not_found', status: 404 } };
+      const info = (project.commercial_info && typeof project.commercial_info === 'object' ? project.commercial_info : {}) as Record<string, unknown>;
+      const property = typeof info.ga4_property_id === 'string' ? info.ga4_property_id.trim() : '';
+      if (!isValidPropertyId(property)) return { ok: false, result: {}, error: { code: 'ga4_property_required', status: 409 } };
+      if (!deps.syncAnalytics) return { ok: false, result: {}, error: { code: 'analytics_sync_unavailable', status: 500 } };
+      const days = Math.min(90, Math.max(1, Math.floor(Number(params.days) || 7)));
+      const r = await deps.syncAnalytics({ projectId: String(project.id), days, property }, fetchFn);
+      if (r.ok) await deps.store.markSync(org, String(project.id), 'ga4', false);
+      return { ok: r.ok, result: { source: 'ga4', days, rows_upserted: r.rows_upserted, error: r.error ?? null } };
     }
     case 'plugin_discovery_refresh': {
       const project = await projectOf(params.projectId);
@@ -244,13 +267,16 @@ Deno.serve(async (req) => {
     if (actor.mode !== 'user') return json({ error: 'interactive_user_required' }, 403);
     const action = str(body.action, 30);
 
+    const mgmt = makeManagementStore(admin);
+
     if (action === 'overview' || action === 'run') {
       const projectId = str(body.projectId, 36);
       if (!UUID.test(projectId)) return json({ error: 'project_required' }, 400);
-      const { data: project } = await admin.from('projects').select('id,organization_id').eq('id', projectId).eq('user_id', actor.userId).maybeSingle();
+      const project = await loadProject(admin, mgmt, projectId, actor.userId);
       if (!project?.organization_id) return json({ error: 'project_forbidden' }, 403);
       const org = String(project.organization_id);
-      if (!(await isOrgMember(admin, org, actor.userId))) return json({ error: 'organization_membership_required' }, 403);
+      const { viewer, isMember } = await loadViewer(mgmt, org, actor.userId);
+      if (!isMember) return json({ error: 'organization_membership_required' }, 403);
 
       if (action === 'overview') {
         const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
@@ -260,10 +286,12 @@ Deno.serve(async (req) => {
           admin.from('nexus_audit_runs').select(RUN_COLUMNS).eq('organization_id', org).order('started_at', { ascending: false }).limit(20),
         ]);
         if (active.error || resolved.error || runs.error) return json({ error: 'audit_unavailable' }, 500);
-        return json(buildOverview([...(active.data || []), ...(resolved.data || [])] as FindingRow[], (runs.data || []) as RunRow[], new Date()));
+        // Quem não gerencia: sem regras de sistema (security.*/runtime.*), sem fix_action e com evidência reduzida (ver nexus-management.ts).
+        const visible = findingsForViewer([...(active.data || []), ...(resolved.data || [])] as FindingRow[], viewer);
+        return json({ ...buildOverview(visible, (runs.data || []) as RunRow[], new Date()), viewer: { role: viewer.role, can_manage_technical: viewer.can_manage_technical } });
       }
 
-      if (!(await isOrgAdmin(admin, org, actor.userId))) return json({ error: 'forbidden' }, 403);
+      if (!viewer.can_manage_technical) return json({ error: 'manager_required' }, 403);
       const store = makeStore(admin);
       const last = await store.lastManualRunAt(org);
       if (last && Date.now() - Date.parse(last) < MANUAL_RATE_LIMIT_MS) return json({ error: 'audit_rate_limited' }, 429);
@@ -281,8 +309,12 @@ Deno.serve(async (req) => {
       if (!UUID.test(id)) return json({ error: 'finding_id_required' }, 400);
       const { data: finding } = await admin.from('nexus_audit_findings').select('*').eq('id', id).maybeSingle();
       // quem não é membro recebe 404 (não revela a existência do achado)
-      if (!finding || !(await isOrgMember(admin, finding.organization_id, actor.userId))) return json({ error: 'finding_not_found' }, 404);
+      const found = finding ? await loadViewer(mgmt, String(finding.organization_id), actor.userId) : null;
+      if (!finding || !found?.isMember) return json({ error: 'finding_not_found' }, 404);
+      const viewer = found.viewer;
       const row = finding as FindingRow;
+      // regras de sistema não são visíveis (nem alteráveis) por quem não gerencia
+      if (!viewer.can_manage_technical && isSystemRuleId(row.rule_id)) return json({ error: 'finding_not_found' }, 404);
 
       if (action === 'update_finding') {
         const parsed = parseUpdateInput(body);
@@ -291,11 +323,11 @@ Deno.serve(async (req) => {
         if (!built.ok) return json({ error: built.error }, 409);
         const { data: updated, error } = await admin.from('nexus_audit_findings').update(built.patch).eq('id', row.id).select('*').single();
         if (error) throw error;
-        return json({ finding: updated });
+        return json({ finding: viewer.can_manage_technical ? updated : redactFindingForClient(updated as FindingRow) });
       }
 
-      // apply_fix [admin]
-      if (!(await isOrgAdmin(admin, row.organization_id, actor.userId))) return json({ error: 'forbidden' }, 403);
+      // apply_fix [gestor ou admin de organização interna]
+      if (!viewer.can_manage_technical) return json({ error: 'manager_required' }, 403);
       if (row.status === 'resolved') return json({ error: 'finding_not_open' }, 409);
       const fix = parseFixAction(row.fix_action);
       if (!fix.ok) return json({ error: fix.error }, fix.error === 'no_fix_available' ? 409 : 400);

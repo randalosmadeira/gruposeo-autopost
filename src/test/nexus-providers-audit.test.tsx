@@ -169,21 +169,28 @@ describe('AuditView', () => {
     expect(p.onApplyFix).toHaveBeenCalledTimes(1);
   });
 
-  it('não-admin não aplica correção nem audita agora', () => {
+  it('visão cliente: sem Aplicar correção, sem Auditar agora e sem histórico de execuções', () => {
     mount(overview([finding()]), { canAdmin: false });
-    expect(screen.getByRole('button', { name: /Aplicar correção:/ })).toHaveProperty('disabled', true);
-    expect(screen.getByRole('button', { name: 'Auditar agora' })).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('button', { name: /Aplicar correção:/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Auditar agora' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Histórico de execuções' })).toBeNull();
     // reconhecer e adiar continuam disponíveis para membros
     expect(screen.getByRole('button', { name: /Reconhecer:/ })).toHaveProperty('disabled', false);
   });
 
   it('open_route navega no app, sem confirmação e sem chamar o servidor', () => {
     const f = finding({ id: 'r1', rule_id: 'provider.free_not_connected', title: 'Conecte o Google Search Console', fix_action: { type: 'open_route', params: { route: '/nexus/motores', tab: 'all' } } });
-    const p = mount(overview([f]), { canAdmin: false });
+    const p = mount(overview([f]), { canAdmin: true });
     fireEvent.click(screen.getByRole('button', { name: `Abrir tela: ${f.title}` }));
     expect(p.onOpenRoute).toHaveBeenCalledWith('/nexus/motores', 'all');
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(p.onApplyFix).not.toHaveBeenCalled();
+  });
+
+  it('visão cliente: nem a navegação open_route aparece como botão', () => {
+    const f = finding({ id: 'r2', title: 'Conecte o Search Console', fix_action: { type: 'open_route', params: { route: '/nexus/motores', tab: 'all' } } });
+    mount(overview([f]), { canAdmin: false });
+    expect(screen.queryByRole('button', { name: /Abrir tela/ })).toBeNull();
   });
 
   it('reconhecer e reabrir chamam onUpdate com o status certo', async () => {
