@@ -315,3 +315,12 @@ Deno.test("planejar coleta paga: prepare de serp/ai_observation/pilot, prepare_p
   assertFalse(isCollectionPlanning("prepare", 3));
   for (const a of ["execute", "status", "observatory", "import_observation", "prepare_clusters", "providers_overview", undefined, 7]) assertFalse(isCollectionPlanning(a, "serp"), String(a));
 });
+
+Deno.test("OAuth gerenciado (oauth_start/finish/properties/bind) é ação técnica: cliente leva manager_required; gestor e admin de org interna passam", () => {
+  for (const a of ["oauth_start", "oauth_finish", "oauth_properties", "oauth_bind"]) {
+    assert(isTechnicalAction(a), a);
+    assertEquals(checkActionPolicy(a, CLIENT), { ok: false, error: "manager_required" }, a);
+    assertEquals(checkActionPolicy(a, MANAGER), { ok: true }, a);
+    assertEquals(checkActionPolicy(a, ORG_ADMIN), { ok: true }, a);
+  }
+});

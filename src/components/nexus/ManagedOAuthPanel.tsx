@@ -1,0 +1,87 @@
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+
+const pendingKey = "nexus-oauth-pending";
+type Pending = { projectId: string; provider: string; state: string };
+type Property = { id: string; label: string };
+async function oauth(action: string, projectId: string, provider: string, extra = {}) {
+  const { data, error } = await supabase.functions.invoke("nexus-intelligence", {
+    body: { action, projectId, provider, ...extra },
+  });
+  if (error || data?.error) throw new Error(data?.error ?? "oauth_operation_failed");
+  return data;
+}
+
+export function ManagedOAuthPanel({ projectId }: { projectId: string }) {
+  const [provider, setProvider] = useState("gsc");
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [selected, setSelected] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const query = new URLSearchParams(location.search);
+    const code = query.get("code");
+    if (!code && !query.has("error")) return;
+    const raw = sessionStorage.getItem(pendingKey);
+    sessionStorage.removeItem(pendingKey);
+    history.replaceState(null, "", location.pathname);
+    if (!raw || !code) return;
+    const pending = JSON.parse(raw) as Pending;
+    if (query.get("state") !== pending.state) return;
+    setProvider(pending.provider);
+    setBusy(true);
+    oauth("oauth_finish", pending.projectId, pending.provider, { code, state: pending.state })
+      .then(() => setNotice("Conexão autorizada. Selecione o projeto e liste as propriedades."))
+      .catch(() => setNotice("Não foi possível concluir a autorização."))
+      .finally(() => setBusy(false));
+  }, []);
+
+  useEffect(() => {
+    setProperties([]);
+    setSelected("");
+  }, [projectId, provider]);
+
+  async function run(action: string) {
+    setBusy(true);
+    setNotice("");
+    try {
+      const result = await oauth(action, projectId, provider, { propertyId: selected });
+      if (action === "oauth_start") {
+        sessionStorage.setItem(pendingKey, JSON.stringify({ projectId, provider, state: result.state }));
+        location.assign(result.url);
+      } else if (action === "oauth_properties") {
+        setProperties(result.properties);
+        setSelected(result.propertyId ?? "");
+        setNotice(result.properties.length ? "Selecione a propriedade deste projeto." : "Nenhuma propriedade autorizada.");
+      } else {
+        setNotice("Propriedade vinculada ao projeto.");
+      }
+    } catch (error) {
+      setNotice(error instanceof Error && error.message === "oauth_agency_app_not_configured"
+        ? "O aplicativo OAuth da agência ainda precisa ser configurado."
+        : "Não foi possível acessar a conexão ou propriedade.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <section className="grid gap-3 rounded-lg border p-4">
+    <h2 className="font-semibold">Conexões gerenciadas pela agência</h2>
+    <label>Provedor <select value={provider} onChange={event => setProvider(event.target.value)}>
+      <option value="gsc">Google Search Console</option>
+      <option value="ga4">Google Analytics 4</option>
+      <option value="bing">Bing Webmaster Tools</option>
+    </select></label>
+    <div className="flex flex-wrap gap-3">
+      <button type="button" disabled={busy || !projectId} onClick={() => run("oauth_start")}>Autorizar conexão</button>
+      <button type="button" disabled={busy || !projectId} onClick={() => run("oauth_properties")}>Listar propriedades</button>
+    </div>
+    {!!properties.length && <label>Propriedade <select value={selected} onChange={event => setSelected(event.target.value)}>
+      <option value="">Selecione</option>
+      {properties.map(property => <option key={property.id} value={property.id}>{property.label}</option>)}
+    </select></label>}
+    {!!properties.length && <button type="button" disabled={busy || !selected} onClick={() => run("oauth_bind")}>Vincular propriedade</button>}
+    <p role="status">{notice}</p>
+  </section>;
+}

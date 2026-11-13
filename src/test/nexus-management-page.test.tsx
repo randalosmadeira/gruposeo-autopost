@@ -94,6 +94,10 @@ describe('Visão cliente × Visão gestor: a tela', () => {
     // nada de gestão técnica
     expect(screen.queryByRole('heading', { name: 'Liberação de execução paga' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Ativação guiada dos gratuitos' })).toBeNull();
+    // painéis do Codex (OAuth gerenciado e planejamento do Serper): só o gestor
+    expect(screen.queryByRole('heading', { name: 'Conexões gerenciadas pela agência' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Planejar coletas no Serper' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Autorizar conexão|Listar propriedades|Salvar plano de coleta/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Testar todas as conexões/ })).toBeNull();
     for (const name of [/Conectar/, /Trocar chave/, /Remover/, /Testar conexão/, /Documentação/, /Contratar/, /Corrigir|Aplicar correção/, /Auditar agora/]) {
       expect(screen.queryByRole('button', { name })).toBeNull();

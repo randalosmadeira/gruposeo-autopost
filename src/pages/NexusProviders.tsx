@@ -30,6 +30,7 @@ import { useNexusRequestActions, useNexusRequests, useNexusRequestsRealtime } fr
 import { useProjects } from '@/hooks/useProjects';
 import { usePreferredProject } from '@/hooks/usePreferredProject';
 import { SerperPlans } from '@/components/nexus/SerperPlans';
+import { ManagedOAuthPanel } from '@/components/nexus/ManagedOAuthPanel';
 import { useNexusProviderActions, useNexusProviders, useNexusRealtime, useNow, useSearchPerformance } from '@/hooks/useNexusProviders';
 import { rangeForDays } from '@/lib/nexus-observatory';
 import {
@@ -370,7 +371,8 @@ export default function NexusProviders() {
             </TabsContent>
           </Tabs>
 
-          {/* Planejamento de coletas e execução paga são decisões do gestor: o cliente nem vê esses painéis. */}
+          {/* Conexões por OAuth, planejamento de coletas e execução paga são decisões do gestor: o cliente nem vê esses painéis. */}
+          {canManage && !!selected && <ManagedOAuthPanel projectId={selected} />}
           {canManage && <SerperPlans projectId={selected || undefined} />}
           {canManage && (
             <ExecutionPanel

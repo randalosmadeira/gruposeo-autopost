@@ -87,6 +87,8 @@ export const TECHNICAL_ACTIONS = [
   // provedor) só pode ser disparada pela conta de gerenciamento. `execute_collection` NÃO é uma ação do corpo da requisição: é o nome da regra,
   // aplicado dentro de `execute` conforme o tipo da operação. A revisão editorial (`editorial_review`), que também passa por `execute`, não é afetada.
   'execute_collection',
+  // Conectar Google/Bing por OAuth gerenciado vincula fonte de dados ao projeto: só a conta de gerenciamento (cliente não conecta; ele solicita).
+  'oauth_start', 'oauth_finish', 'oauth_properties', 'oauth_bind',
 ] as const;
 /** Leituras e solicitações: qualquer membro ativo. */
 export const MEMBER_ACTIONS = ['providers_overview', 'search_performance', 'ga4_summary', 'content_performance', 'project_integrations_get', 'request_create', 'requests_list'] as const;

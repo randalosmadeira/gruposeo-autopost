@@ -27,6 +27,7 @@ const periodOf=(body:Record<string,unknown>):{from:string;to:string}|null=>{
 };
 const PROJECT_COLS='id,name,description,nicho,compliance_rules,domain,wordpress_url,organization_id,user_id,editorial_identity,commercial_info,social_links,cta_leads,cta_conclusao,social_instagram,social_linkedin,social_youtube,social_twitter,social_tiktok,social_google_maps,nexus_strategy,nexus_strategy_version,nexus_profile_status,wordpress_connector_mode,wordpress_username,wordpress_credential_ref,wordpress_app_password,wordpress_plugin_namespace';
 // Chamadas a provedores: fetch original (capturado antes do spend lock), URL montada pelo servidor, sem redirecionamento automático.
+import { handleManagedOAuth } from "../_shared/nexus-managed-oauth-flow.ts";
 const pf=((input:RequestInfo|URL,init?:RequestInit)=>providerFetch(input,{...init,redirect:'manual'})) as typeof fetch;
 Deno.serve(async req=>{
  if(req.method==='OPTIONS')return new Response(null,{headers:cors});
@@ -59,6 +60,11 @@ Deno.serve(async req=>{
    if(actor.mode!=='user')return json({error:'interactive_owner_required'},403);
    const decision=checkActionPolicy(action,(await getViewer()).viewer);
    if(!decision.ok)return json({error:decision.error},403);
+  }
+  if(['oauth_start','oauth_finish','oauth_properties','oauth_bind'].includes(action)){
+   if(actor.mode!=='user'||foreignManager)return json({error:'oauth_project_forbidden'},403);
+   try{return json(await handleManagedOAuth(admin,pf,body,project.id,org,actor.userId));}
+   catch{return json({error:'oauth_operation_failed'},400);}
   }
   // Planejar coleta paga (prepare de serp/ai_observation/pilot, prepare_pilot, prepare_prompt_run): só a conta de gerenciamento. Não afeta editorial_review.
   if(actor.mode==='user'&&isCollectionPlanning(action,body.kind)){
