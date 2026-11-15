@@ -4,7 +4,8 @@ import { useAuth } from './useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from './use-toast';
 import { retryQuery, withRetry } from '@/lib/supabase-retry';
-import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import { applyProjectJsonMerge, mergeColumnsPresent } from '@/lib/json-merge';
+import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 type Project = Tables<'projects'> & { wordpress_credential_ref?: string | null };
 type ProjectInsert = TablesInsert<'projects'>;
@@ -64,11 +65,27 @@ export function useProjects() {
   });
 
   const updateProject = useMutation({
-    mutationFn: async ({ id, ...updates }: ProjectUpdate & { id: string }) => {
+    // editorial_identity existe no banco, mas ainda não nos tipos gerados do Supabase; declarado aqui para a fusão ser tipada.
+    mutationFn: async ({ id, ...updates }: ProjectUpdate & { id: string; editorial_identity?: Json }) => {
+      // commercial_info, social_links e editorial_identity são FUNDIDOS com o que já está no banco (nunca substituídos):
+      // o que a tela não conhece (schema_profile, nexus_visual_policy, social_links.kwai/tiktok...) fica preservado.
+      // Se a leitura da linha atual falhar, retryQuery lança e NADA é gravado (sem sobrescrever às cegas).
+      const mergeColumns = mergeColumnsPresent(updates as Record<string, unknown>);
+      let toSave: ProjectUpdate = updates;
+      if (mergeColumns.length > 0) {
+        const { data: current } = await retryQuery(() =>
+          supabase
+            .from('projects')
+            .select(mergeColumns.join(','))
+            .eq('id', id)
+            .single()
+        );
+        toSave = applyProjectJsonMerge(updates, current as unknown as Record<string, unknown>) as ProjectUpdate;
+      }
       const { data } = await retryQuery(() =>
         supabase
           .from('projects')
-          .update(updates)
+          .update(toSave)
           .eq('id', id)
           .select()
           .single()

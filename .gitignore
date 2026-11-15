@@ -40,3 +40,4 @@ services/zica-orchestrator/.preview/
 
 # Local Supabase CLI cache
 supabase/.temp/
+dist-perfil/
