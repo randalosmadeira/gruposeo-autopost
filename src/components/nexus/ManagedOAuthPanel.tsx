@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import bingAuditUrls from "@/data/rdm-bing-audit-urls.json";
 
 const pendingKey = "nexus-oauth-pending";
 type Pending = { projectId: string; provider: string; state: string };
@@ -44,10 +45,18 @@ export function ManagedOAuthPanel({ projectId }: { projectId: string }) {
 
   async function run(action: string) {
     setBusy(true);
-    setNotice("");
+    setNotice(action === "oauth_ga4_test" ? "Consultando sessões dos últimos sete dias no GA4…" : "");
     try {
       const result = await oauth(action, projectId, provider, { propertyId: selected });
-      if (action === "oauth_start") {
+      if (action === "oauth_ga4_test") {
+        const messages: Record<string, string> = {
+          property: "Vincule uma propriedade GA4 antes do teste.",
+          token: "Falha ao renovar a autorização do Google.",
+          network: result.timeout ? "O GA4 não respondeu dentro do prazo." : "Falha de comunicação com o GA4.",
+          report: result.reason === "SERVICE_DISABLED" ? "A Google Analytics Data API está desativada." : `Falha na consulta de métricas (HTTP ${result.status}).`,
+        };
+        setNotice(result.ok ? `Consulta GA4 concluída. Sessões nos últimos sete dias: ${result.sessions ?? "sem dados"}.` : messages[result.stage]);
+      } else if (action === "oauth_start") {
         sessionStorage.setItem(pendingKey, JSON.stringify({ projectId, provider, state: result.state }));
         location.assign(result.url);
       } else if (action === "oauth_properties") {
@@ -66,6 +75,27 @@ export function ManagedOAuthPanel({ projectId }: { projectId: string }) {
     }
   }
 
+  // Ferramenta pontual (publicada só no compilado pelo Codex em 13/11): consulta as métricas do Bing e a situação de 93 URLs
+  // do blog da RDM em lotes de 8 e mostra o total de consultas registradas. Aparece só para o provedor Bing.
+  async function runBingAudit() {
+    setBusy(true);
+    try {
+      let passed = 0;
+      let saved = 0;
+      for (let i = 0; i < bingAuditUrls.length; i += 8) {
+        const result = await oauth("oauth_bing_audit", projectId, provider, { urls: bingAuditUrls.slice(i, i + 8), metrics: i === 0 });
+        if (!Array.isArray(result.results)) throw new Error(result.error || "resposta inválida");
+        passed += result.results.filter((item: { ok?: boolean }) => item.ok).length;
+        saved += result.saved;
+        setNotice("Bing OAuth: " + passed + "/" + saved + " consultas registradas com sucesso.");
+      }
+    } catch (error) {
+      setNotice("Falha Bing OAuth: " + (error instanceof Error ? error.message : "erro"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return <section className="grid gap-3 rounded-lg border p-4">
     <h2 className="font-semibold">Conexões gerenciadas pela agência</h2>
     <label>Provedor <select value={provider} onChange={event => setProvider(event.target.value)}>
@@ -76,12 +106,14 @@ export function ManagedOAuthPanel({ projectId }: { projectId: string }) {
     <div className="flex flex-wrap gap-3">
       <button type="button" disabled={busy || !projectId} onClick={() => run("oauth_start")}>Autorizar conexão</button>
       <button type="button" disabled={busy || !projectId} onClick={() => run("oauth_properties")}>Listar propriedades</button>
+      {provider === "bing" && <button type="button" disabled={busy || !projectId} onClick={runBingAudit}>Testar métricas e 93 URLs</button>}
     </div>
     {!!properties.length && <label>Propriedade <select value={selected} onChange={event => setSelected(event.target.value)}>
       <option value="">Selecione</option>
       {properties.map(property => <option key={property.id} value={property.id}>{property.label}</option>)}
     </select></label>}
     {!!properties.length && <button type="button" disabled={busy || !selected} onClick={() => run("oauth_bind")}>Vincular propriedade</button>}
+    {provider === "ga4" && <button type="button" disabled={busy || !projectId} onClick={() => run("oauth_ga4_test")}>Testar métricas GA4</button>}
     <p role="status">{notice}</p>
   </section>;
 }

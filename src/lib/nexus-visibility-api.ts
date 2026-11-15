@@ -2,6 +2,7 @@
 // vivem AQUI: se o backend mudar algo, é este o único arquivo a ajustar. Chamadas via `invokeEdge` (nunca registra o corpo;
 // 403 `manager_required` chega como Error('manager_required')). Nada técnico (chaves, custo, execução paga) passa por aqui.
 import { invokeEdge } from '@/hooks/useNexusProviders';
+import { supabase } from '@/integrations/supabase/client';
 import { createClientRequest } from '@/lib/nexus-management-api';
 import {
   normalizeCompetitors, normalizeHistory, normalizeKeywords, normalizeMethodology, normalizeOpportunities, normalizeOverview, normalizeQuestions,
@@ -14,7 +15,20 @@ import type {
 import type { ClientRequest, RequestKind } from '@/types/nexus-requests';
 
 const FN = 'nexus-visibility' as const;
-const call = <T>(projectId: string, body: Record<string, unknown>) => invokeEdge<T>(FN, projectId, body);
+/** Sessão vencida (401): renova o login uma vez e repete a chamada com o novo token; se não der, devolve o erro original. */
+const call = async <T>(projectId: string, body: Record<string, unknown>): Promise<T> => {
+  try {
+    return await invokeEdge<T>(FN, projectId, body);
+  } catch (err) {
+    if (!(err instanceof Error) || !['401', 'session_invalid', 'authorization_required'].includes(err.message)) throw err;
+    const refreshed = await supabase.auth.refreshSession();
+    const token = refreshed.data.session?.access_token;
+    if (refreshed.error || !token) throw err;
+    const result = await supabase.functions.invoke(FN, { body: { projectId, ...body }, headers: { Authorization: `Bearer ${token}` } });
+    if (result.error) throw result.error;
+    return result.data as T;
+  }
+};
 
 export interface PeriodFilter { from: string; to: string }
 export interface ScopeFilter extends PeriodFilter { engine?: string; topic?: string }
