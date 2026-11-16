@@ -50,6 +50,37 @@ export async function callProfile<T = ProfilePayload>(action: string, body: Reco
   return data as T;
 }
 
+// ------------------------------------------------------------------------------------------------------------ conversa com a Zica (agente)
+export interface AgentMessage { id?: string; role: 'user' | 'agent' | 'system'; content: string; created_at?: string }
+export interface AgentFact { fact_id: string | null; key: string; label: string; value: unknown; quote?: string; private?: boolean; confidence?: number }
+export interface AgentHistory { conversation_id: string | null; messages: AgentMessage[]; facts: AgentFact[]; turns_left: number }
+export interface AgentTurn { conversation_id: string; reply: string; items: AgentFact[]; rejected: Array<{ key: string; reason: string }>; turns_left: number }
+
+const AGENT_MESSAGES: Record<string, string> = {
+  budget_paused: 'A conversa com a Zica está desligada: a execução paga está pausada para esta organização. Peça ao gestor para ativar em Motores.',
+  provider_not_enabled: 'A conversa com a Zica ainda não foi liberada para esta organização (provedor de IA não habilitado em Motores).',
+  pricing_not_configured: 'O custo da conversa com a Zica ainda não foi configurado. Fale com o gestor.',
+  budget_exceeded: 'O orçamento mensal de IA desta organização acabou. A conversa volta quando o gestor liberar mais.',
+  organization_credential_required: 'Falta a chave do provedor de IA desta organização. Fale com o gestor.',
+  turn_limit_reached: 'Esta conversa chegou ao limite de mensagens. Apague-a e comece outra, ou continue preenchendo as etapas.',
+  daily_limit_reached: 'Este projeto atingiu o limite diário de mensagens com a Zica. Tente amanhã.',
+  agent_turn_failed: 'A Zica não conseguiu responder agora. O que você escreveu continua na caixa; tente de novo.',
+  role_not_allowed: 'Seu papel nesta organização não permite conversar com a Zica.',
+};
+export const agentErrorMessage = (e: unknown): string =>
+  e instanceof ProfileError ? AGENT_MESSAGES[e.code] || profileErrorMessage(e) : 'Não foi possível concluir. Tente de novo.';
+
+export async function callAgent<T>(action: string, body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke('profile-agent', { body: { action, ...body } });
+  if (error) {
+    let payload: { error?: string } | null = null;
+    const ctx = (error as { context?: unknown }).context;
+    if (typeof Response !== 'undefined' && ctx instanceof Response) payload = await ctx.json().catch(() => null);
+    throw new ProfileError(payload?.error || 'request_failed');
+  }
+  return data as T;
+}
+
 // ------------------------------------------------------------------------------------------------------------ rascunho local
 export interface DraftBase { strategy: number; extended: number; private: number }
 export interface StoredDraft { values: Record<string, FieldValue | null>; base: DraftBase; savedAt: string }

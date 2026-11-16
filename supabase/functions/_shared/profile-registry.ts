@@ -63,7 +63,7 @@ export const COUNCIL: Record<string, [string, string]> = {
 };
 
 export const PROFILE_STEPS: StepDef[] = [
-  { id: 'conversa', name: 'Conversa', intro: 'Conte quanto você conhece de marketing. A conversa com a Zica (texto e voz) chega no próximo marco; por enquanto preencha as etapas do seu jeito, na ordem que preferir.' },
+  { id: 'conversa', name: 'Conversa', intro: 'Conte do seu jeito como o negócio funciona: a Zica pergunta, anota e explica. Você também pode pular a conversa e preencher as etapas na ordem que preferir.' },
   { id: 'negocio', name: 'Negócio e documentos', intro: 'Quem é a empresa, em que momento ela está e onde quer chegar. Os números financeiros ficam só com dono e administrador da organização e nunca aparecem em texto público.' },
   { id: 'marca', name: 'Marca e identidade', intro: 'O conceito vem antes do desenho: o que a marca promete, o que transmite e o que jamais pode transmitir.' },
   { id: 'ofertas', name: 'Ofertas e metas', intro: 'O mix de ofertas define a estratégia: o que gira caixa rápido, o que dá margem e o que sustenta o crescimento. As metas ficam só com dono e administrador.' },

@@ -122,6 +122,14 @@ verify_jwt = false
 [functions.nexus-audit]
 verify_jwt = false
 
+# nexus-observe: observação agendada (cron). Só aceita x-zica-automation-key (hash em automation_ingress_keys, nome 'nexus-observe'); nenhuma chamada de usuário.
+[functions.nexus-observe]
+verify_jwt = false
+
 # nexus-visibility: painel de visibilidade (ZVI); só usuário logado (o JWT é validado no gateway e dentro da função).
 [functions.nexus-visibility]
+verify_jwt = true
+
+# profile-agent: conversa do Perfil do projeto (P3). Chamadas de usuário; o JWT é validado dentro da função (resolveRequestActor).
+[functions.profile-agent]
 verify_jwt = true

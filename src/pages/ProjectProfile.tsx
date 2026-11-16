@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ProfileField } from '@/components/profile/ProfileField';
 import { AnalysisStep, ModulesStep, PathStep, VersionsPanel } from '@/components/profile/ProfileExtras';
+import { ProfileChat } from '@/components/profile/ProfileChat';
 import { callProfile, clearDraft, loadDraft, ProfileError, profileErrorMessage, saveDraft, type ProfilePayload } from '@/lib/profile-api';
 import {
   COUNCIL, PROFILE_FIELDS_V2, PROFILE_STEPS, fieldsOfStep, isPrivateStore, isVisible, type FieldValue, type StepId,
@@ -170,6 +171,8 @@ export default function ProjectProfile() {
               <h2 id="step-title" className="text-2xl font-semibold">{idx + 1}. {stepInfo.name}</h2>
               <p className="mt-1 text-sm text-muted-foreground">{stepInfo.intro}</p>
             </div>
+
+            {step === 'conversa' && <ProfileChat projectId={id} payload={payload} hasUnsaved={hasUnsaved} onProfileUpdated={(next) => { cache.setQueryData(key, next); setDraft({}); setServerErrors({}); clearDraft(id); }} />}
 
             {step === 'negocio' && canWrite && (
               <Button variant="outline" size="sm" disabled={busy} onClick={importLegacy}>Importar dados já cadastrados neste projeto</Button>
