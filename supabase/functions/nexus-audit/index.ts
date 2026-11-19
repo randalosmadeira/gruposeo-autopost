@@ -8,6 +8,7 @@ import { PLUGIN_VERSION } from '../_shared/plugin-version.ts';
 import { FREE_HEALTH_PROVIDERS, runHealthChecks } from '../_shared/nexus-providers.ts';
 import { syncSearchPerformance } from '../_shared/nexus-search-sync.ts';
 import { isValidPropertyId, syncGa4 } from '../_shared/nexus-ga4.ts';
+import { ga4DigitsOf, loadOAuthLink, resolveOAuthSecret, type OAuthSyncProvider } from '../_shared/nexus-oauth-sync.ts';
 import { findingsForViewer, isSystemRuleId, loadViewer, makeManagementStore, redactFindingForClient, type ManagementStore } from '../_shared/nexus-management.ts';
 import { isPluginModeProject, resolvePluginKey, resolvePluginNamespace } from '../_shared/wordpress-plugin-client.ts';
 import {
@@ -45,19 +46,21 @@ function safeEqual(a: string, b: string): boolean {
 function makeStore(admin: SupabaseClient): AuditStore {
   return {
     async loadBase(orgId) {
-      const [program, projects, stats, grants, cron] = await Promise.all([
+      const [program, projects, stats, grants, cron, oauth] = await Promise.all([
         admin.from('nexus_programs').select('execution_enabled,budget_usd_micros,reserved_usd_micros,consumed_usd_micros,settings').eq('organization_id', orgId).maybeSingle(),
         admin.from('projects').select('id,name,domain,wordpress_url,wordpress_connector_mode,wordpress_username,wordpress_plugin_namespace,commercial_info').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(100),
         admin.rpc('nexus_audit_project_stats', { p_org: orgId }),
         admin.rpc('nexus_security_grants_audit'),
         admin.rpc('nexus_cron_health', { p_hours: 24 }),
+        // conexões OAuth gerenciadas (GSC/GA4/Bing) do projeto: valem como credencial na auditoria e na sincronização
+        admin.from('nexus_oauth_connections').select('project_id,provider,property_id,connected_at').eq('organization_id', orgId).limit(500),
       ]);
       if (program.error) throw new Error('program_unavailable');
       if (projects.error) throw new Error('projects_unavailable');
       if (stats.error) throw new Error('project_stats_unavailable');
       return {
         program: normalizeProgram(program.data),
-        projects: buildProjects(projects.data || [], stats.data, (row) => isPluginModeProject(row)),
+        projects: buildProjects(projects.data || [], stats.data, (row) => isPluginModeProject(row), undefined, oauth.error ? [] : oauth.data || []),
         securityGrants: grants.error ? null : normalizeSecurityGrants(grants.data),
         cronHealth: cron.error ? null : normalizeCronHealth(cron.data),
       };
@@ -116,6 +119,26 @@ function buildDeps(admin: SupabaseClient, organizationId: string): AuditDeps {
   let ownHost = '';
   try { ownHost = new URL(supabaseUrl).hostname; } catch { ownHost = ''; }
   const guarded = (deadlineMs: number) => createGuardedFetch(providerFetch, { deadlineMs });
+  const googleApp = () => ({ clientId: Deno.env.get('NEXUS_GOOGLE_OAUTH_CLIENT_ID') || '', clientSecret: Deno.env.get('NEXUS_GOOGLE_OAUTH_CLIENT_SECRET') || '' });
+  const readOrgSecret = async (provider: string) => {
+    const { data, error } = await admin.rpc('nexus_provider_secret_read', { p_org: organizationId, p_provider: provider });
+    return error || typeof data !== 'string' || !data ? null : data;
+  };
+  /** Segredo da fonte: conexão OAuth do projeto primeiro (GSC/GA4); senão a credencial da organização. Falha da conexão só aparece se não houver a outra. */
+  const secretFor = (projectId: string, fetchFn: typeof fetch) => async (provider: string): Promise<string | null> => {
+    if (provider === 'gsc' || provider === 'ga4') {
+      let failure: unknown = null;
+      try {
+        const viaOAuth = await resolveOAuthSecret(admin, fetchFn, googleApp(), organizationId, projectId, provider as OAuthSyncProvider);
+        if (viaOAuth) return viaOAuth;
+      } catch (e) { failure = e; }
+      const org = await readOrgSecret(provider);
+      if (org) return org;
+      if (failure) throw failure;
+      return null;
+    }
+    return readOrgSecret(provider);
+  };
   return {
     store: makeStore(admin),
     now: Date.now,
@@ -124,12 +147,11 @@ function buildDeps(admin: SupabaseClient, organizationId: string): AuditDeps {
     freeHealthProviders: FREE_HEALTH_PROVIDERS,
     healthChecks: (o) => runHealthChecks(admin, o),
     syncSearch: async (call, fetchFn) => {
+      // propriedade do GSC: a do projeto; senão a escolhida na conexão OAuth
+      const property = call.property || (call.source === 'gsc' ? (await loadOAuthLink(admin, organizationId, call.projectId, 'gsc'))?.property_id || undefined : undefined);
       const { results } = await syncSearchPerformance(admin, {
-        organizationId, projectId: call.projectId, source: call.source, days: call.days, fetchFn, domain: call.domain, property: call.property,
-        resolveSecret: async (provider) => {
-          const { data, error } = await admin.rpc('nexus_provider_secret_read', { p_org: organizationId, p_provider: provider });
-          return error || typeof data !== 'string' || !data ? null : data;
-        },
+        organizationId, projectId: call.projectId, source: call.source, days: call.days, fetchFn, domain: call.domain, property,
+        resolveSecret: secretFor(call.projectId, fetchFn),
       });
       const r = results[0];
       return { ok: r?.ok === true, rows_upserted: r?.rows_upserted ?? 0, error: r?.error };
@@ -137,10 +159,7 @@ function buildDeps(admin: SupabaseClient, organizationId: string): AuditDeps {
     syncAnalytics: async (call, fetchFn) => {
       const out = await syncGa4(admin, {
         organizationId, projectId: call.projectId, days: call.days, fetchFn, property: call.property,
-        resolveSecret: async (provider) => {
-          const { data, error } = await admin.rpc('nexus_provider_secret_read', { p_org: organizationId, p_provider: provider });
-          return error || typeof data !== 'string' || !data ? null : data;
-        },
+        resolveSecret: secretFor(call.projectId, fetchFn),
       });
       const r = out.results[0];
       return { ok: r?.ok === true, rows_upserted: out.rows_upserted, error: r?.error };
@@ -205,7 +224,8 @@ async function executeFix(admin: SupabaseClient, deps: AuditDeps, finding: Findi
       const project = await projectOf(params.projectId);
       if (!project) return { ok: false, result: {}, error: { code: 'project_not_found', status: 404 } };
       const info = (project.commercial_info && typeof project.commercial_info === 'object' ? project.commercial_info : {}) as Record<string, unknown>;
-      const property = typeof info.ga4_property_id === 'string' ? info.ga4_property_id.trim() : '';
+      const property = (typeof info.ga4_property_id === 'string' ? info.ga4_property_id.trim() : '')
+        || ga4DigitsOf((await loadOAuthLink(admin, org, String(project.id), 'ga4'))?.property_id) || '';
       if (!isValidPropertyId(property)) return { ok: false, result: {}, error: { code: 'ga4_property_required', status: 409 } };
       if (!deps.syncAnalytics) return { ok: false, result: {}, error: { code: 'analytics_sync_unavailable', status: 500 } };
       const days = Math.min(90, Math.max(1, Math.floor(Number(params.days) || 7)));

@@ -4,10 +4,15 @@ Tags: seo, geo, llms, indexnow, schema, wordpress, automation, queue
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.16.1
+Stable tag: 3.16.2
 License: GPLv2 or later
 
 Agente WordPress leve oficial da Zica.ai. Publica, registra eventos duráveis, serve discovery files e conversa com o Zica Orchestrator sem executar IA pesada durante save_post.
+
+== 3.16.2 ==
+
+* Cliques de contato: o script de sinais passa a medir clique em WhatsApp, telefone, e-mail e envio de formulário de contato (tipo `cta_click`). Só o tipo do contato e o caminho da página saem do navegador: nunca o número, o e-mail ou o texto digitado. Respeita "não rastrear". Botões que não são links podem usar `data-zica-cta="whatsapp|phone|email|form"`.
+* Pede a migração `20261120100000` do Zica (aceita o tipo `cta_click`); antes dela, os cliques são recusados com segurança e a medição de visitas continua igual.
 
 == 3.16.1 ==
 

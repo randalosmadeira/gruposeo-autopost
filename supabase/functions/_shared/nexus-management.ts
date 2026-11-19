@@ -88,7 +88,7 @@ export const TECHNICAL_ACTIONS = [
   // aplicado dentro de `execute` conforme o tipo da operação. A revisão editorial (`editorial_review`), que também passa por `execute`, não é afetada.
   'execute_collection',
   // Conectar Google/Bing por OAuth gerenciado vincula fonte de dados ao projeto: só a conta de gerenciamento (cliente não conecta; ele solicita).
-  'oauth_start', 'oauth_finish', 'oauth_properties', 'oauth_bind',
+  'oauth_start', 'oauth_finish', 'oauth_properties', 'oauth_bind', 'oauth_bing_audit',
 ] as const;
 /** Leituras e solicitações: qualquer membro ativo. */
 export const MEMBER_ACTIONS = ['providers_overview', 'search_performance', 'ga4_summary', 'content_performance', 'project_integrations_get', 'request_create', 'requests_list'] as const;
@@ -96,6 +96,19 @@ export const MEMBER_ACTIONS = ['providers_overview', 'search_performance', 'ga4_
 export const MANAGER_ONLY_ACTIONS = ['request_update'] as const;
 /** Ações em que o gestor pode operar projeto de OUTRA pessoa/organização (ex.: organização cliente) sem ser o dono do projeto. */
 export const MANAGER_PROJECT_ACTIONS: readonly string[] = [...TECHNICAL_ACTIONS, 'providers_overview', 'search_performance', 'ga4_summary', 'content_performance', 'project_integrations_get', 'requests_list', 'request_update'];
+/**
+ * Observatório e coleta (14/11/2026). Todos os projetos internos pertencem a UMA organização com mais de um dono; o co-dono (que não é o `user_id` do
+ * projeto) recebia `project_forbidden` (403) em conjuntos de perguntas, observação manual, chave de sinais e planejamento/execução de coleta.
+ * Estas ações passam a valer para quem é DONO ou ADMIN ATIVO da organização do projeto. Não amplia o acesso de gestor a organizações de clientes
+ * (`canManagerOperateOnForeignProject` segue negando `execute`/`prepare`) nem o de membros comuns. Ações técnicas e a regra `execute_collection`
+ * continuam valendo depois da resolução do projeto.
+ */
+export const ORG_ADMIN_PROJECT_ACTIONS: readonly string[] = [
+  'observatory', 'prompt_sets', 'prompt_set_upsert', 'prompt_upsert', 'prompt_delete', 'import_observation', 'signals_status',
+  'prepare', 'prepare_pilot', 'prepare_prompt_run', 'execute',
+];
+export const canOrgAdminOperateOnProject = (v: unknown) => has(ORG_ADMIN_PROJECT_ACTIONS, v);
+export const isOrgAdminRole = (role: unknown) => role === 'owner' || role === 'admin';
 
 const has = (list: readonly string[], v: unknown) => typeof v === 'string' && list.includes(v);
 export const isTechnicalAction = (v: unknown) => has(TECHNICAL_ACTIONS, v);

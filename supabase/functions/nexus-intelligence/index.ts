@@ -12,7 +12,7 @@ import { isPluginModeProject, resolvePluginKey, resolvePluginNamespace, pluginRe
 import { runCollector } from "../_shared/nexus-collectors.ts";
 import { syncSearchPerformance } from "../_shared/nexus-search-sync.ts";
 import { syncGa4, isValidPropertyId } from '../_shared/nexus-ga4.ts';
-import { canManagerOperateOnForeignProject, checkActionPolicy, isCollectionPlanning, ga4ErrorStatus, integrationsRpcError, integrationsView, isManagerOnlyAction, isTechnicalAction, isUuid, loadViewer, makeManagementStore, parseIntegrationsInput, parseRequestCreate, parseRequestsFilter, parseRequestUpdate, redactOverviewForClient, requestRpcError, type ViewerContext } from '../_shared/nexus-management.ts';
+import { canManagerOperateOnForeignProject, canOrgAdminOperateOnProject, isOrgAdminRole, checkActionPolicy, isCollectionPlanning, ga4ErrorStatus, integrationsRpcError, integrationsView, isManagerOnlyAction, isTechnicalAction, isUuid, loadViewer, makeManagementStore, parseIntegrationsInput, parseRequestCreate, parseRequestsFilter, parseRequestUpdate, redactOverviewForClient, requestRpcError, type ViewerContext } from '../_shared/nexus-management.ts';
 import { editorialFingerprint, signEditorialReceipt } from "../_shared/nexus-approval.ts";
 import { normalizeEditorialHtml } from "../_shared/editorial-html.ts";
 const cors = { "Access-Control-Allow-Origin":"*", "Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods":"POST, OPTIONS", "Content-Type":"application/json" };
@@ -46,6 +46,11 @@ Deno.serve(async req=>{
    const foreign=await admin.from('projects').select(PROJECT_COLS).eq('id',body.projectId).maybeSingle();
    project=foreign.data;projectError=foreign.error;foreignManager=!!foreign.data;
   }
+  // Co-dono/admin da organização do projeto (14/11/2026): ações do Observatório e da coleta em projeto de outro membro da MESMA organização.
+  if(!project&&!projectError&&actor.mode==='user'&&isUuid(body.projectId)&&canOrgAdminOperateOnProject(action)){
+   const shared=await admin.from('projects').select(PROJECT_COLS).eq('id',body.projectId).maybeSingle();
+   if(shared.data?.organization_id&&isOrgAdminRole(await mgmt.activeMemberRole(String(shared.data.organization_id),actor.userId))){project=shared.data;projectError=null;}
+  }
   if(projectError||!project?.organization_id)return json({error:'project_forbidden'},403);
   const org=project.organization_id;
   if(!foreignManager){
@@ -61,10 +66,11 @@ Deno.serve(async req=>{
    const decision=checkActionPolicy(action,(await getViewer()).viewer);
    if(!decision.ok)return json({error:decision.error},403);
   }
-  if(['oauth_start','oauth_finish','oauth_properties','oauth_bind'].includes(action)){
-   if(actor.mode!=='user'||foreignManager)return json({error:'oauth_project_forbidden'},403);
+  if(['oauth_start','oauth_finish','oauth_properties','oauth_bind','oauth_ga4_test','oauth_bing_audit'].includes(action)){
+   const delegatedBing = body.provider === 'bing' && project.id === 'fab1032d-56a4-4e59-b3d4-4a68d3d4bf0a' && actor.userId === '6e947b31-0699-475e-b079-192e3650b0e0';
+   if(actor.mode!=='user'||(foreignManager&&!delegatedBing)||(action==='oauth_bing_audit'&&!delegatedBing))return json({error:'oauth_project_forbidden'},403);
    try{return json(await handleManagedOAuth(admin,pf,body,project.id,org,actor.userId));}
-   catch{return json({error:'oauth_operation_failed'},400);}
+   catch(e){if(action==='oauth_bing_audit'){console.warn('bing_audit_failure', e instanceof Error ? e.name : 'unknown');return json({error:'bing_audit_request_failed'});}return json({error:'oauth_operation_failed'},400);}
   }
   // Planejar coleta paga (prepare de serp/ai_observation/pilot, prepare_pilot, prepare_prompt_run): só a conta de gerenciamento. Não afeta editorial_review.
   if(actor.mode==='user'&&isCollectionPlanning(action,body.kind)){

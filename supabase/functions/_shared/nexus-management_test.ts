@@ -7,7 +7,7 @@ import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { buildProvidersOverview } from "./nexus-providers.ts";
 import {
-  canManagerOperateOnForeignProject, checkActionPolicy, findingsForViewer, ga4ErrorStatus, integrationsRpcError, integrationsView, isManagerOnlyAction, isSystemRuleId,
+  canManagerOperateOnForeignProject, canOrgAdminOperateOnProject, isOrgAdminRole, ORG_ADMIN_PROJECT_ACTIONS, checkActionPolicy, findingsForViewer, ga4ErrorStatus, integrationsRpcError, integrationsView, isManagerOnlyAction, isSystemRuleId,
   isCollectionPlanning, isTechnicalAction, isUuid, loadViewer, MANAGER_ONLY_ACTIONS, MEMBER_ACTIONS, makeManagementStore, normalizeGscProperty, parseIntegrationsInput, parseRequestCreate,
   parseRequestsFilter, parseRequestUpdate, redactFindingForClient, redactOverviewForClient, requestRpcError, resolveViewer, simpleStatus, TECHNICAL_ACTIONS,
   type ManagementStore, type Viewer,
@@ -323,4 +323,14 @@ Deno.test("OAuth gerenciado (oauth_start/finish/properties/bind) é ação técn
     assertEquals(checkActionPolicy(a, MANAGER), { ok: true }, a);
     assertEquals(checkActionPolicy(a, ORG_ADMIN), { ok: true }, a);
   }
+});
+
+Deno.test("co-dono/admin da organização: ações do Observatório e da coleta, sem ampliar o acesso do gestor a organizações de clientes", () => {
+  for (const a of ["observatory", "prompt_sets", "prompt_set_upsert", "prompt_upsert", "prompt_delete", "import_observation", "signals_status", "prepare", "prepare_pilot", "prepare_prompt_run", "execute"]) assert(canOrgAdminOperateOnProject(a), a);
+  for (const a of ["store_credential", "execution_settings_set", "record_conversion", "apply_link", "suggest_links", "request_create", "status", "initialize", undefined, 7]) assertFalse(canOrgAdminOperateOnProject(a), String(a));
+  assert(isOrgAdminRole("owner") && isOrgAdminRole("admin"));
+  for (const r of ["member", "editor", "viewer", "client", null, undefined, ""]) assertFalse(isOrgAdminRole(r), String(r));
+  // o gestor de outra organização continua SEM execute/prepare (regra antiga, inalterada)
+  for (const a of ["execute", "prepare", "observatory", "prompt_sets"]) assertFalse(canManagerOperateOnForeignProject(a), a);
+  assertEquals(ORG_ADMIN_PROJECT_ACTIONS.length, 11);
 });

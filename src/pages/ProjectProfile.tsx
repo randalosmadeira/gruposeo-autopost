@@ -6,7 +6,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ProfileField } from '@/components/profile/ProfileField';
 import { AnalysisStep, ModulesStep, PathStep, VersionsPanel } from '@/components/profile/ProfileExtras';
 import { ProfileChat } from '@/components/profile/ProfileChat';
-import { callProfile, clearDraft, loadDraft, ProfileError, profileErrorMessage, saveDraft, type ProfilePayload } from '@/lib/profile-api';
+import { callProfile, clearDraft, loadDraft, ProfileError, profileErrorMessage, saveDraft, type ModuleEffectPreview, type ProfilePayload } from '@/lib/profile-api';
+import { HIDDEN_MODULES_KEY } from '@/hooks/useHiddenModules';
 import {
   COUNCIL, PROFILE_FIELDS_V2, PROFILE_STEPS, fieldsOfStep, isPrivateStore, isVisible, type FieldValue, type StepId,
 } from '../../supabase/functions/_shared/profile-registry';
@@ -179,12 +180,12 @@ export default function ProjectProfile() {
             )}
 
             {step === 'modulos' ? (
-              <ModulesStep payload={payload} busy={busy} onDecide={(code, enabled, reason) => run(() => callProfile('modules_set', { projectId: id, moduleCode: code, enabled, reason }), `Decisão do módulo registrada: ${enabled ? 'ligado' : 'desligado'}.`)} />
+              <ModulesStep payload={payload} busy={busy} onPreview={async (code) => (await callProfile<{ effects: ModuleEffectPreview[] }>('modules_preview', { projectId: id, moduleCode: code })).effects} onDecide={(code, enabled, reason) => run(() => callProfile('modules_set', { projectId: id, moduleCode: code, enabled, reason }), `Decisão do módulo registrada: ${enabled ? 'ligado' : 'desligado'}.`, () => { void cache.invalidateQueries({ queryKey: HIDDEN_MODULES_KEY }); })} />
             ) : step === 'analise' ? (
-              <AnalysisStep projectId={id} hasUnsaved={hasUnsaved} />
+              <AnalysisStep projectId={id} hasUnsaved={hasUnsaved} canWrite={canWrite} />
             ) : step === 'caminho' ? (
               <>
-                <PathStep values={values} />
+                <PathStep values={values} projectId={id} projectName={payload.project.name} canWrite={canWrite} />
                 <div className="grid gap-4 md:grid-cols-2">
                   {visible.map((f) => <ProfileField key={f.key} field={f} value={display(f.key)} error={errors[f.key]} disabled={!canWrite || busy} onChange={(v) => setField(f.key, v)} />)}
                 </div>

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { ArrowRight, ChevronLeft, Eye, EyeOff, KeyRound, Loader2, LockKeyhole, Mail, RefreshCw, ShieldCheck, Sparkles, UserRound, Wifi, WifiOff } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -8,11 +8,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { CentralCortex } from '@/components/brand/CentralCortex';
 import { ZicaLogo } from '@/components/brand/ZicaLogo';
 import { InstitutionalInfo } from '@/components/shared/InstitutionalInfo';
+import { LeadError, clearHandoff, isHandoffToken, leadActivate, leadErrorMessage, leadPeek, readHandoff, storeHandoff } from '@/lib/lead-api';
+import { friendlyAuthError } from '@/lib/auth-messages';
 
 type AuthView = 'login' | 'signup' | 'recovery';
-type FieldProps = { id: string; label: string; type: string; placeholder: string; value: string; onChange: (value: string) => void; icon: React.ElementType; autoComplete?: string; minLength?: number; };
+type FieldProps = { id: string; label: string; type: string; placeholder: string; value: string; onChange: (value: string) => void; icon: React.ElementType; autoComplete?: string; minLength?: number; readOnly?: boolean; };
 
-function Field({ id, label, type, placeholder, value, onChange, icon: Icon, autoComplete, minLength }: FieldProps) {
+function Field({ id, label, type, placeholder, value, onChange, icon: Icon, autoComplete, minLength, readOnly }: FieldProps) {
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === 'password';
   return (
@@ -20,7 +22,7 @@ function Field({ id, label, type, placeholder, value, onChange, icon: Icon, auto
       <label htmlFor={id} className="text-sm font-semibold text-slate-200">{label}</label>
       <div className="group relative">
         <Icon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-[#00F0FF]" />
-        <input id={id} type={isPassword && showPassword ? 'text' : type} placeholder={placeholder} value={value} onChange={(event) => onChange(event.target.value)} autoComplete={autoComplete} minLength={minLength} required className="h-14 w-full rounded-xl border border-[#2b3945] bg-[#101922]/90 pl-11 pr-11 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-[#00F0FF]/75 focus:shadow-[0_0_0_3px_rgba(0,240,255,.07),0_0_30px_rgba(0,240,255,.05)]" />
+        <input id={id} type={isPassword && showPassword ? 'text' : type} placeholder={placeholder} value={value} onChange={(event) => onChange(event.target.value)} autoComplete={autoComplete} minLength={minLength} readOnly={readOnly} required className="h-14 w-full rounded-xl border border-[#2b3945] bg-[#101922]/90 pl-11 pr-11 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-[#00F0FF]/75 focus:shadow-[0_0_0_3px_rgba(0,240,255,.07),0_0_30px_rgba(0,240,255,.05)]" />
         {isPassword && <button type="button" onClick={() => setShowPassword((current) => !current)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-slate-500 transition hover:bg-white/5 hover:text-[#00F0FF]" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>}
       </div>
     </div>
@@ -31,7 +33,12 @@ export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
   const { toast } = useToast();
   const { status: backendStatus, latency, recheck } = useBackendHealth(20000);
-  const [view, setView] = useState<AuthView>('login');
+  const [params] = useSearchParams();
+  const [view, setView] = useState<AuthView>(params.get('view') === 'signup' ? 'signup' : 'login');
+  const [leadHint, setLeadHint] = useState(false);
+  // token do lead já conferido no servidor: com ele o cadastro é DIRETO (fase de teste: sem e-mail de confirmação)
+  const [leadToken, setLeadToken] = useState('');
+  const [confirmSentTo, setConfirmSentTo] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loginEmail, setLoginEmail] = useState('');
@@ -41,16 +48,52 @@ export default function Auth() {
   const [signupPassword, setSignupPassword] = useState('');
   const [recoveryEmail, setRecoveryEmail] = useState('');
 
+  // Veio do atalho de captação do site: guarda o token (para ligar o cadastro ao lead depois do login) e pré-preenche nome e e-mail.
+  useEffect(() => {
+    const token = params.get('lead');
+    if (!isHandoffToken(token)) return;
+    storeHandoff(token);
+    let alive = true;
+    leadPeek(token).then((r) => {
+      if (!alive || !r.valid) return;
+      setLeadHint(true);
+      setLeadToken(token);
+      setSignupName((n) => n || r.name || '');
+      setSignupEmail((m) => m || r.email || '');
+    }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [params]);
+
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-[#050a0f]"><div className="zica-auth-loading flex items-center gap-3 rounded-2xl border border-[#263541] bg-[#0b141d] px-5 py-4 text-sm text-slate-300"><Loader2 className="h-5 w-5 animate-spin text-[#D4FF00]" /> Sincronizando o Zica.IA Posts...</div></div>;
   if (user) return <Navigate to="/" replace />;
 
   const notifyError = (title: string, error: unknown) => {
     const message = error instanceof Error ? error.message : 'Erro desconhecido';
     const isNetwork = message.includes('Failed to fetch') || message.toLowerCase().includes('timeout') || message.toLowerCase().includes('network') || message.includes('signal is aborted');
-    toast({ title: isNetwork ? 'Sem conexão com o Cérebro Zica.ai' : title, description: isNetwork ? 'Não foi possível alcançar o backend agora. Verifique sua conexão e tente novamente.' : message, variant: 'destructive' });
+    toast({ title: isNetwork ? 'Sem conexão com o Cérebro Zica.ai' : title, description: isNetwork ? 'Não foi possível alcançar o backend agora. Verifique sua conexão e tente novamente.' : friendlyAuthError(message), variant: 'destructive' });
   };
   const handleLogin = async (event: React.FormEvent) => { event.preventDefault(); setIsSubmitting(true); try { await signIn(loginEmail, loginPassword); } catch (error) { notifyError('Não foi possível acessar sua conta', error); } finally { setIsSubmitting(false); } };
-  const handleSignup = async (event: React.FormEvent) => { event.preventDefault(); setIsSubmitting(true); try { await signUp(signupEmail, signupPassword, signupName); } catch (error) { notifyError('Não foi possível criar sua conta', error); } finally { setIsSubmitting(false); } };
+  const handleSignup = async (event: React.FormEvent) => {
+    event.preventDefault(); setIsSubmitting(true);
+    try {
+      if (leadToken) {
+        // cadastro direto: a conta nasce confirmada no servidor (e-mail do lead) e a pessoa já entra
+        const made = await leadActivate(leadToken, signupPassword);
+        clearHandoff();
+        await signIn(made.email, signupPassword);
+        if (made.space === 'created') toast({ title: 'Seu espaço de teste está pronto', description: 'Você já pode criar o seu primeiro projeto e ver as análises. A IA paga é liberada pela nossa equipe.' });
+        return;
+      }
+      const token = readHandoff();
+      const r = await signUp(signupEmail, signupPassword, signupName, token ? { lead_handoff: token } : undefined);
+      if (r?.needsEmailConfirmation) setConfirmSentTo(signupEmail);
+    } catch (error) {
+      if (error instanceof LeadError) {
+        toast({ title: 'Não foi possível criar sua conta', description: leadErrorMessage(error), variant: 'destructive' });
+        if (error.code === 'account_exists') { setLoginEmail(signupEmail); setView('login'); }
+      } else notifyError('Não foi possível criar sua conta', error);
+    } finally { setIsSubmitting(false); }
+  };
   const handleRecovery = async (event: React.FormEvent) => { event.preventDefault(); setIsSubmitting(true); try { const redirectTo = new URL(`${import.meta.env.BASE_URL}auth`, window.location.origin).toString(); const { error } = await supabase.auth.resetPasswordForEmail(recoveryEmail, { redirectTo }); if (error) throw error; toast({ title: 'Link de recuperação enviado', description: 'Confira seu e-mail para redefinir o acesso ao Zica.ai.' }); setView('login'); setLoginEmail(recoveryEmail); } catch (error) { notifyError('Não foi possível enviar o link de recuperação', error); } finally { setIsSubmitting(false); } };
   const healthLabel = backendStatus === 'online' ? `Zica.IA Posts ativo${latency ? ` · ${latency}ms` : ''}` : backendStatus === 'degraded' ? `Sistema com latência${latency ? ` · ${latency}ms` : ''}` : backendStatus === 'offline' ? 'Sistema temporariamente indisponível' : 'Verificando Zica.IA Posts';
 
@@ -79,7 +122,7 @@ export default function Auth() {
               <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00F0FF] to-transparent opacity-70" />
               <div className="mb-7 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl border border-[#D4FF00]/35 bg-[#D4FF00]/[.05] text-[#D4FF00]"><LockKeyhole className="h-5 w-5" /></span><div><p className="text-xs font-black uppercase tracking-[.15em] text-[#D4FF00]">{view === 'login' ? 'Acesso ao Zica.IA Posts' : view === 'signup' ? 'Ativar novo ecossistema' : 'Recuperar acesso'}</p><p className="mt-1 text-xs text-slate-500">Zica.IA Posts · conexão criptografada</p></div></div>
               {view === 'login' && <form onSubmit={handleLogin} className="space-y-5"><Field id="login-email" label="Email de acesso" type="email" placeholder="seu@email.com" value={loginEmail} onChange={setLoginEmail} icon={Mail} autoComplete="email" /><Field id="login-password" label="Senha" type="password" placeholder="••••••••" value={loginPassword} onChange={setLoginPassword} icon={LockKeyhole} autoComplete="current-password" minLength={6} /><div className="flex items-center justify-between gap-3 text-sm"><label className="flex cursor-pointer items-center gap-2 text-slate-400"><input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="h-4 w-4 accent-[#D4FF00]" />Lembrar de mim</label><button type="button" onClick={() => { setRecoveryEmail(loginEmail); setView('recovery'); }} className="font-semibold text-[#00F0FF] underline-offset-4 hover:underline">Esqueci minha senha</button></div><button disabled={isSubmitting} className="zica-primary-cta flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#D4FF00] text-base font-black text-[#061017] disabled:cursor-not-allowed disabled:opacity-60">{isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Entrar <ArrowRight className="h-5 w-5" /></>}</button><button type="button" className="h-14 w-full rounded-xl border border-white/30 text-sm font-semibold text-white" onClick={async () => { try { const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + '/auth' } }); if (error) throw error; } catch { window.alert('Não foi possível iniciar o login com Google.'); } }}>Entrar com Google</button><button type="button" onClick={() => setView('signup')} className="h-14 w-full rounded-xl border border-[#00F0FF]/70 bg-transparent text-sm font-semibold text-[#00F0FF] transition hover:bg-[#00F0FF]/[.06]">Cadastrar nova conta</button></form>}
-              {view === 'signup' && <form onSubmit={handleSignup} className="space-y-5"><Field id="signup-name" label="Nome" type="text" placeholder="Seu nome" value={signupName} onChange={setSignupName} icon={UserRound} autoComplete="name" /><Field id="signup-email" label="Email de acesso" type="email" placeholder="seu@email.com" value={signupEmail} onChange={setSignupEmail} icon={Mail} autoComplete="email" /><Field id="signup-password" label="Crie sua senha" type="password" placeholder="Mínimo de 6 caracteres" value={signupPassword} onChange={setSignupPassword} icon={LockKeyhole} autoComplete="new-password" minLength={6} /><button disabled={isSubmitting} className="zica-primary-cta flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#D4FF00] text-base font-black text-[#061017] disabled:opacity-60">{isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Ativar conta Zica.ai <ArrowRight className="h-5 w-5" /></>}</button><button type="button" onClick={() => setView('login')} className="flex w-full items-center justify-center gap-2 text-sm font-semibold text-[#00F0FF]"><ChevronLeft className="h-4 w-4" /> Voltar para entrar</button></form>}
+              {view === 'signup' && confirmSentTo && <div role="status" className="space-y-4 rounded-2xl border border-[#3cff65]/40 bg-[#3cff65]/5 p-5 text-slate-200"><p className="text-lg font-bold text-white">Confirme o seu e-mail</p><p className="text-sm leading-6">Enviamos um link para <strong className="break-all">{confirmSentTo}</strong>. Abra o link para ativar a conta (de preferência neste mesmo aparelho). Depois é só entrar com a senha que você criou.</p><button type="button" onClick={() => { setLoginEmail(confirmSentTo); setConfirmSentTo(''); setView('login'); }} className="h-12 w-full rounded-xl bg-[#D4FF00] text-sm font-black text-[#061017]">Já confirmei, quero entrar</button></div>}{view === 'signup' && !confirmSentTo && <form onSubmit={handleSignup} className="space-y-5">{leadHint && <p role="status" className="rounded-xl border border-[#3cff65]/40 bg-[#3cff65]/5 p-3 text-sm text-slate-200">Recebemos seus dados. Crie a sua senha e você já entra, sem precisar confirmar o e-mail.</p>}<Field id="signup-name" label="Nome" type="text" placeholder="Seu nome" value={signupName} onChange={setSignupName} icon={UserRound} autoComplete="name" /><Field id="signup-email" label="Email de acesso" type="email" placeholder="seu@email.com" value={signupEmail} onChange={setSignupEmail} icon={Mail} autoComplete="email" readOnly={!!leadToken && !!signupEmail} /><Field id="signup-password" label="Crie sua senha" type="password" placeholder="Mínimo de 6 caracteres" value={signupPassword} onChange={setSignupPassword} icon={LockKeyhole} autoComplete="new-password" minLength={6} /><button disabled={isSubmitting} className="zica-primary-cta flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#D4FF00] text-base font-black text-[#061017] disabled:opacity-60">{isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Ativar conta Zica.ai <ArrowRight className="h-5 w-5" /></>}</button><button type="button" onClick={() => setView('login')} className="flex w-full items-center justify-center gap-2 text-sm font-semibold text-[#00F0FF]"><ChevronLeft className="h-4 w-4" /> Voltar para entrar</button></form>}
               {view === 'recovery' && <form onSubmit={handleRecovery} className="space-y-5"><div className="rounded-2xl border border-[#D4FF00]/15 bg-[#D4FF00]/[.035] p-4 text-sm leading-6 text-slate-400">Informe seu e-mail. A Zica.ai enviará o link seguro de redefinição de senha.</div><Field id="recovery-email" label="Email de acesso" type="email" placeholder="seu@email.com" value={recoveryEmail} onChange={setRecoveryEmail} icon={KeyRound} autoComplete="email" /><button disabled={isSubmitting} className="zica-primary-cta flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#D4FF00] text-base font-black text-[#061017] disabled:opacity-60">{isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Enviar link seguro <ArrowRight className="h-5 w-5" /></>}</button><button type="button" onClick={() => setView('login')} className="flex w-full items-center justify-center gap-2 text-sm font-semibold text-[#00F0FF]"><ChevronLeft className="h-4 w-4" /> Voltar para entrar</button></form>}
               <div className="mt-7 flex items-start gap-3 border-t border-[#25333e] pt-5 text-xs text-slate-500"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#D4FF00]" /><div><strong className="block text-sm font-semibold text-slate-300">Conexão segura e criptografada</strong><span>Seus dados protegidos pela infraestrutura autenticada Zica.ai.</span></div></div>
               <InstitutionalInfo variant="login" />

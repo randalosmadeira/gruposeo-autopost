@@ -10,7 +10,7 @@ import {
   type CurrentState, type SavePlan,
 } from './profile-service.ts';
 
-export const PROFILE_ACTIONS = ['profile_load', 'profile_save', 'profile_restore', 'modules_set'];
+export const PROFILE_ACTIONS = ['profile_load', 'profile_save', 'profile_restore', 'modules_set', 'modules_preview'];
 
 // deno-lint-ignore no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -37,6 +37,7 @@ export async function handleProfileAction(admin: Admin, ctx: Ctx): Promise<Reply
     if (ctx.action === 'profile_save') return await save(admin, ctx, project, role);
     if (ctx.action === 'profile_restore') return await restore(admin, ctx, project, role);
     if (ctx.action === 'modules_set') return await setModule(admin, ctx, project, role);
+    if (ctx.action === 'modules_preview') return await previewModule(admin, ctx, project, role);
     return fail(400, 'unknown_action');
   } catch (_e) {
     console.error('[nexus-business] profile_operation_failed');
@@ -73,7 +74,7 @@ async function loadPayload(admin: Admin, project: Record<string, unknown>, role:
   const [snaps, catalog, decisions] = await Promise.all([
     admin.from('project_profile_snapshots').select('version,created_at,reason').eq('project_id', project.id).order('version', { ascending: false }).limit(15),
     admin.from('module_catalog').select('code,name,description,route,core,default_enabled,sort').order('sort'),
-    admin.from('project_modules').select('module_code,enabled,reason,recommendation,recommendation_reason,decided_at').eq('project_id', project.id),
+    admin.from('project_modules').select('module_code,enabled,reason,recommendation,recommendation_reason,decided_at,paused_state').eq('project_id', project.id),
   ]);
   if (snaps.error || catalog.error || decisions.error) throw new Error('profile_read_failed');
   const readPrivate = canReadPrivate(role);
@@ -88,7 +89,7 @@ async function loadPayload(admin: Admin, project: Record<string, unknown>, role:
     extended: { version: ext ? Number(ext.version) : 0, sections: asObject(ext?.sections), status: ext?.status || 'draft', completeness: ext ? Number(ext.completeness) : 0, updated_at: ext?.updated_at || null, confirmed_at: ext?.confirmed_at || null },
     private: readPrivate ? { version: priv ? Number(priv.version) : 0, finance: asObject(priv?.finance), goals: asObject(priv?.goals) } : null,
     snapshots: snaps.data || [],
-    modules: { catalog: catalog.data || [], decisions: decisions.data || [] },
+    modules: { catalog: catalog.data || [], decisions: (decisions.data || []).map(withPausedCounts) },
   };
 }
 
@@ -169,13 +170,40 @@ async function restore(admin: Admin, ctx: Ctx, project: Record<string, unknown>,
   return execute(admin, ctx, project, role, plan);
 }
 
+/** Decisão com o resumo do que está pausado (só quantidades; os ids ficam no banco). */
+function withPausedCounts(row: Record<string, unknown>): Record<string, unknown> {
+  const { paused_state: state, ...rest } = row;
+  const paused: Record<string, number> = {};
+  for (const [table, ids] of Object.entries(asObject(state))) if (Array.isArray(ids) && ids.length) paused[table] = ids.length;
+  return { ...rest, paused };
+}
+
+const isMissingFunction = (e: unknown) => ['PGRST202', '42883'].includes(String((e as { code?: string } | null)?.code || ''));
+
 async function setModule(admin: Admin, ctx: Ctx, project: Record<string, unknown>, role: string): Promise<Reply> {
   const { data: catalog, error } = await admin.from('module_catalog').select('code,core');
   if (error) throw error;
   const plan = planModuleDecision({ role, catalog: catalog || [], moduleCode: ctx.body.moduleCode, enabled: ctx.body.enabled, reason: ctx.body.reason });
   if (isModuleFailure(plan)) return fail(plan.status, plan.error);
-  const now = new Date().toISOString();
-  const { error: upError } = await admin.from('project_modules').upsert({ project_id: project.id, organization_id: project.organization_id, module_code: plan.row.module_code, enabled: plan.row.enabled, reason: plan.row.reason, decided_by: ctx.userId, decided_at: now, updated_at: now }, { onConflict: 'project_id,module_code' });
-  if (upError) throw upError;
-  return { status: 200, body: { success: true, ...(await loadPayload(admin, project, role)) } };
+  // A decisão e o efeito nas rotinas acontecem na MESMA transação do banco (apply_project_module): ou os dois, ou nenhum.
+  const { data, error: rpcError } = await admin.rpc('apply_project_module', { p_project: project.id, p_module: plan.row.module_code, p_enabled: plan.row.enabled, p_reason: plan.row.reason, p_actor: ctx.userId });
+  if (rpcError) {
+    if (isMissingFunction(rpcError)) return fail(503, 'module_effects_unavailable');
+    throw rpcError;
+  }
+  return { status: 200, body: { success: true, effects: asObject(data).effects || [], ...(await loadPayload(admin, project, role)) } };
+}
+
+/** O que o desligamento pausaria agora, sem mudar nada (a tela mostra antes de a pessoa confirmar). */
+async function previewModule(admin: Admin, ctx: Ctx, project: Record<string, unknown>, role: string): Promise<Reply> {
+  const { data: catalog, error } = await admin.from('module_catalog').select('code,core');
+  if (error) throw error;
+  const plan = planModuleDecision({ role, catalog: catalog || [], moduleCode: ctx.body.moduleCode, enabled: false, reason: null });
+  if (isModuleFailure(plan)) return fail(plan.status, plan.error);
+  const { data, error: rpcError } = await admin.rpc('preview_project_module', { p_project: project.id, p_module: plan.row.module_code });
+  if (rpcError) {
+    if (isMissingFunction(rpcError)) return fail(503, 'module_effects_unavailable');
+    throw rpcError;
+  }
+  return { status: 200, body: { module: plan.row.module_code, effects: Array.isArray(data) ? data : [] } };
 }

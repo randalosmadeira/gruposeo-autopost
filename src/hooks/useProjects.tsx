@@ -4,10 +4,11 @@ import { useAuth } from './useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from './use-toast';
 import { retryQuery, withRetry } from '@/lib/supabase-retry';
+import { PROJECT_COLUMNS } from '@/lib/project-columns';
 import { applyProjectJsonMerge, mergeColumnsPresent } from '@/lib/json-merge';
 import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
-type Project = Tables<'projects'> & { wordpress_credential_ref?: string | null };
+type Project = Tables<'projects'> & { wordpress_credential_ref?: string | null; wordpress_connector_mode?: string | null };
 type ProjectInsert = TablesInsert<'projects'>;
 type ProjectUpdate = TablesUpdate<'projects'>;
 
@@ -24,10 +25,10 @@ export function useProjects() {
       const { data } = await retryQuery(() =>
         supabase
           .from('projects')
-          .select('*')
+          .select(PROJECT_COLUMNS)
           .order('created_at', { ascending: false })
       );
-      return data as Project[];
+      return data as unknown as Project[];
     },
     enabled: !!user,
     retry: 2,
@@ -42,10 +43,10 @@ export function useProjects() {
         supabase
           .from('projects')
           .insert({ ...project, user_id: user.id })
-          .select()
+          .select(PROJECT_COLUMNS)
           .single()
       );
-      return data;
+      return data as unknown as Project;
     },
     onSuccess: (created) => {
       navigate(`/business-profile?project=${created.id}`);
@@ -87,10 +88,10 @@ export function useProjects() {
           .from('projects')
           .update(toSave)
           .eq('id', id)
-          .select()
+          .select(PROJECT_COLUMNS)
           .single()
       );
-      return data;
+      return data as unknown as Project;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });

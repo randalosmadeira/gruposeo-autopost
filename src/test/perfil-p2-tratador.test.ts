@@ -62,7 +62,20 @@ function fakeAdmin(tables: Record<string, Row[]>) {
     };
     return q;
   };
-  return { admin: { from }, tables, log };
+  // P5: a decisão de módulo é gravada pela função do banco; aqui ela é simulada (a lógica de verdade é testada em SQL e em perfil-p5-*).
+  const rpc = async (fn: string, args: Row) => {
+    log.push(`rpc:${fn}`);
+    if (fn === 'apply_project_module') {
+      const keys = ['project_id', 'module_code'];
+      const row = { project_id: args.p_project, organization_id: (tables.projects || []).find((p) => p.id === args.p_project)?.organization_id, module_code: args.p_module, enabled: args.p_enabled, reason: args.p_reason, decided_by: args.p_actor, paused_state: {} };
+      const found = (tables.project_modules ||= []).find((r) => keys.every((k) => r[k] === row[k]));
+      if (found) Object.assign(found, row); else tables.project_modules.push(row);
+      return { data: { enabled: args.p_enabled, effects: [] }, error: null };
+    }
+    if (fn === 'preview_project_module') return { data: [], error: null };
+    return { data: null, error: { code: 'PGRST202' } };
+  };
+  return { admin: { from, rpc }, tables, log };
 }
 
 const PID = '11111111-1111-4111-8111-111111111111';

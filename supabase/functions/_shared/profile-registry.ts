@@ -72,8 +72,8 @@ export const PROFILE_STEPS: StepDef[] = [
   { id: 'marketing', name: 'Marketing e anúncios', intro: 'Marketing sem mistério. Se uma palavra for nova, marque "Não sei o que é" e leia a explicação.' },
   { id: 'vendas', name: 'Vendas e atendimento', intro: 'Como a venda acontece e como cada contato é atendido. Se a empresa vende online, perguntamos também do pagamento e das integrações.' },
   { id: 'modulos', name: 'Módulos', intro: 'Cada projeto liga só o que tem finalidade. Nada é apagado ao desligar um módulo.' },
-  { id: 'analise', name: 'Pente fino', intro: 'A verificação pública sem custo já funciona. A análise completa (CNPJ, Google, IAs) chega em um marco próprio.' },
-  { id: 'caminho', name: 'Caminho', intro: 'A pontuação vem só das suas respostas: onde não houve resposta aparece "sem dados" em vez de um número inventado.' },
+  { id: 'analise', name: 'Pente fino', intro: 'O pente fino gratuito confere, em fontes públicas, o CNPJ, o CEP, o domínio, o DNS, o site, o robots.txt, o sitemap e a idade do site. As verificações pagas (Google Maps e perguntas às IAs) só entram depois de passar pelo portão de custo.' },
+  { id: 'caminho', name: 'Caminho', intro: 'A pontuação vem só do que você respondeu e do que foi medido: onde não há resposta nem medição aparece "sem dados", nunca um número inventado. No fim, você pode pedir ajuda para o que vale delegar.' },
 ];
 
 const f = (def: FieldDef): FieldDef => def;

@@ -10,8 +10,10 @@ export const MAX_BROWSER_BODY = 1024;
 export const MAX_EVENTS = 500;
 export const MAX_SKEW_SECONDS = 300;
 export const MAX_HITS = 100000;
-export const SERVER_KINDS = ['ai_bot_hit', 'ai_referral', 'search_referral', 'human_pageview'] as const;
-export const BROWSER_KINDS = ['ai_referral', 'search_referral', 'human_pageview'] as const;
+export const SERVER_KINDS = ['ai_bot_hit', 'ai_referral', 'search_referral', 'human_pageview', 'cta_click'] as const;
+export const BROWSER_KINDS = ['ai_referral', 'search_referral', 'human_pageview', 'cta_click'] as const;
+/** Tipos de contato medidos no clique (sem dado pessoal): WhatsApp, telefone, e-mail, formulário. */
+export const CTA_AGENTS = ['whatsapp', 'phone', 'email', 'form'] as const;
 export type SignalKind = typeof SERVER_KINDS[number];
 export type SignalEvent = { site_host: string; day: string; kind: SignalKind; agent: string; path: string; hits: number };
 
@@ -34,6 +36,7 @@ const AGENTS_BY_KIND: Record<SignalKind, Map<string, string>> = {
   ai_referral: new Map(AI_REFERRAL_AGENTS.map(a => [a, a])),
   search_referral: new Map(SEARCH_RULES.map(([, a]) => [a, a])),
   human_pageview: new Map(),
+  cta_click: new Map(CTA_AGENTS.map(a => [a, a])),
 };
 export function normalizeAgent(kind: SignalKind, raw: unknown): string {
   return AGENTS_BY_KIND[kind].get(String(raw ?? '').trim().toLowerCase()) ?? 'other';
@@ -180,9 +183,9 @@ export async function handleSignalsRequest(req: Request, deps: SignalsDeps): Pro
     // Unknown site and wrong signature are indistinguishable to the caller.
     if (!secret) return json({ error: 'signature_invalid' }, 401);
     const verdict = await verifySignature({ secret, timestamp, nonce, signature, rawBody: bytes, nowSeconds });
-    if (!verdict.ok) return verdict.reason === 'skew' ? json({ error: 'timestamp_skew' }, 409) : json({ error: 'signature_invalid' }, 401);
+    if (verdict.ok === false) return verdict.reason === 'skew' ? json({ error: 'timestamp_skew' }, 409) : json({ error: 'signature_invalid' }, 401);
     const parsed = parseServerBatch(new TextDecoder().decode(bytes));
-    if (!parsed.ok) return json({ error: parsed.error }, 400);
+    if (parsed.ok === false) return json({ error: parsed.error }, 400);
     const result = await deps.record(siteId, parsed.batch.batch_id, parsed.batch.events);
     return json({ accepted: result.accepted, duplicate: result.duplicate, dropped: parsed.batch.dropped });
   }
@@ -192,7 +195,7 @@ export async function handleSignalsRequest(req: Request, deps: SignalsDeps): Pro
   const bytes = await readBody(req, MAX_BROWSER_BODY);
   if (!bytes) return json({ error: 'payload_too_large' }, 413);
   const event = parseBrowserEvent(new TextDecoder().decode(bytes));
-  if (!event.ok) return json({ error: event.error }, 400);
+  if (event.ok === false) return json({ error: event.error }, 400);
   const site = origin ? await deps.lookupSite(event.siteId) : null;
   if (!site || !isOriginAllowed(origin, site.allowed_origins, site.project_host)) return json({ error: 'origin_not_allowed' }, 403);
   const day = new Date(deps.now()).toISOString().slice(0, 10);

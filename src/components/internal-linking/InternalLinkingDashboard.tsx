@@ -120,12 +120,12 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
     if (!projectId) return;
     
     const project = projects.find(p => p.id === projectId);
-    if (!project?.wordpress_url || !project?.wordpress_app_password) {
+    if (!project?.wordpress_url || !project?.wordpress_has_credential) {
       setPluginHealth({ status: 'error', message: 'Projeto não configurado' });
       return;
     }
 
-    const isPluginAuth = project.wordpress_username === '__CFRDM_PLUGIN__';
+    const isPluginAuth = project.wordpress_username === '__CFRDM_PLUGIN__' || project.wordpress_username === '__ZICA_POSTS_PLUGIN__' || project.wordpress_connector_mode === 'zica_posts';
     if (!isPluginAuth) {
       setPluginHealth({ status: 'healthy', message: 'Usando REST API padrão' });
       return;
@@ -135,11 +135,8 @@ export function InternalLinkingDashboard({ projectId: externalProjectId, project
 
     try {
       const { data, error } = await supabase.functions.invoke('test-wordpress-connection', {
-        body: {
-          wordpress_url: project.wordpress_url,
-          use_plugin: true,
-          api_key: project.wordpress_app_password,
-        },
+        // A credencial salva só existe no servidor (S1): o navegador manda apenas o id do projeto.
+        body: { project_id: project.id },
       });
 
       if (error) throw new Error(error.message);

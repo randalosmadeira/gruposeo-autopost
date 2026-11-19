@@ -141,7 +141,8 @@ paidLockedServe(async (req) => {
     // central resolver, which already knows to fall back to the Vault.
     const aiKeys = await fetchUserKeys(userId);
 
-    const serperKey = settings?.serper_api_key || Deno.env.get("SERPER_API_KEY") || "";
+    // aiKeys.serper já traz a chave do usuário e, só para quem a porteira autoriza, a da plataforma
+    const serperKey = settings?.serper_api_key || aiKeys.serper || "";
     if (!serperKey) {
       return new Response(
         JSON.stringify({ error: "Configure sua chave Serper em user_settings.serper_api_key" }),

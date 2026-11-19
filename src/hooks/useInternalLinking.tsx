@@ -295,7 +295,7 @@ export function useInternalLinking(projectId: string | null) {
       // Get project details to find WordPress URL and credentials
       const { data: project, error: projectError } = await supabase
         .from('projects')
-        .select('wordpress_url, wordpress_username, wordpress_app_password')
+        .select('wordpress_url, wordpress_username')
         .eq('id', projectId)
         .single();
 

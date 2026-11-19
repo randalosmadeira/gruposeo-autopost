@@ -84,7 +84,7 @@ export async function executeGoverned<T>(reserve: () => Promise<unknown>, run: (
 
 export function topicGroups(articles:Array<{id:string;keyword:string;title:string}>) {
  const stop=new Set(['para','como','sobre','quando','quais','direito','direitos','guia','brasil']);
- const terms=(s:string)=>[...new Set(s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/[^a-z0-9]+/).filter(w=>w.length>=4&&!stop.has(w)))];
+ const terms=(s:string)=>[...new Set(s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').split(/[^a-z0-9]+/).filter(w=>w.length>=4&&!stop.has(w)))];
  const map=new Map<string,typeof articles>();
  for(const article of articles)for(const term of terms(article.keyword||article.title)){map.set(term,[...(map.get(term)||[]),article]);}
  const used=new Set<string>();const groups:Array<{term:string;articles:typeof articles}>=[];

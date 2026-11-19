@@ -188,7 +188,7 @@ export default function ProjectsList() {
         <Button 
           variant="outline" 
           className="w-full justify-start gap-2 border-primary/30 text-primary hover:bg-primary/5 hover:text-primary"
-          onClick={() => navigate("/business-profile")}
+          onClick={() => navigate("/descobrir")}
         >
           <Plus className="w-4 h-4" />
           Novo projeto

@@ -123,7 +123,7 @@ export function WordPressSitesCard() {
   // Auto-test connection health on mount
   const checkConnectionHealth = useCallback(async (projectId: string, silent = false) => {
     const project = projects.find(p => p.id === projectId);
-    if (!project?.wordpress_url || (!project.wordpress_app_password && !project.wordpress_credential_ref)) return;
+    if (!project?.wordpress_url || !project.wordpress_has_credential) return;
 
     const startTime = Date.now();
     setConnectionHealth(prev => ({
@@ -365,7 +365,7 @@ export function WordPressSitesCard() {
     setTestingId(projectId);
     const project = projects.find(p => p.id === projectId);
     
-    if (!project?.wordpress_url || (!project.wordpress_app_password && !project.wordpress_credential_ref)) {
+    if (!project?.wordpress_url || !project.wordpress_has_credential) {
       toast({
         title: 'Dados incompletos',
         description: 'Configure a URL e credenciais do WordPress.',
@@ -423,13 +423,8 @@ export function WordPressSitesCard() {
         }
       } else {
         // Standard Application Password test
-        const { data, error } = await supabase.functions.invoke('test-wordpress-connection', {
-          body: {
-            wordpress_url: project.wordpress_url,
-            wordpress_username: project.wordpress_username,
-            wordpress_app_password: project.wordpress_app_password,
-          },
-        });
+        // A senha salva só existe no servidor (S1): o navegador manda apenas o id do projeto.
+        const { data, error } = await supabase.functions.invoke('test-wordpress-connection', { body: { project_id: project.id } });
 
         if (error) throw new Error(error.message);
 

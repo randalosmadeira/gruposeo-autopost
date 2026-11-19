@@ -41,3 +41,7 @@ services/zica-orchestrator/.preview/
 # Local Supabase CLI cache
 supabase/.temp/
 dist-perfil/
+
+# Pacotes de build por release (gerados; ficam na VPS e no backup)
+dist-*/
+.*-release-id

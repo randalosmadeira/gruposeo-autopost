@@ -8,7 +8,7 @@ function Location(){const location=useLocation();return <output data-testid="loc
 function mount(){render(<MemoryRouter initialEntries={['/dashboard']}><NexusFirstBusiness/><Location/></MemoryRouter>);}
 afterEach(()=>{cleanup();fixture.projects=[];fixture.isLoading=false;fixture.error=null;});
 describe('first business onboarding',()=>{
- it('opens the questionnaire for a loaded account without projects',async()=>{mount();await waitFor(()=>expect(screen.getByTestId('location').textContent).toBe('/business-profile'));});
+ it('opens the questionnaire for a loaded account without projects',async()=>{mount();await waitFor(()=>expect(screen.getByTestId('location').textContent).toBe('/descobrir'));});
  it('preserves the dashboard for existing projects',()=>{fixture.projects=[{id:'existing'}];mount();expect(screen.getByTestId('location').textContent).toBe('/dashboard');});
  it('does not mistake a loading or failed lookup for an empty account',()=>{fixture.error=new Error('offline');mount();expect(screen.getByTestId('location').textContent).toBe('/dashboard');});
 });

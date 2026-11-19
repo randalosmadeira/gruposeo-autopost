@@ -74,6 +74,13 @@ export async function readJson(res: Response): Promise<unknown> {
   try { return JSON.parse(await res.text()); } catch { return null; }
 }
 
+/**
+ * Segredo que já É um access token OAuth (conexão gerenciada, 14/11/2026): `oauth-access:<token>`. Um JSON de conta de serviço
+ * começa com `{`, então os dois formatos nunca se confundem. O token vive só na memória da execução (nunca é gravado nem devolvido).
+ */
+export const OAUTH_ACCESS_PREFIX = 'oauth-access:';
+export const asOAuthAccessSecret = (token: string) => `${OAUTH_ACCESS_PREFIX}${token}`;
+
 export type GoogleTokenOptions = GscOptions & { scope: string; /** Prefixo dos códigos de erro: `gsc` ou `ga4`. */ errorPrefix: string };
 
 /**
@@ -84,6 +91,10 @@ export type GoogleTokenOptions = GscOptions & { scope: string; /** Prefixo dos c
 export async function getGoogleAccessToken(fetchFn: typeof fetch, serviceAccountJson: string, opts: GoogleTokenOptions): Promise<{ ok: true; token: string } | GscFailure> {
   const now = opts.now ?? Date.now;
   const p = opts.errorPrefix;
+  if (serviceAccountJson.startsWith(OAUTH_ACCESS_PREFIX)) {
+    const token = serviceAccountJson.slice(OAUTH_ACCESS_PREFIX.length).trim();
+    return token ? { ok: true, token } : { ok: false, status: 400, error: `${p}_credential_invalid` };
+  }
   const sa = parseServiceAccount(serviceAccountJson);
   if (!sa) return { ok: false, status: 400, error: `${p}_credential_invalid` };
   let cacheKey: string;

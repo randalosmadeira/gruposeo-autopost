@@ -136,6 +136,12 @@ export class AIOrchestrator {
     this.platformKeys = { ...this.apiKeys };
   }
 
+  /** Espaço de teste / sem plano: descarta as chaves da PLATAFORMA (variáveis de ambiente). Chamar ANTES de setKeys com as chaves do usuário. */
+  disablePlatformKeys() {
+    for (const name of Object.keys(this.apiKeys)) this.apiKeys[name] = '';
+    for (const name of Object.keys(this.platformKeys)) this.platformKeys[name] = '';
+  }
+
   setKeys(keys: { gemini?: string; openai?: string; anthropic?: string }) {
     if (keys.openai?.startsWith('sk-')) this.apiKeys.openai = keys.openai;
     if (keys.anthropic) this.apiKeys.anthropic = keys.anthropic;

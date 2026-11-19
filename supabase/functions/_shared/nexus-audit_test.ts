@@ -944,3 +944,106 @@ Deno.test('SEGURANÇA: o executor com GA4 só usa a lista branca e o fetch prote
   assertEquals(parseFixAction({ type: 'analytics_sync', params: {} }).ok, true);
   assertEquals(parseFixAction({ type: 'analytics_sync_all', params: {} }), { ok: false, error: 'fix_type_not_allowed' });
 });
+
+// ---------------------------------------------------------------------------
+// Causa C1 (14/11/2026): GSC/GA4 conectados por OAuth gerenciado contam como credencial do projeto
+// ---------------------------------------------------------------------------
+const oauthLink = (property: string | null, connectedAt = daysAgo(2)) => ({ connected_at: connectedAt, property });
+
+Deno.test('C1: buildProjects traz as conexões OAuth do projeto; commercial_info continua mandando nas propriedades', () => {
+  const rows = [
+    { project_id: PRJ, provider: 'gsc', property_id: 'sc-domain:site.example.com', connected_at: daysAgo(1) },
+    { project_id: PRJ, provider: 'ga4', property_id: 'properties/413247338', connected_at: daysAgo(1) },
+    { project_id: PRJ, provider: 'bing', property_id: 'https://site.example.com/', connected_at: daysAgo(1) },
+    { project_id: PRJ, provider: 'outro', property_id: 'x', connected_at: daysAgo(1) },
+    { project_id: 42, provider: 'gsc' },
+  ];
+  const [a, b, c] = buildProjects(
+    [{ id: PRJ, name: 'A' }, { id: 'p2', name: 'B', commercial_info: { gsc_property: 'https://b.example/', ga4_property_id: '999999' } }, { id: 'p3', name: 'C' }],
+    [], () => false, undefined, rows,
+  );
+  assertEquals([a.gsc_property, a.ga4_property_id], ['sc-domain:site.example.com', '413247338']);
+  assertEquals(Object.keys(a.oauth ?? {}).sort(), ['bing', 'ga4', 'gsc']);
+  assertEquals(a.oauth?.ga4, { connected_at: daysAgo(1), property: 'properties/413247338' });
+  assertEquals([b.oauth, c.oauth], [undefined, undefined]);
+  // sem o argumento novo, tudo igual ao comportamento anterior
+  assertEquals(buildProjects([{ id: PRJ, name: 'A' }], [], () => false)[0].oauth, undefined);
+  // commercial_info do próprio projeto vence a propriedade da conexão
+  const [d] = buildProjects([{ id: PRJ, name: 'D', commercial_info: { gsc_property: 'https://d.example/', ga4_property_id: '999999' } }], [], () => false, undefined, rows);
+  assertEquals([d.gsc_property, d.ga4_property_id], ['https://d.example/', '999999']);
+});
+
+Deno.test('C1: regras tratam a conexão OAuth do projeto como fonte conectada (GSC e GA4), sem esconder o Bing', () => {
+  const oauth = { gsc: oauthLink('sc-domain:site.example.com'), ga4: oauthLink('properties/123456789') };
+  const noRows = { rows: 0, last_day: null, last_synced_at: null, last_full_sync_at: null };
+  const pr = project({ oauth, ga4_property_id: '123456789', gsc_property: 'sc-domain:site.example.com', search: { gsc: noRows, bing: noRows }, analytics: noRows });
+  // sem nenhuma credencial na organização: antes dava "ainda não está conectado"
+  const none = [notStored('gsc'), notStored('bing_webmaster'), notStored('ga4')];
+  assertEquals(ids(ruleProviderFreeNotConnected(ctxOf({ providers: none, projects: [pr] }))), ['provider.free_not_connected|bing_webmaster|high']);
+  assertEquals(ruleGa4NotConnected(ctxOf({ providers: none, projects: [pr] })).findings.length, 0);
+  assertEquals(ruleProviderFreeNotConnected(ctxOf({ providers: none, projects: [project()] })).findings.length, 2); // sem conexão: continua aparecendo
+  assertEquals(ruleGa4NotConnected(ctxOf({ providers: none, projects: [project()] })).findings.length, 1);
+  // conectado há mais de 1 dia e sem dados: o aviso "conectado, mas sem dados" passa a valer; recém-conectado dá tempo
+  assertEquals(ids(ruleSearchNoData(ctxOf({ providers: none, projects: [pr] }))), ['search.no_data|gsc|medium']);
+  assertEquals(ids(ruleGa4NoData(ctxOf({ providers: none, projects: [pr] }))), ['ga4.no_data|ga4|medium']);
+  const fresh = project({ ...pr, oauth: { gsc: oauthLink('x', hoursAgo(2)), ga4: oauthLink('properties/123456789', hoursAgo(2)) } });
+  assertEquals(ruleSearchNoData(ctxOf({ providers: none, projects: [fresh] })).findings.length + ruleGa4NoData(ctxOf({ providers: none, projects: [fresh] })).findings.length, 0);
+  // GA4 conectado sem propriedade escolhida: falta informar
+  const noProp = project({ oauth: { ga4: oauthLink(null) } });
+  assertEquals(ruleGa4PropertyMissing(ctxOf({ providers: none, projects: [noProp] })).findings.length, 1);
+  // desatualizado
+  const stale = project({
+    ...pr,
+    search: { gsc: { rows: 5, last_day: null, last_synced_at: hoursAgo(60), last_full_sync_at: daysAgo(3) }, bing: noRows },
+    analytics: { rows: 5, last_day: null, last_synced_at: hoursAgo(60), last_full_sync_at: daysAgo(3) },
+  });
+  assertEquals(ruleSearchSyncStale(ctxOf({ providers: none, projects: [stale] })).findings.length, 1);
+  assertEquals(ruleGa4SyncStale(ctxOf({ providers: none, projects: [stale] })).findings.length, 1);
+  // a conexão de um projeto não vale para outro projeto da mesma organização
+  assertEquals(ruleSearchNoData(ctxOf({ providers: none, projects: [project({ id: 'outro', oauth: undefined, search: { gsc: noRows, bing: noRows } })] })).findings.length, 0);
+  // Bing por OAuth não conta (a sincronização do Bing usa a chave da organização)
+  const bingOnly = ids(ruleProviderFreeNotConnected(ctxOf({ providers: none, projects: [project({ oauth: { bing: oauthLink('https://site.example.com/') } })] })));
+  assert(bingOnly.includes('provider.free_not_connected|bing_webmaster|high'));
+});
+
+Deno.test('C1: executor sincroniza GSC e GA4 de projetos com conexão OAuth mesmo sem credencial da organização; Bing continua exigindo a chave', async () => {
+  const calls: string[] = [];
+  const connected = project({
+    oauth: { gsc: oauthLink('sc-domain:site.example.com'), ga4: oauthLink('properties/123456789') }, gsc_property: 'sc-domain:site.example.com', ga4_property_id: '123456789',
+    search: { gsc: emptyState, bing: emptyState }, analytics: emptyState,
+  });
+  const plain = project({ id: 'sem-conexao', search: { gsc: emptyState, bing: emptyState }, analytics: emptyState, ga4_property_id: '777777777' });
+  const store = new MemStore(emptyBase({ projects: [connected, plain] }), [notStored('gsc'), notStored('bing_webmaster'), notStored('ga4')]);
+  const deps = depsOf(store, {
+    rules: [],
+    syncSearch: (c) => { calls.push(`${c.projectId}:${c.source}:${c.days}:${c.property}`); return Promise.resolve({ ok: true, rows_upserted: 4 }); },
+    syncAnalytics: (c) => { calls.push(`${c.projectId}:ga4:${c.days}:${c.property}`); return Promise.resolve({ ok: true, rows_upserted: 9 }); },
+  });
+  await runAuditForOrganization(deps, ORG, { trigger: 'schedule' });
+  assertEquals(calls, [`${PRJ}:gsc:90:sc-domain:site.example.com`, `${PRJ}:ga4:90:123456789`]);
+  assertEquals(store.marks, [[PRJ, 'gsc', true], [PRJ, 'ga4', true]]);
+  // credencial da organização continua valendo para todos os projetos (comportamento anterior)
+  const calls2: string[] = [];
+  const store2 = new MemStore(emptyBase({ projects: [plain] }), [provider('gsc'), notStored('ga4'), notStored('bing_webmaster')]);
+  await runAuditForOrganization(depsOf(store2, { rules: [], syncSearch: (c) => { calls2.push(`${c.projectId}:${c.source}`); return Promise.resolve({ ok: true, rows_upserted: 1 }); } }), ORG, { trigger: 'schedule' });
+  assertEquals(calls2, ['sem-conexao:gsc']);
+});
+
+Deno.test('C1: falhas repetidas do Bing (4 projetos sem site no Bing) não deixam o GA4 sem rodar; ordem GSC, GA4, Bing', async () => {
+  const order: string[] = [];
+  const connected = project({
+    oauth: { gsc: oauthLink('sc-domain:site.example.com'), ga4: oauthLink('properties/123456789') }, gsc_property: 'sc-domain:site.example.com', ga4_property_id: '123456789',
+    search: { gsc: emptyState, bing: { rows: 5, last_day: null, last_synced_at: hoursAgo(1), last_full_sync_at: daysAgo(1) } }, analytics: emptyState,
+  });
+  const noBing = (id: string) => project({ id, search: { gsc: emptyState, bing: emptyState }, analytics: emptyState });
+  const store = new MemStore(emptyBase({ projects: [noBing('b1'), noBing('b2'), noBing('b3'), noBing('b4'), connected] }), [notStored('gsc'), provider('bing_webmaster'), notStored('ga4')]);
+  const deps = depsOf(store, {
+    rules: [],
+    syncSearch: (c) => { order.push(`${c.source}:${c.projectId}`); return Promise.resolve(c.source === 'bing' ? { ok: false, rows_upserted: 0, error: 'bing_site_not_found' } : { ok: true, rows_upserted: 3 }); },
+    syncAnalytics: (c) => { order.push(`ga4:${c.projectId}`); return Promise.resolve({ ok: true, rows_upserted: 8 }); },
+  });
+  await runAuditForOrganization(deps, ORG, { trigger: 'schedule' });
+  // GSC e GA4 do projeto conectado vêm primeiro; o Bing usa só o que sobra do teto (4 por execução)
+  assertEquals(order, [`gsc:${PRJ}`, `ga4:${PRJ}`, 'bing:b1', 'bing:b2']);
+  assertEquals(store.marks, [[PRJ, 'gsc', true], [PRJ, 'ga4', true]]);
+});

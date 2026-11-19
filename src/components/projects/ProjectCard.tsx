@@ -40,6 +40,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { hasUsableCredential, passwordPatch } from '@/lib/project-columns';
 import type { Tables, TablesUpdate } from '@/integrations/supabase/types';
 
 type Project = Tables<'projects'>;
@@ -102,7 +104,8 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
     description: project.description || '',
     wordpress_url: sanitizeWordPressUrl(project.wordpress_url || ''),
     wordpress_username: project.wordpress_username || '',
-    wordpress_app_password: project.wordpress_app_password || '',
+    // A senha salva nunca chega ao navegador (S1). Vazio = manter a que já está guardada; digitar = trocar.
+    wordpress_app_password: '',
     seo_plugin: project.seo_plugin || 'none',
     // ZicaJuris fields
     nicho: (project as any).nicho || 'auto',
@@ -123,16 +126,18 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
     cta_leads: (project as any).cta_leads || '',
   });
 
+  const hasStoredCredential = !!project.wordpress_has_credential;
   const hasCredentials = !!(
     project.wordpress_url &&
     project.wordpress_username &&
-    project.wordpress_app_password
+    hasStoredCredential
   );
 
   const handleTestConnection = async () => {
     const cleanUrl = sanitizeWordPressUrl(formData.wordpress_url);
     
-    if (!cleanUrl || !formData.wordpress_username || !formData.wordpress_app_password) {
+    const typedPassword = formData.wordpress_app_password;
+    if (!cleanUrl || !formData.wordpress_username || (!typedPassword && !hasStoredCredential)) {
       toast({
         title: 'Dados incompletos',
         description: 'Preencha URL, usuário e senha do WordPress.',
@@ -146,13 +151,22 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
 
     setIsTesting(true);
     try {
-      const response = await fetch(`${cleanUrl}/wp-json/wp/v2/posts?per_page=1`, {
-        headers: {
-          'Authorization': 'Basic ' + btoa(`${formData.wordpress_username}:${formData.wordpress_app_password}`),
-        },
-      });
+      let ok: boolean;
+      if (typedPassword) {
+        // Senha digitada agora: ainda não está salva, então só existe aqui na tela.
+        const response = await fetch(`${cleanUrl}/wp-json/wp/v2/posts?per_page=1`, {
+          headers: {
+            'Authorization': 'Basic ' + btoa(`${formData.wordpress_username}:${typedPassword}`),
+          },
+        });
+        ok = response.ok;
+      } else {
+        // Senha já salva: quem testa é o servidor, que é o único que a conhece.
+        const { data, error } = await supabase.functions.invoke('test-wordpress-connection', { body: { project_id: project.id } });
+        ok = !error && !!data?.success;
+      }
 
-      if (response.ok) {
+      if (ok) {
         toast({
           title: 'Conexão bem-sucedida!',
           description: 'O WordPress está acessível com essas credenciais.',
@@ -185,9 +199,10 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
       description: formData.description || null,
       wordpress_url: cleanUrl || null,
       wordpress_username: formData.wordpress_username || null,
-      wordpress_app_password: formData.wordpress_app_password || null,
+      // Só envia a senha se a pessoa digitou uma nova; em branco mantém a guardada (nunca apaga por engano).
+      ...passwordPatch(formData.wordpress_app_password),
       seo_plugin: formData.seo_plugin,
-      is_connected: !!(cleanUrl && formData.wordpress_username && formData.wordpress_app_password),
+      is_connected: hasUsableCredential(cleanUrl, formData.wordpress_username, formData.wordpress_app_password, hasStoredCredential),
       // ZicaJuris fields
       nicho: formData.nicho === 'auto' ? null : formData.nicho,
       empresa_nome: formData.empresa_nome || null,
@@ -371,7 +386,7 @@ export function ProjectCard({ project, stats, onUpdate, onDelete, isUpdating }: 
                 <div className="relative">
                   <Input 
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="xxxx xxxx xxxx xxxx"
+                    placeholder={hasStoredCredential ? 'Senha já salva — deixe em branco para manter' : 'xxxx xxxx xxxx xxxx'}
                     value={formData.wordpress_app_password} 
                     onChange={(e) => setFormData({ ...formData, wordpress_app_password: e.target.value })} 
                   />

@@ -57,7 +57,12 @@ export async function exchangeOAuth(
   const response = await fetcher(managedOAuth[provider].token, {
     method: "POST", body: params, redirect: "error", signal: AbortSignal.timeout(10000),
   });
-  if (!response.ok) throw new Error("oauth_token_exchange_failed");
+  if (!response.ok) {
+    const failure = await response.json().catch(() => ({}));
+    const code = ["invalid_client", "invalid_grant", "redirect_uri_mismatch", "invalid_scope", "unauthorized_client"].includes(failure.error) ? failure.error : "provider_error";
+    console.warn("nexus_oauth_token_exchange", provider, response.status, code);
+    throw new Error("oauth_token_exchange_failed");
+  }
   const result = await response.json();
   if (typeof result.access_token !== "string" || !result.access_token) throw new Error("oauth_access_token_missing");
   return {
@@ -74,7 +79,12 @@ export async function listOAuthResources(fetcher: typeof fetch, provider: Manage
       headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
       redirect: "error", signal: AbortSignal.timeout(10000),
     });
-    if (!response.ok) throw new Error("oauth_resource_list_failed");
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      const reason = data.error?.details?.find?.((d: {reason?: string}) => d.reason === "SERVICE_DISABLED") ? "SERVICE_DISABLED" : "resource_request_failed";
+      console.warn("nexus_oauth_resource_list", provider, response.status, reason);
+      throw new Error("oauth_resource_list_failed");
+    }
     const data = await response.json();
     if (provider === "gsc") {
       for (const item of data.siteEntry ?? []) {

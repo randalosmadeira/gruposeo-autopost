@@ -18,9 +18,12 @@ export interface ProfilePayload {
   snapshots: Array<{ version: number; created_at: string; reason: string | null }>;
   modules: {
     catalog: Array<{ code: string; name: string; description: string | null; route: string | null; core: boolean; default_enabled: boolean; sort: number }>;
-    decisions: Array<{ module_code: string; enabled: boolean; reason: string | null; recommendation: string | null; recommendation_reason: string | null; decided_at: string | null }>;
+    decisions: Array<{ module_code: string; enabled: boolean; reason: string | null; recommendation: string | null; recommendation_reason: string | null; decided_at: string | null; paused?: Record<string, number> }>;
   };
 }
+
+/** O que desligar um módulo pausaria agora (prévia, nada é gravado). */
+export interface ModuleEffectPreview { table: string; label: string; active: number }
 
 export class ProfileError extends Error {
   constructor(public code: string, public fields: Record<string, string> = {}, public stores: string[] = []) {
@@ -35,6 +38,7 @@ const MESSAGES: Record<string, string> = {
   organization_membership_required: 'Você não faz parte da organização deste projeto.',
   project_not_found: 'Projeto não encontrado.',
   core_module_cannot_be_disabled: 'Módulos nucleares não podem ser desligados.',
+  module_effects_unavailable: 'A pausa de rotinas ainda não está disponível neste ambiente. Nada foi alterado.',
 };
 export const profileErrorMessage = (e: unknown): string =>
   e instanceof ProfileError ? MESSAGES[e.code] || 'Não foi possível concluir. O que você digitou continua nesta tela.' : 'Não foi possível concluir. O que você digitou continua nesta tela.';
@@ -53,7 +57,7 @@ export async function callProfile<T = ProfilePayload>(action: string, body: Reco
 // ------------------------------------------------------------------------------------------------------------ conversa com a Zica (agente)
 export interface AgentMessage { id?: string; role: 'user' | 'agent' | 'system'; content: string; created_at?: string }
 export interface AgentFact { fact_id: string | null; key: string; label: string; value: unknown; quote?: string; private?: boolean; confidence?: number }
-export interface AgentHistory { conversation_id: string | null; messages: AgentMessage[]; facts: AgentFact[]; turns_left: number }
+export interface AgentHistory { conversation_id: string | null; messages: AgentMessage[]; facts: AgentFact[]; turns_left: number; consent_audio?: boolean }
 export interface AgentTurn { conversation_id: string; reply: string; items: AgentFact[]; rejected: Array<{ key: string; reason: string }>; turns_left: number }
 
 const AGENT_MESSAGES: Record<string, string> = {
@@ -66,12 +70,45 @@ const AGENT_MESSAGES: Record<string, string> = {
   daily_limit_reached: 'Este projeto atingiu o limite diário de mensagens com a Zica. Tente amanhã.',
   agent_turn_failed: 'A Zica não conseguiu responder agora. O que você escreveu continua na caixa; tente de novo.',
   role_not_allowed: 'Seu papel nesta organização não permite conversar com a Zica.',
+  consent_required: 'Para usar o ditado por voz, concorde antes com o aviso de voz. O texto que você digitou continua na caixa.',
+  granted_required: 'Não foi possível registrar sua escolha sobre a voz. Tente de novo.',
 };
 export const agentErrorMessage = (e: unknown): string =>
   e instanceof ProfileError ? AGENT_MESSAGES[e.code] || profileErrorMessage(e) : 'Não foi possível concluir. Tente de novo.';
 
 export async function callAgent<T>(action: string, body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke('profile-agent', { body: { action, ...body } });
+  if (error) {
+    let payload: { error?: string } | null = null;
+    const ctx = (error as { context?: unknown }).context;
+    if (typeof Response !== 'undefined' && ctx instanceof Response) payload = await ctx.json().catch(() => null);
+    throw new ProfileError(payload?.error || 'request_failed');
+  }
+  return data as T;
+}
+
+// ------------------------------------------------------------------------------------------------------------ pente fino (P4)
+export type CheckStatus = 'ok' | 'warn' | 'fail' | 'skipped' | 'error';
+export type FindingSeverity = 'alta' | 'media' | 'baixa' | 'info';
+export type FindingState = 'open' | 'applied' | 'ignored';
+export interface AnalysisCheck { check_key: string; source: string; status: CheckStatus; measured: Record<string, unknown>; evidence_url: string | null; duration_ms: number | null; error: string | null }
+export interface AnalysisFinding { id: string; check_key: string; severity: FindingSeverity; title: string; detail: string | null; evidence: Record<string, unknown>; suggested_action: string | null; state: FindingState }
+export interface AnalysisRun { id: string; status: 'queued' | 'running' | 'done' | 'partial' | 'failed' | 'cancelled'; created_at: string; started_at: string | null; finished_at: string | null; summary: Record<string, unknown>; error: string | null }
+export interface AnalysisReport { run: AnalysisRun | null; checks: AnalysisCheck[]; findings: AnalysisFinding[]; replayed?: boolean }
+export interface AnalysisHistoryItem { id: string; status: AnalysisRun['status']; created_at: string; finished_at: string | null }
+
+const ANALYZE_MESSAGES: Record<string, string> = {
+  already_running: 'Já existe um pente fino em andamento neste projeto. Espere terminar.',
+  daily_limit: 'Este projeto atingiu o limite diário de verificações. Tente amanhã.',
+  role_not_allowed: 'Seu papel nesta organização permite ver o relatório, mas não rodar o pente fino.',
+  analyze_run_failed: 'O pente fino não conseguiu terminar e foi encerrado. Tente de novo em instantes.',
+  request_key_in_use: 'Esse pedido já foi usado em outro projeto. Tente de novo.',
+};
+export const analyzeErrorMessage = (e: unknown): string =>
+  e instanceof ProfileError ? ANALYZE_MESSAGES[e.code] || profileErrorMessage(e) : 'Não foi possível concluir. Tente de novo.';
+
+export async function callAnalyze<T = AnalysisReport>(action: string, body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke('profile-analyze', { body: { action, ...body } });
   if (error) {
     let payload: { error?: string } | null = null;
     const ctx = (error as { context?: unknown }).context;

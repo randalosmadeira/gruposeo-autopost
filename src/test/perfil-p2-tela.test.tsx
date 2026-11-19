@@ -151,14 +151,20 @@ describe('tela do Perfil do projeto (P2)', () => {
     expect(api.callProfile).toHaveBeenCalledTimes(1); // só a leitura inicial
   });
 
-  it('módulos: decisão é enviada e a tela avisa que ainda não afeta o menu', async () => {
+  it('módulos: desligar pede prévia e confirmação; só depois a decisão é enviada (P5)', async () => {
     api.callProfile.mockResolvedValueOnce(payload());
     mount();
     await screen.findByRole('heading', { level: 1 });
     goStep(/9\. Módulos/);
-    expect(screen.getByText(/ainda não esconde o item do menu/)).toBeTruthy();
-    api.callProfile.mockResolvedValueOnce(payload({ modules: { catalog: payload().modules.catalog, decisions: [{ module_code: 'articles', enabled: false, reason: null, recommendation: null, recommendation_reason: null, decided_at: '2026-11-15T21:00:00Z' }] } }));
+    expect(screen.getByText(/pausa as rotinas dele/)).toBeTruthy();
+    expect(screen.queryByText(/ainda não esconde o item do menu/)).toBeNull();
+    api.callProfile.mockResolvedValueOnce({ effects: [] });
     fireEvent.click(screen.getByRole('switch', { name: 'Artigos' }));
+    expect(await screen.findByRole('alertdialog')).toBeTruthy();
+    expect(api.callProfile).toHaveBeenLastCalledWith('modules_preview', { projectId: PID, moduleCode: 'articles' });
+    expect(api.callProfile.mock.calls.some((c) => c[0] === 'modules_set')).toBe(false); // ainda não gravou nada
+    api.callProfile.mockResolvedValueOnce(payload({ modules: { catalog: payload().modules.catalog, decisions: [{ module_code: 'articles', enabled: false, reason: null, recommendation: null, recommendation_reason: null, decided_at: '2026-11-15T21:00:00Z' }] } }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar desligamento' }));
     await screen.findByText(/Decisão do módulo registrada: desligado/);
     expect(api.callProfile).toHaveBeenLastCalledWith('modules_set', { projectId: PID, moduleCode: 'articles', enabled: false, reason: '' });
   });

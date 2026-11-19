@@ -32,9 +32,45 @@ var C={"a":[["chatgpt.com",["chatgpt.com","chat.openai.com","openai.com"]],["per
     }
     if (all == '1') return ['human_pageview', 'other'];
   }
-  var r = run(), t = 'text/plain;charset=UTF-8', b;
-  if (!r) return;
-  b = JSON.stringify({ site_id: site, kind: r[0], agent: r[1], path: L.pathname.slice(0, 200) });
-  try { if (n.sendBeacon(ep, new Blob([b], { type: t }))) return; } catch (e) {}
-  try { w.fetch(ep, { method: 'POST', body: b, keepalive: true, headers: { 'Content-Type': t } }).catch(function () {}); } catch (e) {}
+  var t = 'text/plain;charset=UTF-8';
+  function send(kind, agent) {
+    var b = JSON.stringify({ site_id: site, kind: kind, agent: agent, path: L.pathname.slice(0, 200) });
+    try { if (n.sendBeacon(ep, new Blob([b], { type: t }))) return; } catch (e) {}
+    try { w.fetch(ep, { method: 'POST', body: b, keepalive: true, headers: { 'Content-Type': t } }).catch(function () {}); } catch (e) {}
+  }
+  var r = run();
+  if (r) send(r[0], r[1]);
+  /* Cliques de contato (item 4): WhatsApp, telefone, e-mail e formulario. So o TIPO e o caminho da pagina saem do navegador:
+     nunca o numero, o endereco de e-mail ou o texto digitado. Respeita doNotTrack (ja tratado no inicio do arquivo). */
+  var CTA = { whatsapp: 1, phone: 1, email: 1, form: 1 }, last = {};
+  function cta(agent) {
+    var now = Date.now();
+    if (last[agent] && now - last[agent] < 3000) return;
+    last[agent] = now;
+    send('cta_click', agent);
+  }
+  function kindOfHref(href) {
+    var h = String(href || '').toLowerCase().replace(/^\s+/, '');
+    if (h.indexOf('tel:') == 0) return 'phone';
+    if (h.indexOf('mailto:') == 0) return 'email';
+    if (/^https?:\/\/(wa\.me|api\.whatsapp\.com|web\.whatsapp\.com|chat\.whatsapp\.com|(www\.)?whatsapp\.com\/send)/.test(h) || h.indexOf('whatsapp://') == 0) return 'whatsapp';
+  }
+  d.addEventListener('click', function (ev) {
+    var el = ev.target, k, i = 0;
+    while (el && el !== d && i++ < 8) {
+      if (el.getAttribute) {
+        k = el.getAttribute('data-zica-cta');
+        if (k && CTA[k]) return cta(k);
+        if (el.tagName && el.tagName.toLowerCase() == 'a') { k = kindOfHref(el.getAttribute('href')); if (k) return cta(k); }
+      }
+      el = el.parentNode;
+    }
+  }, true);
+  d.addEventListener('submit', function (ev) {
+    var f = ev.target, id;
+    if (!f || !f.tagName || f.tagName.toLowerCase() != 'form' || f.getAttribute('role') == 'search') return;
+    id = (f.id || '') + ' ' + (f.className || '') + ' ' + (f.getAttribute('action') || '');
+    if (/search|busca|newsletter|login|comment/i.test(id) || (f.querySelector && f.querySelector('input[type=search]'))) return;
+    cta('form');
+  }, true);
 })(window, document);

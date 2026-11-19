@@ -1489,7 +1489,8 @@ export type Database = {
           tom_padrao: string | null
           updated_at: string
           user_id: string
-          wordpress_app_password: string | null
+          // wordpress_app_password não é legível pelo navegador (S1); use wordpress_has_credential.
+          wordpress_has_credential: boolean
           wordpress_url: string | null
           wordpress_username: string | null
         }

@@ -87,76 +87,25 @@ export function useWordPressStats(projectId?: string) {
 
   const syncMutation = useMutation({
     mutationFn: async (targetProjectId: string) => {
-      // Get project details
+      // S1: a senha do WordPress não chega mais ao navegador, então a leitura direta
+      // (navegador -> WordPress com a senha) foi desligada. As estatísticas chegam pelo plugin
+      // Zica Posts (função sync-wordpress-stats), que as envia sozinho.
       const { data: project, error: projectError } = await supabase
         .from('projects')
-        .select('*')
+        .select('id,wordpress_url,wordpress_username,wordpress_has_credential')
         .eq('id', targetProjectId)
         .single();
 
       if (projectError) throw projectError;
 
-      if (!project.wordpress_url || !project.wordpress_username || !project.wordpress_app_password) {
-        throw new Error('WordPress credentials not configured');
+      if (!project.wordpress_url || !project.wordpress_username || !project.wordpress_has_credential) {
+        throw new Error('As credenciais do WordPress ainda não foram configuradas neste projeto.');
       }
 
-      // Fetch stats from WordPress REST API
-      const wpUrl = project.wordpress_url.replace(/\/$/, '');
-      const auth = btoa(`${project.wordpress_username}:${project.wordpress_app_password}`);
-
-      // Fetch posts count by status
-      const [publishedRes, draftRes, pendingRes, commentsRes] = await Promise.all([
-        fetch(`${wpUrl}/wp-json/wp/v2/posts?status=publish&per_page=1`, {
-          headers: { 'Authorization': `Basic ${auth}` }
-        }),
-        fetch(`${wpUrl}/wp-json/wp/v2/posts?status=draft&per_page=1`, {
-          headers: { 'Authorization': `Basic ${auth}` }
-        }),
-        fetch(`${wpUrl}/wp-json/wp/v2/posts?status=pending&per_page=1`, {
-          headers: { 'Authorization': `Basic ${auth}` }
-        }),
-        fetch(`${wpUrl}/wp-json/wp/v2/comments?per_page=1`, {
-          headers: { 'Authorization': `Basic ${auth}` }
-        })
-      ]);
-
-      const publishedTotal = parseInt(publishedRes.headers.get('X-WP-Total') || '0');
-      const draftTotal = parseInt(draftRes.headers.get('X-WP-Total') || '0');
-      const pendingTotal = parseInt(pendingRes.headers.get('X-WP-Total') || '0');
-      const commentsTotal = parseInt(commentsRes.headers.get('X-WP-Total') || '0');
-
-      const statsData = {
-        project_id: targetProjectId,
-        user_id: user!.id,
-        total_articles: publishedTotal + draftTotal + pendingTotal,
-        published_articles: publishedTotal,
-        draft_articles: draftTotal,
-        pending_articles: pendingTotal,
-        total_comments: commentsTotal,
-        last_sync_at: new Date().toISOString(),
-      };
-
-      // Upsert stats
-      const { data: existingStats } = await supabase
-        .from('wordpress_stats')
-        .select('id')
-        .eq('project_id', targetProjectId)
-        .maybeSingle();
-
-      if (existingStats) {
-        const { error } = await supabase
-          .from('wordpress_stats')
-          .update(statsData)
-          .eq('id', existingStats.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('wordpress_stats')
-          .insert(statsData);
-        if (error) throw error;
-      }
-
-      return statsData;
+      throw new Error(
+        'A atualização manual pelo navegador foi desligada por segurança (a senha do WordPress não sai mais do servidor). ' +
+        'As estatísticas chegam sozinhas pelo plugin Zica Posts; use "Sincronizar" no painel do plugin dentro do WordPress.'
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wordpress-stats'] });

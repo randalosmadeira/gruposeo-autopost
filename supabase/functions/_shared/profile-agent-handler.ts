@@ -14,7 +14,7 @@ import {
   fieldCatalog, parseAgentResponse, pickModel, profileDigest, validateExtraction, type HistoryMessage,
 } from './profile-agent-core.ts';
 
-export const AGENT_ACTIONS = ['history', 'turn', 'decide', 'delete_conversation'];
+export const AGENT_ACTIONS = ['history', 'turn', 'decide', 'delete_conversation', 'voice_consent'];
 
 // deno-lint-ignore no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,6 +38,7 @@ export async function handleAgentAction(admin: Admin, ctx: AgentCtx): Promise<Re
     if (ctx.action === 'history') return await history(admin, ctx, project, role);
     if (!WRITE_ROLES.includes(role)) return fail(403, 'role_not_allowed');
     if (ctx.action === 'turn') return await turn(admin, ctx, project, role);
+    if (ctx.action === 'voice_consent') return await voiceConsent(admin, ctx, project, role);
     if (ctx.action === 'decide') return await decide(admin, ctx, project, role);
     if (ctx.action === 'delete_conversation') return await deleteConversation(admin, ctx, project, role);
     return fail(400, 'unknown_action');
@@ -62,13 +63,13 @@ async function findConversation(admin: Admin, ctx: AgentCtx, project: Record<str
   const id = ctx.body.conversationId;
   if (typeof id === 'string' && id) {
     if (!UUID.test(id)) return { error: fail(422, 'conversation_id_invalid') };
-    const { data, error } = await admin.from('project_profile_conversations').select('id,started_by,status,created_at').eq('id', id).eq('project_id', project.id).maybeSingle();
+    const { data, error } = await admin.from('project_profile_conversations').select('id,started_by,status,created_at,consent_audio').eq('id', id).eq('project_id', project.id).maybeSingle();
     if (error) throw error;
     if (!data || data.status === 'deleted') return { error: fail(404, 'conversation_not_found') };
     if (data.started_by !== ctx.userId && !PRIVATE_ROLES.includes(role)) return { error: fail(403, 'conversation_not_yours') };
     return { conversation: data };
   }
-  const { data, error } = await admin.from('project_profile_conversations').select('id,started_by,status,created_at').eq('project_id', project.id).eq('started_by', ctx.userId).eq('status', 'open').order('created_at', { ascending: false }).limit(1);
+  const { data, error } = await admin.from('project_profile_conversations').select('id,started_by,status,created_at,consent_audio').eq('project_id', project.id).eq('started_by', ctx.userId).eq('status', 'open').order('created_at', { ascending: false }).limit(1);
   if (error) throw error;
   return { conversation: (data && data[0]) || null };
 }
@@ -99,7 +100,30 @@ async function history(admin: Admin, ctx: AgentCtx, project: Record<string, unkn
   if (factsError) throw factsError;
   const visible = (facts || []).filter((f: { is_private: boolean }) => canPrivate || !f.is_private).map((f: { id: string; field_key: string; value: unknown; is_private: boolean; confidence: number; observed_at: string }) => ({ fact_id: f.id, key: f.field_key, label: labelOf(f.field_key), value: f.value, private: f.is_private, confidence: f.confidence, observed_at: f.observed_at }));
   const used = (messages as Array<{ role: string }>).filter((m) => m.role === 'user').length;
-  return { status: 200, body: { conversation_id: conversation?.id ?? null, messages, facts: visible, turns_used: used, turns_left: Math.max(0, MAX_USER_TURNS_PER_CONVERSATION - used) } };
+  return { status: 200, body: { conversation_id: conversation?.id ?? null, messages, facts: visible, turns_used: used, turns_left: Math.max(0, MAX_USER_TURNS_PER_CONVERSATION - used), consent_audio: conversation?.consent_audio === true } };
+}
+
+// ------------------------------------------------------------------------------------------------------------ consentimento de voz
+/**
+ * Registra (ou revoga) o consentimento para DITAR por voz nesta conversa. O áudio NUNCA chega a esta função: o navegador o transforma em texto
+ * (com o serviço de voz do próprio navegador) e a pessoa revisa o texto antes de enviar. Aqui só fica o registro de quem concordou e quando.
+ */
+async function voiceConsent(admin: Admin, ctx: AgentCtx, project: Record<string, unknown>, role: string): Promise<Reply> {
+  const granted = ctx.body.granted;
+  if (typeof granted !== 'boolean') return fail(422, 'granted_required');
+  const found = await findConversation(admin, ctx, project, role);
+  if (found.error) return found.error;
+  const conversation = found.conversation;
+  const nowIso = new Date((ctx.now ?? Date.now)()).toISOString();
+  if (!conversation) {
+    if (!granted) return { status: 200, body: { conversation_id: null, consent_audio: false } };
+    const { data, error } = await admin.from('project_profile_conversations').insert({ organization_id: project.organization_id, project_id: project.id, started_by: ctx.userId, channel: 'text', status: 'open', consent_audio: true, consent_at: nowIso }).select('id').single();
+    if (error) throw error;
+    return { status: 200, body: { conversation_id: data.id, consent_audio: true, consent_at: nowIso } };
+  }
+  const { error } = await admin.from('project_profile_conversations').update(granted ? { consent_audio: true, consent_at: nowIso } : { consent_audio: false }).eq('id', conversation.id);
+  if (error) throw error;
+  return { status: 200, body: { conversation_id: conversation.id, consent_audio: granted, ...(granted ? { consent_at: nowIso } : {}) } };
 }
 
 // ------------------------------------------------------------------------------------------------------------ um turno da conversa
@@ -109,6 +133,13 @@ async function turn(admin: Admin, ctx: AgentCtx, project: Record<string, unknown
   const canPrivate = PRIVATE_ROLES.includes(role);
   const orgId = project.organization_id as string;
   const nowMs = (ctx.now ?? Date.now)();
+
+  // 0) texto que veio de DITADO por voz só entra com o consentimento registrado na conversa (LGPD); sem ele, nada mais acontece
+  if (ctx.body.viaVoice === true) {
+    const consent = await findConversation(admin, ctx, project, role);
+    if (consent.error) return consent.error;
+    if (consent.conversation?.consent_audio !== true) return fail(422, 'consent_required');
+  }
 
   // 1) portão de execução da organização (mesma regra do Observatório): sem isso, nada além daqui acontece
   const { data: program, error: programError } = await admin.from('nexus_programs').select('execution_enabled,budget_usd_micros,settings').eq('organization_id', orgId).maybeSingle();

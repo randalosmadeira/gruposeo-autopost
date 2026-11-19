@@ -7,7 +7,8 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName?: string) => Promise<void>;
+  /** `needsEmailConfirmation` = a conta foi criada, mas só entra depois de confirmar o e-mail (não há sessão ainda) */
+  signUp: (email: string, password: string, fullName?: string, extra?: Record<string, unknown>) => Promise<{ needsEmailConfirmation: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -138,10 +139,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = useCallback(
-    async (email: string, password: string, fullName?: string) => {
+    async (email: string, password: string, fullName?: string, extra?: Record<string, unknown>) => {
       const result = await withRetry(async () => {
         const emailRedirectTo = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
-        const { error } = await withTimeout(
+        const { data, error } = await withTimeout(
           supabase.auth.signUp({
             email,
             password,
@@ -149,6 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               emailRedirectTo,
               data: {
                 full_name: fullName,
+                ...(extra || {}),
               },
             },
           }),
@@ -156,15 +158,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
 
         if (error) throw error;
-        return true;
+        // e-mail que já tem conta: o Supabase responde "ok" mas não manda nada (identities vazio). Sem isto a tela mentiria "enviamos um link".
+        if (Array.isArray(data?.user?.identities) && data.user.identities.length === 0) throw new Error('User already registered');
+        return { needsEmailConfirmation: !data?.session };
       });
 
-      if (result) {
+      if (result && !result.needsEmailConfirmation) {
         toast({
           title: 'Conta criada com sucesso!',
           description: 'Você já pode começar a usar o Zica.ai.',
         });
       }
+      return { needsEmailConfirmation: result ? result.needsEmailConfirmation : false };
     },
     [toast]
   );

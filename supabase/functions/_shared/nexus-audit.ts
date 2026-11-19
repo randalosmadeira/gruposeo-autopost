@@ -75,7 +75,13 @@ export type ProjectCtx = {
   analytics: SearchSourceState;
   /** Índice de conteúdos publicados (`wordpress_article_index`): total, média de links internos e quantos sem área. */
   content_index: ContentIndexState;
+  /**
+   * Conexões OAuth gerenciadas deste projeto (`nexus_oauth_connections`, 14/11/2026). Uma conexão vale como credencial do projeto
+   * para GSC e GA4 (a sincronização troca o refresh token por um access token). Bing continua só pela chave da organização.
+   */
+  oauth?: { gsc?: OAuthLink; ga4?: OAuthLink; bing?: OAuthLink };
 };
+export type OAuthLink = { connected_at: string | null; property: string | null };
 export type SecurityGrants = { anon_write_tables: number; sample: string[]; rls_disabled_tables: number; rls_sample: string[] };
 export type CronJobHealth = { jobname: string; active: boolean; runs: number; failures: number; last_status: string | null; last_run: string | null };
 
@@ -316,6 +322,7 @@ export function ruleProviderFreeNotConnected(ctx: AuditContext): RuleOutput {
   for (const id of SEARCH_TRUTH_PROVIDERS) {
     const p = providers.find((x) => x.id === id);
     if (p?.credential.stored) continue;
+    if (id === 'gsc' && ctx.projects.some((pr) => pr.oauth?.gsc)) continue; // conectado por OAuth gerenciado (por projeto)
     f.push(cand({
       rule_id: 'provider.free_not_connected', subject: id, category: 'improvement', severity: 'high',
       title: `${providerName(id)} ainda não está conectado`,
@@ -327,14 +334,26 @@ export function ruleProviderFreeNotConnected(ctx: AuditContext): RuleOutput {
   return out(f);
 }
 
-const activeCred = (ctx: AuditContext, id: string) => ctx.providers?.find((p) => p.id === id && p.credential.stored && p.credential.status === 'active') ?? null;
+const activeCredIn = (providers: ProviderSnapshot[] | null, id: string) => providers?.find((p) => p.id === id && p.credential.stored && p.credential.status === 'active') ?? null;
+const activeCred = (ctx: AuditContext, id: string) => activeCredIn(ctx.providers, id);
 const SOURCES = [['gsc', 'gsc'], ['bing', 'bing_webmaster']] as const;
+/**
+ * Fonte de dados do projeto: credencial ativa da organização OU conexão OAuth gerenciada do próprio projeto (só GSC e GA4).
+ * `at` = quando foi configurada (ms) ou null; devolve null quando o projeto não tem a fonte. Causa C1 (14/11/2026): antes só a
+ * credencial da organização contava, então GSC/GA4 conectados por OAuth apareciam "não conectados" e nunca sincronizavam.
+ */
+export function dataLink(providers: ProviderSnapshot[] | null, pr: ProjectCtx, id: 'gsc' | 'bing_webmaster' | 'ga4'): { at: number | null; via: 'credential' | 'oauth' } | null {
+  const cred = activeCredIn(providers, id);
+  if (cred) return { at: ms(cred.credential.updated_at), via: 'credential' };
+  const oauth = id === 'gsc' ? pr.oauth?.gsc : id === 'ga4' ? pr.oauth?.ga4 : undefined;
+  return oauth ? { at: ms(oauth.connected_at), via: 'oauth' } : null;
+}
 export function ruleSearchSyncStale(ctx: AuditContext): RuleOutput {
   needProviders(ctx);
   const f: Candidate[] = [];
   for (const [source, providerId] of SOURCES) {
-    if (!activeCred(ctx, providerId)) continue;
     for (const pr of ctx.projects) {
+      if (!dataLink(ctx.providers, pr, providerId)) continue;
       const last = ms(pr.search[source].last_synced_at);
       if (last === null) continue; // nunca sincronizado: tratado por search.no_data
       const age = ctx.now.getTime() - last;
@@ -355,11 +374,10 @@ export function ruleSearchNoData(ctx: AuditContext): RuleOutput {
   needProviders(ctx);
   const f: Candidate[] = [];
   for (const [source, providerId] of SOURCES) {
-    const cred = activeCred(ctx, providerId);
-    if (!cred) continue;
-    const credAt = ms(cred.credential.updated_at);
-    if (credAt !== null && ctx.now.getTime() - credAt < DAY) continue; // dá tempo à primeira sincronização agendada
     for (const pr of ctx.projects) {
+      const link = dataLink(ctx.providers, pr, providerId);
+      if (!link) continue;
+      if (link.at !== null && ctx.now.getTime() - link.at < DAY) continue; // dá tempo à primeira sincronização agendada
       if (!pr.base_url && !pr.domain) continue;
       if (pr.search[source].rows > 0) continue;
       f.push(cand({
@@ -375,13 +393,13 @@ export function ruleSearchNoData(ctx: AuditContext): RuleOutput {
   }
   return out(f);
 }
-const ga4Active = (ctx: AuditContext) => activeCred(ctx, 'ga4');
 const hasSite = (pr: ProjectCtx) => !!(pr.base_url || pr.domain);
 export function ruleGa4NotConnected(ctx: AuditContext): RuleOutput {
   const providers = needProviders(ctx);
   if (providers.find((p) => p.id === 'ga4')?.credential.stored) return out([]);
+  if (ctx.projects.some((pr) => pr.oauth?.ga4)) return out([]); // conectado por OAuth gerenciado (por projeto)
   if (!ctx.projects.some(hasSite)) return out([]);
-  const gscConnected = providers.some((p) => p.id === 'gsc' && p.credential.stored);
+  const gscConnected = providers.some((p) => p.id === 'gsc' && p.credential.stored) || ctx.projects.some((pr) => pr.oauth?.gsc);
   return out([cand({
     rule_id: 'ga4.not_connected', subject: 'ga4', category: 'improvement', severity: gscConnected ? 'high' : 'medium',
     title: 'Google Analytics 4 ainda não está conectado',
@@ -393,9 +411,9 @@ export function ruleGa4NotConnected(ctx: AuditContext): RuleOutput {
 }
 export function ruleGa4PropertyMissing(ctx: AuditContext): RuleOutput {
   needProviders(ctx);
-  if (!ga4Active(ctx)) return out([]);
   const f: Candidate[] = [];
   for (const pr of ctx.projects) {
+    if (!dataLink(ctx.providers, pr, 'ga4')) continue;
     if (!hasSite(pr) || pr.ga4_property_id) continue;
     f.push(cand({
       rule_id: 'ga4.property_missing', project_id: pr.id, category: 'corrective', severity: 'medium',
@@ -410,10 +428,9 @@ export function ruleGa4PropertyMissing(ctx: AuditContext): RuleOutput {
 }
 export function ruleGa4SyncStale(ctx: AuditContext): RuleOutput {
   needProviders(ctx);
-  if (!ga4Active(ctx)) return out([]);
   const f: Candidate[] = [];
   for (const pr of ctx.projects) {
-    if (!pr.ga4_property_id) continue;
+    if (!pr.ga4_property_id || !dataLink(ctx.providers, pr, 'ga4')) continue;
     const last = ms(pr.analytics.last_synced_at);
     if (last === null) continue; // nunca sincronizado: tratado por ga4.no_data
     const age = ctx.now.getTime() - last;
@@ -431,12 +448,11 @@ export function ruleGa4SyncStale(ctx: AuditContext): RuleOutput {
 }
 export function ruleGa4NoData(ctx: AuditContext): RuleOutput {
   needProviders(ctx);
-  const cred = ga4Active(ctx);
-  if (!cred) return out([]);
-  const credAt = ms(cred.credential.updated_at);
-  if (credAt !== null && ctx.now.getTime() - credAt < DAY) return out([]); // dá tempo à primeira sincronização agendada
   const f: Candidate[] = [];
   for (const pr of ctx.projects) {
+    const link = dataLink(ctx.providers, pr, 'ga4');
+    if (!link) continue;
+    if (link.at !== null && ctx.now.getTime() - link.at < DAY) continue; // dá tempo à primeira sincronização agendada
     if (!pr.ga4_property_id || pr.analytics.rows > 0) continue;
     f.push(cand({
       rule_id: 'ga4.no_data', project_id: pr.id, subject: 'ga4', category: 'improvement', severity: 'medium',
@@ -1151,11 +1167,12 @@ export async function runAuditForOrganization(deps: AuditDeps, organizationId: s
       // 2) sincronização de busca (GSC/Bing) a cada 12 h (janela de 7 dias) e 90 dias uma vez por semana
       const syncs = detail.syncs as Array<Record<string, unknown>>;
       let done = 0;
-      for (const [source, providerId] of SOURCES) {
-        const cred = providers?.find((p) => p.id === providerId && p.credential.stored && p.credential.status === 'active');
-        if (!cred) continue;
+      // Ordem: GSC, GA4 e só depois o Bing. Falhas repetidas do Bing (site não cadastrado nele) não consomem o teto por execução
+      // antes das fontes gratuitas do Google (defeito achado em 14/11/2026: 4 projetos sem site no Bing deixavam o GA4 sem rodar).
+      const syncSource = async (source: typeof SOURCES[number][0], providerId: typeof SOURCES[number][1]) => {
         for (const pr of base.projects) {
           if (done >= MAX_SYNCS_PER_RUN || deps.now() > t0 + SYNC_WINDOW_MS) break;
+          if (!dataLink(providers, pr, providerId)) continue; // credencial da organização OU conexão OAuth do projeto (GSC)
           const domain = pr.domain || (pr.base_url ? hostOf(pr.base_url) : '');
           if (!domain) continue;
           const st = pr.search[source];
@@ -1170,25 +1187,28 @@ export async function runAuditForOrganization(deps: AuditDeps, organizationId: s
             if (r.ok) await deps.store.markSync(organizationId, pr.id, source, full);
           } catch (e) { syncs.push({ project_id: pr.id, source, ok: false, rows: 0, error: safeErr(e) }); }
         }
-      }
+      };
       // 2b) GA4 (gratuito): mesma cadência (12 h com janela de 7 dias; 90 dias uma vez por semana) e o mesmo teto de sincronizações por execução
-      const ga4Cred = providers?.find((p) => p.id === 'ga4' && p.credential.stored && p.credential.status === 'active');
-      if (deps.syncAnalytics && ga4Cred) {
+      const syncAnalyticsSource = async () => {
+        if (!deps.syncAnalytics) return;
         for (const pr of base.projects) {
           if (done >= MAX_SYNCS_PER_RUN || deps.now() > t0 + SYNC_WINDOW_MS) break;
-          if (!pr.ga4_property_id) continue;
+          if (!pr.ga4_property_id || !dataLink(providers, pr, 'ga4')) continue;
           const last = ms(pr.analytics.last_synced_at);
           if (last !== null && deps.now() - last < 12 * HOUR) continue;
           const lastFull = ms(pr.analytics.last_full_sync_at);
           const full = lastFull === null || deps.now() - lastFull >= 7 * DAY;
           done++;
           try {
-            const r = await deps.syncAnalytics({ projectId: pr.id, days: full ? 90 : 7, property: pr.ga4_property_id }, actions);
+            const r = await deps.syncAnalytics!({ projectId: pr.id, days: full ? 90 : 7, property: pr.ga4_property_id }, actions);
             syncs.push({ project_id: pr.id, source: 'ga4', ok: r.ok, rows: r.rows_upserted, days: full ? 90 : 7, error: r.error ?? null });
             if (r.ok) await deps.store.markSync(organizationId, pr.id, 'ga4', full);
           } catch (e) { syncs.push({ project_id: pr.id, source: 'ga4', ok: false, rows: 0, error: safeErr(e) }); }
         }
-      }
+      };
+      await syncSource('gsc', 'gsc');
+      await syncAnalyticsSource();
+      await syncSource('bing', 'bing_webmaster');
       if (done) base = await deps.store.loadBase(organizationId);
     }
 
@@ -1314,7 +1334,17 @@ export function buildProjects(
   stats: unknown,
   isPluginMode: (row: Record<string, unknown>) => boolean,
   defaultNamespace = 'zica-posts/v1',
+  oauthRows: unknown = [],
 ): ProjectCtx[] {
+  const oauthById = new Map<string, NonNullable<ProjectCtx['oauth']>>();
+  for (const raw of Array.isArray(oauthRows) ? oauthRows : []) {
+    const o = asRec(raw);
+    const provider = o.provider;
+    if (typeof o.project_id !== 'string' || (provider !== 'gsc' && provider !== 'ga4' && provider !== 'bing')) continue;
+    const cur = oauthById.get(o.project_id) ?? {};
+    cur[provider] = { connected_at: strOrNull(o.connected_at), property: strOrNull(o.property_id) };
+    oauthById.set(o.project_id, cur);
+  }
   const statById = new Map<string, Record<string, unknown>>();
   for (const s of Array.isArray(stats) ? stats : []) { const o = asRec(s); if (typeof o.project_id === 'string') statById.set(o.project_id, o); }
   return rows.filter((r) => typeof r.id === 'string').map((r) => {
@@ -1325,8 +1355,10 @@ export function buildProjects(
     const base = wp || (domain ? `https://${domain}` : null);
     const key = asRec(st.site_key);
     const search = asRec(st.search);
-    const gscProp = asRec(r.commercial_info).gsc_property;
-    const ga4Raw = asRec(r.commercial_info).ga4_property_id ?? st.ga4_property_id;
+    const oauth = oauthById.get(id);
+    // Propriedades escolhidas na conexão OAuth valem quando o projeto não tem a sua em `commercial_info` (que continua mandando).
+    const gscProp = asRec(r.commercial_info).gsc_property ?? oauth?.gsc?.property;
+    const ga4Raw = asRec(r.commercial_info).ga4_property_id ?? st.ga4_property_id ?? oauth?.ga4?.property?.replace(/^properties\//, '');
     const ga4Id = typeof ga4Raw === 'string' && /^\d{5,15}$/.test(ga4Raw.trim()) ? ga4Raw.trim() : null;
     const ci = asRec(st.content_index);
     return {
@@ -1339,6 +1371,7 @@ export function buildProjects(
       ga4_property_id: ga4Id,
       analytics: st.ga4 ? normalizeSearch(st.ga4) : emptySearch(),
       content_index: { total: num(ci.total), avg_internal_links: numOrNull(ci.internal_links_avg), unclassified: num(ci.unclassified) },
+      ...(oauth ? { oauth } : {}),
     };
   });
 }
