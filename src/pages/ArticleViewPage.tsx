@@ -1,3 +1,4 @@
+import { NexusEditorialReview } from '@/components/articles/NexusEditorialReview';
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Pencil, ExternalLink, Calendar, Tag, FileText, BarChart3, RefreshCw, WifiOff } from 'lucide-react';
@@ -11,6 +12,7 @@ import { ArticleContentRenderer } from '@/components/articles/ArticleContentRend
 import { ArticleLoadError, ArticleLoadErrorCode, getArticleById, isValidUuid } from '@/services/articles';
 
 interface Article {
+  project_id: string;
   id: string;
   title: string | null;
   keyword: string;
@@ -21,6 +23,7 @@ interface Article {
   status: string;
   word_count: number | null;
   created_at: string;
+  updated_at: string;
   published_at: string | null;
   published_url: string | null;
 }
@@ -186,6 +189,7 @@ export default function ArticleViewPage() {
       </div>
 
       <div className="max-w-6xl mx-auto p-6">
+        <NexusEditorialReview key={article.id} articleId={article.id} updatedAt={article.updated_at} projectId={article.project_id} />
         <ArticleContentRenderer
           content={article.content || ''}
           rawMarkdown={article.content || ''}

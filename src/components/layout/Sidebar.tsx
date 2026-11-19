@@ -2,10 +2,12 @@ import { memo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { cn } from '@/lib/utils';
-import { Activity, Building2, Calendar, Cpu, FileCode2, FileText, Globe2, Layers3, LayoutDashboard, ListChecks, Network, UserRound, Users, Vote } from 'lucide-react';
+import { Activity, Building2, Filter, GitBranch, Link2, UserPlus, Gauge, Calendar, Cpu, FileCode2, FileText, Globe2, Layers3, LayoutDashboard, ListChecks, Network, PlugZap, Radar, Sparkles, Timer, UserRound, Users, Vote } from 'lucide-react';
 import { ZicaLogo } from '@/components/brand/ZicaLogo';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
 import { useElectoralAccess } from '@/hooks/useElectoralAccess';
+import { useHiddenModules } from '@/hooks/useHiddenModules';
+import { isMenuItemVisible } from '@/lib/module-visibility';
 
 interface NavItem { label: string; icon: React.ElementType; href: string; }
 
@@ -15,11 +17,22 @@ const clientItems: NavItem[] = [
   { label: 'Publicar em massa', icon: Layers3, href: '/keywords/bulk' },
   { label: 'Calendário Editorial', icon: Calendar, href: '/calendar' },
   { label: 'Meus Blogs', icon: Globe2, href: '/integrations' },
+  { label: 'Descobrir meu negócio', icon: Sparkles, href: '/descobrir' },
+  { label: 'Funil de captação', icon: Filter, href: '/funil' },
+  { label: 'Velocidade do site', icon: Timer, href: '/velocidade' },
+  { label: 'Estrutura do domínio', icon: GitBranch, href: '/estrutura' },
+  { label: 'Backlinks', icon: Link2, href: '/backlinks' },
+  { label: 'Negócios & Estratégia', icon: Building2, href: '/business-profile' },
+  { label: 'NEXUS · Inteligência', icon: Network, href: '/nexus-intelligence' },
+  { label: 'NEXUS · Observatório', icon: Radar, href: '/nexus/observatorio' },
+  { label: 'NEXUS · Motores & APIs', icon: PlugZap, href: '/nexus/motores' },
+  { label: 'Visibilidade', icon: Gauge, href: '/nexus/visibilidade' },
   { label: 'Minha Conta', icon: UserRound, href: '/account' },
 ];
 
 const adminItems: NavItem[] = [
   { label: 'Contratantes & Planos', icon: Building2, href: '/admin/organizations' },
+  { label: 'Leads do site', icon: UserPlus, href: '/admin/leads' },
   { label: 'Motor de IA & Chaves', icon: Cpu, href: '/admin/ai-engine' },
   { label: 'Engenharia de Prompts', icon: FileCode2, href: '/admin/prompts' },
   { label: 'Filas & Operações', icon: ListChecks, href: '/admin/queues' },
@@ -35,6 +48,9 @@ export const Sidebar = memo(function Sidebar() {
   const location = useLocation();
   const { isAdmin } = useAdminAccess();
   const { canManageElectoral } = useElectoralAccess();
+  const hidden = useHiddenModules();
+  const visible = (items: NavItem[]) => items.filter((item) => isMenuItemVisible(item.href, hidden));
+  const electoral = visible(electoralItems);
   const isActive = (href: string) => location.pathname === href || location.pathname.startsWith(`${href}/`);
   const renderItem = (item: NavItem) => {
     const Icon = item.icon;
@@ -54,8 +70,8 @@ export const Sidebar = memo(function Sidebar() {
       </div>
       <nav className="scrollbar-thin flex-1 overflow-y-auto px-2.5 py-4 lg:px-3.5" aria-label="Navegação principal">
         <p className="mb-2 hidden px-2 text-[9px] font-black uppercase tracking-[.18em] text-slate-600 lg:block">Painel</p>
-        <div className="space-y-1">{clientItems.map(renderItem)}</div>
-        {canManageElectoral ? <div className="mt-5 border-t border-[#1f2d38] pt-4"><p className="mb-2 hidden px-2 text-[9px] font-black uppercase tracking-[.18em] text-slate-600 lg:block">Eleitoral 1470</p><div className="space-y-1">{electoralItems.map(renderItem)}</div></div> : null}
+        <div className="space-y-1">{visible(clientItems).map(renderItem)}</div>
+        {canManageElectoral ? (electoral.length ? <div className="mt-5 border-t border-[#1f2d38] pt-4"><p className="mb-2 hidden px-2 text-[9px] font-black uppercase tracking-[.18em] text-slate-600 lg:block">Eleitoral 1470</p><div className="space-y-1">{electoral.map(renderItem)}</div></div> : null) : null}
         {isAdmin ? <div className="mt-5 border-t border-[#1f2d38] pt-4"><p className="mb-2 hidden px-2 text-[9px] font-black uppercase tracking-[.18em] text-slate-600 lg:block">Administração</p><div className="space-y-1">{adminItems.map(renderItem)}</div></div> : null}
       </nav>
       <div className="border-t border-[#263541] p-2.5 lg:p-3.5"><div className="zica-sidebar-status hidden rounded-xl border border-[#263541] p-3 lg:block"><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.12em] text-[#D4FF00]"><Activity className="h-4 w-4" /> Núcleo conectado</div><p className="mt-2 text-[10px] leading-4 text-slate-500">Sincronização automática ativa</p></div></div>

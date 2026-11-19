@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Zica Posts — Conector WordPress Oficial Zica.ai
  * Plugin URI: https://zica.ai
- * Description: Agente WordPress leve da Zica.ai com outbox persistente, HMAC, idempotência, GEO/Schema, discovery LLM, IndexNow em lote, cards e integração com Zica Orchestrator.
- * Version: 3.15.0
+ * Description: Agente WordPress leve da Zica.ai com outbox persistente, sinais de IA (robôs e visitas), HMAC, idempotência, GEO/Schema, discovery LLM, IndexNow em lote, cards e integração com Zica Orchestrator.
+ * Version: 3.16.2
  * Author: Equipe Zica.ai
  * Author URI: https://zica.ai
  * License: GPL v2 or later
@@ -14,7 +14,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('ZICA_POSTS_VERSION', '3.15.0');
+define('ZICA_POSTS_VERSION', '3.16.2');
 define('ZICA_POSTS_PAIRING_URL', 'https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1/pair-wordpress-site');
 define('ZICA_POSTS_SOFTWARE_ID', 'zica-posts');
 define('ZICA_POSTS_FILE', __FILE__);
@@ -25,6 +25,7 @@ define('ZICA_POSTS_CRON_DAILY', 'zica_posts_daily_1500_sync');
 define('ZICA_POSTS_CRON_OUTBOX', 'zica_posts_process_outbox');
 define('ZICA_POSTS_CRON_DISCOVERY', 'zica_posts_refresh_discovery');
 define('ZICA_POSTS_CRON_CURATOR', 'zica_posts_curator_audit');
+define('ZICA_POSTS_CRON_SIGNALS', 'zica_posts_signals_flush');
 define('ZICA_POSTS_OUTBOX_TABLE', 'zica_posts_outbox');
 
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-auth.php';
@@ -34,6 +35,7 @@ require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-cards.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-curator.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-ai-auditor.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-schema-validator.php';
+require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-signals.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-rest.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-admin.php';
 
@@ -46,6 +48,7 @@ final class Zica_Posts_3110 {
     public $curator;
     public $ai_auditor;
     public $schema_validator;
+    public $signals;
     public $rest;
     public $admin;
 
@@ -62,8 +65,9 @@ final class Zica_Posts_3110 {
         $this->curator = new Zica_Posts_Curator();
         $this->ai_auditor = new Zica_Posts_AI_Auditor($this->discovery);
         $this->schema_validator = new Zica_Posts_Schema_Validator();
-        $this->rest = new Zica_Posts_REST($this->auth, $this->discovery, $this->outbox, $this->cards, $this->ai_auditor, $this->schema_validator);
-        $this->admin = new Zica_Posts_Admin($this->auth, $this->discovery, $this->outbox, $this->curator, $this->ai_auditor);
+        $this->signals = new Zica_Posts_Signals($this->auth, $this->discovery);
+        $this->rest = new Zica_Posts_REST($this->auth, $this->discovery, $this->outbox, $this->cards, $this->ai_auditor, $this->schema_validator, $this->signals);
+        $this->admin = new Zica_Posts_Admin($this->auth, $this->discovery, $this->outbox, $this->curator, $this->ai_auditor, $this->signals);
 
         add_filter('cron_schedules', array($this, 'cron_schedules'));
         add_filter('wp_robots', array($this, 'robots_max_image_preview'));
@@ -94,6 +98,7 @@ final class Zica_Posts_3110 {
         $this->outbox->ensure_table();
         $this->outbox->ensure_schedules();
         $this->curator->ensure_schedule();
+        $this->signals->ensure_schedule();
     }
 
     public function register_pairing() {
@@ -129,11 +134,13 @@ final class Zica_Posts_3110 {
         add_option('zica_posts_hub_delegates_indexing', '1');
         add_option('zica_posts_hub_delegates_discovery', '0');
         add_option('zica_posts_auto_correction_enabled', '1');
+        add_option('zica_posts_signals_enabled', '0', '', false);
 
         $outbox->clear_schedules();
         $outbox->ensure_schedules();
         wp_schedule_single_event(time() + 10, ZICA_POSTS_CRON_DISCOVERY);
         (new Zica_Posts_Curator())->ensure_schedule();
+        (new Zica_Posts_Signals($auth, $discovery))->ensure_schedule();
     }
 
     public static function deactivate() {
@@ -142,6 +149,7 @@ final class Zica_Posts_3110 {
         $outbox = new Zica_Posts_Outbox($auth, $discovery);
         $outbox->clear_schedules();
         wp_clear_scheduled_hook(ZICA_POSTS_CRON_CURATOR);
+        wp_clear_scheduled_hook(ZICA_POSTS_CRON_SIGNALS);
     }
 }
 

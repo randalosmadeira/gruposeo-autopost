@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { fetchUserKeys } from "../_shared/byok-resolver.ts";
@@ -92,7 +94,7 @@ async function callAI(
   throw new Error("Nenhuma chave BYOK (OpenAI/Gemini) configurada em user_settings");
 }
 
-Deno.serve(async (req) => {
+paidLockedServe(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -139,7 +141,8 @@ Deno.serve(async (req) => {
     // central resolver, which already knows to fall back to the Vault.
     const aiKeys = await fetchUserKeys(userId);
 
-    const serperKey = settings?.serper_api_key || Deno.env.get("SERPER_API_KEY") || "";
+    // aiKeys.serper já traz a chave do usuário e, só para quem a porteira autoriza, a da plataforma
+    const serperKey = settings?.serper_api_key || aiKeys.serper || "";
     if (!serperKey) {
       return new Response(
         JSON.stringify({ error: "Configure sua chave Serper em user_settings.serper_api_key" }),

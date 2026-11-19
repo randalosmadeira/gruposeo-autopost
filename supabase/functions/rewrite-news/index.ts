@@ -1,5 +1,9 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
+import { dispatchAutonomousReview } from "../_shared/nexus-review-dispatch.ts";
+import { buildNexusEditorialPolicy, NEXUS_EDITORIAL_VERSION } from "../_shared/nexus-editorial.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 import { normalizeEditorialHtml } from "../_shared/editorial-html.ts";
@@ -91,8 +95,8 @@ function originalityScore(source: string, generated: string) {
   return Math.max(0, Math.min(100, Math.round((1 - overlap) * 100)));
 }
 
-async function resolveTemplate(admin: ReturnType<typeof createClient>, userId: string, projectId: string, explicit?: string) {
-  let templateName = explicit || "legal_news_rdm_v1";
+async function resolveTemplate(admin: SupabaseClient, userId: string, projectId: string, explicit?: string) {
+  let templateName = explicit || "nexus_news_v1";
   if (!explicit) {
     const { data: agent } = await admin.from("news_agents").select("prompt_template")
       .eq("project_id", projectId).eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -103,7 +107,7 @@ async function resolveTemplate(admin: ReturnType<typeof createClient>, userId: s
   return {
     templateName,
     prompt: String(template?.prompt || ""),
-    agentName: String(template?.agent_name || "LEX RDM NEWS"),
+    agentName: String(template?.agent_name || "NEXUS Editorial"),
   };
 }
 
@@ -151,7 +155,7 @@ ${source || "Nenhum corpo de fonte fornecido."}
 }
 
 function reviewPrompt(article: ArticleDraft, source: string, url: string) {
-  return `Revise juridicamente e editorialmente a matéria contra a fonte. Detecte invenções, exageros,
+  return `Revise factual e editorialmente a matéria contra a fonte, conforme o nicho do projeto. Detecte invenções, exageros,
 afirmações sem suporte, resíduos de prompt e cópia excessiva. Preserve HTML semântico no corrected_content.
 Retorne somente JSON com pass, needs_primary_source, issues, corrected_title, corrected_excerpt,
 corrected_content, corrected_keyword e notes.
@@ -160,7 +164,7 @@ FONTE URL: ${url || "texto fornecido"}
 MATÉRIA: ${JSON.stringify(article).slice(0, 70000)}`;
 }
 
-Deno.serve(async (req: Request) => {
+paidLockedServe(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ success: false, error: "Method not allowed" }, 405);
   const requestId = crypto.randomUUID();
@@ -180,7 +184,7 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
     const { data: project } = await admin.from("projects")
-      .select("id,name,description,commercial_info,social_links,editorial_identity,social_instagram,social_linkedin,social_youtube,social_twitter,social_tiktok,social_google_maps,cta_leads,cta_conclusao")
+      .select("id,name,description,commercial_info,social_links,editorial_identity,social_instagram,social_linkedin,social_youtube,social_twitter,social_tiktok,social_google_maps,cta_leads,cta_conclusao,nexus_strategy,nexus_strategy_version,nexus_profile_status")
       .eq("id", input.projectId).eq("user_id", userId).maybeSingle();
     if (!project) return json({ success: false, error: "Projeto não encontrado ou acesso negado", request_id: requestId }, 403);
 
@@ -191,10 +195,11 @@ Deno.serve(async (req: Request) => {
       if (existing) return json({ success: true, duplicate: true, article: existing, request_id: requestId });
     }
 
+    if (!hasText) return json({ success: false, error: "Envie o texto extraído da fonte; uma URL isolada não permite revisão factual.", code: "source_body_required", retryable: false, request_id: requestId }, 409);
     const template = await resolveTemplate(admin, userId, input.projectId, input.promptTemplate);
     const orchestrator = await getOrchestratorForUser(userId);
     const generation = await orchestrator.callWithMeta("news_rewrite", [
-      { role: "system", content: `Você é ${template.agentName}. Entregue somente JSON válido e HTML semântico sem H1.` },
+      { role: "system", content: `Você é ${template.agentName}. Entregue somente JSON válido e HTML semântico sem H1.\n${buildNexusEditorialPolicy({ contentType: "news", projectConfig: project })}` },
       { role: "user", content: generationPrompt(input, template.prompt, project as ProjectContext) },
     ], { preferredProvider: "openai", maxTokens: 14000, temperature: 0.25 });
 
@@ -203,8 +208,8 @@ Deno.serve(async (req: Request) => {
       return json({ success: false, error: "IA não retornou matéria estruturada válida", request_id: requestId }, 502);
     }
 
-    const reviewCall = await orchestrator.callWithMeta("legal_review", [
-      { role: "system", content: "Revisão factual, jurídica e editorial rigorosa. JSON apenas." },
+    const reviewCall = await orchestrator.callWithMeta("content_review", [
+      { role: "system", content: "Revisão factual e editorial rigorosa, adequada ao nicho do projeto. JSON apenas.\n" + buildNexusEditorialPolicy({ contentType: "news", projectConfig: project }) },
       { role: "user", content: reviewPrompt(draft, input.sourceContent || "", input.sourceUrl || "") },
     ], { preferredProvider: generation.provider === "openai" ? "anthropic" : "openai", maxTokens: 10000, temperature: 0.1 });
     const review = parseJson<Review>(reviewCall.content) || { pass: false, needs_primary_source: true, issues: ["Resposta de revisão inválida"] };
@@ -239,6 +244,7 @@ Deno.serve(async (req: Request) => {
       config: {
         source_url: input.sourceUrl || null,
         source_name: input.sourceName || null,
+        sourcesContext: String(input.sourceContent || "").slice(0, 8000),
         prompt_template: template.templateName,
         auto_pilot: input.autoPilot !== false,
         generation_provider: generation.provider,
@@ -246,6 +252,8 @@ Deno.serve(async (req: Request) => {
         review_provider: reviewCall.provider,
         review_model: reviewCall.model,
         review_pass: reviewPass,
+        editorial_contract_version: NEXUS_EDITORIAL_VERSION,
+        nexus_approval_required: true,
         needs_primary_source: needsPrimary,
         review_issues: reviewIssues,
         primary_sources: draft.primary_sources || [],
@@ -262,6 +270,8 @@ Deno.serve(async (req: Request) => {
 
     const { data: article, error } = await admin.from("articles").insert(payload).select().single();
     if (error || !article) return json({ success: false, error: error?.message || "Falha ao salvar artigo", request_id: requestId }, 500);
+
+    await dispatchAutonomousReview(userId, input.projectId, article.id).catch(() => console.warn("[rewrite-news] autonomous_review_preparation_pending"));
 
     if (input.autoPilot !== false && draft.image_prompt) {
       const { error: imageQueueError } = await admin.from("zica_brain_jobs").upsert({
@@ -287,7 +297,8 @@ Deno.serve(async (req: Request) => {
         originalityScore: payload.originality_score,
         citationCompliance: !needsPrimary,
         seoOptimized: audit.pass,
-        readabilityScore: 80,
+        readabilityScore: null,
+        readabilityStatus: "not_measured",
       },
       editorial: { pass: audit.pass, version: "3.0.0", issues: audit.issues, fatal_issues: audit.fatalIssues, metrics: audit.metrics },
       generation: { provider: generation.provider, model: generation.model },

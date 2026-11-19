@@ -1489,7 +1489,8 @@ export type Database = {
           tom_padrao: string | null
           updated_at: string
           user_id: string
-          wordpress_app_password: string | null
+          // wordpress_app_password não é legível pelo navegador (S1); use wordpress_has_credential.
+          wordpress_has_credential: boolean
           wordpress_url: string | null
           wordpress_username: string | null
         }
@@ -2248,6 +2249,9 @@ export type Database = {
       }
     }
     Functions: {
+      // Present in the committed 2026-09 governance/queue migrations.
+      is_ceo: { Args: never; Returns: boolean }
+      control_zica_brain_batch: { Args: { p_batch_id: string; p_action: string }; Returns: Json }
       can_manage_electoral_campaign: { Args: never; Returns: boolean }
       exec_sql: { Args: { sql_query: string }; Returns: Json }
     }

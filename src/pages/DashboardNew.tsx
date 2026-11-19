@@ -42,6 +42,7 @@ import { AuditReportPanel } from '@/components/dashboard/AuditReportPanel';
 import { AiGeoAuditPanel } from '@/components/dashboard/AiGeoAuditPanel';
 import { AuditScoreHistoryChart } from '@/components/dashboard/AuditScoreHistoryChart';
 import { TrafficBrainHero } from '@/components/brand/TrafficBrainHero';
+import { TrafficSummary } from '@/components/overview/TrafficSummary';
 
 // Quick action card component
 function QuickActionCard({ 
@@ -339,6 +340,9 @@ export default function DashboardNew() {
             />
           )}
         </div>
+
+        {/* Resultados reais do projeto: Google, visitas, contatos */}
+        <TrafficSummary />
 
         {/* Quick Actions */}
         <Card className="border-0 shadow-card">

@@ -1,16 +1,20 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { useNavigate } from 'react-router-dom';
 import { useToast } from './use-toast';
 import { retryQuery, withRetry } from '@/lib/supabase-retry';
-import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import { PROJECT_COLUMNS } from '@/lib/project-columns';
+import { applyProjectJsonMerge, mergeColumnsPresent } from '@/lib/json-merge';
+import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
-type Project = Tables<'projects'>;
+type Project = Tables<'projects'> & { wordpress_credential_ref?: string | null; wordpress_connector_mode?: string | null };
 type ProjectInsert = TablesInsert<'projects'>;
 type ProjectUpdate = TablesUpdate<'projects'>;
 
 export function useProjects() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -21,10 +25,10 @@ export function useProjects() {
       const { data } = await retryQuery(() =>
         supabase
           .from('projects')
-          .select('*')
+          .select(PROJECT_COLUMNS)
           .order('created_at', { ascending: false })
       );
-      return data as Project[];
+      return data as unknown as Project[];
     },
     enabled: !!user,
     retry: 2,
@@ -39,12 +43,13 @@ export function useProjects() {
         supabase
           .from('projects')
           .insert({ ...project, user_id: user.id })
-          .select()
+          .select(PROJECT_COLUMNS)
           .single()
       );
-      return data;
+      return data as unknown as Project;
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
+      navigate(`/business-profile?project=${created.id}`);
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       toast({
         title: 'Projeto criado!',
@@ -61,16 +66,32 @@ export function useProjects() {
   });
 
   const updateProject = useMutation({
-    mutationFn: async ({ id, ...updates }: ProjectUpdate & { id: string }) => {
+    // editorial_identity existe no banco, mas ainda não nos tipos gerados do Supabase; declarado aqui para a fusão ser tipada.
+    mutationFn: async ({ id, ...updates }: ProjectUpdate & { id: string; editorial_identity?: Json }) => {
+      // commercial_info, social_links e editorial_identity são FUNDIDOS com o que já está no banco (nunca substituídos):
+      // o que a tela não conhece (schema_profile, nexus_visual_policy, social_links.kwai/tiktok...) fica preservado.
+      // Se a leitura da linha atual falhar, retryQuery lança e NADA é gravado (sem sobrescrever às cegas).
+      const mergeColumns = mergeColumnsPresent(updates as Record<string, unknown>);
+      let toSave: ProjectUpdate = updates;
+      if (mergeColumns.length > 0) {
+        const { data: current } = await retryQuery(() =>
+          supabase
+            .from('projects')
+            .select(mergeColumns.join(','))
+            .eq('id', id)
+            .single()
+        );
+        toSave = applyProjectJsonMerge(updates, current as unknown as Record<string, unknown>) as ProjectUpdate;
+      }
       const { data } = await retryQuery(() =>
         supabase
           .from('projects')
-          .update(updates)
+          .update(toSave)
           .eq('id', id)
-          .select()
+          .select(PROJECT_COLUMNS)
           .single()
       );
-      return data;
+      return data as unknown as Project;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });

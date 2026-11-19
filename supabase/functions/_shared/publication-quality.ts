@@ -134,6 +134,10 @@ function isNegatedPromise(text: string, index: number, matchLength: number) {
   const sentenceStart = Math.max(text.lastIndexOf('.', index - 1), text.lastIndexOf('?', index - 1), text.lastIndexOf('!', index - 1)) + 1;
   const lead = text.slice(Math.max(sentenceStart, index - 45), index).split(/[:;—–]/).pop() || '';
   if (NEGATION_LEAD.test(lead)) return true;
+  // An explicit anti-fraud warning reports somebody else's promise; it does not offer it.
+  // Keep the whole prefix anchored and bounded so a later first-person promise still fails.
+  const warningLead = text.slice(sentenceStart, index).trim();
+  if (/^desconfie de (?:contatos|mensagens) que associem um pagamento imediato a$/.test(warningLead)) return true;
   return CONDEMNATION_TAIL.test(text.slice(index + matchLength, index + matchLength + 130));
 }
 

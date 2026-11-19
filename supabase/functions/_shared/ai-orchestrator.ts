@@ -1,3 +1,4 @@
+import {PAID_SERVICES_BLOCKED} from './nexus-spend-lock.ts';
 import { getDirectivesForTask } from './behavioral-directives.ts';
 import { ANTHROPIC_PRIMARY_MODEL, ANTHROPIC_ECONOMY_MODEL } from './anthropic-model-policy.ts';
 
@@ -135,6 +136,12 @@ export class AIOrchestrator {
     this.platformKeys = { ...this.apiKeys };
   }
 
+  /** Espaço de teste / sem plano: descarta as chaves da PLATAFORMA (variáveis de ambiente). Chamar ANTES de setKeys com as chaves do usuário. */
+  disablePlatformKeys() {
+    for (const name of Object.keys(this.apiKeys)) this.apiKeys[name] = '';
+    for (const name of Object.keys(this.platformKeys)) this.platformKeys[name] = '';
+  }
+
   setKeys(keys: { gemini?: string; openai?: string; anthropic?: string }) {
     if (keys.openai?.startsWith('sk-')) this.apiKeys.openai = keys.openai;
     if (keys.anthropic) this.apiKeys.anthropic = keys.anthropic;
@@ -164,9 +171,9 @@ export class AIOrchestrator {
   private getKeysForProvider(providerName: string): string[] {
     const keys: string[] = [];
     const byok = this.apiKeys[providerName];
-    const platform = this.platformKeys[providerName];
+    // Organization credential only; global fallback disabled.
     if (byok) keys.push(byok);
-    if (platform && platform !== byok) keys.push(platform);
+    // No silent fallback to the platform credential or another organization.
     return keys;
   }
 
@@ -184,6 +191,7 @@ export class AIOrchestrator {
   }
 
   async callWithMeta(taskType: TaskType, messages: AIMessage[], options?: AICallOptions): Promise<AICallResult> {
+    if (PAID_SERVICES_BLOCKED) throw new Error('global_paid_services_blocked');
     const enriched = this.injectDirectives(taskType, messages);
     const names = this.getAvailableProviders();
     let providers = (AI_PROVIDERS[taskType] || AI_PROVIDERS.article_generation)
@@ -213,6 +221,7 @@ export class AIOrchestrator {
   }
 
   async callDualWithMeta(taskType: TaskType, messages: AIMessage[], options?: AICallOptions): Promise<AICallResult> {
+    if (PAID_SERVICES_BLOCKED) throw new Error('global_paid_services_blocked');
     const enriched = this.injectDirectives(taskType, messages);
     let providers = (AI_PROVIDERS[taskType] || AI_PROVIDERS.article_generation)
       .filter((provider) => ['openai', 'anthropic'].includes(provider.name))

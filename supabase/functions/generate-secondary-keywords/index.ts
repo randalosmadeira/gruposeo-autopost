@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 // Retired 2026-09-17 (remediation of the 2026-08-22 accidental wipe, see
@@ -11,7 +13,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+paidLockedServe(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }

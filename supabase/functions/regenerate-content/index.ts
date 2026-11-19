@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
@@ -110,7 +112,7 @@ function prompts(type: RegenerateType, input: { keyword: string; title: string; 
   ];
 }
 
-Deno.serve(async (req: Request) => {
+paidLockedServe(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ success: false, error: "Method not allowed" }, 405);
 

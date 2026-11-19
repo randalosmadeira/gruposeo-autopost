@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { fetchUserKeys } from "../_shared/byok-resolver.ts";
@@ -281,7 +283,7 @@ async function saveArticle(admin: any, userId: string, body: ImageRequest, image
   await admin.from("articles").update({ featured_image_url: image, image_source: source, config: { ...config, image_geo: meta }, updated_at: new Date().toISOString() }).eq("id", body.articleId).eq("user_id", userId);
 }
 
-Deno.serve(async (req: Request) => {
+paidLockedServe(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ success: false, error: "method_not_allowed" }, 405);
   const requestId = crypto.randomUUID();

@@ -1,3 +1,4 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { setEnvKeysForUser } from "../_shared/byok-resolver.ts";
 

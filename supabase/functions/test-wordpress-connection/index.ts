@@ -1,3 +1,4 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createLogger, createRequestId } from "../_shared/logger.ts";
 import { PLUGIN_API_NAMESPACE, PLUGIN_MINIMUM_VERSION, PLUGIN_NAME, PLUGIN_SOFTWARE_ID } from "../_shared/plugin-version.ts";

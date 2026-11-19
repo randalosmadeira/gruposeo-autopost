@@ -1,3 +1,4 @@
+import { collectMetricPages } from '@/lib/article-metrics';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -52,16 +53,12 @@ export function useZicaTrafficKpis() {
 
       // `as any` is intentional until generated Supabase types include the new
       // observability columns added by the Zica.ai neural metrics migration.
-      const { data, error } = await (supabase as any)
-        .from('articles')
-        .select(
-          'status,indexing_status,indexing_submitted_at,indexed_confirmed_at,llm_visibility_score,semantic_authority_score,traffic_wave_status',
-        )
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      const rows = (data || []) as ArticleMetricRow[];
+      const rows = await collectMetricPages<ArticleMetricRow>(async (from, to) => {
+        const { data, error } = await supabase.from('articles')
+          .select('status,indexing_status,indexing_submitted_at,indexed_confirmed_at,llm_visibility_score,semantic_authority_score,traffic_wave_status')
+          .eq('user_id', user.id).order('id', { ascending: true }).range(from, to);
+        return { data: data as unknown as ArticleMetricRow[], error };
+      });
       const llmScores = rows
         .map((row) => row.llm_visibility_score)
         .filter((value): value is number => typeof value === 'number');
@@ -72,7 +69,7 @@ export function useZicaTrafficKpis() {
       return {
         totalWaves: rows.length,
         published: rows.filter((row) => row.status === 'published').length,
-        activeWaves: rows.filter((row) => row.traffic_wave_status === 'active').length,
+        activeWaves: rows.filter((row) => row.status === 'published').length,
         indexingSubmitted: rows.filter(
           (row) => row.indexing_status === 'submitted' || !!row.indexing_submitted_at,
         ).length,

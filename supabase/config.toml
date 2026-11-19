@@ -108,3 +108,59 @@ content_path = "./supabase/templates/magic_link.html"
 [auth.email.template.recovery]
 subject = "Acesse seu Cérebro de Tráfego - Zica.ai"
 content_path = "./supabase/templates/recovery.html"
+
+[functions.nexus-editorial-approval]
+verify_jwt = true
+
+[functions.nexus-intelligence]
+verify_jwt = true
+
+[functions.zica-signals]
+verify_jwt = false
+
+# nexus-audit: o cron envia x-zica-automation-key (hash em automation_ingress_keys); chamadas de usuário validam o JWT dentro da função.
+[functions.nexus-audit]
+verify_jwt = false
+
+# nexus-observe: observação agendada (cron). Só aceita x-zica-automation-key (hash em automation_ingress_keys, nome 'nexus-observe'); nenhuma chamada de usuário.
+[functions.nexus-observe]
+verify_jwt = false
+
+# nexus-visibility: painel de visibilidade (ZVI); só usuário logado (o JWT é validado no gateway e dentro da função).
+[functions.nexus-visibility]
+verify_jwt = true
+
+# profile-agent: conversa do Perfil do projeto (P3). Chamadas de usuário; o JWT é validado dentro da função (resolveRequestActor).
+[functions.profile-agent]
+verify_jwt = true
+
+[functions.profile-analyze]
+verify_jwt = true
+
+# lead-capture: atalho público de captação de leads (aberta; as ações com login conferem o usuário dentro da função).
+[functions.lead-capture]
+verify_jwt = false
+
+# profile-discover: Descoberta do negocio (le o site publico do projeto; so quem tem login e papel de escrita)
+[functions.profile-discover]
+verify_jwt = true
+
+# funnel: funil de captacao com numeros por projeto (M1); so dados agregados
+[functions.funnel]
+verify_jwt = true
+
+# site-speed: velocidade e Core Web Vitals (PageSpeed Insights e CrUX do Google); a chave do Google e segredo da funcao
+[functions.site-speed]
+verify_jwt = true
+
+# backlinks: lista de backlinks importada pelo cliente + verificacao ao vivo de cada pagina (F2); login e papel conferidos dentro da funcao
+[functions.backlinks]
+verify_jwt = true
+
+# site-monitor: cron a cada 10 min (velocidade agendada + reverificacao de backlinks); sem login, so a chave de automacao propria (automation_ingress_keys)
+[functions.site-monitor]
+verify_jwt = false
+
+# site-overview: Visao Geral e Estrutura do negocio (Google, GA4, cliques de contato, arvore do dominio); login e papel conferidos dentro da funcao
+[functions.site-overview]
+verify_jwt = true

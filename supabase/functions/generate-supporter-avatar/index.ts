@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 
 /**
@@ -10,7 +12,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
  */
 const PIPELINE_VERSION = 'supporter-avatar-vps-v8';
 
-Deno.serve(() => new Response(JSON.stringify({
+paidLockedServe(() => new Response(JSON.stringify({
   error: 'gone',
   status: 410,
   pipeline: PIPELINE_VERSION,

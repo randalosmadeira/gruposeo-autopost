@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { formatElectoralFooter, resolveElectoralPreset } from "../_shared/electoral-campaign-presets.ts";
@@ -220,7 +222,7 @@ function renderCorpusContext(units: any[]) {
   ].join('\n');
 }
 
-serve(async (req) => {
+paidLockedServe(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'method_not_allowed' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 

@@ -11,7 +11,8 @@ interface Project {
   name: string;
   wordpress_url?: string | null;
   wordpress_username?: string | null;
-  wordpress_app_password?: string | null;
+  /** coluna gerada: há credencial guardada (a senha em si não chega ao navegador) */
+  wordpress_has_credential?: boolean | null;
   is_connected?: boolean;
 }
 
@@ -34,7 +35,7 @@ export function WordPressCard({ form, projects, projectsLoading }: WordPressCard
     return !!(
       selectedProject.wordpress_url &&
       selectedProject.wordpress_username &&
-      selectedProject.wordpress_app_password
+      selectedProject.wordpress_has_credential
     );
   }, [selectedProject]);
 
@@ -60,7 +61,7 @@ export function WordPressCard({ form, projects, projectsLoading }: WordPressCard
                     </div>
                   ) : projects && projects.length > 0 ? (
                     projects.map((project) => {
-                      const isConfigured = !!(project.wordpress_url && project.wordpress_username && project.wordpress_app_password);
+                      const isConfigured = !!(project.wordpress_url && project.wordpress_username && project.wordpress_has_credential);
                       return (
                         <SelectItem key={project.id} value={project.id}>
                           <span className="flex items-center gap-2">

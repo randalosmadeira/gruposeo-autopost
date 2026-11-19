@@ -20,6 +20,7 @@ const IndexNowConfigCard = lazy(() => import('@/components/settings/IndexNowConf
 const PressCitationsCard = lazy(() => import('@/components/settings/PressCitationsCard').then((module) => ({ default: module.PressCitationsCard })));
 const SubscriptionOverviewCard = lazy(() => import('@/components/settings/SubscriptionOverviewCard').then((module) => ({ default: module.SubscriptionOverviewCard })));
 const BrandAssetsCard = lazy(() => import('@/components/settings/BrandAssetsCard').then((module) => ({ default: module.BrandAssetsCard })));
+const ComplianceModeCard = lazy(() => import('@/components/settings/ComplianceModeCard').then((module) => ({ default: module.ComplianceModeCard })));
 const ProjectCtaCard = lazy(() => import('@/components/settings/ProjectCtaCard').then((module) => ({ default: module.ProjectCtaCard })));
 
 type SettingsMode = 'account' | 'integrations' | 'ai' | 'prompts';
@@ -59,6 +60,7 @@ export default function SettingsPage({ mode = 'account' }: { mode?: SettingsMode
           <>
             <ProfileIdentityCard />
             <SubscriptionOverviewCard />
+            <ComplianceModeCard />
             <InstitutionalInfo />
           </>
         ) : null}

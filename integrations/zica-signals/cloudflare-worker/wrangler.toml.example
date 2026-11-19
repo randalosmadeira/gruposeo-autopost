@@ -1,0 +1,20 @@
+# Exemplo. Copie para wrangler.toml e ajuste. NAO coloque o segredo aqui.
+name = "zica-signals-meusite"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+# Rota do site que sera medido (o Worker passa a requisicao adiante sem alterar a resposta).
+routes = [
+  { pattern = "meusite.com.br/*", zone_name = "meusite.com.br" }
+]
+
+[vars]
+ZICA_SIGNALS_SITE_ID = "COLE_AQUI_O_SITE_ID"
+ZICA_SIGNALS_ENDPOINT = "https://COLE_AQUI_O_PROJETO.supabase.co/functions/v1/zica-signals"
+# Opcional: fuso do campo "dia" (padrao America/Sao_Paulo).
+# ZICA_SIGNALS_TZ = "America/Sao_Paulo"
+# Opcional: contar tambem visitas vindas de IA/busca pelo servidor (nao use junto com o snippet no navegador).
+# ZICA_SIGNALS_REFERRALS = "1"
+
+# O segredo e cadastrado por comando, nunca em arquivo:
+#   npx wrangler secret put ZICA_SIGNALS_SECRET

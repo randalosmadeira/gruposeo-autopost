@@ -1,0 +1,98 @@
+/* Página Visibilidade (ZVI). Tudo escopado em `.zv`.
+   Superfícies, texto e bordas vêm dos tokens do app (--card, --foreground, --border...): se o app ganhar um tema claro, a página acompanha.
+   As cores semânticas (série, bom/atenção/ruim) são próprias, com variante para o tema claro (`.light` ou `[data-theme='light']`). */
+.zv {
+  --zv-ink: hsl(var(--foreground));
+  --zv-muted: hsl(var(--muted-foreground));
+  --zv-surface: hsl(var(--card));
+  --zv-surface-2: hsl(var(--muted) / 0.55);
+  --zv-line: hsl(var(--border));
+  --zv-vr: #22d3ee;
+  --zv-cr: #c4f000;
+  --zv-good: #4ade80;
+  --zv-good-bg: rgb(74 222 128 / 0.12);
+  --zv-warn: #fbbf24;
+  --zv-warn-bg: rgb(251 191 36 / 0.12);
+  --zv-bad: #fb7185;
+  --zv-bad-bg: rgb(251 113 133 / 0.12);
+  --zv-info: #7dd3fc;
+  --zv-info-bg: rgb(125 211 252 / 0.12);
+  --zv-glow: rgb(34 211 238 / 0.10);
+  --zv-track: hsl(var(--muted));
+  --zv-own: rgb(196 240 0 / 0.10);
+  --zv-own-line: rgb(196 240 0 / 0.45);
+}
+.light .zv, [data-theme='light'] .zv {
+  --zv-vr: #0e7490;
+  --zv-cr: #4d6b00;
+  --zv-good: #15803d;
+  --zv-good-bg: rgb(21 128 61 / 0.10);
+  --zv-warn: #92580a;
+  --zv-warn-bg: rgb(180 109 10 / 0.12);
+  --zv-bad: #b91c3c;
+  --zv-bad-bg: rgb(185 28 60 / 0.09);
+  --zv-info: #0369a1;
+  --zv-info-bg: rgb(3 105 161 / 0.09);
+  --zv-glow: rgb(14 116 144 / 0.08);
+  --zv-own: rgb(77 107 0 / 0.08);
+  --zv-own-line: rgb(77 107 0 / 0.40);
+}
+
+/* Entrada discreta (fade + 6px), escalonada por --i. */
+@keyframes zv-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.zv-rise { animation: zv-rise 260ms ease-out both; animation-delay: calc(var(--i, 0) * 45ms); }
+
+.zv-panel {
+  background: var(--zv-surface);
+  border: 1px solid var(--zv-line);
+  border-radius: 1rem;
+}
+.zv-hero {
+  background:
+    radial-gradient(120% 90% at 0% 0%, var(--zv-glow), transparent 60%),
+    var(--zv-surface);
+}
+
+/* Barras e marcadores: largura animada em transição curta. */
+.zv-fill { transition: width 480ms cubic-bezier(.2, .7, .2, 1), left 480ms cubic-bezier(.2, .7, .2, 1); }
+.zv-track { background: var(--zv-track); }
+
+.zv-pill { display: inline-flex; align-items: center; gap: .3rem; border-radius: 999px; padding: .12rem .55rem; font-size: .72rem; font-weight: 600; line-height: 1.25; white-space: nowrap; border: 1px solid transparent; }
+.zv-pill--good { color: var(--zv-good); background: var(--zv-good-bg); border-color: color-mix(in srgb, var(--zv-good) 35%, transparent); }
+.zv-pill--warn { color: var(--zv-warn); background: var(--zv-warn-bg); border-color: color-mix(in srgb, var(--zv-warn) 35%, transparent); }
+.zv-pill--bad { color: var(--zv-bad); background: var(--zv-bad-bg); border-color: color-mix(in srgb, var(--zv-bad) 35%, transparent); }
+.zv-pill--info { color: var(--zv-info); background: var(--zv-info-bg); border-color: color-mix(in srgb, var(--zv-info) 35%, transparent); }
+.zv-pill--neutral { color: var(--zv-muted); background: var(--zv-surface-2); border-color: var(--zv-line); }
+
+.zv-own-row { background: var(--zv-own); box-shadow: inset 3px 0 0 var(--zv-own-line); }
+
+/* Tabela que vira cartões no celular (sem rolagem horizontal da página). */
+.zv-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.zv-table th { text-align: left; font-weight: 600; font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; color: var(--zv-muted); padding: .55rem .75rem; border-bottom: 1px solid var(--zv-line); }
+.zv-table td { padding: .7rem .75rem; border-bottom: 1px solid var(--zv-line); vertical-align: middle; }
+.zv-table tbody tr:last-child td { border-bottom: 0; }
+.zv-table tbody tr[data-clickable='true'] { cursor: pointer; transition: background-color 140ms ease; }
+.zv-table tbody tr[data-clickable='true']:hover { background: var(--zv-surface-2); }
+.zv-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 767px) {
+  .zv-stack, .zv-stack tbody, .zv-stack tr, .zv-stack td { display: block; width: 100%; }
+  .zv-stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .zv-stack tbody tr { border: 1px solid var(--zv-line); border-radius: .9rem; padding: .6rem .8rem; margin-bottom: .6rem; background: var(--zv-surface); }
+  .zv-stack td { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border: 0; padding: .28rem 0; text-align: right; }
+  .zv-stack td::before { content: attr(data-label); color: var(--zv-muted); font-size: .72rem; font-weight: 600; text-align: left; flex: none; }
+  .zv-stack td[data-primary='true'] { display: block; text-align: left; padding-bottom: .4rem; }
+  .zv-stack td[data-primary='true']::before { content: none; }
+}
+
+/* Abas roláveis no celular sem barra de rolagem visível (o texto cortado na borda indica que há mais). */
+.zv-noscrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.zv-noscrollbar::-webkit-scrollbar { display: none; }
+
+/* Foco visível em qualquer controle da página. */
+.zv :where(button, a, [role='tab'], [role='radio'], select, input, textarea):focus-visible { outline: 2px solid var(--zv-vr); outline-offset: 2px; }
+
+.zv-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  .zv *, .zv *::before, .zv *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

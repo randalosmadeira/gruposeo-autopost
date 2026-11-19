@@ -2,6 +2,8 @@ import { NavLink } from 'react-router-dom';
 import { CalendarDays, FileText, Globe2, Home, UserRound, Vote } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useElectoralAccess } from '@/hooks/useElectoralAccess';
+import { useHiddenModules } from '@/hooks/useHiddenModules';
+import { isMenuItemVisible } from '@/lib/module-visibility';
 
 const items = [
   { to: '/dashboard', label: 'Painel', icon: Home, end: true },
@@ -13,16 +15,20 @@ const items = [
 
 export function MobileDock() {
   const { canManageElectoral } = useElectoralAccess();
-  const visibleItems = canManageElectoral
+  const hidden = useHiddenModules();
+  const showElectoral = canManageElectoral && isMenuItemVisible('/electoral-campaign', hidden);
+  const base = items.filter((item) => isMenuItemVisible(item.to, hidden));
+  // o botão central do celular é o calendário; se ele sumir, o Painel (sempre presente) não vira botão central
+  const visibleItems = showElectoral
     ? [
-        ...items.map((item) => item.to === '/calendar' ? { ...item, primary: false } : item),
+        ...base.map((item) => item.to === '/calendar' ? { ...item, primary: false } : item),
         { to: '/electoral-campaign', label: 'Eleitoral', icon: Vote, primary: true },
       ]
-    : items;
+    : base;
   return (
     <nav className={cn(
       'neural-mobile-dock fixed inset-x-3 bottom-3 z-50 grid items-end rounded-2xl border border-[#30363D]/90 bg-[#0D1117]/92 px-2 pb-[max(.45rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_18px_70px_rgba(0,0,0,.65)] backdrop-blur-2xl md:hidden',
-      canManageElectoral ? 'grid-cols-6' : 'grid-cols-5',
+      visibleItems.length >= 6 ? 'grid-cols-6' : visibleItems.length === 5 ? 'grid-cols-5' : visibleItems.length === 4 ? 'grid-cols-4' : 'grid-cols-3',
     )}>
       {visibleItems.map(({ to, label, icon: Icon, primary, end }) => (
         <NavLink

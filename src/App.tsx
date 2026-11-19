@@ -5,11 +5,14 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { LeadClaimer } from "@/hooks/useLeadClaim";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Layout } from "@/components/layout/Layout";
 import { AdminRoute } from "@/components/AdminRoute";
 import { ElectoralRoute } from "@/components/ElectoralRoute";
 
+const GetStarted = lazy(() => import("./pages/GetStarted"));
+const AdminLeads = lazy(() => import("./pages/AdminLeads"));
 const Dashboard = lazy(() => import("./pages/DashboardNew"));
 const ContentCalendar = lazy(() => import("./pages/ContentCalendar"));
 const ArticleGeneratorV2 = lazy(() => import("./pages/ArticleGeneratorV2"));
@@ -17,6 +20,13 @@ const BulkArticleGenerator = lazy(() => import("./pages/BulkArticleGenerator"));
 const ArticlesList = lazy(() => import("./pages/ArticlesList"));
 const ArticleViewPage = lazy(() => import("./pages/ArticleViewPage"));
 const ArticleEditPage = lazy(() => import("./pages/ArticleEditPage"));
+const BusinessProfile = lazy(() => import("./pages/BusinessProfile"));
+const DiscoverBusiness = lazy(() => import("./pages/DiscoverBusiness"));
+const Funnel = lazy(() => import("./pages/Funnel"));
+const Speed = lazy(() => import("./pages/Speed"));
+const Backlinks = lazy(() => import("./pages/Backlinks"));
+const Structure = lazy(() => import("./pages/Structure"));
+const ProjectProfile = lazy(() => import("./pages/ProjectProfile"));
 const ProjectsList = lazy(() => import("./pages/ProjectsList"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const AuthorityPlanner = lazy(() => import("./pages/AuthorityPlanner"));
@@ -42,6 +52,10 @@ const SupportersAdminPage = lazy(() => import("./pages/SupportersAdminPage"));
 const AuditoriaGBP = lazy(() => import("./pages/AuditoriaGBP"));
 const Hiperlocal = lazy(() => import("./pages/Hiperlocal"));
 const AdminOrganizations = lazy(() => import("./pages/AdminOrganizations"));
+const NexusIntelligence = lazy(() => import("./pages/NexusIntelligence"));
+const NexusObservatory = lazy(() => import("./pages/NexusObservatory"));
+const NexusProviders = lazy(() => import("./pages/NexusProviders"));
+const NexusVisibility = lazy(() => import("./pages/NexusVisibility"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -77,9 +91,11 @@ const App = () => (
       <Sonner />
       <BrowserRouter basename={routerBasename}>
         <AuthProvider>
+          <LeadClaimer />
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/auth" element={<Auth />} />
+              <Route path="/comecar" element={<GetStarted />} />
               <Route path="/1470" element={<SupporterAvatar1470 />} />
               <Route path="/apoiadores" element={<SupporterAvatar1470 />} />
               <Route path="/apoiadores/avatar" element={<SupporterAvatar1470 />} />
@@ -101,7 +117,18 @@ const App = () => (
                 <Route path="/news-agents" element={<NewsAgents />} />
                 <Route path="/news-agents/new" element={<CreateNewsAgent />} />
                 <Route path="/projects" element={<ProjectsList />} />
+                <Route path="/descobrir" element={<DiscoverBusiness />} />
+                <Route path="/funil" element={<Funnel />} />
+                <Route path="/velocidade" element={<Speed />} />
+                <Route path="/backlinks" element={<Backlinks />} />
+                <Route path="/estrutura" element={<Structure />} />
+                <Route path="/business-profile" element={<BusinessProfile />} />
+                <Route path="/projects/:id/perfil" element={<ProjectProfile />} />
                 <Route path="/internal-linking" element={<InternalLinking />} />
+                <Route path="/nexus-intelligence" element={<NexusIntelligence />} />
+                <Route path="/nexus/observatorio" element={<NexusObservatory />} />
+                <Route path="/nexus/motores" element={<NexusProviders />} />
+                <Route path="/nexus/visibilidade" element={<NexusVisibility />} />
                 <Route path="/internal-links" element={<InternalLinking />} />
                 <Route path="/topical-maps" element={<Dashboard />} />
                 <Route path="/settings" element={<Navigate to="/account" replace />} />
@@ -109,6 +136,7 @@ const App = () => (
                 <Route path="/integrations" element={<SettingsPage mode="integrations" />} />
                 <Route path="/wordpress-plugin" element={<WordPressPlugin />} />
                 <Route path="/wordpress-monitor" element={<AdminRoute><WordPressMonitor /></AdminRoute>} />
+                <Route path="/admin/leads" element={<AdminRoute><AdminLeads /></AdminRoute>} />
                 <Route path="/queue-monitor" element={<AdminRoute><QueueMonitor /></AdminRoute>} />
                 <Route path="/admin/ai-engine" element={<AdminRoute><SettingsPage mode="ai" /></AdminRoute>} />
                 <Route path="/admin/prompts" element={<AdminRoute><SettingsPage mode="prompts" /></AdminRoute>} />

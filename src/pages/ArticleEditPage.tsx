@@ -131,7 +131,7 @@ export default function ArticleEditPage() {
     }
   }, [article?.scheduled_at, toast]);
 
-  const handlePublish = async (articleToPublish: Article) => {
+  const handlePublish = async (articleToPublish: Article, options?: { acknowledgeCompliance?: boolean }) => {
     if (!articleToPublish.project_id) {
       toast({
         title: 'Projeto não definido',
@@ -146,7 +146,7 @@ export default function ArticleEditPage() {
       title: articleToPublish.title,
       project_id: articleToPublish.project_id,
       scheduled_at: scheduleIso(articleToPublish.scheduled_at),
-    });
+    }, options);
 
     if (result.success && !result.scheduled) await loadArticle();
   };

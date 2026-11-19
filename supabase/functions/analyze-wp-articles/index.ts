@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
@@ -419,7 +421,7 @@ async function fetchWordPressArticlesForIndexing(args: {
   }
 }
 
-Deno.serve(async (req) => {
+paidLockedServe(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -455,8 +457,13 @@ Deno.serve(async (req) => {
     const fullSync = !!full_sync;
     const useFallback = !!use_fallback;
 
-    // Verify project ownership
-    const { data: project, error: projectError } = await supabase
+    // Verify project ownership.
+    // S1: o papel `authenticated` não lê mais a coluna wordpress_app_password; a credencial é lida aqui
+    // no servidor, com a chave de serviço, e a posse continua checada pelo user_id da sessão (acima).
+    const projectReader = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: project, error: projectError } = await projectReader
       .from("projects")
       .select("id, wordpress_url, wordpress_username, wordpress_app_password")
       .eq("id", project_id)

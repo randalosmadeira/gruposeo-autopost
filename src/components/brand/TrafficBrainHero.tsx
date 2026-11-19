@@ -37,7 +37,7 @@ export function TrafficBrainHero({ totalWaves, activeWaves, indexingSubmitted, i
           <div className="mt-6">
             <div className="grid grid-cols-2 gap-2.5">
               <div className="zica-live-stat"><Zap className="h-5 w-5 text-[#D4FF00]" /><div><strong>{totalWaves}</strong><span>Ondas criadas</span></div></div>
-              <div className="zica-live-stat"><Radar className="h-5 w-5 text-[#00F0FF]" /><div><strong>{activeWaves}</strong><span>Ondas ativas</span></div></div>
+              <div className="zica-live-stat"><Radar className="h-5 w-5 text-[#00F0FF]" /><div><strong>{activeWaves}</strong><span>Artigos publicados</span></div></div>
             </div>
             <Link to="/articles/new" className="zica-primary-cta mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#D4FF00] px-5 text-sm font-black uppercase tracking-[.02em] text-[#071018] transition"><Zap className="h-4 w-4 fill-current" /> Gerar nova onda de conteúdo <ArrowRight className="h-4 w-4" /></Link>
           </div>
@@ -47,9 +47,9 @@ export function TrafficBrainHero({ totalWaves, activeWaves, indexingSubmitted, i
           <CentralCortex variant="dashboard" className="absolute inset-0" />
         </div>
         <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-          <article className="zica-kpi-panel"><div className="flex items-start justify-between gap-3"><div><p>IndexNow / LLMs</p><strong>{indexingSubmitted}</strong><span className="ml-1 text-sm font-semibold text-slate-400">submetidos</span></div><Radar className="h-6 w-6 text-[#00F0FF]" /></div><div className="zica-sparkline zica-sparkline--cyan" /><span>{indexingConfirmed} com indexação confirmada</span></article>
-          <article className="zica-kpi-panel"><div className="flex items-start justify-between gap-3"><div><p>Visibilidade em LLMs</p><MetricValue value={llmVisibility} /></div><BrainCircuit className="h-6 w-6 text-[#D4FF00]" /></div><div className="zica-sparkline zica-sparkline--volt" /><span>{llmVisibility === null ? 'Aguardando auditoria real' : 'Média dos artigos auditados'}</span></article>
-          <article className="zica-kpi-panel"><div className="flex items-start justify-between gap-3"><div><p>Autoridade Semântica</p><MetricValue value={semanticAuthority} /></div><ShieldCheck className="h-6 w-6 text-[#00F0FF]" /></div><div className="zica-sparkline zica-sparkline--cyan" /><span>{semanticAuthority === null ? 'Sem score fabricado' : 'Score semântico auditado'}</span></article>
+          <article className="zica-kpi-panel"><div className="flex items-start justify-between gap-3"><div><p>Envios de indexação</p><strong>{indexingSubmitted}</strong><span className="ml-1 text-sm font-semibold text-slate-400">submetidos</span></div><Radar className="h-6 w-6 text-[#00F0FF]" /></div><div className="zica-sparkline zica-sparkline--cyan" /><span>{indexingConfirmed} com indexação confirmada</span></article>
+          <article className="zica-kpi-panel"><div className="flex items-start justify-between gap-3"><div><p>Preparação para IA</p><MetricValue value={llmVisibility} /></div><BrainCircuit className="h-6 w-6 text-[#D4FF00]" /></div><div className="zica-sparkline zica-sparkline--volt" /><span>{llmVisibility === null ? 'Aguardando avaliação interna' : 'Índice interno; não mede citações em IA'}</span></article>
+          <article className="zica-kpi-panel"><div className="flex items-start justify-between gap-3"><div><p>Autoridade Semântica</p><MetricValue value={semanticAuthority} /></div><ShieldCheck className="h-6 w-6 text-[#00F0FF]" /></div><div className="zica-sparkline zica-sparkline--cyan" /><span>{semanticAuthority === null ? 'Sem score fabricado' : 'Heurística interna, não autoridade externa'}</span></article>
         </div>
       </div>
       <div className="relative z-10 mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-[#22303a] pt-4 text-[9px] font-black uppercase tracking-[.18em] text-slate-500"><span>Artigos de Blog</span><i className="h-1.5 w-1.5 rounded-full bg-[#00F0FF] shadow-[0_0_8px_#00F0FF]" /><span>Posts Sociais</span><i className="h-1.5 w-1.5 rounded-full bg-[#D4FF00] shadow-[0_0_8px_#D4FF00]" /><span>Ondas Virais</span><i className="h-1.5 w-1.5 rounded-full bg-[#00F0FF] shadow-[0_0_8px_#00F0FF]" /><span>GEO & Semântica LLMs</span></div>

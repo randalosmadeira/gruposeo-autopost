@@ -2,15 +2,22 @@
  * Zica.ai provider resolver.
  * User BYOK credentials take priority. Platform OpenAI/Claude credentials are
  * resolved from Supabase Vault through service-role-only RPCs.
+ * Platform credentials (Vault and environment) are only used when the database
+ * function `platform_ai_allowed` says so (manager, or member of a live organization
+ * on a non-trial plan); trial spaces and users without an organization get BYOK only.
+ * See _shared/platform-ai-gate.ts (fails closed).
  */
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { AIOrchestrator } from "./ai-orchestrator.ts";
+import { isPlatformAiAllowed, mergeProviderKeys, PLATFORM_AI_BLOCKED_MESSAGE } from "./platform-ai-gate.ts";
 
 export interface UserAIKeys {
   gemini: string;
   openai: string;
   anthropic: string;
   serper: string;
+  /** false = espaço de teste / sem plano: só as chaves do próprio usuário valem */
+  platformAi?: boolean;
 }
 
 function env(name: string) {
@@ -49,22 +56,25 @@ export async function fetchUserKeys(userId: string): Promise<UserAIKeys> {
 
   const userOpenAI = String(data?.openai_api_key || "").trim();
   const userAnthropic = String(data?.anthropic_api_key || "").trim();
+  const platformAllowed = await isPlatformAiAllowed(admin, userId);
   const [vaultOpenAI, vaultAnthropic] = await Promise.all([
-    userOpenAI ? Promise.resolve("") : vaultProviderKey(admin, "openai"),
-    userAnthropic ? Promise.resolve("") : vaultProviderKey(admin, "anthropic"),
+    userOpenAI || !platformAllowed ? Promise.resolve("") : vaultProviderKey(admin, "openai"),
+    userAnthropic || !platformAllowed ? Promise.resolve("") : vaultProviderKey(admin, "anthropic"),
   ]);
 
-  return {
-    gemini: String(data?.gemini_api_key || env("GEMINI_API_KEY")).trim(),
-    openai: userOpenAI || vaultOpenAI || env("OPENAI_API_KEY"),
-    anthropic: userAnthropic || vaultAnthropic || env("ANTHROPIC_API_KEY"),
-    serper: String(data?.serper_api_key || env("SERPER_API_KEY")).trim(),
-  };
+  return mergeProviderKeys({
+    user: { gemini: data?.gemini_api_key, openai: userOpenAI, anthropic: userAnthropic, serper: data?.serper_api_key },
+    platformAllowed,
+    vault: { openai: vaultOpenAI, anthropic: vaultAnthropic },
+    env: { gemini: env("GEMINI_API_KEY"), openai: env("OPENAI_API_KEY"), anthropic: env("ANTHROPIC_API_KEY"), serper: env("SERPER_API_KEY") },
+  });
 }
 
 export async function getOrchestratorForUser(userId: string): Promise<AIOrchestrator> {
   const orchestrator = new AIOrchestrator();
   const userKeys = await fetchUserKeys(userId);
+  // sem autorização para a IA da plataforma: o orquestrador não pode cair nas chaves do ambiente (só vale o que for do usuário)
+  if (userKeys.platformAi === false) orchestrator.disablePlatformKeys();
   const keys: { gemini?: string; openai?: string; anthropic?: string } = {};
   if (userKeys.gemini) keys.gemini = userKeys.gemini;
   if (userKeys.openai) keys.openai = userKeys.openai;
@@ -100,7 +110,9 @@ export async function getOrchestratorForUser(userId: string): Promise<AIOrchestr
 
   const available = orchestrator.getAvailableProviders();
   if (!available.includes("openai") && !available.includes("anthropic")) {
-    throw new Error("Nenhum provedor OpenAI/Claude disponível. Configure a credencial no painel CEO ou no Vault do Zica.ai.");
+    throw new Error(userKeys.platformAi === false
+      ? PLATFORM_AI_BLOCKED_MESSAGE
+      : "Nenhum provedor OpenAI/Claude disponível. Configure a credencial no painel CEO ou no Vault do Zica.ai.");
   }
   console.log(`[BYOK] Providers disponíveis: ${available.join(", ")}`);
   return orchestrator;
@@ -112,6 +124,8 @@ export async function getOrchestratorForUser(userId: string): Promise<AIOrchestr
 export async function setEnvKeysForUser(userId: string): Promise<void> {
   const { setRuntimeKey } = await import("./gemini.ts");
   const keys = await fetchUserKeys(userId);
+  // a ponte antiga lê as chaves do ambiente quando não há chave em memória: sem autorização e sem chave própria, não segue
+  if (keys.platformAi === false && !keys.gemini && !keys.openai && !keys.anthropic) throw new Error(PLATFORM_AI_BLOCKED_MESSAGE);
   if (keys.gemini) setRuntimeKey("GEMINI_API_KEY", keys.gemini);
   if (keys.openai) setRuntimeKey("OPENAI_API_KEY", keys.openai);
   if (keys.anthropic) setRuntimeKey("ANTHROPIC_API_KEY", keys.anthropic);

@@ -1,3 +1,5 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
+import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
@@ -88,7 +90,7 @@ async function callOpenAI(apiKey: string, instructions: string, input: string, m
 
 const baseInstructions = `Você atua como auditor editorial técnico do módulo eleitoral Zica.ai.\n\nREGRAS INEGOCIÁVEIS:\n- Trabalhe somente com qualidade editorial, factualidade, clareza, estrutura, fontes, acessibilidade, conformidade e erros técnicos.\n- Não recomende voto, não tente persuadir eleitores e não personalize mensagem por cidade, bairro, perfil, opinião política ou qualquer atributo individual.\n- Não infira preferência política nem crie perfil individual de eleitor.\n- Não invente fatos, estatísticas, leis, julgados, fontes, URLs, depoimentos ou experiências pessoais. Quando a prova não estiver no texto, preserve ou crie marcador [VERIFICAR].\n- Preserve identificação eleitoral, avisos de revisão humana, rotulagem de IA quando aplicável e rodapé existente.\n- Não trate SEO como garantia de ranking ou indexação.\n- Não publique nada. Esta função somente analisa ou corrige um rascunho armazenado.\n- Responda em português do Brasil.`;
 
-Deno.serve(async (req) => {
+paidLockedServe(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
 

@@ -10,6 +10,7 @@ import {
   repairCommonTitleTypos,
   sentenceCaseTitle,
 } from '../../supabase/functions/_shared/publication-quality';
+import { runComplianceCheck } from '../../supabase/functions/_shared/compliance-mode';
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
@@ -46,6 +47,8 @@ describe('portão de qualidade de título (palavra-chave crua não vira título)
   });
 });
 
+// A regra em si não mudou: o que mudou é quem decide o efeito. strict = bloqueio antigo (409 compliance_gate);
+// advisory (padrão) = só avisa; off = não verifica. Ver supabase/functions/_shared/compliance-mode.ts.
 describe('portão Provimento 205/2021 (publicidade de advocacia)', () => {
   it('reprova promessa de resultado, superlativo, urgência comercial e captação direta', () => {
     const codes = findComplianceViolations({
@@ -53,6 +56,14 @@ describe('portão Provimento 205/2021 (publicidade de advocacia)', () => {
       content: '<p>Garantimos a absolvição. Consulta gratuita. Entre em contato agora pelo WhatsApp.</p>',
     }).map((i) => i.code);
     expect(codes).toEqual(expect.arrayContaining(['superlativo', 'promessa_resultado', 'urgencia_comercial', 'captacao_direta']));
+  });
+
+  it('strict bloqueia como antes; advisory avisa sem bloquear; off ignora', () => {
+    const input = { title: 'O melhor advogado criminalista de São Paulo', content: '<p>Garantimos a absolvição.</p>' };
+    expect(runComplianceCheck('strict', input).blocking).toBe(true);
+    expect(runComplianceCheck('advisory', input)).toMatchObject({ blocking: false });
+    expect(runComplianceCheck('advisory', input).warnings.length).toBeGreaterThan(0);
+    expect(runComplianceCheck('off', input)).toEqual({ blocking: false, warnings: [] });
   });
 
   it('não reprova pergunta de FAQ que nega a promessa ("é garantia de absolvição? Não.")', () => {
@@ -105,10 +116,12 @@ describe('slug para checagem de duplicata', () => {
 
 describe('publish-to-wordpress aplica os portões antes de enviar ao plugin', () => {
   const publisher = read('supabase/functions/publish-to-wordpress/index.ts');
-  it('importa e usa os quatro portões, fail-closed', () => {
+  it('importa e usa os quatro portões, fail-closed (o de publicidade segue o modo da organização)', () => {
     expect(publisher).toContain('publication-quality.ts');
     expect(publisher).toContain('title_quality_gate');
     expect(publisher).toContain('compliance_gate');
+    expect(publisher).toContain('resolveComplianceMode');
+    expect(publisher).toContain('compliance.blocking');
     expect(publisher).toContain('broken_cta_gate');
     expect(publisher).toContain('duplicate_slug_gate');
     expect(publisher).toContain('lookupPublishedSlug');

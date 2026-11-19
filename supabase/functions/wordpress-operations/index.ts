@@ -1,3 +1,4 @@
+import '../_shared/nexus-runtime-bootstrap.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
@@ -17,6 +18,7 @@ type Input = {
   operationId?: string | null;
   scheduledAt?: string | null;
   publishStatus?: "draft" | "publish";
+  acknowledgeCompliance?: boolean;
   limit?: number;
 };
 
@@ -151,7 +153,7 @@ async function createOrRefreshOperation(
   return data as OperationRow;
 }
 
-async function callPublisher(admin: any, operation: OperationRow, automated = false) {
+async function callPublisher(admin: any, operation: OperationRow, automated = false, acknowledgeCompliance = false) {
   const supabaseUrl = env("SUPABASE_URL");
   const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY") || env("SUPABASE_SECRET_KEY");
   if (!supabaseUrl || !serviceKey) throw new Error("Backend interno incompleto");
@@ -179,6 +181,7 @@ async function callPublisher(admin: any, operation: OperationRow, automated = fa
         publishStatus: operation.operation_type === "draft" ? "draft" : "publish",
         requireFeaturedImage: operation.operation_type === "publish",
         automated,
+        acknowledgeCompliance: acknowledgeCompliance && !automated,
       }),
       signal: AbortSignal.timeout(90000),
     });
@@ -373,7 +376,7 @@ Deno.serve(async (req: Request) => {
         status: "pending",
         scheduledAt: null,
       });
-      const result = await callPublisher(admin, operation, actor.mode === "service");
+      const result = await callPublisher(admin, operation, actor.mode === "service", input.acknowledgeCompliance === true);
       return json({ success: result.success, operation_id: operation.id, ...result, request_id: requestId }, result.success ? 200 : 502);
     }
 

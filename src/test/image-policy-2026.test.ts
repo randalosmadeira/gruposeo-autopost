@@ -72,15 +72,15 @@ describe('Zica Posts 3.14.0 image delivery', () => {
   });
 
   it('bumps the plugin version everywhere while keeping 3.12.0 installs allowed', () => {
-    expect(plugin).toContain('Version: 3.15.0');
-    expect(plugin).toContain("define('ZICA_POSTS_VERSION', '3.15.0');");
-    expect(read('public/wordpress-plugin/zica-posts/version.json')).toContain('"version": "3.15.0"');
-    expect(read('public/wordpress-plugin/zica-posts/readme.txt')).toContain('Stable tag: 3.15.0');
-    expect(read('scripts/build-wordpress-downloads.mjs')).toContain("outputName: 'zica-posts-3.15.0.zip'");
-    expect(read('.github/workflows/zica-posts-package.yml')).toContain("grep -q 'Version: 3.15.0'");
-    expect(read('supabase/functions/_shared/plugin-version.ts')).toContain('PLUGIN_VERSION="3.15.0"');
+    expect(plugin).toContain('Version: 3.16.2');
+    expect(plugin).toContain("define('ZICA_POSTS_VERSION', '3.16.2');");
+    expect(read('public/wordpress-plugin/zica-posts/version.json')).toContain('"version": "3.16.2"');
+    expect(read('public/wordpress-plugin/zica-posts/readme.txt')).toContain('Stable tag: 3.16.2');
+    expect(read('scripts/build-wordpress-downloads.mjs')).toContain("outputName: 'zica-posts-3.16.2.zip'");
+    expect(read('.github/workflows/zica-posts-package.yml')).toContain("grep -q 'Version: 3.16.2'");
+    expect(read('supabase/functions/_shared/plugin-version.ts')).toContain('PLUGIN_VERSION="3.16.2"');
     expect(read('supabase/functions/_shared/plugin-version.ts')).toContain('PLUGIN_MINIMUM_VERSION="3.12.0"');
-    expect(read('src/lib/plugin-version.ts')).toContain("PLUGIN_VERSION='3.15.0'");
+    expect(read('src/lib/plugin-version.ts')).toContain("PLUGIN_VERSION='3.16.2'");
   });
 
   it('the brand bank export stays under 150 KB', () => {

@@ -153,7 +153,7 @@ export function SEOOptimizationPanel({ content, keyword, title, excerpt }: SEOOp
 
         {/* Compliance Tab - OAB validation */}
         <TabsContent value="compliance" className="mt-4">
-          <ComplianceChecker content={content || ''} />
+          <ComplianceChecker content={content || ''} title={title} excerpt={excerpt} />
         </TabsContent>
 
         {/* Keywords Tab - Original functionality */}

@@ -21,7 +21,7 @@ describe('matriz de aceite do usuário GESTOR eleitoral', () => {
       '/electoral-campaign/history',
       '/electoral-campaign/supporters',
     ]) {
-      expect(app).toMatch(new RegExp(`path="${route.replaceAll('/', '\\/')}" element=\\{<ElectoralRoute>`));
+      expect(app).toMatch(new RegExp(`path="${route.split('/').join('\\/')}" element=\\{<ElectoralRoute>`));
     }
     expect(accessHook).toContain("supabase.rpc('can_manage_electoral_campaign')");
     expect(routeGuard).toContain('<Navigate to="/dashboard" replace />');

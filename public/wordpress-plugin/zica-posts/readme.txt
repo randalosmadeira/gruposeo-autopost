@@ -4,10 +4,30 @@ Tags: seo, geo, llms, indexnow, schema, wordpress, automation, queue
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.15.0
+Stable tag: 3.16.2
 License: GPLv2 or later
 
 Agente WordPress leve oficial da Zica.ai. Publica, registra eventos duráveis, serve discovery files e conversa com o Zica Orchestrator sem executar IA pesada durante save_post.
+
+== 3.16.2 ==
+
+* Cliques de contato: o script de sinais passa a medir clique em WhatsApp, telefone, e-mail e envio de formulário de contato (tipo `cta_click`). Só o tipo do contato e o caminho da página saem do navegador: nunca o número, o e-mail ou o texto digitado. Respeita "não rastrear". Botões que não são links podem usar `data-zica-cta="whatsapp|phone|email|form"`.
+* Pede a migração `20261120100000` do Zica (aceita o tipo `cta_click`); antes dela, os cliques são recusados com segurança e a medição de visitas continua igual.
+
+== 3.16.1 ==
+
+* Auditor de IA: a checagem "Schema JSON-LD da homepage" agora lê o JSON-LD que a página realmente publica (tema, Rank Math ou plugin), junta `@graph`, ignora blocos inválidos e aponta o que falta (endereço, telefone, sameAs). O schema configurado no plugin continua sendo contado como fonte adicional.
+* Auditor de IA: a checagem de schema dos artigos amostra os 6 posts mais recentes e, quando não há `_zica_posts_json_ld`, lê a permalink renderizada em busca de Article/NewsArticle/BlogPosting.
+* As duas checagens de schema ficam em cache de 6 horas (`zica_posts_audit_schema_cache`). "Rodar Auditor de IA Agora" ignora o cache e `POST /homepage-schema/inject` o invalida.
+
+== 3.16.0 ==
+
+* Sinais de IA: conta acessos de robôs de IA (GPTBot, ClaudeBot, PerplexityBot etc.) e visitas vindas de IA/busca, por dia, agente e página. Sem IP, sem User-Agent completo, sem cookies e ignorando usuários logados.
+* Snippet de navegador `assets/zica-signals.js` (sem cookies, respeita Do Not Track, envia uma vez por visita) impresso quando o site está conectado.
+* Envio horário assinado (HMAC-SHA256) ao Zica.ai; endpoint precisa ser HTTPS e terminar em .supabase.co ou usar o host do webhook do Hub.
+* REST: `GET /signals/status`, `POST /signals/configure`, `POST /signals/flush`. Bloco "Sinais de IA" no admin.
+* `ZICA_Posts_Auth::sign_body` aceita segredo opcional (compatível com chamadas anteriores).
+* Limite: com cache de página/CDN o PHP não vê o acesso do robô; use o Worker/middleware/leitor de logs em integrations/zica-signals.
 
 == 3.15.0 ==
 

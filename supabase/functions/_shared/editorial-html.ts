@@ -134,8 +134,11 @@ function markdownToHtml(input: string) {
 
 function sanitizeAttributes(tag: string, attrs: string) {
   if (tag !== "a") return "";
-  const href = attrs.match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1] || "#";
-  const title = attrs.match(/\btitle\s*=\s*["']([^"']+)["']/i)?.[1] || "";
+  // Decode previously escaped attribute values before escaping again. Otherwise
+  // each review/publication adds another &amp; layer and changes the approved URL.
+  const decode = (value: string) => value.replace(/&(?:amp;)+/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;/g, "'");
+  const href = decode(attrs.match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1] || "#");
+  const title = decode(attrs.match(/\btitle\s*=\s*["']([^"']+)["']/i)?.[1] || "");
   const safeHref = escapeHtml(safeUrl(href));
   const safeTitle = title ? ` title="${escapeHtml(title.slice(0, 240))}"` : "";
   const external = /^https?:\/\//i.test(href) ? ' target="_blank" rel="noopener noreferrer"' : "";
