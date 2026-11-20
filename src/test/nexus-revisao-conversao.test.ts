@@ -75,3 +75,18 @@ describe('revisão editorial: aceita as dimensões dentro de `dimensions` ou no 
     expect(validateAutonomousReview({ ...resto, dimensions: { factuality, utility, semantic, conversion, sector_compliance } }, fonte2).pass).toBe(true);
   });
 });
+
+describe('revisão editorial: citação com trecho omitido ([...])', () => {
+  const fonte3 = 'Art. 395. A denúncia ou queixa será rejeitada quando: (Redação dada pela Lei nº 11.719, de 2008). I - for manifestamente inepta; (Incluído pela Lei nº 11.719, de 2008). II - faltar pressuposto processual ou condição para o exercício da ação penal; ou (Incluído pela Lei nº 11.719, de 2008). III - faltar justa causa para o exercício da ação penal. (Incluído pela Lei nº 11.719, de 2008).';
+  it('aceita quando cada trecho entre os marcadores está na fonte, na ordem', () => {
+    expect(quoteSupported(fonte3, 'Art. 395. A denúncia ou queixa será rejeitada quando: [...] I - for manifestamente inepta; II - faltar pressuposto processual ou condição para o exercício da ação penal')).toBe(true);
+    expect(quoteSupported(fonte3, 'A denúncia ou queixa será rejeitada quando … faltar justa causa para o exercício da ação penal')).toBe(true);
+  });
+  it('recusa trecho que não está na fonte ou fora de ordem', () => {
+    expect(quoteSupported(fonte3, 'A denúncia ou queixa será rejeitada quando: [...] a denúncia sempre será recebida pelo juiz singular')).toBe(false);
+    expect(quoteSupported(fonte3, 'faltar justa causa para o exercício da ação penal [...] A denúncia ou queixa será rejeitada quando')).toBe(false);
+  });
+  it('só reticências ou trechos curtos demais não valem', () => {
+    expect(quoteSupported(fonte3, '[...] será [...] quando [...]')).toBe(false);
+  });
+});
