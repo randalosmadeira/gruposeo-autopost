@@ -19,7 +19,8 @@ function sameText(a: string, b: string) { if (a.length !== b.length) return fals
 
 const motivoReprovacao = (out: Record<string, any> | undefined, erro: unknown): string => {
   const rev = (out?.review || {}) as Record<string, any>;
-  const falsas = Object.entries((rev.dimensions || {}) as Record<string, unknown>).filter(([, v]) => v !== true).map(([k]) => k);
+  const dimsObj = (rev.dimensions && typeof rev.dimensions === 'object' ? rev.dimensions : Object.fromEntries(['factuality', 'utility', 'semantic', 'conversion', 'sector_compliance'].filter((k) => k in rev).map((k) => [k, rev[k]]))) as Record<string, unknown>;
+  const falsas = Object.entries(dimsObj).filter(([, v]) => v !== true).map(([k]) => k);
   const partes = [falsas.length ? `dimensoes_falsas=${falsas.join(',')}` : '', Array.isArray(rev.issues) && rev.issues.length ? `problemas=${rev.issues.slice(0, 2).join(' | ')}` : '', Array.isArray(rev.unsupported_claims) && rev.unsupported_claims.length ? `sem_fonte=${rev.unsupported_claims.slice(0, 2).join(' | ')}` : '', !out?.review ? String(erro || 'sem_veredito') : '', out?.review && !falsas.length && !(rev.issues || []).length && !(rev.unsupported_claims || []).length ? 'fontes_ou_citacoes_insuficientes' : ''].filter(Boolean);
   return partes.join(' ; ').slice(0, 320);
 };
