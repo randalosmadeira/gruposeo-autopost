@@ -5,13 +5,13 @@ project_id = "ubahrbgaxrkjxklytobl"
 verify_jwt = true
 
 [functions.news-agent]
-verify_jwt = true
+verify_jwt = false
 
 [functions.generate-authority-plan]
-verify_jwt = true
+verify_jwt = false
 
 [functions.generate-authority-plan-stream]
-verify_jwt = true
+verify_jwt = false
 
 # These functions participate in server-to-server chains. They validate either
 # a real user JWT through auth.getUser(), an exact opaque service credential,
@@ -45,7 +45,7 @@ verify_jwt = false
 
 # Administrative supporter database requires an authenticated user JWT and CEO role.
 [functions.supporter-avatar-admin]
-verify_jwt = true
+verify_jwt = false
 
 [functions.regenerate-content]
 verify_jwt = true
@@ -54,10 +54,10 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.wordpress-api]
-verify_jwt = true
+verify_jwt = false
 
 [functions.articles-api]
-verify_jwt = true
+verify_jwt = false
 
 # External webhooks authenticate with application-level signatures/secrets.
 [functions.webhooks]
@@ -67,16 +67,16 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.parse-rss]
-verify_jwt = true
+verify_jwt = false
 
 [functions.generate-secondary-keywords]
-verify_jwt = true
+verify_jwt = false
 
 [functions.analyze-url-content]
-verify_jwt = true
+verify_jwt = false
 
 [functions.monitor-portals]
-verify_jwt = true
+verify_jwt = false
 
 [functions.auto-process-rss]
 verify_jwt = false
@@ -86,16 +86,16 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.seo-agent]
-verify_jwt = true
+verify_jwt = false
 
 [functions.ai-chat]
-verify_jwt = true
+verify_jwt = false
 
 [functions.analyze-seo-advanced]
-verify_jwt = true
+verify_jwt = false
 
 [functions.analyze-file]
-verify_jwt = true
+verify_jwt = false
 
 [auth.email.template.confirmation]
 subject = "Acesse seu Cérebro de Tráfego - Zica.ai"
@@ -128,7 +128,7 @@ verify_jwt = false
 
 # nexus-visibility: painel de visibilidade (ZVI); só usuário logado (o JWT é validado no gateway e dentro da função).
 [functions.nexus-visibility]
-verify_jwt = true
+verify_jwt = false
 
 # profile-agent: conversa do Perfil do projeto (P3). Chamadas de usuário; o JWT é validado dentro da função (resolveRequestActor).
 [functions.profile-agent]
@@ -188,3 +188,37 @@ verify_jwt = true
 # auto-optimize: Piloto Automatico de Otimizacao (SEO, GEO, AEO, AIO) por artigo; correcoes sem IA primeiro e IA em passos pequenos dentro do teto diario; login e papel conferidos dentro da funcao
 [functions.auto-optimize]
 verify_jwt = true
+
+# Alinhado a producao em 20/11/2026 (conferido com list_edge_functions): estas funcoes estao com verify_jwt=false no ar.
+# Sem estas entradas, um deploy sem --no-verify-jwt as passaria a exigir login e quebraria chamadas sem sessao.
+
+[functions.generate-landing-page]
+verify_jwt = false
+
+[functions.electoral-analytics-public-config]
+verify_jwt = false
+
+[functions.electoral-optin-public]
+verify_jwt = false
+
+[functions.externalize-legacy-images]
+verify_jwt = false
+
+[functions.pair-wordpress-site]
+verify_jwt = false
+
+[functions.reprocess-article-images]
+verify_jwt = false
+
+[functions.rdm-asset-seed]
+verify_jwt = false
+
+[functions.zica-ai-provider-health]
+verify_jwt = false
+
+[functions.supporter-avatar-candidate-assets]
+verify_jwt = false
+
+# ATENCAO (auditoria 20/11/2026): generate-authority-plan, generate-secondary-keywords e news-agent estao com verify_jwt=false
+# no ar E sem checagem de login no corpo da funcao (so o bloqueio de gasto paidLockedServe). Valor mantido igual a producao para nao
+# mudar comportamento neste PR; decidir exigir login (true) em PR proprio.
