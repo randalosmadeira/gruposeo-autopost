@@ -176,24 +176,24 @@ describe('plugin 3.18.0: rotas de páginas (PHP NÃO executado aqui: checagem es
     expect(main).toContain('new Zica_Posts_Pages($this->auth, $this->completeness)');
     expect(main.indexOf('class-zica-posts-completeness.php')).toBeLessThan(main.indexOf('class-zica-posts-pages.php'));
   });
-  it('versão 3.18.0 em todos os lugares que travam a versão; features, leia-me e empacotamento incluem as páginas', () => {
-    expect(main).toContain('Version: 3.18.0');
-    expect(main).toContain("define('ZICA_POSTS_VERSION', '3.18.0');");
+  it('versão 3.19.0 em todos os lugares que travam a versão; features, leia-me e empacotamento incluem as páginas', () => {
+    expect(main).toContain('Version: 3.19.0');
+    expect(main).toContain("define('ZICA_POSTS_VERSION', '3.19.0');");
     const vj = JSON.parse(read('public/wordpress-plugin/zica-posts/version.json'));
-    expect(vj.version).toBe('3.18.0');
+    expect(vj.version).toBe('3.19.0');
     expect(vj.features).toEqual(expect.arrayContaining(['completeness_gate', 'studio_pages', 'semantic_url_pages', 'page_lookup', 'page_status', 'page_redirects_301']));
     const readme = read('public/wordpress-plugin/zica-posts/readme.txt');
-    expect(readme).toContain('Stable tag: 3.18.0');
+    expect(readme).toContain('Stable tag: 3.19.0');
     expect(readme).toMatch(/== 3\.18\.0 ==[\s\S]*NÃO foram executados[\s\S]*== 3\.17\.0 ==/);
-    expect(read('src/lib/plugin-version.ts')).toContain("PLUGIN_VERSION='3.18.0'");
-    expect(read('supabase/functions/_shared/plugin-version.ts')).toContain('PLUGIN_VERSION="3.18.0"');
+    expect(read('src/lib/plugin-version.ts')).toContain("PLUGIN_VERSION='3.19.0'");
+    expect(read('supabase/functions/_shared/plugin-version.ts')).toContain('PLUGIN_VERSION="3.19.0"');
     expect(read('supabase/functions/_shared/plugin-version.ts')).toContain('"studio_pages"');
-    expect(read('scripts/build-wordpress-downloads.mjs')).toContain("outputName: 'zica-posts-3.18.0.zip'");
+    expect(read('scripts/build-wordpress-downloads.mjs')).toContain("outputName: 'zica-posts-3.19.0.zip'");
     expect(read('scripts/build-wordpress-downloads.mjs')).toContain('includes/class-zica-posts-pages.php');
     const wf = read('.github/workflows/zica-posts-package.yml');
-    expect(wf).toContain("grep -q 'Version: 3.18.0'");
+    expect(wf).toContain("grep -q 'Version: 3.19.0'");
     expect(wf).toContain('zica_page_slug_changed');
-    expect(wf).toContain('zica-posts-3.18.0.zip');
+    expect(wf).toContain('zica-posts-3.19.0.zip');
   });
   it('contrato servidor-plugin: o plugin lê os campos que o Estúdio envia e devolve os que o Estúdio lê', () => {
     for (const k of ['zica_ai_id', 'full_path', 'parent_path', 'slug', 'seo_title', 'meta_description', 'canonical', 'schema', 'hreflang', 'noindex', 'og', 'completeness', 'excerpt', 'content', 'title', 'status', 'language']) expect(php, k).toContain(`'${k}'`);

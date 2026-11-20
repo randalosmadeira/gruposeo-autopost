@@ -8,6 +8,7 @@ import { analyzeContent, buildContentTips, buildCriticalIssues, buildImprovement
 import { promptLimits, type RuleProfile } from "../_shared/optimization-rules.ts";
 import { loadRuleProfile } from "../_shared/rules-loader.ts";
 import { resolveLanguage } from "../_shared/language-packs.ts";
+import { humanVoiceBlock } from "../_shared/human-voice-guide.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -284,7 +285,7 @@ paidLockedServe(async (req) => {
           if (!hasContent) {
             // GENERATE full content from scratch
             console.log(`[AI SEO] Generating full content for article ${article.id} (keyword: ${article.keyword})`);
-            const generated = await generateFullContent(article, project, internalLinks, orchestrator, rules, langName);
+            const generated = await generateFullContent(article, project, internalLinks, orchestrator, rules, langName, langInfo.tag);
             
             if (generated.content) {
               const newClean = generated.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -347,7 +348,7 @@ paidLockedServe(async (req) => {
             // OPTIMIZE existing content
             console.log(`[AI SEO] Optimizing existing content for article ${article.id}`);
             const localAnalysis = analyzeContent(content, cleanContent, article, project, rules, extras);
-            const optimized = await optimizeExistingContent(article, localAnalysis, project, internalLinks, orchestrator, rules, langName);
+            const optimized = await optimizeExistingContent(article, localAnalysis, project, internalLinks, orchestrator, rules, langName, langInfo.tag);
 
             if (optimized.content) {
               const newClean = optimized.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -489,12 +490,12 @@ paidLockedServe(async (req) => {
 });
 
 // === GENERATE full content for empty articles ===
-async function generateFullContent(article: any, project: any, internalLinks: Array<{title: string, url: string}>, orchestrator: any, rules: RuleProfile, langName: string) {
+async function generateFullContent(article: any, project: any, internalLinks: Array<{title: string, url: string}>, orchestrator: any, rules: RuleProfile, langName: string, langTag = "pt") {
   const lim = promptLimits(rules);
   const keyword = article.keyword || "tema geral";
   const projectName = project?.empresa_nome || project?.name || "";
   const domain = project?.domain || "";
-  const nicho = project?.nicho || "jurídico";
+  const nicho = project?.nicho || "geral (não informado no projeto: não assuma segmento)";
   const tom = project?.tom_padrao || "profissional";
   
   const internalLinksStr = internalLinks.length > 0 
@@ -553,9 +554,9 @@ ${internalLinksStr}
 4. LINKS EXTERNOS: fontes oficiais ou autoritativas reais (órgãos públicos, instituições de ensino, organizações reconhecidas), só se existirem; nunca invente URL
 5. ${lim.readability}
 6. Estrutura: ${lim.structure}, HTML semântico
-7. FAQ: 5-8 perguntas com <h3> dentro de seção FAQ
+7. FAQ: só se houver perguntas reais que o texto responde (até 8), com <h3> dentro de seção FAQ; sem número mínimo e sem perguntas de molde
 8. CONVITES DE CONTATO: sóbrios e informativos, nos cinco blocos indicados acima (orientação, autoridade, contato, comunidade, fechamento); sem urgência, medo, gratuidade ou promessa
-9. CONCLUSÃO: com CTA final e links de redes sociais
+9. FECHO: o próximo passo prático para o leitor, sem repetir o artigo; links de redes só se fizerem sentido
 10. ${lim.words}
 
 FORMATO DA RESPOSTA - JSON VÁLIDO COM ESTAS CHAVES EXATAS:
@@ -570,7 +571,8 @@ FORMATO DA RESPOSTA - JSON VÁLIDO COM ESTAS CHAVES EXATAS:
       { 
         role: 'system', 
         content: `Você é um jornalista sênior e especialista SEO. Escreva em ${langName}.
-REGRAS: ${lim.readability} HTML semântico, links internos (${lim.internalLinks}), FAQ, CTAs, conclusão. Não invente fatos, números, fontes nem citações.
+REGRAS: ${lim.readability} HTML semântico, links internos (${lim.internalLinks}), FAQ só com perguntas reais, convite ao contato sóbrio, fecho útil. Não invente fatos, números, fontes nem citações.
+${humanVoiceBlock(langTag, { mode: "compact" })}
 Tags permitidas: p, strong, em, ul, ol, li, blockquote, a, table, h2-h6, figure, figcaption, section, article.
 PROIBIDO: div, span, b, i. Responda APENAS com JSON válido com as chaves: title, slug, meta_description, content, image_prompt.` 
       },
@@ -629,7 +631,7 @@ PROIBIDO: div, span, b, i. Responda APENAS com JSON válido com as chaves: title
 }
 
 // === OPTIMIZE existing content ===
-async function optimizeExistingContent(article: any, analysis: any, project: any, internalLinks: Array<{title: string, url: string}>, orchestrator: any, rules: RuleProfile, langName: string) {
+async function optimizeExistingContent(article: any, analysis: any, project: any, internalLinks: Array<{title: string, url: string}>, orchestrator: any, rules: RuleProfile, langName: string, langTag = "pt") {
   const lim = promptLimits(rules);
   const internalLinksStr = internalLinks.length > 0 
     ? internalLinks.slice(0, 15).map(l => `- "${l.title}": ${l.url}`).join("\n")
@@ -683,9 +685,9 @@ ${issuesList.length > 0 ? issuesList.map(i => `❌ ${i}`).join("\n") : "Nenhum p
 1. ${lim.readability}
 2. ${lim.internalLinks} como <a href="URL">texto âncora contextual</a>
 3. Links externos: só fontes oficiais ou autoritativas reais que já estejam no texto ou na lista fornecida; nunca invente URL
-4. FAQ com 5-8 perguntas se ausente
-5. CTAs estratégicos em todo o artigo
-6. Conclusão com CTA final
+4. FAQ só se o texto responder perguntas reais (sem mínimo; até 8)
+5. Convites ao contato sóbrios e coerentes com o tema (sem repetir em toda seção)
+6. Fecho com o próximo passo prático para o leitor
 7. Título: 55-80 chars, SEM ":" no final, SEM "Guia Completo"
 8. Meta: 145-180 chars, frase COMPLETA com ponto final
 
@@ -707,7 +709,8 @@ RESPONDA APENAS COM JSON — use EXATAMENTE estas chaves:
     
     const aiContent = await orchestrator.call('content_editing', [
       { role: 'system', content: `Você é um editor SEO sênior. Mantenha o idioma original do texto (${langName}). Reescreva conteúdo para ${lim.readability} Frases curtas, voz ativa, HTML semântico. Não invente fatos, números, fontes nem citações.
-ADICIONE links internos, CTAs, FAQ e conclusão faltantes. Responda APENAS com JSON válido com chaves: content, title, meta_description.
+ADICIONE links internos faltantes e, só se o texto sustentar, FAQ com perguntas reais e um fecho útil. Não crie fato novo para preencher lacuna. Responda APENAS com JSON válido com chaves: content, title, meta_description.
+${humanVoiceBlock(langTag, { mode: "compact" })}
 Tags permitidas: p, strong, em, ul, ol, li, blockquote, a, table, h2-h6, section, article, figure, figcaption.` },
       { role: 'user', content: prompt },
     ], { maxTokens, temperature: 0.3 });

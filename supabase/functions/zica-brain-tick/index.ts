@@ -363,9 +363,19 @@ Deno.serve(async (req: Request) => {
     }
 
     if (Date.now() - started < 20000) {
-      const { data: enabledPrograms } = await admin.from("nexus_programs").select("organization_id").eq("execution_enabled", true).gt("budget_usd_micros", 0).limit(10);
+      const { data: enabledPrograms } = await admin.from("nexus_programs").select("organization_id,settings").eq("execution_enabled", true).gt("budget_usd_micros", 0).limit(10);
       for (const program of enabledPrograms || []) {
-        const { data: pending } = await admin.from("nexus_operations").select("id,project_id,user_id").eq("organization_id", program.organization_id).eq("status", "prepared").eq("kind", "editorial_review").order("created_at").limit(1).maybeSingle();
+        // Cadência da revisão editorial (ordem do dono, 20/11/2026): NÃO roda a cada minuto. Só em janelas do dia (padrão 00h, 08h e 16h de Brasília),
+        // nos primeiros `review_window_minutes` minutos (padrão 10) = no máximo 1 revisão por tick, ~10 por janela. Projetos em `review_low_priority_projects` ficam de fora.
+        const st = ((program as { settings?: Record<string, unknown> }).settings || {}) as Record<string, unknown>;
+        const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date());
+        const hh = Number(parts.find((p) => p.type === "hour")?.value) % 24; const mm = Number(parts.find((p) => p.type === "minute")?.value);
+        const hours = Array.isArray(st.review_schedule_hours_brt) ? (st.review_schedule_hours_brt as unknown[]).map(Number) : [0, 8, 16];
+        const windowMinutes = Number.isFinite(Number(st.review_window_minutes)) ? Number(st.review_window_minutes) : 10;
+        if (!(hours.includes(hh) && mm < windowMinutes)) continue;
+        const low = new Set(Array.isArray(st.review_low_priority_projects) ? (st.review_low_priority_projects as unknown[]).map(String) : []);
+        const { data: queue } = await admin.from("nexus_operations").select("id,project_id,user_id").eq("organization_id", program.organization_id).eq("status", "prepared").eq("kind", "editorial_review").order("created_at").limit(60);
+        const pending = (queue || []).find((q: { project_id: string }) => !low.has(String(q.project_id)));
         if (pending) {
           await edgeCall(url, serviceKey, "nexus-intelligence", { userId: pending.user_id, projectId: pending.project_id, action: "execute", operationId: pending.id }, 100000);
           break;

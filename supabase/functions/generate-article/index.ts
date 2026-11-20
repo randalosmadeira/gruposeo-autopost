@@ -7,6 +7,8 @@ import type { AICallResult } from "../_shared/ai-orchestrator.ts";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 import { distributeProjectCtas } from "../_shared/editorial-cta.ts";
 import { runAgentPipeline } from "../_shared/agents/agent-pipeline.ts";
+import { hasHumanVoiceBlock, humanVoiceBlock } from "../_shared/human-voice-guide.ts";
+import { renderPromptVariables } from "../_shared/prompt-library.ts";
 
 import { buildNexusEditorialPolicy, normalizeWordProfile, EDITORIAL_WORD_BANDS, NEXUS_EDITORIAL_VERSION, type ConversionBrief } from "../_shared/nexus-editorial.ts";
 
@@ -160,7 +162,7 @@ REGRAS FACTUAIS E DE PUBLICAÇÃO:
 - Se uma fonte primária ausente for indispensável para sustentar a tese central do artigo, NÃO produza o artigo. Retorne somente: ZICA_NEEDS_PRIMARY_SOURCE: seguido de uma descrição objetiva da fonte que falta.
 - Conteúdo jurídico sobre lei, ato normativo, jurisprudência, prazo oficial ou política pública atual exige fonte primária quando a afirmação depender dela.
 - Preserve conformidade jurídica, publicitária e editorial aplicável ao conteúdo.
-- ${config.includeConclusion === false ? "Não force conclusão." : "Finalize com síntese objetiva e CTA coerente, sem promessa de resultado."}
+- ${config.includeConclusion === false ? "Não force conclusão." : "Feche com o próximo passo prático para o leitor (e um convite coerente quando houver oferta e canal reais), sem repetir o que já foi dito e sem promessa de resultado."}
 
 CONTEXTO DA ORGANIZAÇÃO:
 ${projectContext || "Não informado."}
@@ -274,6 +276,13 @@ paidLockedServe(async (req: Request) => {
     }
 
     const band = { ...bandFor(config.wordCount), ...EDITORIAL_WORD_BANDS[normalizeWordProfile(config.wordCount || "medium")] };
+    // As variáveis ${title}, ${language}... dos modelos do banco nunca eram preenchidas: o modelo recebia o texto cru.
+    systemPrompt = renderPromptVariables(systemPrompt, {
+      title: config.title || config.keyword, language: config.language || "pt-BR", articleLength: band.label,
+      tone: config.tone || "profissional e acessível", pov: config.pointOfView || "natural para a intenção",
+      currentYear: new Date().getFullYear(), sourcesContext: (config.sourcesContext || "").slice(0, MAX_SOURCES_CONTEXT_CHARS),
+    });
+    if (!hasHumanVoiceBlock(systemPrompt)) systemPrompt += "\n\n" + humanVoiceBlock(config.language || "pt-BR", { mode: "full" });
     systemPrompt += "\n\n" + buildNexusEditorialPolicy(config);
     const prompt = buildPrompt(config, band);
     const orchestrator = await getOrchestratorForUser(userId);
@@ -360,10 +369,11 @@ paidLockedServe(async (req: Request) => {
     }
 
     let words = countWords(content);
-    if (words < Math.floor(band.min * 0.85) && band.min >= 1000) {
+    // Só amplia quando o operador PEDIU um perfil de extensão. Sem pedido, o tamanho é o que a intenção exige (decisão do dono, 20/11/2026).
+    if (config.wordCount && words < Math.floor(band.min * 0.85) && band.min >= 1000) {
       const expanded = await orchestrator.callWithMeta("content_editing", [
         { role: "system", content: buildNexusEditorialPolicy(config) + "\nAprofunde sem inventar fatos, sem repetir ideias e sem alterar a tese central. Não insira marcadores de revisão, comentários técnicos ou metadados no corpo." },
-        { role: "user", content: `Faixa editorial: ${band.label}. O rascunho possui ${words} palavras. Acrescente apenas explicações, critérios, exemplos hipotéticos claramente identificados, listas ou comparações sustentadas pelo próprio contexto. Se uma fonte primária indispensável estiver ausente, retorne somente ZICA_NEEDS_PRIMARY_SOURCE: <fonte necessária>.\n\nRASCUNHO:\n${content}` },
+        { role: "user", content: `Faixa editorial: ${band.label}. O rascunho possui ${words} palavras. Acrescente apenas explicações, critérios, exemplos hipotéticos claramente identificados, listas ou comparações sustentadas pelo próprio contexto. Se o tema já estiver coberto sem enchimento, devolva o rascunho sem alterações. Se uma fonte primária indispensável estiver ausente, retorne somente ZICA_NEEDS_PRIMARY_SOURCE: <fonte necessária>.\n\nRASCUNHO:\n${content}` },
       ], { preferredProvider: generation.provider, maxTokens: 32000, temperature: 0.2 });
       const expandedContent = expanded.content.trim();
       const expandedSourceSignal = expandedContent.match(SOURCE_SIGNAL);

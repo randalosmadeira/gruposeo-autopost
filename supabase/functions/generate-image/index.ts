@@ -3,6 +3,7 @@ import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { fetchUserKeys } from "../_shared/byok-resolver.ts";
+import { bindSpendIdentity } from "../_shared/spend-gate.ts";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 import { generateGeminiImage, setRuntimeKey } from "../_shared/gemini.ts";
 import { imagePromptRules, deriveHeroImage, deriveJpegCopy, heroDimensionsFor, imagePolicyMetadata, type StorageAdmin } from "../_shared/image-policy.ts";
@@ -18,7 +19,7 @@ type ImageRequest = {
   title: string; keywords?: string; context?: string; content?: string;
   segment?: string; aspectRatio?: "16:9" | "4:3" | "1:1";
   quality?: "low" | "medium" | "high" | "standard"; articleId?: string;
-  projectId?: string | null; moduleKey?: string; allowAiGeneration?: boolean; userId?: string;
+  projectId?: string | null; moduleKey?: string; allowAiGeneration?: boolean; forceOriginalImage?: boolean; imageStyle?: string; userId?: string;
   watermark?: string;
 };
 type PoolAsset = {
@@ -244,7 +245,8 @@ REGRAS OBRIGATÓRIAS:\n- Esta é uma EDIÇÃO DE FUNDO de uma fotografia real au
 async function synthetic(openaiKey: string, body: ImageRequest) {
   // 2026-09 policy: nothing textual inside the pixels. Brand credit goes to alt text / caption.
   const brandRule = `Sem texto, sem marca d'água e sem logotipo. ${imagePromptRules(heroDimensionsFor(body.aspectRatio).aspect)}`;
-  const prompt = `Crie uma imagem editorial original para: ${body.title}. Contexto: ${[body.context, body.keywords].filter(Boolean).join(". ")}. ${brandRule} Sem pessoa pública identificável não fornecida como referência. Não copiar logotipos, assinaturas ou composição protegida da matéria de origem.`;
+  const styleRule = body.imageStyle ? ` Estilo visual obrigatório: ${body.imageStyle}` : "";
+  const prompt = `Crie uma imagem editorial original para: ${body.title}. Contexto: ${[body.context, body.keywords].filter(Boolean).join(". ")}.${styleRule} ${brandRule} Sem pessoa pública identificável não fornecida como referência. Não copiar logotipos, assinaturas ou composição protegida da matéria de origem.`;
   const response = await fetch("https://api.openai.com/v1/images/generations", { method: "POST", headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: OPENAI_IMAGE_MODEL, prompt, n: 1, size: size(body.aspectRatio), quality: body.quality === "low" ? "low" : body.quality === "medium" || body.quality === "standard" ? "medium" : "high" }), signal: AbortSignal.timeout(150000) });
   const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(String(payload?.error?.message || `openai_image_http_${response.status}`));
   if (payload?.data?.[0]?.b64_json) return { bytes: fromBase64(payload.data[0].b64_json), mime: "image/png" };
@@ -265,7 +267,7 @@ async function syntheticWithFallback(keys: { openai: string; gemini: string }, b
   if (keys.gemini) {
     setRuntimeKey("GEMINI_API_KEY", keys.gemini);
     const result = await generateGeminiImage(
-      `Imagem editorial original para ${body.title}. Contexto: ${[body.context, body.keywords].filter(Boolean).join(". ")}. Sem texto, sem marca d'água e sem logotipo. ${imagePromptRules(heroDimensionsFor(body.aspectRatio).aspect)}`,
+      `Imagem editorial original para ${body.title}. Contexto: ${[body.context, body.keywords].filter(Boolean).join(". ")}.${body.imageStyle ? ` Estilo visual obrigatório: ${body.imageStyle}.` : ""} Sem texto, sem marca d'água e sem logotipo. ${imagePromptRules(heroDimensionsFor(body.aspectRatio).aspect)}`,
       { aspectRatio: body.aspectRatio || "16:9", provider: "gemini" },
     );
     if (result?.imageData) {
@@ -291,12 +293,18 @@ paidLockedServe(async (req: Request) => {
     const body = await req.json().catch(() => ({})) as ImageRequest; if (!body.title?.trim()) return json({ success: false, error: "Título é obrigatório" }, 400);
     if (body.aspectRatio !== undefined && body.aspectRatio !== "16:9" && body.aspectRatio !== "4:3" && body.aspectRatio !== "1:1") return json({ success: false, error: "aspectRatio inválido: use 16:9, 4:3 ou 1:1" }, 400);
     const actor = await resolveRequestActor(req, body.userId); const userId = actor.userId;
+    // chamada interna (modo serviço): o corpo já foi lido, então as pistas de identidade do gasto são informadas aqui (a organização sai do projeto, conferido no banco)
+    if (actor.mode === "service") bindSpendIdentity({ userId, projectId: body.projectId || undefined, articleId: body.articleId });
     const supabaseUrl = env("SUPABASE_URL"); const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY") || env("SUPABASE_SECRET_KEY");
     if (!supabaseUrl || !serviceKey) return json({ success: false, error: "Backend incompleto" }, 500);
     const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const moduleKey = moduleFor(body); const { policy, assets, assetScope } = await pool(admin, userId, moduleKey, body.projectId); const required = Number(policy.required_asset_count || 6);
 
-    if (assets.length > 0 && policy.auto_select !== false) {
+    // Lote da curadoria (chamada interna, modo serviço): pula o banco de fotos e gera imagem ORIGINAL e única. Usuário comum nunca ativa isto.
+    const forceOriginal = actor.mode === "service" && body.forceOriginalImage === true && body.allowAiGeneration === true;
+    // estilo visual só vale em chamada interna (o lote da curadoria); de usuário comum é descartado
+    body.imageStyle = forceOriginal && typeof body.imageStyle === "string" ? body.imageStyle.trim().slice(0, 700) : undefined;
+    if (!forceOriginal && assets.length > 0 && policy.auto_select !== false) {
       const usable = await chooseUsableAsset(admin, body, assets.slice(0, 6));
       if (usable) {
       const { selected, original, failures: assetFailures } = usable;
@@ -323,7 +331,7 @@ paidLockedServe(async (req: Request) => {
       }
     }
 
-    if (!(body.allowAiGeneration === true && policy.allow_ai_generation === true)) return json({ success: false, error: `Nenhuma das ${assets.length} imagens cadastradas no módulo ${moduleKey} está acessível.`, code: "image_pool_incomplete", retryable: false }, 409);
+    if (!forceOriginal && !(body.allowAiGeneration === true && policy.allow_ai_generation === true)) return json({ success: false, error: `Nenhuma das ${assets.length} imagens cadastradas no módulo ${moduleKey} está acessível.`, code: "image_pool_incomplete", retryable: false }, 409);
     const keys = await fetchUserKeys(userId);
     if (!keys.openai && !keys.gemini) return json({ success: false, error: "Nenhum provedor de imagem configurado", code: "image_provider_missing" }, 503);
     const generated = await syntheticWithFallback(keys, body);

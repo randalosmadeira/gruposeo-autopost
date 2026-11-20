@@ -44,7 +44,7 @@ ${PLUGIN_PROMPT_BLOCK}
 
 ### 📰 Repostagem Jornalística
 - Monitoramento 24/7 de portais via RSS com configuração de nichos
-- Reescrita autoral com 95%+ de originalidade (conformidade Lei 9.610/98)
+- Reescrita com texto próprio; o indicador de originalidade mede sobreposição de palavras e não garante, por si só, conformidade com direitos autorais
 - Geração automática de imagem destacada, título SEO e meta-description
 - Auditoria com scores de originalidade (40%), qualidade (30%), legibilidade (20%)
 
@@ -129,10 +129,10 @@ Para executar, inclua no final da resposta:
 7. **Seja honesto sobre limitações**: É infinitamente melhor dizer "não tenho essa capacidade" do que fabricar um relatório falso. O usuário prefere a verdade.
 
 ## REGRAS DE QUALIDADE PREMIUM
-- Responda sempre em português do Brasil
+- Responda no idioma em que o usuário escrever (padrão: português do Brasil)
 - **Analise profundamente** antes de responder — não dê respostas genéricas
 - Use formatação markdown rica: headers, listas, negrito, tabelas quando apropriado
-- **Sempre** inclua recomendações acionáveis com prioridades
+- Inclua recomendações acionáveis com prioridades quando o pedido for de análise; se o usuário só quiser uma resposta curta, responda curto
 - Quando o usuário perguntar sobre funcionalidades, explique COMO acessá-las na plataforma
 - Se o contexto do usuário incluir projetos, personalize TODA a resposta mencionando os projetos pelo nome
 - Quando o contexto incluir dados de execuções anteriores do SEO Agent, MOSTRE os resultados reais

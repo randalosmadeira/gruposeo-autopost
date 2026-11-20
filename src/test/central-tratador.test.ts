@@ -43,7 +43,7 @@ const events = (tables: Record<string, Row[]>) => tables.project_lifecycle_event
 
 describe('Central de Projetos: função de borda', () => {
   it('ações existentes', () => {
-    expect(LIFECYCLE_ACTIONS).toEqual(['health_overview', 'health_detail', 'integrity_report', 'pause', 'resume', 'archive', 'restore', 'delete_plan', 'export', 'purge']);
+    expect(LIFECYCLE_ACTIONS).toEqual(['health_overview', 'health_detail', 'integrity_report', 'pause', 'resume', 'archive', 'restore', 'delete_plan', 'export', 'purge', 'pulse']);
   });
 
   describe('leitura: saúde e integridade', () => {

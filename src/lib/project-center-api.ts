@@ -8,6 +8,8 @@ export type { ProjectHealth, HealthState, ConnectionMap, IntegrityIssue };
 export interface HealthOverview {
   organization_id: string; can_manage: boolean; can_delete: boolean; plugin_version: string;
   projects: ProjectHealth[]; totals: Record<HealthState, number>; generated_at: string;
+  /** Conferência ao vivo do plugin nos sites (ausente em servidor antigo). ao_vivo + guardado = projetos consultados; guardado = site não respondeu. */
+  live?: { enabled: boolean; checked_at: string | null; projects: number; ao_vivo: number; guardado: number; versions_updated: number };
 }
 export interface TimelineEntry { at: string; kind: 'evento' | 'atividade'; text: string; source: string }
 export interface HealthDetail { health: ProjectHealth; map: ConnectionMap; events: Array<{ id: string; event: string; created_at: string }>; timeline: TimelineEntry[]; plugin_version: string }

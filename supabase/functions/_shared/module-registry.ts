@@ -10,7 +10,7 @@
  */
 import type { ProjectFacts } from './project-health-core.ts';
 
-export type ModuleKey = 'projeto' | 'perfil' | 'google' | 'conteudo' | 'sinais' | 'visao_geral' | 'taxonomia' | 'estudio_paginas' | 'funil' | 'monitor' | 'alertas' | 'observatorio' | 'arvore' | 'indexacao' | 'radar';
+export type ModuleKey = 'projeto' | 'perfil' | 'google' | 'conteudo' | 'sinais' | 'visao_geral' | 'taxonomia' | 'estudio_paginas' | 'funil' | 'monitor' | 'alertas' | 'observatorio' | 'arvore' | 'indexacao' | 'radar' | 'curadoria';
 
 export interface ExportTable {
   table: string;
@@ -65,7 +65,7 @@ export const MODULES: ModuleDef[] = [
     produces: ['projects'], consumes: [], plannedConsumes: [],
     engine: [
       { name: 'central', handler: 'lifecycle', scope: 'project', roleSource: 'members', cost: 'none', consumes: ['projects'],
-        actions: { health_overview: { minRole: 'member' }, health_detail: { minRole: 'member' }, integrity_report: { minRole: 'member' }, pause: { minRole: 'editor' }, resume: { minRole: 'editor' }, archive: { minRole: 'editor' }, restore: { minRole: 'editor' }, delete_plan: { minRole: 'admin' }, export: { minRole: 'admin' }, purge: { minRole: 'admin' } } },
+        actions: { health_overview: { minRole: 'member' }, health_detail: { minRole: 'member' }, integrity_report: { minRole: 'member' }, pause: { minRole: 'editor' }, resume: { minRole: 'editor' }, archive: { minRole: 'editor' }, restore: { minRole: 'editor' }, delete_plan: { minRole: 'admin' }, export: { minRole: 'admin' }, purge: { minRole: 'admin' }, pulse: { minRole: 'member' } } },
       { name: 'teto_gasto', handler: 'spend-policy', scope: 'organization', roleSource: 'members+owner', cost: 'none',
         actions: { status: { minRole: 'member' }, history: { minRole: 'member' }, update_policy: { minRole: 'owner' }, unlock_extra: { minRole: 'admin' } } },
       { name: 'eventos', handler: 'events', scope: 'project', roleSource: 'members', cost: 'none', consumes: ['project_events'], actions: { list: { minRole: 'member' } } },
@@ -270,6 +270,26 @@ export const MODULES: ModuleDef[] = [
       { table: 'radar_scores', order: ['week', 'id'], pageSize: 1000 },
       { table: 'radar_schedules', order: ['created_at', 'id'], pageSize: 200 },
     ],
+  },
+  {
+    key: 'curadoria', label: 'Curadoria de conteúdo', route: '/curadoria', status: 'ativo',
+    produces: ['article_curation'],
+    consumes: ['articles'], plannedConsumes: [],
+    // ligações REAIS (o código lê cada tabela), mas dispensáveis: módulo sem dado vira "sem dados" no item da curadoria, nunca erro
+    optionalConsumes: ['project_profile_extended', 'project_funnels', 'project_taxonomy_nodes', 'project_geo_scope', 'market_queries', 'project_focuses', 'nexus_prompts', 'nexus_prompt_sets'],
+    engine: [{
+      name: 'curadoria', handler: 'curadoria', scope: 'project', roleSource: 'members', cost: 'none',
+      produces: ['article_curation'],
+      consumes: ['articles', 'project_profile_extended', 'project_funnels', 'project_taxonomy_nodes', 'project_geo_scope', 'market_queries', 'project_focuses', 'nexus_prompts', 'nexus_prompt_sets'],
+      actions: {
+        resumo: { minRole: 'member' }, listar: { minRole: 'member' }, detalhe: { minRole: 'member' }, prompts_abertos: { minRole: 'member' }, imagens: { minRole: 'member' },
+        rodar: { minRole: 'editor' },
+      },
+    }],
+    // os números da curadoria (project_curation_summary) ainda não entram nos fatos da saúde do projeto: sem `curation` nos fatos = "não instalado" no mapa
+    hasData: (f) => { const c = (f as unknown as { curation?: { total?: number } | null }).curation; return c == null ? null : (c.total ?? 0) > 0; },
+    dataText: (f) => { const c = (f as unknown as { curation?: { total?: number } | null }).curation; return c ? `${n(c.total ?? 0)} artigos curados` : 'não instalado'; },
+    exportTables: [{ table: 'article_curation', order: ['curated_at', 'id'], pageSize: 500 }],
   },
 ];
 

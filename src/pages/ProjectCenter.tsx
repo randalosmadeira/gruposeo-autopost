@@ -1,9 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useProjects } from '@/hooks/useProjects';
+import { useOrganizationConsole } from '@/hooks/useOrganizationConsole';
+import { useLivePulse } from '@/hooks/useLivePulse';
+import { LivePulseBridge } from '@/components/layout/LivePulseBridge';
+import { FreshnessBar } from '@/components/project-center/FreshnessBar';
 import { callLifecycle, lifecycleErrorMessage, type HealthOverview, type HealthState } from '@/lib/project-center-api';
 import { ProjectCard } from '@/components/project-center/ProjectCard';
 import { ProjectDetailPanel } from '@/components/project-center/ProjectDetailPanel';
@@ -21,10 +25,15 @@ export default function ProjectCenter() {
   const [filter, setFilter] = useState<HealthState | 'todos'>('todos');
   const [selected, setSelected] = useState<string | null>(null);
 
-  const q = useQuery<HealthOverview>({ queryKey: ['project-center', 'overview', orgId], queryFn: () => callLifecycle<HealthOverview>('health_overview', { organizationId: orgId }), enabled: !!orgId, retry: false, refetchOnWindowFocus: false });
+  // "Conferir agora": a próxima leitura ignora o cache curto do servidor e pergunta de novo aos sites.
+  const forceNext = useRef(false);
+  const consoleOrg = useOrganizationConsole().data?.membership?.organization_id || null;
+  const pulse = useLivePulse(orgId || null);
+  const q = useQuery<HealthOverview>({ queryKey: ['project-center', 'overview', orgId], queryFn: () => { const force = forceNext.current; forceNext.current = false; return callLifecycle<HealthOverview>('health_overview', { organizationId: orgId, ...(force ? { force: true } : {}) }); }, enabled: !!orgId, retry: false, refetchOnWindowFocus: false });
   const data = q.data;
   const list = useMemo(() => (data?.projects || []).filter((p) => (filter === 'todos' ? p.state !== 'arquivado' : p.state === filter)), [data, filter]);
   const refresh = () => { void cache.invalidateQueries({ queryKey: ['project-center'] }); };
+  const checkNow = () => { forceNext.current = true; void cache.invalidateQueries({ queryKey: ['project-center'] }); void pulse.refetch(); };
 
   const shell = 'mx-auto w-full max-w-7xl space-y-4 px-4 py-5 pb-32 sm:px-6 md:pb-10 lg:px-8';
   if (loadingProjects) return <div className={shell} aria-busy="true"><Skeleton className="h-10 w-2/3" /><Skeleton className="h-64 w-full" /></div>;
@@ -40,6 +49,8 @@ export default function ProjectCenter() {
           {orgIds.length > 1 && <div><label htmlFor="pc-org" className="block text-xs text-muted-foreground">Organização</label><select id="pc-org" className={SELECT} value={orgId} onChange={(e) => { setOrgChoice(e.target.value); setSelected(null); }}>{orgIds.map((id, i) => <option key={id} value={id}>Organização {i + 1} ({projects.filter((p) => p.organization_id === id).length} projetos)</option>)}</select></div>}
           <Button variant="outline" disabled={q.isFetching} onClick={refresh}><RefreshCw className={`mr-2 h-4 w-4 ${q.isFetching ? 'animate-spin' : ''}`} aria-hidden />Atualizar</Button>
         </div>
+        {orgId && orgId !== consoleOrg && <LivePulseBridge organizationId={orgId} />}
+        <FreshnessBar overviewAt={q.dataUpdatedAt} pulseAt={pulse.dataUpdatedAt} pulseFailed={pulse.isError} busy={q.isFetching} live={data?.live} onCheckNow={checkNow} />
       </header>
 
       {q.isError && <p role="alert" className="rounded border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-300">{lifecycleErrorMessage(q.error)} <Button size="sm" variant="outline" className="ml-2" onClick={() => q.refetch()}>Tentar de novo</Button></p>}

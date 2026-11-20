@@ -337,22 +337,10 @@ export function buildVernizDNASection(config: VernizConfig): string {
 
 ### Regras de Escrita OBRIGATÓRIAS:
 
-**🎯 LEGIBILIDADE FLESCH 60-100 (OBRIGATÓRIO - MÍNIMO 60):**
-
-📊 **Escala Flesch (referência obrigatória):**
-| Score | Nível | Escolaridade |
-|-------|-------|-------------|
-| 90-100 | Muito Fácil | 5º ano — criança de 11 anos entende |
-| 80-89 | Fácil | 6º ano |
-| 70-79 | Bastante Fácil | 8º ano — maioria dos adultos |
-| 60-69 | Padrão | 8º-9º ano — inglês simples, ideal para web |
-| < 60 | ❌ REPROVADO | Reescrever obrigatoriamente |
-
-- Sentenças de no MÁXIMO 15-18 palavras em média
-- Use palavras curtas e comuns (2-3 sílabas no máximo)
-- Um semi-analfabeto deve conseguir ler e entender o conteúdo
-- Score Flesch abaixo de 60 = REPROVAR e reescrever
-- NUNCA entregar conteúdo com Flesch abaixo de 60
+**🎯 LEGIBILIDADE:**
+- Frases curtas e diretas, palavras comuns, termo técnico sempre explicado na primeira vez em que aparece.
+- A meta numérica de legibilidade (fórmula de Flesch adaptada ao idioma) é definida pelo perfil de regras do projeto e conferida pelo analisador do sistema; não invente nem declare pontuação.
+- Se o texto estiver acima do nível do leitor, reescreva com palavras mais simples, sem perder precisão.
 
 **LINGUAGEM DO DIA-A-DIA:**
 - ❌ "O jurisdicionado deve impetrar" → ✅ "Você precisa entrar com"
@@ -364,19 +352,17 @@ export function buildVernizDNASection(config: VernizConfig): string {
 - ❌ "Prerrogativa" → ✅ "Direito"
 - ❌ "Fulcral" → ✅ "Importante"
 
-**META-DESCRIPTION OBRIGATÓRIA:**
-- NUNCA entregar conteúdo sem meta-description
-- Sempre gerar <!-- META_DESCRIPTION: ... --> com 145-160 caracteres
+**META-DESCRIPTION:**
+- Entregar meta-description no campo que o executor pedir, fiel ao conteúdo e sem promessa; o tamanho segue o perfil de regras do projeto.
 
-**LINKS EXTERNOS OBRIGATÓRIOS (mínimo 2):**
-- Sempre incluir 2-3 links para fontes oficiais (.gov, .edu, instituições)
+**LINKS EXTERNOS:**
+- Incluir links para fontes oficiais ou autoritativas (órgãos públicos, instituições de ensino) apenas quando elas existirem no material fornecido ou tiverem endereço comprovado; nunca invente URL. Quantidade segue o perfil de regras do projeto.
 - Formato: <a href="URL" target="_blank" rel="noopener noreferrer">texto</a>
 
-**DESMITIFICAR O SISTEMA:**
-- Explique COMO funciona, não apenas O QUE é
-- Mostre os bastidores que ninguém conta
-- Use padrões: "O que ninguém te conta é que...", "Na prática, o que acontece de verdade é..."
-- Para conceitos complexos, use analogias do cotidiano
+**EXPLICAR COMO FUNCIONA:**
+- Explique COMO funciona, não apenas O QUE é, com base no material fornecido
+- Sem promessa de "bastidores" ou "o que ninguém conta" (isso é isca de clique e não se sustenta em fonte)
+- Para conceitos complexos, use analogias do cotidiano, identificadas como analogia
 
 **ESTRUTURA DE EXPLICAÇÃO para termos técnicos:**
 [TERMO] (em português claro: [explicação])
@@ -384,18 +370,18 @@ Na prática, isso significa que [consequência real para o leitor].
 💡 Exemplo do dia a dia: [analogia com situação comum]
 
 **TOM CONSULTIVO-PRÓXIMO:**
-- Como se estivesse explicando para um amigo inteligente
-- Frases-gatilho: "Olha, na real...", "Vou ser direto com você:", "Se tivesse que te dar um conselho:"
+- Como se estivesse explicando para um amigo inteligente, com respeito e sem condescendência.
+- Não use frases-fórmula repetidas de um texto para outro (por exemplo, o mesmo "Vou ser direto com você" em todo artigo): variar a forma de abrir e de falar com o leitor.
 
-### REGRA 80/20 - LEI 9.610/98:
-- **20% BASE ORIGINAL**: Dados, citações diretas com aspas, fatos verificáveis
-- **80% REESCRITA**: Análise, contexto, linguagem própria, comparações, exemplos
+### DIREITOS AUTORAIS (Lei 9.610/98, no Brasil):
+- Não existe percentual legal de "80/20": o cuidado é não reproduzir a redação da fonte.
+- Reescreva com palavras e estrutura próprias; cite trechos curtos entre aspas, com autor e fonte; acrescente contexto verificável, nunca dado inventado.
 
 ### PROIBIÇÕES ABSOLUTAS:
 1. ❌ Palavras vazias: "incrível", "revolucionário", "o melhor", "único"
 2. ❌ Promessas irreais: "garantido", "100% seguro", "sem risco"
 3. ❌ Termos técnicos SEM explicar
-4. ❌ Parágrafos > 4 linhas
+4. ❌ Parágrafos longos demais para a tela do celular (uma ideia por parágrafo)
 5. ❌ Iniciar com "De acordo com" ou "Segundo"
 6. ❌ CTAs genéricos: "clique aqui", "saiba mais"
 
@@ -413,7 +399,7 @@ Na prática, isso significa que [consequência real para o leitor].
     section += `\n- **Vocabulário-chave**: ${dnaEntry.vocabulary.join(', ')}`;
     section += `\n- **CTA padrão do gatilho**: "${dnaEntry.cta}"`;
     section += `\n- **Estilo de imagem**: ${dnaEntry.imageStyle}`;
-    section += `\n\n**REGRA**: Adapte TODO o conteúdo ao tom "${dnaEntry.tone}" e use o vocabulário-chave naturalmente.`;
+    section += `\n\n**REGRA**: Adapte o tom a "${dnaEntry.tone}" apenas na medida em que os fatos sustentarem. O vocabulário-chave é sugestão: não use adjetivo de indignação, ironia ou celebração sem fonte, e nunca no lugar de um fato.`;
   }
   // Add disclaimers
   if (nichoDetectado.disclaimers.length > 0) {
@@ -443,13 +429,13 @@ Na prática, isso significa que [consequência real para o leitor].
   if (config.socialLinktree) socialLinks.push(`Links: ${config.socialLinktree}`);
 
   if (socialLinks.length > 0) {
-    section += `\n\n### 📱 REDES SOCIAIS - CITAR TODAS OBRIGATORIAMENTE:`;
+    section += `\n\n### 📱 REDES SOCIAIS OFICIAIS DA MARCA (usar com moderação):`;
     socialLinks.forEach(l => { section += `\n- ${l}`; });
-    section += `\n\n**REGRAS DE INSERÇÃO DE REDES SOCIAIS (OBRIGATÓRIO):**`;
-    section += `\n- TODAS as redes sociais listadas acima DEVEM ser citadas no artigo`;
-    section += `\n- Criar seção "Acompanhe nossos canais" ou "Siga-nos" antes da conclusão`;
-    section += `\n- Distribuir CTAs sociais ao longo do texto quando contextualmente relevante:`;
-    section += `\n  • Instagram: "Acompanhe dicas diárias no nosso Instagram"`;
+    section += `\n\n**REGRAS DE INSERÇÃO DE REDES SOCIAIS:**`;
+    section += `\n- Cite uma rede só quando houver motivo natural no texto; não é preciso citar todas`;
+    section += `\n- Um convite discreto antes do fecho basta (o sistema também distribui os canais do projeto)`;
+    section += `\n- Se citar uma rede, diga o que a pessoa de fato encontra lá, sem prometer frequência ou resultado. Exemplos de forma:`;
+    section += `\n  • Instagram: "Acompanhe no Instagram"`;
     section += `\n  • YouTube: "Assista nossos vídeos explicativos no YouTube"`;
     section += `\n  • LinkedIn: "Conecte-se conosco no LinkedIn"`;
     section += `\n  • TikTok: "Veja conteúdos rápidos no TikTok"`;
@@ -481,7 +467,7 @@ Na prática, isso significa que [consequência real para o leitor].
     // CTA de autoridade (após corpo principal)
     section += `\n\n**Bloco de autoridade** (inserir após seção de maior valor técnico como <blockquote>):`;
     if (config.empresaNome) {
-      section += `\nCriar uma citação de autoridade na voz da empresa ${config.empresaNome}`;
+      section += `\nApresentar ${config.empresaNome} só com os dados fornecidos (sem inventar credenciais, casos, números ou depoimentos)`;
       if (config.empresaEndereco) section += `\n- ${config.empresaEndereco}`;
     }
 
@@ -517,13 +503,18 @@ Na prática, isso significa que [consequência real para o leitor].
 
   // Padrão de publicidade (Provimento 205/2021 CFOAB). Espelha COMPLIANCE_RULES de
   // publication-quality.ts: o que o redator escrever aqui fora da regra é bloqueado na publicação.
-  section += `\n\n### ⚖️ PADRÃO DE PUBLICIDADE (o texto é BLOQUEADO na publicação se violar):`;
+  // Regras de publicidade profissional: valem como CUIDADO no segmento jurídico; o portão do projeto decide se só avisa ou se segura (modo rígido).
+  if (nichoDetectado.nicho === 'juridico') {
+  section += `\n\n### ⚖️ PADRÃO DE PUBLICIDADE (cuidado do segmento jurídico; o portão de conformidade do projeto avisa ou, em modo rígido, segura a publicação):`;
   section += `\n- NUNCA usar chamada imperativa de captação: "fale agora", "ligue agora", "chame no WhatsApp", "mande um WhatsApp", "contrate agora", "entre em contato agora", "clique aqui e fale"`;
   section += `\n- NUNCA usar urgência comercial ou gratuidade como isca: "não perca tempo", "última chance", "vagas limitadas", "consulta gratuita", "avaliação gratuita", "sem custo", "sem compromisso"`;
   section += `\n- NUNCA prometer ou garantir resultado: "garantimos", "resultado garantido", "sucesso garantido", "ganhe sua causa", "resolve seu caso"`;
   section += `\n- NUNCA usar superlativo ou comparação: "o melhor advogado", "o maior escritório", "referência nacional", "diferente dos outros escritórios"`;
   section += `\n- NUNCA explorar medo, prejuízo ou desespero do leitor como motivo para contato`;
   section += `\n- Convites de contato são SÓBRIOS e informativos: "Converse com a nossa equipe", "Conheça os canais de atendimento", "Tire suas dúvidas com um advogado"`;
+  } else {
+    section += `\n\n### ⚠️ CUIDADO DE COMUNICAÇÃO (aviso): sem promessa de resultado, sem urgência ou escassez inventada, sem comparação depreciativa e sem explorar medo; convites de contato sóbrios e informativos.`;
+  }
 
   // Add writing prohibitions (RDM Standard)
   section += `\n\n### ❌ PROIBIÇÕES ABSOLUTAS DE ESCRITA:`;
@@ -531,23 +522,23 @@ Na prática, isso significa que [consequência real para o leitor].
   section += `\n- NUNCA usar "Vale ressaltar que..." ou "Cabe mencionar..."`;
   section += `\n- NUNCA escrever parágrafos com mais de 4 linhas`;
   section += `\n- NUNCA usar placeholders como "(URL_DA_SUA_PAGINA)" — use as URLs reais do projeto`;
-  section += `\n- NUNCA deixar o artigo sem pelo menos 3 CTAs`;
+  section += `\n- Não há mínimo de CTAs: os canais e chamadas do projeto são distribuídos pelo sistema; no texto, só um convite natural ao próximo passo`;
   section += `\n- NUNCA começar com definição: "X é uma área que..."`;
   section += `\n- NUNCA usar "Este guia vai te mostrar..."`;
   section += `\n- NUNCA iniciar com "De acordo com" ou "Segundo"`;
 
   // Add article structure guidelines
-  section += `\n\n### 📋 ESTRUTURA OBRIGATÓRIA DO ARTIGO:`;
-  section += `\n1. **GANCHO** (2 parágrafos): Começar com a dor/situação REAL do leitor`;
+  section += `\n\n### 📋 ESTRUTURA SUGERIDA DO ARTIGO (adapte ao tema; nem toda parte é obrigatória):`;
+  section += `\n1. **ABERTURA** (curta): a situação real do leitor descrita de forma factual, sem dramatizar, já com a resposta ao que ele procura`;
   section += `\n2. **CONTEXTO**: Validar que o problema é sério com dado ou lei`;
   section += `\n3. Bloco de orientação (HTML natural, sem rótulo)`;
   section += `\n4. **CORPO PRINCIPAL**: H2s como perguntas do leitor + listas + boxes de atenção`;
   section += `\n5. Bloco de autoridade (HTML natural, sem rótulo)`;
   section += `\n6. **APROFUNDAMENTO**: Prazos, variações, jurisprudência`;
   section += `\n7. Bloco de contato (HTML natural, sem rótulo)`;
-  section += `\n8. **ERROS COMUNS**: 3-5 erros que fazem perder direitos`;
+  section += `\n8. **ERROS COMUNS**: só os que existem de fato para o tema e podem ser sustentados (sem número fixo)`;
   section += `\n9. Bloco de redes sociais (HTML natural, sem rótulo)`;
-  section += `\n10. **FAQ**: Mínimo 5 perguntas`;
+  section += `\n10. **FAQ**: só com perguntas que o público faz e o texto sabe responder (sem mínimo fixo)`;
   section += `\n11. Bloco de fechamento (HTML natural, sem rótulo)`;
   section += `\n\n⚠️ LEMBRETE FINAL: NUNCA exibir "[CTA #1]", "[CTA #2]", "[CTA #3]", "[CTA #4]", "[CTA #5]" ou qualquer rótulo técnico visível no artigo.`;
 

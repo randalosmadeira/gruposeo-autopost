@@ -3,6 +3,7 @@ import {paidLockedServe} from '../_shared/nexus-spend-lock.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
+import { humanVoiceBlock } from "../_shared/human-voice-guide.ts";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 
 const corsHeaders = {
@@ -80,7 +81,7 @@ function prompts(type: RegenerateType, input: { keyword: string; title: string; 
     return [
       {
         role: "system" as const,
-        content: "Você edita títulos SEO. Preserve o assunto e os fatos do texto. Não invente dados, decisões, números, nomes ou promessas. Responda somente com um único título, sem aspas, sem markdown e com no máximo 60 caracteres.",
+        content: `Você edita títulos. Preserve o assunto e os fatos do texto. Não invente dados, decisões, números, nomes ou promessas. Sem fórmula de manchete, sem exagero e sem repetir o molde de títulos anteriores. Responda somente com um único título, sem aspas, sem markdown, no idioma do conteúdo e, de preferência, com até 60 caracteres (cabe na exibição do buscador; se o conteúdo exigir mais, priorize clareza).\n${humanVoiceBlock(input.language, { mode: "micro" })}`,
       },
       {
         role: "user" as const,
@@ -92,7 +93,7 @@ function prompts(type: RegenerateType, input: { keyword: string; title: string; 
     return [
       {
         role: "system" as const,
-        content: "Você cria meta-descrições SEO factualmente fiéis. Não invente fatos, resultados, garantias ou números. Responda somente com a meta-descrição, sem aspas e sem markdown, idealmente entre 140 e 160 caracteres.",
+        content: `Você cria meta-descrições factualmente fiéis. Não invente fatos, resultados, garantias ou números. Sem promessa e sem fórmula de chamada. Responda somente com a meta-descrição, sem aspas e sem markdown, no idioma do conteúdo e, de preferência, entre 140 e 160 caracteres.\n${humanVoiceBlock(input.language, { mode: "micro" })}`,
       },
       {
         role: "user" as const,
@@ -103,7 +104,7 @@ function prompts(type: RegenerateType, input: { keyword: string; title: string; 
   return [
     {
       role: "system" as const,
-      content: "Você é editor de conteúdo. Reescreva somente com base no material fornecido. Preserve fatos, links, citações e sentido jurídico. Não invente fontes, jurisprudência, dados, pessoas ou eventos. Entregue somente HTML sem bloco markdown, mantendo headings, parágrafos, listas e links úteis.",
+      content: `Você é editor de conteúdo. Reescreva somente com base no material fornecido. Preserve fatos, links, citações e o sentido original (inclusive o sentido técnico ou jurídico, quando houver). Não invente fontes, jurisprudência, dados, pessoas ou eventos. Entregue somente HTML sem bloco markdown, mantendo headings, parágrafos, listas e links úteis.\n${humanVoiceBlock(input.language, { mode: "compact" })}`,
     },
     {
       role: "user" as const,

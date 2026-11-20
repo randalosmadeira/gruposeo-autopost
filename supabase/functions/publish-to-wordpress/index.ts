@@ -16,6 +16,7 @@ import { mapSegmentToSector } from "../_shared/sector-config.ts";
 import { isPluginModeProject, pluginRequest, resolvePluginKey, resolvePluginNamespace } from "../_shared/wordpress-plugin-client.ts";
 import { syncHreflangForTranslationGroup } from "../_shared/hreflang-sync.ts";
 import { HERO_MAX_BYTES } from "../_shared/image-policy.ts";
+import { checkCurationGate, gateAdvisory, gateRefusalBody } from "../_shared/curadoria-gate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -272,6 +273,14 @@ Deno.serve(async (req: Request) => {
         request_id: requestId,
       }, 409);
     }
+
+    // Portão de curadoria (20/11/2026): artigo ainda não publicado só sai com curadoria `aprovado` e atual (imagem repetida ou ausente bloqueia).
+    // Interruptor CURADORIA_GATE (padrão ligado; `aviso` só informa). Artigo já publicado não passa por aqui. Ver _shared/curadoria-gate.ts.
+    const curationGate = await checkCurationGate(admin, article, { publishStatus: body.publishStatus || "publish" });
+    if (curationGate.pending && !curationGate.allowed) {
+      return json(gateRefusalBody(curationGate, requestId), 409);
+    }
+    const curationAdvisory = gateAdvisory(curationGate);
 
     // Piloto Automático (20/11/2026): se o perfil do projeto liga o "automático", roda a rodada RÁPIDA (sem IA, sem gasto) antes de publicar.
     // O resultado é um rascunho de revisão; falha ou demora aqui nunca impede a publicação.
@@ -631,6 +640,7 @@ Deno.serve(async (req: Request) => {
       hreflangSync,
       completeness: completenessReport ? { ...completenessReport, summary: describeCompleteness(completenessReport) } : null,
       autopilot,
+      curadoria: curationAdvisory,
       request_id: requestId,
     });
   } catch (error) {

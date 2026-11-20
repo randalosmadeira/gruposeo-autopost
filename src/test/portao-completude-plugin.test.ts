@@ -167,21 +167,21 @@ describe('portão de completude: PHP do plugin 3.17.0 (a sintaxe PHP NÃO foi ex
     expect(MAIN).toContain("require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-completeness.php';");
   });
 
-  it('versão 3.18.0 em todos os lugares que travam a versão; plugin-version com a nova função; Zica antigo/plugin antigo continuam compatíveis', () => {
-    expect(MAIN).toContain('Version: 3.18.0');
-    expect(MAIN).toContain("define('ZICA_POSTS_VERSION', '3.18.0');");
-    expect(read(`${PLUGIN}/version.json`)).toContain('"version": "3.18.0"');
+  it('versão 3.19.0 em todos os lugares que travam a versão; plugin-version com a nova função; Zica antigo/plugin antigo continuam compatíveis', () => {
+    expect(MAIN).toContain('Version: 3.19.0');
+    expect(MAIN).toContain("define('ZICA_POSTS_VERSION', '3.19.0');");
+    expect(read(`${PLUGIN}/version.json`)).toContain('"version": "3.19.0"');
     expect(read(`${PLUGIN}/version.json`)).toContain('completeness_gate');
     const readme = read(`${PLUGIN}/readme.txt`);
-    expect(readme).toContain('Stable tag: 3.18.0');
+    expect(readme).toContain('Stable tag: 3.19.0');
     expect(readme).toMatch(/== 3\.17\.0 ==[\s\S]*Portão de completude[\s\S]*== 3\.16\.2 ==/);
-    expect(read('src/lib/plugin-version.ts')).toContain("PLUGIN_VERSION='3.18.0'");
-    expect(read('supabase/functions/_shared/plugin-version.ts')).toContain('PLUGIN_VERSION="3.18.0"');
+    expect(read('src/lib/plugin-version.ts')).toContain("PLUGIN_VERSION='3.19.0'");
+    expect(read('supabase/functions/_shared/plugin-version.ts')).toContain('PLUGIN_VERSION="3.19.0"');
     expect(read('supabase/functions/_shared/plugin-version.ts')).toContain('"completeness_gate"');
     expect(read('supabase/functions/_shared/plugin-version.ts')).toMatch(/PLUGIN_MINIMUM_VERSION="3\.12\.0"/); // quem não atualizou continua aceito
-    expect(read('scripts/build-wordpress-downloads.mjs')).toContain("outputName: 'zica-posts-3.18.0.zip'");
+    expect(read('scripts/build-wordpress-downloads.mjs')).toContain("outputName: 'zica-posts-3.19.0.zip'");
     expect(read('scripts/build-wordpress-downloads.mjs')).toContain('includes/class-zica-posts-completeness.php');
-    expect(read('.github/workflows/zica-posts-package.yml')).toContain("grep -q 'Version: 3.18.0'");
+    expect(read('.github/workflows/zica-posts-package.yml')).toContain("grep -q 'Version: 3.19.0'");
   });
 });
 

@@ -9,6 +9,7 @@
 
 import { type TaskType } from "../ai-orchestrator.ts";
 import { getOrchestratorForUser } from "../byok-resolver.ts";
+import { humanVoiceBlock } from "../human-voice-guide.ts";
 import { buildNexusEditorialPolicy, buildNexusEvidenceContext, normalizeWordProfile, EDITORIAL_WORD_BANDS, type ConversionBrief } from "../nexus-editorial.ts";
 import { type SectorType, type SectorConfig, SECTOR_CONFIGS, mapSegmentToSector, buildSectorPromptSection } from "../sector-config.ts";
 
@@ -125,7 +126,8 @@ FAQ: ${config.includeFaq ? `somente se útil, até ${config.faqCount} perguntas 
 Tabela: ${config.includeTable ? "quando há comparação fundamentada" : "não forçar"}.
 Listas: ${config.includeList ? "quando facilitarem a leitura" : "não forçar"}.
 Conclusão: ${config.includeConclusion ? "síntese e ação coerente" : "não forçar seção"}.
-Se faltar uma fonte primária indispensável, retorne somente ZICA_NEEDS_PRIMARY_SOURCE: <necessidade>.`;
+Se faltar uma fonte primária indispensável, retorne somente ZICA_NEEDS_PRIMARY_SOURCE: <necessidade>.
+${humanVoiceBlock(config.language, { mode: "full" })}`;
 }
 
 function getEditorPrompt(config: AgentPipelineConfig, sector: SectorConfig): string {
@@ -135,7 +137,9 @@ Mantenha os fatos e links sustentados. Não transforme números vagos em número
 Responda objeções com condições e alternativas; urgência só com suporte factual.
 Não alegue Flesch calculado ou qualidade medida por impressão subjetiva.
 Se faltar fonte indispensável, retorne somente ZICA_NEEDS_PRIMARY_SOURCE: <necessidade>.
-Remova marcadores técnicos visíveis e metadados internos, sem H1.`;
+Remova marcadores técnicos visíveis e metadados internos, sem H1.
+Tire do texto as marcas de escrita automática (abertura genérica, «não é apenas X, é Y», fecho de resumo, elogio sem prova, atribuição a "especialistas" sem nome) sem acrescentar nenhum fato novo.
+${humanVoiceBlock(config.language, { mode: "compact" })}`;
 }
 
 function getSEOReviewerPrompt(config: AgentPipelineConfig, sector: SectorConfig): string {
