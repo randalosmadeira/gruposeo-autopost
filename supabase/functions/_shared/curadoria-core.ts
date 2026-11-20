@@ -110,6 +110,8 @@ export interface CurationContext {
   candidates: LinkCandidate[];
   /** chave normalizada da imagem -> ids dos artigos do projeto que a usam (todos os status) */
   imageUsage: Map<string, string[]>;
+  /** quantos artigos do projeto podem dividir a mesma imagem (padrão 1; portais de notícia podem permitir mais) */
+  maxImageUses?: number;
 }
 
 // ---------------------------------------------------------------------------------------------------------------- texto
@@ -194,7 +196,7 @@ const fileNameTokens = (url: string): string[] => {
   return tokens(name.replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ')).filter((t) => !/\d/.test(t));
 };
 
-export function checkImage(a: CurationArticle, usage: Map<string, string[]>): ImageReport {
+export function checkImage(a: CurationArticle, usage: Map<string, string[]>, maxUses = 1): ImageReport {
   const url = String(a.featured_image_url || '').trim();
   const key = imageKey(url);
   const detalhes: string[] = [];
@@ -206,8 +208,10 @@ export function checkImage(a: CurationArticle, usage: Map<string, string[]>): Im
   const usos = ids.size;
   const cfg = (a.config || {}) as Any;
   const geo = (cfg.image_geo && typeof cfg.image_geo === 'object' ? cfg.image_geo : {}) as Any;
-  let estado: ImageState = usos > 1 ? 'repetida' : 'ok';
-  if (usos > 1) detalhes.push(`A mesma imagem está em ${usos} artigos deste projeto.`);
+  const limite = Math.max(1, Math.floor(maxUses) || 1);
+  let estado: ImageState = usos > limite ? 'repetida' : 'ok';
+  if (usos > limite) detalhes.push(`A mesma imagem está em ${usos} artigos deste projeto (o limite é ${limite}).`);
+  else if (usos > 1) detalhes.push(`A mesma imagem é dividida por ${usos} artigos (dentro do limite de ${limite} deste projeto).`);
 
   const altText = String(geo.alt_text || '').trim();
   const alt: ImageReport['alt'] = altText ? 'ok' : String(a.title || '').trim() ? 'do_titulo' : 'ausente';
@@ -496,7 +500,7 @@ export async function curateArticle(a: CurationArticle, c: CurationContext): Pro
     { article: { id: a.id, title: a.title || '', keyword: a.keyword || '', excerpt: a.excerpt || '', content: a.content || '', config: a.config || {} }, project: c.project, rules, candidates: [], sources: [], cta: (c.project as Any)?.cta_conclusao ? String((c.project as Any).cta_conclusao) : null },
     { title: a.title || '', content: a.content || '', excerpt: a.excerpt || '' },
   ).analysis.structure.hasCTA === true : false;
-  const img = checkImage(a, c.imageUsage);
+  const img = checkImage(a, c.imageUsage, c.maxImageUses ?? 1);
   const minLinks = rules.rules.internal_links.level !== 'desligado' ? (rules.rules.internal_links.value ?? null) : null;
   const byModule: Record<CurationModule, CurationItem> = {
     perfil: checkPerfil(a, c, text),

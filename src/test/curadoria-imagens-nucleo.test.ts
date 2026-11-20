@@ -59,3 +59,25 @@ describe('curadoria-imagens: pedido ao generate-image e parada', () => {
     expect(stopReasonFor(500, { code: 'image_processing_failed' })).toBeNull();
   });
 });
+
+import { checkImage } from '../../supabase/functions/_shared/curadoria-core.ts';
+
+describe('curadoria-imagens: lista escolhida, estilo e limite de usos por imagem', () => {
+  it('com lista de ids, só gera para eles e na ordem dada (ignora a ordem por status)', () => {
+    const list = [art({ id: 'a', status: 'ready' }), art({ id: 'b', status: 'ready' }), art({ id: 'c', status: 'ready' })];
+    expect(orderTargets(list, [], ['p1'], ['c', 'a']).map((x) => x.id)).toEqual(['c', 'a']);
+  });
+  it('estilo vai no pedido (cortado em 700) e some quando vazio', () => {
+    expect(buildImageRequest(art(), 'medium', '  Ilustração minimalista  ').imageStyle).toBe('Ilustração minimalista');
+    expect('imageStyle' in buildImageRequest(art(), 'medium', '   ')).toBe(false);
+    expect(buildImageRequest(art(), 'medium', 'x'.repeat(900)).imageStyle?.length).toBe(700);
+  });
+  const imgArt = { id: 'a1', title: 'Título', featured_image_url: 'https://x.supabase.co/storage/v1/object/public/article-images/u/abc.webp', config: {} } as never;
+  const usage = (n: number) => new Map([['x.supabase.co/storage/v1/object/public/article-images/u/abc', Array.from({ length: n - 1 }, (_, i) => `o${i}`)]]);
+  it('limite padrão 1: a mesma imagem em 2 artigos é repetida', () => { expect(checkImage(imgArt, usage(2)).estado).toBe('repetida'); });
+  it('limite 3: até 3 artigos na mesma imagem passam; 4 é repetida', () => {
+    expect(checkImage(imgArt, usage(3), 3).estado).not.toBe('repetida');
+    expect(checkImage(imgArt, usage(4), 3).estado).toBe('repetida');
+    expect(checkImage(imgArt, usage(1), 3).estado).not.toBe('repetida');
+  });
+});

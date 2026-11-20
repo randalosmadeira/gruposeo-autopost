@@ -168,6 +168,7 @@ export async function loadCurationContext(admin: Admin, project: ProjectBase, no
     return out;
   });
   const usageRows = (await loadAll<{ id: string; featured_image_url: string | null }>(admin, 'articles', 'id,featured_image_url', { col: 'project_id', val: project.id }, UNBOUNDED)).rows;
+  const maxImageUses = await loadMaxImageUses(admin, project.id);
   const candidates = (await safe(() => loadLinkCandidates(admin, project.id, ''))) || [];
   const origin = originOf(row);
   const rules = resolveRuleProfile({ projectIdentity: row.editorial_identity, projectStrategy: row.nexus_strategy && typeof row.nexus_strategy === 'object' ? row.nexus_strategy as Rec : null, articleConfig: null, prompts: [] }) as RuleProfile;
@@ -177,9 +178,16 @@ export async function loadCurationContext(admin: Admin, project: ProjectBase, no
       now: nowMs, project: row, profile, rules, funnel, taxonomy, geo, prompts, market, radar,
       indexation: null, backlinks: null, inbound: null,
       siteHost: origin ? new URL(origin).hostname.replace(/^www\./, '') : null,
-      candidates, imageUsage: buildImageUsage(usageRows),
+      candidates, imageUsage: buildImageUsage(usageRows), maxImageUses,
     },
   };
+}
+
+/** limite de artigos por imagem deste projeto (curadoria_project_rules); sem regra ou sem a tabela = 1 */
+export async function loadMaxImageUses(admin: Admin, projectId: string): Promise<number> {
+  const r = await safe(async () => { const q = await admin.from('curadoria_project_rules').select('max_image_uses').eq('project_id', projectId).maybeSingle(); if (q.error) throw q.error; return q.data; });
+  const n = Number((r as Rec | null)?.max_image_uses);
+  return Number.isFinite(n) && n >= 1 && n <= 10 ? Math.floor(n) : 1;
 }
 
 async function loadPrompts(admin: Admin, projectId: string): Promise<{ prompts: PromptRef[]; sets: number }> {
@@ -308,6 +316,7 @@ async function imagens(admin: Admin, ctx: CuradoriaCtx, project: ProjectBase): P
   const offset = num(ctx.body.offset, 0, 0, 100_000);
   const arts = await loadLight(admin, project.id);
   const usage = buildImageUsage(arts);
+  const maxUses = await loadMaxImageUses(admin, project.id);
   const porStatus: Record<string, { artigos: number; com_imagem: number; sem_imagem: number; em_imagem_repetida: number; imagens_distintas: number }> = {};
   const distintas: Record<string, Set<string>> = {};
   for (const a of arts) {
@@ -318,11 +327,11 @@ async function imagens(admin: Admin, ctx: CuradoriaCtx, project: ProjectBase): P
     const k = imageKey(a.featured_image_url);
     if (!k) { porStatus[s].sem_imagem++; continue; }
     porStatus[s].com_imagem++; distintas[s].add(k);
-    if ((usage.get(k) || []).length > 1) porStatus[s].em_imagem_repetida++;
+    if ((usage.get(k) || []).length > maxUses) porStatus[s].em_imagem_repetida++;
   }
   for (const s of Object.keys(porStatus)) porStatus[s].imagens_distintas = distintas[s].size;
   const byId = new Map(arts.map((a) => [a.id, a]));
-  const grupos = [...usage.entries()].filter(([, ids]) => ids.length > 1).map(([k, ids]) => {
+  const grupos = [...usage.entries()].filter(([, ids]) => ids.length > maxUses).map(([k, ids]) => {
     const st: Record<string, number> = {};
     for (const id of ids) { const s = byId.get(id)?.status ?? '?'; st[s] = (st[s] || 0) + 1; }
     return { chave: k.startsWith('data:') ? 'imagem embutida (base64)' : k, exemplo_url: shortUrl(byId.get(ids[0])?.featured_image_url), usos: ids.length, por_status: st, usada_em_publicado: (st.published || 0) > 0 };
@@ -330,13 +339,13 @@ async function imagens(admin: Admin, ctx: CuradoriaCtx, project: ProjectBase): P
   const precisam = arts.filter((a) => a.status !== 'published' && (CURATED_STATUSES as readonly string[]).includes(a.status)).map((a) => {
     const k = imageKey(a.featured_image_url);
     const usos = k ? (usage.get(k) || []).length : 0;
-    return { a, k, usos, motivo: !k ? 'ausente' : usos > 1 ? 'repetida' : null };
+    return { a, k, usos, motivo: !k ? 'ausente' : usos > maxUses ? 'repetida' : null };
   }).filter((x) => x.motivo).sort((x, y) => (STATUS_PRIORITY[x.a.status] ?? 9) - (STATUS_PRIORITY[y.a.status] ?? 9) || (x.motivo === 'ausente' ? 0 : 1) - (y.motivo === 'ausente' ? 0 : 1) || y.usos - x.usos || String(x.a.created_at).localeCompare(String(y.a.created_at)));
   return ok({
     project_id: project.id, total_artigos: arts.length, imagens_distintas: usage.size, artigos_sem_imagem: arts.filter((a) => !imageKey(a.featured_image_url)).length,
     por_status: porStatus, rotulos: STATUS_LABEL, mais_repetidas: grupos.slice(0, 15), grupos_repetidos: grupos.length,
     precisam_imagem_nova: { total: precisam.length, offset, limit, artigos: precisam.slice(offset, offset + limit).map((x, i) => ({ prioridade: offset + i + 1, article_id: x.a.id, title: x.a.title, keyword: x.a.keyword, status: x.a.status, status_rotulo: STATUS_LABEL[x.a.status] ?? x.a.status, motivo: x.motivo, usos: x.usos })) },
-    regra: 'Imagem repetida (a mesma imagem em mais de 1 artigo do projeto, de qualquer status) ou ausente bloqueia a publicação. Prioridade: Em criação, depois Na fila, depois Finalizado.',
+    regra: `Imagem repetida (a mesma imagem em mais de ${maxUses} artigo(s) do projeto, de qualquer status) ou ausente bloqueia a publicação. Prioridade: Em criação, depois Na fila, depois Finalizado.`,
     normalizacao: 'A mesma imagem é reconhecida mesmo com parâmetros, versão derivada (-1200x675) ou rota de render do armazenamento.',
   });
 }

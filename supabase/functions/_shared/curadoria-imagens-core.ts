@@ -41,27 +41,32 @@ export const plainText = (html: string | null | undefined, max = 300): string =>
   String(html ?? '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 
 /** artigos elegíveis, na ordem: status (Em criação > Na fila > Finalizado), projeto na ordem pedida, mais antigo primeiro */
-export function orderTargets(articles: TargetArticle[], jobs: JobLite[], projectOrder: string[]): TargetArticle[] {
+export function orderTargets(articles: TargetArticle[], jobs: JobLite[], projectOrder: string[], onlyIds: string[] = []): TargetArticle[] {
   const done = new Set(jobs.filter((j) => j.status === 'ok').map((j) => j.article_id));
   const attempts = new Map<string, number>();
   for (const j of jobs) if (j.status === 'erro') attempts.set(j.article_id, (attempts.get(j.article_id) || 0) + 1);
   const rank = (s: string) => { const i = (STATUS_ORDER as readonly string[]).indexOf(s); return i < 0 ? 99 : i; };
   const proj = (p: string) => { const i = projectOrder.indexOf(p); return i < 0 ? 99 : i; };
+  const picked = new Map(onlyIds.map((id, i) => [id, i]));
   return articles
+    .filter((a) => !picked.size || picked.has(a.id))
     .filter((a) => a.status !== 'published' && (STATUS_ORDER as readonly string[]).includes(a.status))
     .filter((a) => plainText(a.content, MIN_TEXT_CHARS + 1).length >= MIN_TEXT_CHARS && String(a.title || '').trim())
     .filter((a) => !done.has(a.id) && (attempts.get(a.id) || 0) < MAX_ATTEMPTS_PER_ARTICLE)
-    .sort((x, y) => rank(x.status) - rank(y.status) || proj(x.project_id) - proj(y.project_id) || String(x.created_at).localeCompare(String(y.created_at)));
+    .sort((x, y) => picked.size
+      ? (picked.get(x.id) ?? 0) - (picked.get(y.id) ?? 0)
+      : rank(x.status) - rank(y.status) || proj(x.project_id) - proj(y.project_id) || String(x.created_at).localeCompare(String(y.created_at)));
 }
 
 /**
  * corpo do pedido ao generate-image. `projectId` é necessário para a trava de gasto achar a organização (por artigo ela não acha);
  * `forceOriginalImage` (só vale em chamada interna) pula o banco de fotos, que é o que repetia a imagem.
  */
-export function buildImageRequest(a: TargetArticle, quality: 'low' | 'medium' | 'high' = 'medium') {
+export function buildImageRequest(a: TargetArticle, quality: 'low' | 'medium' | 'high' = 'medium', style = '') {
   return {
     title: String(a.title || '').slice(0, 200), keywords: String(a.keyword || '').slice(0, 200), context: plainText(a.content, 300),
     articleId: a.id, projectId: a.project_id, userId: a.user_id, moduleKey: MODULE_KEY, allowAiGeneration: true, forceOriginalImage: true, quality, aspectRatio: '16:9' as const,
+    ...(style.trim() ? { imageStyle: style.trim().slice(0, 700) } : {}),
   };
 }
 

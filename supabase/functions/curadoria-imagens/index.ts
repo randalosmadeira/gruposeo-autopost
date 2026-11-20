@@ -50,6 +50,9 @@ Deno.serve(async (req) => {
     const timeBudgetMs = num(body.timeBudgetMs, 90_000, 10_000, 120_000);
     const quality = body.quality === 'low' || body.quality === 'high' ? body.quality : 'medium';
     const dryRun = body.dryRun === true;
+    // estilo visual único do lote (ex.: ilustração minimalista) e lista fixa de artigos escolhidos pelo dono (na ordem dada)
+    const style = typeof body.style === 'string' ? body.style.trim().slice(0, 700) : '';
+    const onlyIds = Array.isArray(body.articleIds) ? (body.articleIds as unknown[]).filter(isUuid).slice(0, 300) : [];
 
     // 1) teto autorizado pelo dono e o que o lote já gastou
     const budget = await admin.from('curadoria_image_budget').select('cap_micros,enabled').eq('organization_id', organizationId).maybeSingle();
@@ -72,7 +75,7 @@ Deno.serve(async (req) => {
       if (r.error) throw r.error;
       articles.push(...((r.data || []) as TargetArticle[]));
     }
-    const targets = orderTargets(articles, jobs, projectOrder);
+    const targets = orderTargets(articles, jobs, projectOrder, onlyIds);
     const base = { organization_id: organizationId, teto_micros: capMicros, gasto_micros: spent, restante_micros: remainingMicros(capMicros, spent), estimativa_por_imagem_micros: estimate, elegiveis: targets.length };
     if (dryRun) return json({ ok: true, dry_run: true, ...base, proximos: targets.slice(0, 5).map((t) => ({ article_id: t.id, status: t.status, title: t.title })) });
 
@@ -95,7 +98,7 @@ Deno.serve(async (req) => {
       try {
         const res = await fetch(`${url}/functions/v1/generate-image`, {
           method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildImageRequest(t, quality)), signal: AbortSignal.timeout(140_000),
+          body: JSON.stringify(buildImageRequest(t, quality, style)), signal: AbortSignal.timeout(140_000),
         });
         status = res.status;
         resBody = (await res.json().catch(() => null)) as Record<string, unknown> | null;

@@ -85,9 +85,12 @@ export async function checkCurationGate(admin: Admin, article: GateArticle, opts
     if (estado !== 'aprovado') return verdict(mode, 'precisa_correcao', faltando, estado);
     // conferência ao vivo: outro artigo do projeto com exatamente a mesma imagem (URL idêntica)
     if (article.project_id && typeof article.featured_image_url === 'string' && !/^data:/i.test(article.featured_image_url)) {
-      const dup = await admin.from('articles').select('id').eq('project_id', article.project_id).eq('featured_image_url', article.featured_image_url).neq('id', article.id).limit(1);
+      const rule = await admin.from('curadoria_project_rules').select('max_image_uses').eq('project_id', article.project_id).maybeSingle();
+      const rn = rule.error ? 1 : Number((rule.data as Rec | null)?.max_image_uses);
+      const maxUses = Number.isFinite(rn) && rn >= 1 && rn <= 10 ? Math.floor(rn) : 1;
+      const dup = await admin.from('articles').select('id').eq('project_id', article.project_id).eq('featured_image_url', article.featured_image_url).neq('id', article.id).limit(maxUses);
       if (dup.error) throw dup.error;
-      if (Array.isArray(dup.data) && dup.data.length) return verdict(mode, 'imagem_repetida_ao_vivo', faltando, estado);
+      if (Array.isArray(dup.data) && dup.data.length >= maxUses) return verdict(mode, 'imagem_repetida_ao_vivo', faltando, estado);
     }
     return verdict(mode, 'ok', [], estado);
   } catch {
