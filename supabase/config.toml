@@ -165,6 +165,10 @@ verify_jwt = false
 [functions.radar-run]
 verify_jwt = false
 
+# curadoria-imagens: lote de imagens originais para artigos barrados por imagem repetida/ausente; sem login, so a chave de automacao propria `curadoria-imagens` (automation_ingress_keys); teto proprio em curadoria_image_budget
+[functions.curadoria-imagens]
+verify_jwt = false
+
 # site-overview: Visao Geral e Estrutura do negocio (Google, GA4, cliques de contato, arvore do dominio); login e papel conferidos dentro da funcao
 [functions.site-overview]
 verify_jwt = true
