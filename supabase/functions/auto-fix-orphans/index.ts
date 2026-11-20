@@ -16,13 +16,15 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
 import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
+import { scopedServe } from "../_shared/nexus-spend-lock.ts";
+import { bindSpendIdentity } from "../_shared/spend-gate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-Deno.serve(async (req) => {
+scopedServe(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -63,6 +65,7 @@ Deno.serve(async (req) => {
     for (const project of projects) {
       let orchestrator = getOrchestrator();
       try {
+        bindSpendIdentity({ projectId: project.id }); // Teto Diário de Gasto: cada projeto do lote paga na sua organização (no-op com o bloqueio total)
         orchestrator = await getOrchestratorForUser(project.user_id);
       } catch {
         console.warn(`[OrphanFixer v4] BYOK failed for ${project.user_id}, using defaults`);

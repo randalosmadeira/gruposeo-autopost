@@ -8,6 +8,10 @@ import { findPublicationResidues, repairPublicationResidues, resolveMetaDescript
 import { evaluateTitleQuality, findBrokenContactCtas, lookupPublishedSlug, normalizeSlugForLookup, repairBrokenContactCtas, repairCommonTitleTypos, repairSolicitationCtas } from "../_shared/publication-quality.ts";
 import { buildComplianceAdvisoryRecord, resolveComplianceMode, runComplianceCheck } from "../_shared/compliance-mode.ts";
 import { buildArticleJsonLd } from "../_shared/schema-builder.ts";
+import { buildSchemaPlan } from "../_shared/schema-completeness.ts";
+import { buildCompletenessRequest, compactReport, describeCompleteness, parseCompletenessReport } from "../_shared/plugin-completeness.ts";
+import { loadRuleProfile } from "../_shared/rules-loader.ts";
+import { sha256Hex } from "../_shared/auto-optimize-core.ts";
 import { mapSegmentToSector } from "../_shared/sector-config.ts";
 import { isPluginModeProject, pluginRequest, resolvePluginKey, resolvePluginNamespace } from "../_shared/wordpress-plugin-client.ts";
 import { syncHreflangForTranslationGroup } from "../_shared/hreflang-sync.ts";
@@ -115,6 +119,7 @@ async function publishPlugin(
   status: "draft" | "publish",
   categories: Array<number | string>,
   tags: Array<number | string>,
+  rules?: Awaited<ReturnType<typeof loadRuleProfile>>,
 ) {
   const baseUrl = String(project.wordpress_url).replace(/\/$/, "");
   const featured = String(article.featured_image_url || "");
@@ -135,6 +140,22 @@ async function publishPlugin(
   };
   const sectorType = mapSegmentToSector(String(config.segment || article.nicho_detectado || "general"));
   payload.json_ld_schemas = buildArticleJsonLd({ article, project, sectorType });
+  // 20/11/2026: o plano de schema (um só Article, trilha BreadcrumbList, datas coerentes, idioma, sem duplicar o SEO plugin) substitui o bloco acima.
+  const plan = buildSchemaPlan({ article, project, sectorType });
+  payload.json_ld_schemas = plan.schemas;
+  payload.schema_policy = plan.policy;
+  if (rules) {
+    // Portão de completude do plugin 3.17.0+ (plugin antigo ignora o campo e segue como sempre)
+    payload.completeness = buildCompletenessRequest({
+      rules,
+      approvedHash: await sha256Hex(String(article.content || "")),
+      language: plan.language.tag !== "und" ? plan.language.tag : null,
+      hasFaq: plan.types.includes("FAQPage"),
+      hasTranslations: Boolean(article.translation_group_id),
+      authorIdentified: plan.author.identified,
+      schemaPolicy: plan.policy,
+    });
+  }
 
   if (featuredImageId) payload.featured_image_id = featuredImageId;
   if (categories.length) payload.categories = categories;
@@ -163,6 +184,8 @@ async function publishPlugin(
     pluginContract: "zica-posts",
     pluginNamespace: project.wordpress_plugin_namespace || "zica-posts/v1",
     endpointMode: result.endpointMode,
+    postStatus: typeof row.status === "string" ? row.status : undefined,
+    completeness: result.data.completeness,
   };
 }
 
@@ -248,6 +271,28 @@ Deno.serve(async (req: Request) => {
         code: "cross_project_blocked",
         request_id: requestId,
       }, 409);
+    }
+
+    // Piloto Automático (20/11/2026): se o perfil do projeto liga o "automático", roda a rodada RÁPIDA (sem IA, sem gasto) antes de publicar.
+    // O resultado é um rascunho de revisão; falha ou demora aqui nunca impede a publicação.
+    let autopilot: Record<string, unknown> | null = null;
+    if ((body.publishStatus || "publish") === "publish") {
+      try {
+        const invoked = await Promise.race([
+          admin.functions.invoke("auto-optimize", { body: { action: "trigger", articleId: article.id, trigger: "pre_publish", mode: "quick", userId } }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("autopilot_timeout")), 15000)),
+        ]) as { data?: Record<string, any> | null };
+        const d = invoked?.data || null;
+        if (d) {
+          autopilot = { ran: d.ran === true, skipped: d.skipped ?? null, proposal: d.proposal ?? null, pending: Array.isArray(d.report?.pending) ? d.report.pending.length : null, applied: Array.isArray(d.report?.applied) ? d.report.applied.length : null };
+          if (d.ran === true) {
+            const { data: fresh } = await admin.from("articles").select("*").eq("id", article.id).maybeSingle();
+            if (fresh) Object.assign(article, fresh);
+          }
+        }
+      } catch (autopilotError) {
+        console.warn(`[publish-to-wordpress] autopilot skipped: ${autopilotError instanceof Error ? autopilotError.message : "unknown"}`);
+      }
     }
 
     const status = body.publishStatus || "publish";
@@ -407,14 +452,17 @@ Deno.serve(async (req: Request) => {
     if (structureRepair.repaired) audit = normalizeEditorialHtml(structureRepair.html);
 
     const words = audit.metrics.wordCount;
-    const minimum = Number(config?.geo_word_band?.min || 0) > 0 ? Number(config.geo_word_band.min) : 300;
-    if (status === "publish" && words < minimum) {
+    // Tamanho do texto é definido pelo prompt/agente do projeto (geo_word_band.min). Sem valor configurado não há piso fixo.
+    const minimum = Number(config?.geo_word_band?.min || 0) > 0 ? Number(config.geo_word_band.min) : 0;
+    // Travas de estrutura (H2 / destaques) só bloqueiam se o projeto pedir explicitamente (config.strict_editorial_gates === true).
+    const strictStructure = config?.strict_editorial_gates === true;
+    if (status === "publish" && minimum > 0 && words < minimum) {
       return json({ success: false, error: `Conteúdo insuficiente para publicação: ${words} palavras, mínimo configurado ${minimum}`, code: "content_gate", retryable: false, request_id: requestId }, 409);
     }
-    if (status === "publish" && words >= 500 && audit.metrics.h2Count === 0) {
+    if (status === "publish" && strictStructure && words >= 500 && audit.metrics.h2Count === 0) {
       return json({ success: false, error: "Publicação bloqueada: matéria longa sem estrutura H2", code: "editorial_gate", reason: "heading_structure", metrics: audit.metrics, retryable: false, request_id: requestId }, 409);
     }
-    if (status === "publish" && words >= 700 && audit.metrics.strongCount === 0) {
+    if (status === "publish" && strictStructure && words >= 700 && audit.metrics.strongCount === 0) {
       return json({ success: false, error: "Publicação bloqueada: matéria longa sem destaques semânticos", code: "editorial_gate", reason: "semantic_emphasis", metrics: audit.metrics, retryable: false, request_id: requestId }, 409);
     }
 
@@ -485,7 +533,8 @@ Deno.serve(async (req: Request) => {
     if (pluginMode) {
       const credential = await resolvePluginKey(admin, project);
       credentialSource = credential.source;
-      result = await publishPlugin(project, normalizedArticle, credential.apiKey, status, categories, tags);
+      const rulesProfile = await loadRuleProfile(admin, normalizedArticle, project).catch(() => undefined);
+      result = await publishPlugin(project, normalizedArticle, credential.apiKey, status, categories, tags, rulesProfile);
     } else {
       if (!project.wordpress_username || !project.wordpress_app_password) {
         return json({ success: false, error: "Credenciais WordPress não configuradas", request_id: requestId }, 400);
@@ -493,6 +542,10 @@ Deno.serve(async (req: Request) => {
       result = await publishStandard(project, normalizedArticle, status, categories, tags);
     }
 
+    // Relatório do portão de completude do plugin (plugin antigo = sem relatório, e a publicação segue como antes)
+    const completenessReport = pluginMode ? parseCompletenessReport(result.completeness) : null;
+    // O portão pode ter segurado como rascunho (só se o projeto escolheu "exigir" e há item exigido pendente)
+    const effectiveStatus = pluginMode && status === "publish" && completenessReport?.held ? "draft" : status;
     const now = new Date().toISOString();
     const publications = normalizedConfig.wordpress_publications && typeof normalizedConfig.wordpress_publications === "object"
       ? { ...normalizedConfig.wordpress_publications }
@@ -502,7 +555,7 @@ Deno.serve(async (req: Request) => {
       project_name: project.name,
       post_id: result.postId || null,
       post_url: result.postUrl || null,
-      status,
+      status: effectiveStatus,
       categories,
       tags,
       duplicate: Boolean(result.duplicate),
@@ -516,9 +569,10 @@ Deno.serve(async (req: Request) => {
       wordpress_last_project_id: project.id,
       wordpress_last_post_id: result.postId || null,
       wordpress_last_post_url: result.postUrl || null,
+      ...(completenessReport ? { plugin_completeness: compactReport(completenessReport, now) } : {}),
     };
     const isPrimaryProject = !article.project_id || article.project_id === project.id;
-    const articleUpdate = status === "publish"
+    const articleUpdate = effectiveStatus === "publish"
       ? {
         status: "published",
         published_at: article.published_at || now,
@@ -547,7 +601,7 @@ Deno.serve(async (req: Request) => {
     // look like — push the refreshed map to the whole family. Never lets a
     // sync failure fail the publish itself (see _shared/hreflang-sync.ts).
     let hreflangSync: Awaited<ReturnType<typeof syncHreflangForTranslationGroup>> | null = null;
-    if (status === "publish" && article.translation_group_id) {
+    if (status === "publish" && article.translation_group_id && effectiveStatus === "publish") {
       try {
         hreflangSync = await syncHreflangForTranslationGroup(admin, project, String(article.translation_group_id));
       } catch (syncError) {
@@ -562,7 +616,8 @@ Deno.serve(async (req: Request) => {
       projectName: project.name,
       postId: result.postId,
       postUrl: result.postUrl,
-      status,
+      status: effectiveStatus,
+      held_by_plugin: effectiveStatus !== status,
       duplicate: Boolean(result.duplicate),
       categories,
       pluginContract: result.pluginContract,
@@ -574,6 +629,8 @@ Deno.serve(async (req: Request) => {
       compliance_warnings: complianceAdvisory ? complianceAdvisory.issues : [],
       editorial: { version: "2.1.0", issues: audit.issues, metrics: audit.metrics },
       hreflangSync,
+      completeness: completenessReport ? { ...completenessReport, summary: describeCompleteness(completenessReport) } : null,
+      autopilot,
       request_id: requestId,
     });
   } catch (error) {

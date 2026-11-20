@@ -2,7 +2,7 @@ import { serperRequest, serperRegionalInputs } from "../_shared/serper-request.t
 import { providerFetch } from '../_shared/nexus-provider-fetch.ts';
 import '../_shared/nexus-runtime-bootstrap.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import {allowWordPressBase} from '../_shared/nexus-spend-lock.ts';
+import {allowWordPressBase,scopedServe} from '../_shared/nexus-spend-lock.ts';
 import { PROVIDER_CATALOG, isProviderId, isCatalogId, validateCredentialFormat, secretFormatError, MAX_SECRET_LENGTH, runHealthChecks, buildProvidersOverview, executionGate, validateExecutionSettings, providersEnabledFrom } from '../_shared/nexus-providers.ts';
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveRequestActor, RequestAuthError } from "../_shared/request-auth.ts";
@@ -29,7 +29,7 @@ const PROJECT_COLS='id,name,description,nicho,compliance_rules,domain,wordpress_
 // Chamadas a provedores: fetch original (capturado antes do spend lock), URL montada pelo servidor, sem redirecionamento automático.
 import { handleManagedOAuth } from "../_shared/nexus-managed-oauth-flow.ts";
 const pf=((input:RequestInfo|URL,init?:RequestInit)=>providerFetch(input,{...init,redirect:'manual'})) as typeof fetch;
-Deno.serve(async req=>{
+scopedServe(async req=>{
  if(req.method==='OPTIONS')return new Response(null,{headers:cors});
  if(req.method!=='POST')return json({error:'method_not_allowed'},405);
  let operationId=''; let reserved=false;

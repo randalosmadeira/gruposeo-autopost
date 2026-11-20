@@ -71,7 +71,8 @@ export function validateCredentialFormat(provider: string, raw: unknown): Format
       if (!secret.startsWith('sk-ant-') || !PRINTABLE_TOKEN.test(secret)) return { ok: false, hint: 'prefixo_sk-ant-' };
       return { ok: true, secret };
     case 'gemini':
-      if (!secret.startsWith('AIza') || !PRINTABLE_TOKEN.test(secret)) return { ok: false, hint: 'prefixo_AIza' };
+      // Chaves antigas começam com "AIza"; o Google AI Studio também emite chaves em formato novo (sem esse prefixo). O teste real de conexão é a prova final.
+      if (!PRINTABLE_TOKEN.test(secret) || !(secret.startsWith('AIza') || secret.length >= 30)) return { ok: false, hint: 'prefixo_AIza' };
       return { ok: true, secret };
     case 'perplexity':
       if (!secret.startsWith('pplx-') || !PRINTABLE_TOKEN.test(secret)) return { ok: false, hint: 'prefixo_pplx-' };

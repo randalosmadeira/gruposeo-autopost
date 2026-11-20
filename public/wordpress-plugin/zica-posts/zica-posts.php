@@ -3,7 +3,7 @@
  * Plugin Name: Zica Posts — Conector WordPress Oficial Zica.ai
  * Plugin URI: https://zica.ai
  * Description: Agente WordPress leve da Zica.ai com outbox persistente, sinais de IA (robôs e visitas), HMAC, idempotência, GEO/Schema, discovery LLM, IndexNow em lote, cards e integração com Zica Orchestrator.
- * Version: 3.16.2
+ * Version: 3.18.0
  * Author: Equipe Zica.ai
  * Author URI: https://zica.ai
  * License: GPL v2 or later
@@ -14,7 +14,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('ZICA_POSTS_VERSION', '3.16.2');
+define('ZICA_POSTS_VERSION', '3.18.0');
 define('ZICA_POSTS_PAIRING_URL', 'https://ubahrbgaxrkjxklytobl.supabase.co/functions/v1/pair-wordpress-site');
 define('ZICA_POSTS_SOFTWARE_ID', 'zica-posts');
 define('ZICA_POSTS_FILE', __FILE__);
@@ -36,6 +36,8 @@ require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-curator.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-ai-auditor.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-schema-validator.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-signals.php';
+require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-completeness.php';
+require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-pages.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-rest.php';
 require_once ZICA_POSTS_DIR . 'includes/class-zica-posts-admin.php';
 
@@ -49,6 +51,8 @@ final class Zica_Posts_3110 {
     public $ai_auditor;
     public $schema_validator;
     public $signals;
+    public $completeness;
+    public $pages;
     public $rest;
     public $admin;
 
@@ -66,7 +70,9 @@ final class Zica_Posts_3110 {
         $this->ai_auditor = new Zica_Posts_AI_Auditor($this->discovery);
         $this->schema_validator = new Zica_Posts_Schema_Validator();
         $this->signals = new Zica_Posts_Signals($this->auth, $this->discovery);
-        $this->rest = new Zica_Posts_REST($this->auth, $this->discovery, $this->outbox, $this->cards, $this->ai_auditor, $this->schema_validator, $this->signals);
+        $this->completeness = new Zica_Posts_Completeness();
+        $this->pages = new Zica_Posts_Pages($this->auth, $this->completeness);
+        $this->rest = new Zica_Posts_REST($this->auth, $this->discovery, $this->outbox, $this->cards, $this->ai_auditor, $this->schema_validator, $this->signals, $this->completeness);
         $this->admin = new Zica_Posts_Admin($this->auth, $this->discovery, $this->outbox, $this->curator, $this->ai_auditor, $this->signals);
 
         add_filter('cron_schedules', array($this, 'cron_schedules'));
@@ -135,6 +141,10 @@ final class Zica_Posts_3110 {
         add_option('zica_posts_hub_delegates_discovery', '0');
         add_option('zica_posts_auto_correction_enabled', '1');
         add_option('zica_posts_signals_enabled', '0', '', false);
+        add_option('zica_posts_fill_breadcrumb', '1');
+        add_option('zica_posts_fill_schema', '1');
+        add_option('zica_posts_fill_og', '1');
+        add_option('zica_posts_fill_alt', '1');
 
         $outbox->clear_schedules();
         $outbox->ensure_schedules();

@@ -26,7 +26,8 @@ import {
   CheckCircle2,
   FileText,
   Pencil,
-  Trash2,
+  Archive,
+  HeartPulse,
   Save,
   X,
   Check
@@ -37,7 +38,8 @@ import { cn } from '@/lib/utils';
 
 export default function ProjectsList() {
   const navigate = useNavigate();
-  const { projects, isLoading, createProject, updateProject, deleteProject } = useProjects();
+  const [showArchived, setShowArchived] = useState(false);
+  const { projects, isLoading, createProject, updateProject, archiveProject } = useProjects({ includeArchived: showArchived });
   const { allStats } = useWordPressStats();
   const [search, setSearch] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -117,13 +119,12 @@ export default function ProjectsList() {
     setEditingName('');
   };
 
-  const handleDeleteProject = (e: React.MouseEvent, id: string) => {
+  // Nunca excluir direto: arquivar é reversível. A exclusão definitiva (com resumo, exportação e confirmação) fica na Central de Projetos.
+  const handleArchiveProject = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (confirm('Tem certeza que deseja excluir este projeto?')) {
-      deleteProject.mutate(id);
-      if (selectedProjectId === id) {
-        setSelectedProjectId(null);
-      }
+    archiveProject.mutate(id);
+    if (selectedProjectId === id) {
+      setSelectedProjectId(null);
     }
   };
 
@@ -195,6 +196,7 @@ export default function ProjectsList() {
         </Button>
 
         <Button variant="outline" asChild><Link to="/business-profile">Configurar negócios e estratégias existentes</Link></Button>
+        <Button variant="outline" className="w-full justify-start gap-2" asChild><Link to="/central-de-projetos"><HeartPulse className="w-4 h-4" />Central de Projetos (saúde, arquivar e excluir)</Link></Button>
         {/* Projects List */}
         <div className="flex-1 flex flex-col gap-3">
           <div className="flex items-center justify-between">
@@ -203,6 +205,11 @@ export default function ProjectsList() {
               {projects.length}
             </span>
           </div>
+
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input type="checkbox" className="h-3.5 w-3.5" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+            Mostrar arquivados
+          </label>
 
           {/* Search */}
           <div className="relative">
@@ -273,6 +280,8 @@ export default function ProjectsList() {
                       <>
                         <div className="flex items-center gap-1">
                           <p className="text-sm font-medium truncate">{project.name}</p>
+                          {project.lifecycle_status === 'arquivado' && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">Arquivado</Badge>}
+                          {project.lifecycle_status === 'pausado' && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">Pausado</Badge>}
                           <Button
                             size="icon"
                             variant="ghost"
@@ -303,15 +312,22 @@ export default function ProjectsList() {
                     )}
                   </div>
 
-                  {/* Delete button */}
-                  {!isEditing && (
+                  {/* Arquivar (reversível). Excluir definitivamente só na Central de Projetos. */}
+                  {!isEditing && project.lifecycle_status !== 'arquivado' && (
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
-                      onClick={(e) => handleDeleteProject(e, project.id)}
+                      className="h-7 w-7 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity text-muted-foreground"
+                      aria-label={`Arquivar ${project.name}`}
+                      title="Arquivar (dá para restaurar na Central de Projetos)"
+                      onClick={(e) => handleArchiveProject(e, project.id)}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Archive className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                  {!isEditing && project.lifecycle_status === 'arquivado' && (
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" asChild onClick={(e) => e.stopPropagation()}>
+                      <Link to="/central-de-projetos">Central</Link>
                     </Button>
                   )}
                 </div>

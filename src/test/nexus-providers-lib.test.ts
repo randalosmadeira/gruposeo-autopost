@@ -249,6 +249,9 @@ describe('validateSecretFormat (espelha o servidor)', () => {
     expect(validateSecretFormat('anthropic', 'sk-abc')).toMatch(/sk-ant-/);
     expect(validateSecretFormat('gemini', 'AIzaXYZ')).toBeNull();
     expect(validateSecretFormat('gemini', 'aiza')).toMatch(/AIza/);
+    // formato novo do Google AI Studio (sem prefixo AIza), valores fictícios
+    expect(validateSecretFormat('gemini', 'AQ.' + 'x'.repeat(44))).toBeNull();
+    expect(validateSecretFormat('gemini', 'nome da chave com espaço 1234567890123456')).toMatch(/AIza/);
     expect(validateSecretFormat('perplexity', 'pplx-1')).toBeNull();
     expect(validateSecretFormat('perplexity', 'sk-1')).toMatch(/pplx-/);
   });

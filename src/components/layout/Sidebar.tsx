@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { cn } from '@/lib/utils';
-import { Activity, Building2, Filter, GitBranch, Link2, UserPlus, Gauge, Calendar, Cpu, FileCode2, FileText, Globe2, Layers3, LayoutDashboard, ListChecks, Network, PlugZap, Radar, Sparkles, Timer, UserRound, Users, Vote } from 'lucide-react';
+import { Activity, HeartPulse, SearchCheck, Building2, Filter, GitBranch, Link2, UserPlus, Gauge, Calendar, Cpu, FileCode2, FileText, Globe2, Layers3, LayoutDashboard, ListChecks, Network, PlugZap, Target, Radar, Crosshair, Sparkles, Timer, UserRound, Users, Vote } from 'lucide-react';
 import { ZicaLogo } from '@/components/brand/ZicaLogo';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
 import { useElectoralAccess } from '@/hooks/useElectoralAccess';
@@ -17,11 +17,16 @@ const clientItems: NavItem[] = [
   { label: 'Publicar em massa', icon: Layers3, href: '/keywords/bulk' },
   { label: 'Calendário Editorial', icon: Calendar, href: '/calendar' },
   { label: 'Meus Blogs', icon: Globe2, href: '/integrations' },
+  { label: 'Central de Projetos', icon: HeartPulse, href: '/central-de-projetos' },
   { label: 'Descobrir meu negócio', icon: Sparkles, href: '/descobrir' },
   { label: 'Funil de captação', icon: Filter, href: '/funil' },
   { label: 'Velocidade do site', icon: Timer, href: '/velocidade' },
   { label: 'Estrutura do domínio', icon: GitBranch, href: '/estrutura' },
   { label: 'Backlinks', icon: Link2, href: '/backlinks' },
+  { label: 'Taxonomia e mercado', icon: Target, href: '/taxonomia' },
+  { label: 'Indexação', icon: SearchCheck, href: '/indexacao' },
+  { label: 'Radar de mercado', icon: Crosshair, href: '/radar' },
+  { label: 'Estúdio de Páginas', icon: FileCode2, href: '/estudio' },
   { label: 'Negócios & Estratégia', icon: Building2, href: '/business-profile' },
   { label: 'NEXUS · Inteligência', icon: Network, href: '/nexus-intelligence' },
   { label: 'NEXUS · Observatório', icon: Radar, href: '/nexus/observatorio' },

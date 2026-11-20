@@ -3,6 +3,8 @@
 import { providerFetch } from '../_shared/nexus-provider-fetch.ts';
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { scopedServe } from '../_shared/nexus-spend-lock.ts';
+import { bindSpendIdentity } from '../_shared/spend-gate.ts';
 import { OBSERVE_MAX_OPS_PER_TICK, runObservationTickForOrg, type ObserveAdmin, type TickReport } from '../_shared/nexus-observe.ts';
 
 const cors = {
@@ -28,7 +30,7 @@ function safeEqual(a: string, b: string): boolean {
 // Fetch dos provedores: URL montada pelo servidor, sem seguir redirecionamentos.
 const pf = ((input: RequestInfo | URL, init?: RequestInit) => providerFetch(input, { ...init, redirect: 'manual' })) as typeof fetch;
 
-Deno.serve(async (req) => {
+scopedServe(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
   const admin = createClient(Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SECRET_KEY') || '', { auth: { persistSession: false, autoRefreshToken: false } });
@@ -55,6 +57,7 @@ Deno.serve(async (req) => {
     const deadline = Date.now() + 110_000;
     for (const p of (programs || []) as Array<{ organization_id: string }>) {
       if (Date.now() > deadline) break;
+      bindSpendIdentity({ orgId: p.organization_id }); // Teto Diário de Gasto: cada organização paga a própria rodada (no-op com o bloqueio total)
       reports.push(await runObservationTickForOrg({ admin: admin as unknown as ObserveAdmin, fetchFn: pf, now: Date.now, maxOps, deadlineMs: deadline, dryRun }, p.organization_id));
     }
     return json({ ok: true, dry_run: dryRun, organizations: reports });

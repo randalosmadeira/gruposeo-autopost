@@ -4,12 +4,13 @@ import { providerFetch } from '../_shared/nexus-provider-fetch.ts';
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { resolveRequestActor, RequestAuthError } from '../_shared/request-auth.ts';
+import { scopedServe } from '../_shared/nexus-spend-lock.ts';
 import { AGENT_ACTIONS, handleAgentAction } from '../_shared/profile-agent-handler.ts';
 
 const headers = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization,apikey,content-type,x-client-info', 'Access-Control-Allow-Methods': 'POST,OPTIONS' };
 const json = (v: unknown, s = 200) => new Response(JSON.stringify(v), { status: s, headers });
 
-Deno.serve(async (req) => {
+scopedServe(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
   try {

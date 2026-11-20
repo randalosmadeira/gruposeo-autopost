@@ -17,13 +17,13 @@ verify_jwt = true
 # a real user JWT through auth.getUser(), an exact opaque service credential,
 # or a dedicated automation secret inside the function body.
 [functions.publish-to-wordpress]
-verify_jwt = false
+verify_jwt = true
 
 [functions.rewrite-news]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-image]
-verify_jwt = false
+verify_jwt = true
 
 [functions.wordpress-operations]
 verify_jwt = false
@@ -161,6 +161,30 @@ verify_jwt = true
 [functions.site-monitor]
 verify_jwt = false
 
+# radar-run: cron de hora em hora do Radar de mercado (rotinas diaria/semanal/mensal por foco, descoberta dentro do teto diario de gasto, varredura educada); sem login, so a chave de automacao propria `radar-run` (automation_ingress_keys)
+[functions.radar-run]
+verify_jwt = false
+
 # site-overview: Visao Geral e Estrutura do negocio (Google, GA4, cliques de contato, arvore do dominio); login e papel conferidos dentro da funcao
 [functions.site-overview]
+verify_jwt = true
+
+# taxonomy: taxonomia de areas/nichos/geografia do negocio e planejador de campanha de mercado (SERP) com teto de custo; nada executa busca paga; login e papel conferidos dentro da funcao
+[functions.taxonomy]
+verify_jwt = true
+
+# project-lifecycle: Central de Projetos (saude, integridade, pausar/arquivar/restaurar, exportar e excluir definitivamente); login e papel conferidos dentro da funcao
+[functions.project-lifecycle]
+verify_jwt = true
+
+# spend-policy: Teto Diario de Gasto (situacao do dia, credito adicional, politica e historico por organizacao); login e papel conferidos dentro da funcao
+[functions.spend-policy]
+verify_jwt = true
+
+# engine: portao unico dos modulos ({ module, action }); despacha para os handlers registrados em _shared/module-registry.ts. As funcoes antigas continuam existindo. Login e papel conferidos dentro da funcao
+[functions.engine]
+verify_jwt = true
+
+# auto-optimize: Piloto Automatico de Otimizacao (SEO, GEO, AEO, AIO) por artigo; correcoes sem IA primeiro e IA em passos pequenos dentro do teto diario; login e papel conferidos dentro da funcao
+[functions.auto-optimize]
 verify_jwt = true

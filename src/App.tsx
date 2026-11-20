@@ -26,8 +26,13 @@ const Funnel = lazy(() => import("./pages/Funnel"));
 const Speed = lazy(() => import("./pages/Speed"));
 const Backlinks = lazy(() => import("./pages/Backlinks"));
 const Structure = lazy(() => import("./pages/Structure"));
+const Taxonomy = lazy(() => import("./pages/Taxonomy"));
+const Indexation = lazy(() => import("./pages/Indexation"));
+const Radar = lazy(() => import("./pages/Radar"));
+const PageStudio = lazy(() => import("./pages/PageStudio"));
 const ProjectProfile = lazy(() => import("./pages/ProjectProfile"));
 const ProjectsList = lazy(() => import("./pages/ProjectsList"));
+const ProjectCenter = lazy(() => import("./pages/ProjectCenter"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const AuthorityPlanner = lazy(() => import("./pages/AuthorityPlanner"));
 const NewsAgents = lazy(() => import("./pages/NewsAgents"));
@@ -117,11 +122,16 @@ const App = () => (
                 <Route path="/news-agents" element={<NewsAgents />} />
                 <Route path="/news-agents/new" element={<CreateNewsAgent />} />
                 <Route path="/projects" element={<ProjectsList />} />
+                <Route path="/central-de-projetos" element={<ProjectCenter />} />
                 <Route path="/descobrir" element={<DiscoverBusiness />} />
                 <Route path="/funil" element={<Funnel />} />
                 <Route path="/velocidade" element={<Speed />} />
                 <Route path="/backlinks" element={<Backlinks />} />
                 <Route path="/estrutura" element={<Structure />} />
+                <Route path="/taxonomia" element={<Taxonomy />} />
+                <Route path="/indexacao" element={<Indexation />} />
+                <Route path="/radar" element={<Radar />} />
+                <Route path="/estudio" element={<PageStudio />} />
                 <Route path="/business-profile" element={<BusinessProfile />} />
                 <Route path="/projects/:id/perfil" element={<ProjectProfile />} />
                 <Route path="/internal-linking" element={<InternalLinking />} />

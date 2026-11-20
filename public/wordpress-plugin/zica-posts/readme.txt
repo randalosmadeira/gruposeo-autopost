@@ -4,10 +4,25 @@ Tags: seo, geo, llms, indexnow, schema, wordpress, automation, queue
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.16.2
+Stable tag: 3.18.0
 License: GPLv2 or later
 
 Agente WordPress leve oficial da Zica.ai. Publica, registra eventos duráveis, serve discovery files e conversa com o Zica Orchestrator sem executar IA pesada durante save_post.
+
+== 3.18.0 ==
+
+* Páginas do Estúdio de Páginas do Zica: a nova rota POST /pages cria ou atualiza uma PÁGINA (page), idempotente por zica_ai_id, com endereço semântico EXATO (até 3 níveis) e hierarquia. Se o WordPress mudar o slug (sufixo "-2") ou a hierarquia, a criação é DESFEITA e a rota devolve 409. A página-pai precisa existir; página de outro zica_ai_id no mesmo caminho devolve 409 (nunca sobrescreve página alheia).
+* POST ou GET /pages/lookup (acha por caminho ou zica_ai_id), POST /pages/status (despublica ou republica), GET /pages/{id} (conteúdo e hash, para detectar desvio) e POST /redirects (301 do endereço antigo para o novo).
+* Schema JSON-LD em um grafo só (impresso pelo módulo de descoberta), meta descrição, canonical, hreflang, Open Graph e cartão do X vindos do Estúdio; título de SEO e robots (noindex) respeitados. Com Rank Math ou Yoast ativos, título, descrição e canonical vão para as chaves deles e o Zica Posts não imprime os seus.
+* Reaproveita o portão de completude 3.17.0 (relatório estruturado; por padrão publica com aviso). Conteúdo filtrado por wp_kses_post; sem requisição externa nova; sem telemetria. Zica antigo continua funcionando como antes.
+* ATENÇÃO: a sintaxe PHP desta versão e o comportamento nos temas (Elementor, Divi, blocos) NÃO foram executados antes do empacotamento: instale primeiro em UM site de teste e publique uma página de teste como rascunho.
+
+== 3.17.0 ==
+
+* Portão de completude antes de publicar: o plugin confere o conjunto do artigo (título, meta descrição, H1 único e hierarquia, trilha BreadcrumbList, schema Article, canonical, Open Graph, imagem destacada e alt, links internos mínimos, autor, datas coerentes, tabelas sem markdown cru, resíduo de prompt e o hash do conteúdo aprovado no Zica) e devolve um relatório estruturado ao Zica.
+* O que o plugin consegue preencher de forma determinística ele preenche (trilha, schema, canonical, Open Graph, alt das imagens na exibição, data de modificação do schema). O que não consegue fica "pendente" no relatório. Por padrão publica com aviso; só segura como rascunho se o projeto, no Zica, escolher "exigir".
+* Um só bloco Article por post: com Rank Math, Yoast, AIOSEO ou SEOPress ativos o Article e a trilha ficam com eles e o Zica Posts não duplica. As opções `zica_posts_fill_breadcrumb`, `zica_posts_fill_schema`, `zica_posts_fill_og` e `zica_posts_fill_alt` (padrão "1") desligam cada preenchimento.
+* Sem requisição externa nova, sem telemetria e sem enviar conteúdo a terceiros. Não altera o texto salvo do post. Zica antigo (sem o campo `completeness`) continua funcionando como antes.
 
 == 3.16.2 ==
 

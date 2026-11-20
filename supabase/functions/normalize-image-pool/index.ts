@@ -2,6 +2,8 @@ import '../_shared/nexus-runtime-bootstrap.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { fetchUserKeys } from "../_shared/byok-resolver.ts";
+import { scopedServe } from "../_shared/nexus-spend-lock.ts";
+import { bindSpendIdentity } from "../_shared/spend-gate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +27,7 @@ async function sha256(value: string | Uint8Array) {
 async function resolveOpenAIKey(_admin: ReturnType<typeof createClient>, userId: string) {
   // Delegates to the central resolver (BYOK -> platform Vault -> env), the same
   // order every other function uses, instead of re-implementing it locally.
+  bindSpendIdentity({ userId }); // Teto Diário de Gasto: quem paga a edição de imagem (no-op com o bloqueio total)
   const keys = await fetchUserKeys(userId);
   return keys.openai;
 }
@@ -75,7 +78,7 @@ Regras obrigatórias:
   return bytes;
 }
 
-Deno.serve(async (req: Request) => {
+scopedServe(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ success: false, error: "method_not_allowed" }, 405);
   const requestId = crypto.randomUUID();

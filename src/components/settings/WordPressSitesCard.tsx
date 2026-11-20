@@ -25,7 +25,7 @@ import {
   AlertTriangle,
   Globe,
   Pencil,
-  Trash2,
+  Archive,
   Plus,
   CheckCircle2,
   Loader2,
@@ -91,7 +91,7 @@ export function WordPressSitesCard() {
   const { isAdmin } = useAdminAccess();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { projects, createProject, updateProject, deleteProject } = useProjects();
+  const { projects, createProject, updateProject, archiveProject } = useProjects();
   
   // Standard connection (Application Password)
   const [newSiteName, setNewSiteName] = useState('');
@@ -493,14 +493,10 @@ export function WordPressSitesCard() {
     });
   };
 
-  const handleDeleteSite = async (projectId: string) => {
-    if (!confirm('Tem certeza que deseja remover este site?')) return;
+  const handleArchiveSite = async (projectId: string) => {
+    if (!confirm('Arquivar este site? Nada é apagado: dá para restaurar (ou excluir definitivamente) na Central de Projetos.')) return;
     
-    await deleteProject.mutateAsync(projectId);
-    toast({
-      title: 'Site removido',
-      description: 'O site WordPress foi removido.',
-    });
+    await archiveProject.mutateAsync(projectId);
   };
 
   const isPluginConnection = isPluginProject;
@@ -629,10 +625,12 @@ export function WordPressSitesCard() {
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => handleDeleteSite(project.id)}
+                      className="h-8 w-8 text-muted-foreground"
+                      aria-label={`Arquivar ${project.name}`}
+                      title="Arquivar (dá para restaurar na Central de Projetos)"
+                      onClick={() => handleArchiveSite(project.id)}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Archive className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>

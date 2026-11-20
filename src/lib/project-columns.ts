@@ -35,3 +35,11 @@ export function passwordPatch(typed: string | null | undefined): { wordpress_app
 export function hasUsableCredential(url: string, username: string, typed: string | null | undefined, hasStored: boolean): boolean {
   return !!(url && username && (typed || hasStored));
 }
+
+/**
+ * Colunas do ciclo de vida (migração 20261120300000, Central de Projetos). O navegador só LÊ; quem muda é a função `project-lifecycle`.
+ * Ficam FORA de PROJECT_COLUMN_LIST de propósito: se a migração ainda não foi aplicada, a leitura principal de projetos continua funcionando
+ * e a leitura destas colunas (feita à parte, em useProjects) apenas falha em silêncio e todos os projetos contam como ativos.
+ */
+export const PROJECT_LIFECYCLE_COLUMNS = ['lifecycle_status', 'archived_at', 'paused_reason'] as const;
+export type ProjectLifecycleStatus = 'ativo' | 'pausado' | 'arquivado';

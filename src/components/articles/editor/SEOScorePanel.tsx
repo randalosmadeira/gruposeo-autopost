@@ -38,6 +38,11 @@ interface SEOScorePanelProps {
   content?: string;
   keyword?: string;
   className?: string;
+  /** idioma do artigo (pt-BR, en, es...); sem ele a análise detecta pelo texto */
+  language?: string | null;
+  /** mínimo e alvo de legibilidade definidos pelo projeto/prompt do agente; sem eles valem os da fórmula do idioma */
+  readabilityMin?: number | null;
+  readabilityTarget?: number | null;
 }
 
 export function SEOScorePanel({ 
@@ -45,7 +50,10 @@ export function SEOScorePanel({
   metaDescription, 
   content, 
   keyword,
-  className 
+  className,
+  language,
+  readabilityMin,
+  readabilityTarget,
 }: SEOScorePanelProps) {
   const [seoScore, setSeoScore] = useState<SEOScoreResult | null>(null);
   const [readability, setReadability] = useState<ReadabilityResult | null>(null);
@@ -59,7 +67,7 @@ export function SEOScorePanel({
         setSeoScore(calculateSEOScore({ title, metaDescription, content, keyword }));
         
         if (content && content.length > 100) {
-          setReadability(calculateReadability(content));
+          setReadability(calculateReadability(content, { language, minimum: readabilityMin, target: readabilityTarget }));
           setContentQuality(assessContentQuality(content));
           
           if (keyword) {
@@ -70,7 +78,7 @@ export function SEOScorePanel({
     }, 500);
     
     return () => clearTimeout(timer);
-  }, [title, metaDescription, content, keyword]);
+  }, [title, metaDescription, content, keyword, language, readabilityMin, readabilityTarget]);
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600';
@@ -220,13 +228,14 @@ export function SEOScorePanel({
               <div className="space-y-4">
                 <div className="text-center p-4 rounded-lg bg-muted/50">
                   <div className={`text-4xl font-bold ${
-                    readability.fleschScore >= 70 ? 'text-green-600' : 
-                    readability.fleschScore >= 60 ? 'text-yellow-600' : 'text-red-600'
+                    readability.fleschScore === null ? 'text-muted-foreground' :
+                    readability.fleschScore >= readability.target ? 'text-green-600' : 
+                    readability.fleschScore >= readability.min ? 'text-yellow-600' : 'text-red-600'
                   }`}>
-                    {readability.fleschScore}
+                    {readability.fleschScore ?? '—'}
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Flesch Reading Ease
+                    {readability.formula ? `Legibilidade (${readability.formula.label})` : 'Legibilidade'}
                   </p>
                   <Badge className="mt-2">
                     {readability.level}
@@ -237,7 +246,7 @@ export function SEOScorePanel({
                   <StatCard 
                     label="Palavras" 
                     value={readability.wordCount.toLocaleString()} 
-                    good={readability.wordCount >= 800}
+                    good={true}
                   />
                   <StatCard 
                     label="Sentenças" 
@@ -256,17 +265,22 @@ export function SEOScorePanel({
                 </div>
 
                 <div className="text-xs text-muted-foreground space-y-1">
-                  <p className="font-medium mb-1">Escala Flesch (mínimo: 60):</p>
-                  <p className="text-green-600">• 90-100: Muito Fácil (5º ano)</p>
-                  <p className="text-green-600">• 80-89: Fácil (6º ano)</p>
-                  <p className="text-green-500">• 70-79: Bastante Fácil (8º ano)</p>
-                  <p className="text-yellow-600">• 60-69: Padrão (8º-9º ano) ✓</p>
-                  <p className="text-red-600">• &lt;60: ❌ Reprovado — reescrever</p>
+                  {readability.scored ? (
+                    <>
+                      <p className="font-medium mb-1">Escala (mínimo {readability.min}, alvo {readability.target}; idioma {readability.language}):</p>
+                      <p className="text-green-600">• {readability.target} ou mais: no alvo</p>
+                      <p className="text-yellow-600">• {readability.min} a {readability.target - 1}: dentro do mínimo ✓</p>
+                      <p className="text-red-600">• abaixo de {readability.min}: abaixo do mínimo, vale simplificar</p>
+                      {readability.formula?.status === 'referencia' && <p>As constantes desta fórmula são de referência: use como indicativo.</p>}
+                    </>
+                  ) : (
+                    <p>Este idioma ainda não tem fórmula de legibilidade no sistema: a nota não é calculada (e nunca vira zero). Os mínimos vêm do prompt e do agente do projeto.</p>
+                  )}
                 </div>
                 
-                {readability && readability.fleschScore < 60 && (
+                {readability && readability.scored && (readability.fleschScore as number) < readability.min && (
                   <div className="p-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded text-xs text-red-700 dark:text-red-400">
-                    ⚠️ <strong>Score abaixo do mínimo (60).</strong> O conteúdo precisa ser reescrito com frases mais curtas e vocabulário mais simples.
+                    ⚠️ <strong>Nota abaixo do mínimo ({readability.min}).</strong> Vale reescrever com frases mais curtas e vocabulário mais simples (o Piloto Automático faz isso em passos pequenos).
                   </div>
                 )}
               </div>

@@ -6,6 +6,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, Sparkles, AlertTriangle, CheckCircle2, XCircle, ArrowRight, Wand2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAutoPilot } from '@/hooks/useAutoPilot';
+import { AutoPilotPanel } from './AutoPilotPanel';
 
 interface AISEOAnalysisPanelProps {
   articleId: string;
@@ -50,9 +52,16 @@ interface AnalysisResult {
 
 export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt, onApplyTitle, onApplyMeta, onApplyContent, className }: AISEOAnalysisPanelProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isOptimizing, setIsOptimizing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const { toast } = useToast();
+  // O botão "Otimizar e Corrigir" agora chama o Piloto Automático (correções sem IA primeiro, IA em passos pequenos, rascunho de revisão).
+  const pilot = useAutoPilot(articleId, (f) => {
+    if (f.content && onApplyContent) onApplyContent(f.content);
+    if (f.title && onApplyTitle) onApplyTitle(f.title);
+    if (f.excerpt && onApplyMeta) onApplyMeta(f.excerpt);
+    toast({ title: 'Rascunho do piloto aplicado', description: 'O texto mudou: revise e aprove de novo antes de publicar.' });
+  });
+  const isOptimizing = pilot.phase === 'running' || pilot.phase === 'applying';
 
   const runAnalysis = async () => {
     setIsAnalyzing(true);
@@ -72,84 +81,7 @@ export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt
     }
   };
 
-  const runOptimization = async () => {
-    setIsOptimizing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('analyze-seo-advanced', {
-        body: { article_ids: [articleId], mode: 'optimize' },
-      });
-      if (error) throw error;
-      
-      const r = data?.results?.[0];
-      if (r) {
-        // Check for AI errors (402 payment, 429 rate limit)
-        if (r.error) {
-          const isPayment = String(r.error).includes('402');
-          const isRateLimit = String(r.error).includes('429');
-          toast({
-            title: isPayment ? '❌ Créditos insuficientes' : isRateLimit ? '⏳ Limite de requisições' : '❌ Erro na IA',
-            description: isPayment 
-              ? 'Os créditos de IA estão esgotados. Vá em Settings → Workspace → Usage para recarregar.' 
-              : isRateLimit 
-                ? 'Muitas requisições. Aguarde alguns segundos e tente novamente.'
-                : `Erro: ${r.error}`,
-            variant: 'destructive',
-          });
-          setResult(r);
-          return;
-        }
-
-        setResult(r);
-        
-        // Auto-apply optimized content to editor — always fetch fresh from DB
-        if (r.optimized || r.generated) {
-          // Small delay to ensure DB write is committed
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
-          const { data: updated, error: fetchErr } = await supabase
-            .from('articles')
-            .select('title, content, excerpt')
-            .eq('id', articleId)
-            .single();
-          
-          if (fetchErr) {
-            console.error('[AISEOPanel] Failed to fetch updated article:', fetchErr);
-          }
-          
-          if (updated) {
-            if (updated.content && onApplyContent) {
-              console.log('[AISEOPanel] Applying optimized content:', updated.content.length, 'chars');
-              onApplyContent(updated.content);
-            }
-            if (updated.title && onApplyTitle) {
-              console.log('[AISEOPanel] Applying optimized title:', updated.title);
-              onApplyTitle(updated.title);
-            }
-            if (updated.excerpt && onApplyMeta) {
-              console.log('[AISEOPanel] Applying optimized meta:', updated.excerpt);
-              onApplyMeta(updated.excerpt);
-            }
-          }
-          
-          toast({
-            title: r.generated ? 'Artigo gerado e salvo ✅' : 'Artigo otimizado e salvo ✅',
-            description: `Score: ${r.score}/100. Conteúdo corrigido e aplicado no editor.`,
-          });
-        } else {
-          toast({
-            title: '⚠️ Otimização não aplicada',
-            description: 'A IA não conseguiu gerar melhorias. Verifique os créditos ou tente novamente.',
-            variant: 'destructive',
-          });
-        }
-      }
-    } catch (e) {
-      console.error('Optimization error:', e);
-      toast({ title: 'Erro na otimização', description: 'Verifique sua conexão e tente novamente.', variant: 'destructive' });
-    } finally {
-      setIsOptimizing(false);
-    }
-  };
+  const runOptimization = async () => { await pilot.run(); };
 
   const gradeColor = (grade?: string) => {
     if (!grade) return 'text-muted-foreground';
@@ -165,8 +97,10 @@ export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt
     return 'outline';
   };
 
-  if (!result) {
+  if (!result || !result.analysis) {
     return (
+      <div className="min-w-0 space-y-3">
+      <AutoPilotPanel pilot={pilot} />
       <Card className={className}>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -188,12 +122,15 @@ export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt
           </Button>
         </CardContent>
       </Card>
+      </div>
     );
   }
 
   const { analysis, ai } = result;
 
   return (
+    <div className="min-w-0 space-y-3">
+    <AutoPilotPanel pilot={pilot} />
     <Card className={className}>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium flex items-center justify-between">
@@ -329,6 +266,7 @@ export function AISEOAnalysisPanel({ articleId, title, keyword, content, excerpt
         </div>
       </CardContent>
     </Card>
+    </div>
   );
 }
 
