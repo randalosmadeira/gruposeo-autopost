@@ -81,6 +81,7 @@ export function fakeAdmin(tables: Record<string, Row[]>, rpcs: Record<string, Rp
       lt: (c: string, v: unknown) => { filters.push((r) => String(r[c]) < String(v)); return q; },
       in: (c: string, vs: unknown[]) => { filters.push((r) => vs.includes(r[c])); return q; },
       is: (c: string, v: unknown) => { filters.push((r) => (v === null ? r[c] === null || r[c] === undefined : r[c] === v)); return q; },
+      like: (c: string, pattern: string) => { const re = new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*')}$`); filters.push((r) => re.test(String(r[c] ?? ''))); return q; },
       neq: (c: string, v: unknown) => { filters.push((r) => r[c] !== v); return q; },
       range: (from: number, to: number) => { rangeFrom = from; lim = to - from + 1; return q; },
       order: (col: string, o?: { ascending?: boolean }) => { orderBy = { col, asc: o?.ascending ?? true }; return q; },

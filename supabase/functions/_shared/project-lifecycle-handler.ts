@@ -17,8 +17,10 @@ import { assessOrganization, assessProject, normalizeFacts, normalizeIndexation,
 import { buildConnectionMap, verifyIntegrity, type OrphanScan } from './project-integrity-core.ts';
 import { EXPORT_TABLES, MODULES, producerOf, type ExportTable } from './module-registry.ts';
 import { PLUGIN_VERSION } from './plugin-version.ts';
+import { LIVE_CACHE_MS, checkProjectsLive, persistLiveVersions, toPluginLive, type LiveDeps, type LiveResult, type LiveTarget } from './plugin-live-check.ts';
+import { describeEvent } from './project-events.ts';
 
-export const LIFECYCLE_ACTIONS = ['health_overview', 'health_detail', 'integrity_report', 'pause', 'resume', 'archive', 'restore', 'delete_plan', 'export', 'purge'];
+export const LIFECYCLE_ACTIONS = ['health_overview', 'health_detail', 'integrity_report', 'pause', 'resume', 'archive', 'restore', 'delete_plan', 'export', 'purge', 'pulse'];
 export const WRITE_ROLES = ['owner', 'admin', 'editor'];
 export const ADMIN_ROLES = ['owner', 'admin'];
 /** Teto de linhas exportadas por tabela; acima dele o pacote avisa que ficou incompleto. */
@@ -31,7 +33,7 @@ const SECRET_KEY = /(secret|token|password|passwd|vault|api_?key|credential|auth
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = any;
 type Reply = { status: number; body: Record<string, unknown> };
-export interface LifecycleCtx { action: string; body: Record<string, unknown>; userId: string; roleByOrg: Map<string, string>; deps: { now: () => number } }
+export interface LifecycleCtx { action: string; body: Record<string, unknown>; userId: string; roleByOrg: Map<string, string>; deps: { now: () => number; /** conferência ao vivo do plugin; ausente = não consulta os sites (testes e chamadas sem rede) */ live?: LiveDeps } }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fail = (status: number, error: string, extra: Record<string, unknown> = {}): Reply => ({ status, body: { error, ...extra } });
@@ -43,6 +45,7 @@ interface Snapshot { speed?: { enabled: boolean } | null; backlinks?: { enabled:
 export async function handleLifecycleAction(admin: Admin, ctx: LifecycleCtx): Promise<Reply> {
   try {
     if (ctx.action === 'health_overview') return await healthOverview(admin, ctx);
+    if (ctx.action === 'pulse') return await pulse(admin, ctx);
     if (ctx.action === 'integrity_report' && !isUuid(ctx.body.projectId)) return await integrityOrganization(admin, ctx);
     const projectId = ctx.body.projectId;
     if (!isUuid(projectId)) return fail(422, 'project_id_required');
@@ -89,14 +92,80 @@ async function loadFacts(admin: Admin, organizationId: string): Promise<ProjectF
   return withRadar.map((f) => ({ ...f, studio: normalizeStudio(studioBy[f.id] || { pages: 0 }) }));
 }
 
+/** Cache curto (por instância da função) das conferências ao vivo: várias abas e atualizações seguidas não martelam o site do cliente. */
+const LIVE_CACHE = new Map<string, { at: number; result: LiveResult }>();
+
+export interface LiveSummary { enabled: boolean; checked_at: string | null; projects: number; ao_vivo: number; guardado: number; versions_updated: number }
+
+/**
+ * Pergunta aos sites (GET /version e /status do plugin) e põe o resultado nos fatos de saúde. Só projetos conectados pelo plugin e não arquivados.
+ * `onlyProject` limita a um projeto (tela de detalhe). Sem `ctx.deps.live` nada é consultado (enabled=false) e os fatos seguem como vieram do banco.
+ * Falha na conferência nunca derruba a leitura: o projeto fica com o valor guardado e o motivo por extenso.
+ */
+export async function withLiveCheck(admin: Admin, ctx: LifecycleCtx, facts: ProjectFacts[], onlyProject: string | null): Promise<{ facts: ProjectFacts[]; summary: LiveSummary }> {
+  const off: LiveSummary = { enabled: false, checked_at: null, projects: 0, ao_vivo: 0, guardado: 0, versions_updated: 0 };
+  const live = ctx.deps.live;
+  if (!live) return { facts, summary: off };
+  const eligible = facts.filter((f) => f.wordpress.connected && f.wordpress.mode === 'zica_posts' && f.lifecycle_status !== 'arquivado' && (!onlyProject || f.id === onlyProject));
+  if (!eligible.length) return { facts, summary: { ...off, enabled: true, checked_at: new Date(ctx.deps.now()).toISOString() } };
+  try {
+    const rows = await admin.from('projects').select('id,organization_id,wordpress_url,wordpress_plugin_namespace,wordpress_credential_ref').in('id', eligible.map((f) => f.id));
+    if (rows.error) throw rows.error;
+    const byId = new Map<string, Record<string, string | null>>(((rows.data || []) as Array<Record<string, string | null>>).map((r) => [String(r.id), r]));
+    const targets: LiveTarget[] = eligible.map((f) => {
+      const r = byId.get(f.id) || {};
+      return { project_id: f.id, organization_id: r.organization_id ?? null, wordpress_url: r.wordpress_url || f.wordpress_url, namespace: r.wordpress_plugin_namespace ?? null, credential_ref: r.wordpress_credential_ref ?? null, stored_version: f.wordpress.plugin_version, stored_verified_at: f.wordpress.last_verified_at };
+    });
+    const results = await checkProjectsLive(targets, live, { cache: LIVE_CACHE, cacheMs: LIVE_CACHE_MS, force: ctx.body.force === true });
+    const nowIso = new Date(ctx.deps.now()).toISOString();
+    const updated = await persistLiveVersions(admin, results, nowIso);
+    const by = new Map(results.map((r) => [r.project_id, r]));
+    const out = facts.map((f) => {
+      const r = by.get(f.id);
+      return r ? { ...f, wordpress: { ...f.wordpress, plugin_version: r.version, last_verified_at: r.origem === 'ao vivo' && r.changed ? nowIso : f.wordpress.last_verified_at, live: toPluginLive(r) } } : f;
+    });
+    return { facts: out, summary: { enabled: true, checked_at: nowIso, projects: results.length, ao_vivo: results.filter((r) => r.origem === 'ao vivo').length, guardado: results.filter((r) => r.origem !== 'ao vivo').length, versions_updated: updated } };
+  } catch (_e) {
+    console.error('[project-lifecycle] live_check_failed');
+    return { facts, summary: { ...off, enabled: true, checked_at: new Date(ctx.deps.now()).toISOString() } };
+  }
+}
+
+/**
+ * Pulso da organização para o painel "em tempo real" (leitura por qualquer membro): carimbo da última mudança de cada área e, se vier `since`,
+ * os fatos novos do barramento de eventos. O navegador compara os carimbos a cada poucos segundos (só com a aba visível) e recarrega só o que mudou.
+ * Área sem tabela/permissão = carimbo null (sem dado), nunca inventado.
+ */
+async function pulse(admin: Admin, ctx: LifecycleCtx): Promise<Reply> {
+  const org = ctx.body.organizationId;
+  if (!isUuid(org)) return fail(422, 'organization_id_required');
+  if (!ctx.roleByOrg.get(org)) return fail(403, 'organization_membership_required');
+  const since = typeof ctx.body.since === 'string' && Number.isFinite(Date.parse(ctx.body.since)) ? ctx.body.since : null;
+  const latest = async (q: PromiseLike<{ data: unknown; error: unknown }>, col: string): Promise<string | null> => {
+    try { const r = await q; const row = Array.isArray(r.data) ? (r.data[0] as Record<string, unknown> | undefined) : undefined; return r.error || !row || typeof row[col] !== 'string' ? null : String(row[col]); } catch { return null; }
+  };
+  const projects = await admin.from('projects').select('id,updated_at').eq('organization_id', org);
+  const ids = projects.error ? [] : ((projects.data || []) as Array<{ id: string }>).map((p) => p.id);
+  const projectsStamp = projects.error ? null : ((projects.data || []) as Array<{ updated_at: string | null }>).reduce<string | null>((m, p) => (p.updated_at && (!m || p.updated_at > m) ? p.updated_at : m), null);
+  const [eventsStamp, articlesStamp, spendStamp, news] = await Promise.all([
+    latest(admin.from('project_events').select('created_at').eq('organization_id', org).order('created_at', { ascending: false }).limit(1), 'created_at'),
+    ids.length ? latest(admin.from('articles').select('updated_at').in('project_id', ids).order('updated_at', { ascending: false }).limit(1), 'updated_at') : Promise.resolve(null),
+    latest(admin.from('spend_reservations').select('updated_at').eq('organization_id', org).order('updated_at', { ascending: false }).limit(1), 'updated_at'),
+    since ? admin.from('project_events').select('id,project_id,module,kind,payload,created_at').eq('organization_id', org).gt('created_at', since).order('created_at', { ascending: false }).limit(50) : Promise.resolve({ data: [], error: null }),
+  ]);
+  const events = news.error ? [] : ((news.data || []) as Array<{ id: string; project_id: string; module: string; kind: string; payload: Record<string, unknown>; created_at: string }>).map((e) => ({ id: e.id, project_id: e.project_id, module: e.module, kind: e.kind, created_at: e.created_at, text: describeEvent(e) }));
+  return { status: 200, body: { organization_id: org, server_time: new Date(ctx.deps.now()).toISOString(), stamps: { events: eventsStamp, projects: projectsStamp, articles: articlesStamp, spend: spendStamp }, events } };
+}
+
 async function healthOverview(admin: Admin, ctx: LifecycleCtx): Promise<Reply> {
   const org = ctx.body.organizationId;
   if (!isUuid(org)) return fail(422, 'organization_id_required');
   const role = ctx.roleByOrg.get(org) || null;
   if (!role) return fail(403, 'organization_membership_required');
-  const all = await loadFacts(admin, org);
+  const loaded = await loadFacts(admin, org);
+  const { facts: all, summary } = await withLiveCheck(admin, ctx, loaded, null);
   const health = assessOrganization(all, ctx.deps.now());
-  return { status: 200, body: { organization_id: org, can_manage: WRITE_ROLES.includes(role), can_delete: ADMIN_ROLES.includes(role), plugin_version: PLUGIN_VERSION, ...health } };
+  return { status: 200, body: { organization_id: org, can_manage: WRITE_ROLES.includes(role), can_delete: ADMIN_ROLES.includes(role), plugin_version: PLUGIN_VERSION, live: summary, ...health } };
 }
 
 interface TimelineEntry { at: string; kind: 'evento' | 'atividade'; text: string; source: string }
@@ -116,7 +185,8 @@ async function loadEvents(admin: Admin, projectId: string, limit = 50) {
 }
 
 async function healthDetail(admin: Admin, ctx: LifecycleCtx, p: ProjectRow): Promise<Reply> {
-  const all = await loadFacts(admin, p.organization_id);
+  const loaded = await loadFacts(admin, p.organization_id);
+  const { facts: all } = await withLiveCheck(admin, ctx, loaded, p.id);
   const facts = all.find((f) => f.id === p.id);
   if (!facts) return fail(404, 'project_not_found');
   const health = assessProject(facts, all, ctx.deps.now());

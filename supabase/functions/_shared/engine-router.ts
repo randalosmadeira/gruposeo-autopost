@@ -22,6 +22,7 @@ import { handleSpendPolicyAction } from './spend-policy-handler.ts';
 import { handleIndexationAction, type GoogleLink } from './indexation-handler.ts';
 import { handleRadarAction, type RadarDeps } from './radar-handler.ts';
 import { handleStudioAction, type StudioDeps } from './studio-handler.ts';
+import { handleCuradoriaAction } from './curadoria-handler.ts';
 
 export interface EngineDeps {
   fetchFn: typeof fetch;
@@ -67,6 +68,7 @@ export const ADAPTERS: Record<string, Adapter> = {
   events: (admin, c) => handleEventsAction(admin, c),
   indexacao: (admin, c, d) => handleIndexationAction(admin, { ...c, deps: { ...net(d), sleep: d.sleep, resolveGoogle: d.resolveGoogle, resolveBingKey: d.resolveBingKey, budgetMs: d.budgetMs } }),
   radar: (admin, c, d) => handleRadarAction(admin, { ...c, deps: radarDeps(d) }),
+  curadoria: (admin, c, d) => handleCuradoriaAction(admin, { ...c, deps: { now: d.now, budgetMs: d.budgetMs } }),
   estudio: (admin, c, d) => handleStudioAction(admin, { ...c, deps: { ...net(d), ai: d.studio?.ai, image: d.studio?.image, plugin: d.studio?.plugin } }),
 };
 

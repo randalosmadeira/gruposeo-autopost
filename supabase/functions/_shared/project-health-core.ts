@@ -15,6 +15,11 @@ export type ItemArea = 'conexoes' | 'atividade' | 'resultado' | 'estrutura' | 'r
 export const STATE_LABEL: Record<HealthState, string> = { saudavel: 'Saudável', atencao: 'Atenção', critico: 'Crítico', inativo: 'Inativo', pausado: 'Pausado', arquivado: 'Arquivado' };
 export const AREA_LABEL: Record<ItemArea, string> = { conexoes: 'Conexões', atividade: 'Atividade', resultado: 'Resultado', estrutura: 'Estrutura', risco: 'Risco' };
 
+/** Resumo da fila de saída do plugin (lido ao vivo de GET /status). `detail` false = plugin sem o resumo do motivo (anterior à 3.19.0). */
+export interface PluginQueue { counts: Record<string, number>; failed: number; pending: number; detail: boolean; last_error: string | null; last_error_at: string | null }
+/** Conferência ao vivo do plugin (plugin-live-check.ts). Ausente = a conferência não rodou (testes antigos, função sem a dependência). */
+export interface PluginLive { origin: 'ao vivo' | 'guardado: site não respondeu'; checked_at: string | null; attempted_at: string; reason: string | null; queue: PluginQueue | null }
+
 /** Fatos de UM projeto. `null` em um bloco opcional = a tabela do módulo não existe no banco (módulo não instalado): vira "sem dados". */
 export interface ProjectFacts {
   id: string;
@@ -25,7 +30,7 @@ export interface ProjectFacts {
   lifecycle_status: LifecycleStatus;
   archived_at: string | null;
   paused_reason: string | null;
-  wordpress: { connected: boolean; plugin_version: string | null; mode: string | null; connected_at: string | null; last_verified_at: string | null };
+  wordpress: { connected: boolean; plugin_version: string | null; mode: string | null; connected_at: string | null; last_verified_at: string | null; live?: PluginLive | null };
   profile: { status: string | null; completeness: number | null; confirmed: boolean | null } | null;
   articles: { total: number; published: number; last_published_at: string | null };
   gsc: { rows: number; last_day: string | null };
@@ -130,6 +135,26 @@ export function richness(f: ProjectFacts): number {
 const item = (key: string, area: ItemArea, label: string, status: ItemStatus, detail: string, source: string, date: string | null, action: string | null = null): HealthItem => ({ key, area, label, status, detail, source, date, action });
 const SEM = (key: string, area: ItemArea, label: string, detail: string, source: string): HealthItem => item(key, area, label, 'sem_dados', detail, source, null, null);
 
+/**
+ * Conferência ao vivo do plugin: acrescenta ao item "Plugin do WordPress" se a versão foi lida agora ou se é o valor guardado (site sem resposta)
+ * e devolve o item da fila de saída (motivo das falhas). Sem a conferência (live ausente) nada muda.
+ */
+function livePluginItems(plugin: HealthItem, live: PluginLive): HealthItem[] {
+  if (live.origin === 'ao vivo') { plugin.detail += ' Conferido ao vivo agora.'; plugin.date = live.attempted_at; plugin.source = 'Plugin do WordPress (leitura ao vivo)'; }
+  else plugin.detail += ` Não conferido agora: ${live.reason || 'o site não respondeu'}. Valor guardado da última verificação${live.checked_at ? ` (${fmtDate(live.checked_at)})` : ''}.`;
+  const q = live.queue;
+  const src = 'Plugin do WordPress (fila de saída)';
+  if (!q) return [SEM('fila_plugin', 'conexoes', 'Fila de envio do plugin', live.origin === 'ao vivo' ? 'O plugin não informou a fila (versão antiga ou sem permissão de leitura).' : 'Sem dados: o site não respondeu agora, então a fila não foi lida.', src)];
+  if (q.failed > 0) {
+    const why = q.detail
+      ? (q.last_error ? `Último erro registrado: ${q.last_error}${q.last_error_at ? ` (evento de ${fmtDate(q.last_error_at)})` : ''}.` : 'O plugin não guardou o motivo dos erros.')
+      : `O motivo só aparece com o plugin ${PLUGIN_VERSION} ou mais novo (o instalado não informa o erro).`;
+    return [item('fila_plugin', 'conexoes', 'Fila de envio do plugin', 'atencao', `${plural(q.failed, 'envio falhou', 'envios falharam')} (${plural(q.pending, 'pendente', 'pendentes')}). ${why}`, src, live.attempted_at,
+      'Corrija a causa (endereço do hub, chave ou rede). O Zica não apaga nem reenvia a fila sozinho; use o painel do plugin no WordPress.')];
+  }
+  return [item('fila_plugin', 'conexoes', 'Fila de envio do plugin', 'ok', `Fila em dia: nenhum envio falhou (${plural(q.pending, 'pendente', 'pendentes')}).`, src, live.attempted_at)];
+}
+
 /** Todos os itens de saúde de um projeto, a partir dos fatos. Sem dado = "sem dados" (não entra na nota). */
 export function buildItems(f: ProjectFacts, now: number): HealthItem[] {
   const out: HealthItem[] = [];
@@ -146,10 +171,12 @@ export function buildItems(f: ProjectFacts, now: number): HealthItem[] {
   }
   if (f.wordpress.connected) {
     const v = f.wordpress.plugin_version;
+    const firstPluginItem = out.length;
     if (!v) out.push(SEM('plugin', 'conexoes', 'Plugin do WordPress', 'A versão do plugin não foi informada (conexão sem o plugin Zica Posts).', 'Plugin do WordPress'));
     else if (compareVersions(v, PLUGIN_MINIMUM_VERSION) < 0) out.push(item('plugin', 'risco', 'Plugin do WordPress', 'critico', `Plugin ${v} abaixo do mínimo aceito (${PLUGIN_MINIMUM_VERSION}). A versão atual é ${PLUGIN_VERSION}.`, 'Plugin do WordPress', f.wordpress.last_verified_at, `Atualize o plugin Zica Posts no WordPress para a ${PLUGIN_VERSION}.`));
     else if (compareVersions(v, PLUGIN_VERSION) < 0) out.push(item('plugin', 'conexoes', 'Plugin do WordPress', 'atencao', `Plugin ${v} desatualizado; a versão atual é ${PLUGIN_VERSION}.`, 'Plugin do WordPress', f.wordpress.last_verified_at, `Atualize o plugin Zica Posts no WordPress para a ${PLUGIN_VERSION}.`));
     else out.push(item('plugin', 'conexoes', 'Plugin do WordPress', 'ok', `Plugin ${v} (atual).`, 'Plugin do WordPress', f.wordpress.last_verified_at));
+    if (f.wordpress.live) out.push(...livePluginItems(out[firstPluginItem], f.wordpress.live));
   }
   out.push(google
     ? item('google', 'conexoes', 'Google (Search Console e GA4)', 'ok', `Conectado: ${f.providers.filter((p) => p !== 'bing').map((p) => (p === 'gsc' ? 'Search Console' : 'GA4')).join(' e ')}.`, 'Conexões do Google', null)
@@ -387,6 +414,18 @@ export function normalizeRadar(v: unknown): ProjectFacts['radar'] {
   return { focuses: num(o.focuses), competitors: num(o.competitors), last_run_at: str(o.last_run_at), coverage_done: num(o.coverage_done), coverage_total: num(o.coverage_total), identities_orphan: num(o.identities_orphan), competitors_without_link: num(o.competitors_without_link) };
 }
 
+function normalizeLive(raw: unknown): PluginLive | null {
+  const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : null;
+  if (!o || (o.origin !== 'ao vivo' && o.origin !== 'guardado: site não respondeu') || typeof o.attempted_at !== 'string') return null;
+  const q = o.queue && typeof o.queue === 'object' && !Array.isArray(o.queue) ? o.queue as Record<string, unknown> : null;
+  const counts: Record<string, number> = {};
+  if (q && q.counts && typeof q.counts === 'object') for (const [k, v] of Object.entries(q.counts as Record<string, unknown>)) counts[k] = Number(v) || 0;
+  return {
+    origin: o.origin, checked_at: typeof o.checked_at === 'string' ? o.checked_at : null, attempted_at: o.attempted_at, reason: typeof o.reason === 'string' ? o.reason : null,
+    queue: q ? { counts, failed: Number(q.failed) || 0, pending: Number(q.pending) || 0, detail: q.detail === true, last_error: typeof q.last_error === 'string' ? q.last_error : null, last_error_at: typeof q.last_error_at === 'string' ? q.last_error_at : null } : null,
+  };
+}
+
 /** Normaliza o JSON bruto do banco (colunas ausentes viram valores seguros; blocos de módulo não instalado ficam null). */
 export function normalizeFacts(raw: Record<string, unknown>): ProjectFacts {
   const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
@@ -412,7 +451,7 @@ export function normalizeFacts(raw: Record<string, unknown>): ProjectFacts {
   return {
     id: String(raw.id), name: String(raw.name ?? ''), domain: str(raw.domain), wordpress_url: str(raw.wordpress_url), created_at: str(raw.created_at),
     lifecycle_status: lc === 'pausado' || lc === 'arquivado' ? lc : 'ativo', archived_at: str(raw.archived_at), paused_reason: str(raw.paused_reason),
-    wordpress: { connected: bool(wp.connected), plugin_version: str(wp.plugin_version), mode: str(wp.mode), connected_at: str(wp.connected_at), last_verified_at: str(wp.last_verified_at) },
+    wordpress: { connected: bool(wp.connected), plugin_version: str(wp.plugin_version), mode: str(wp.mode), connected_at: str(wp.connected_at), last_verified_at: str(wp.last_verified_at), ...(wp.live ? { live: normalizeLive(wp.live) } : {}) },
     profile: prof ? { status: str(prof.status), completeness: prof.completeness === null || prof.completeness === undefined ? null : num(prof.completeness), confirmed: prof.confirmed === null || prof.confirmed === undefined ? null : bool(prof.confirmed) } : null,
     articles: { total: num(art.total), published: num(art.published), last_published_at: str(art.last_published_at) },
     gsc: { rows: num(gsc.rows), last_day: str(gsc.last_day) },

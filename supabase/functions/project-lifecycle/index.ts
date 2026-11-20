@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     const { data: members, error: memberError } = await admin.from('organization_members').select('organization_id,role').eq('user_id', actor.userId).eq('status', 'active');
     if (memberError) throw memberError;
     const roleByOrg = new Map<string, string>((members || []).map((m: { organization_id: string; role: string | null }) => [m.organization_id, String(m.role || '')]));
-    const result = await handleLifecycleAction(admin, { action: body.action, body, userId: actor.userId, roleByOrg, deps: { now: () => Date.now() } });
+    const result = await handleLifecycleAction(admin, { action: body.action, body, userId: actor.userId, roleByOrg, deps: { now: () => Date.now(), live: { fetchFn: fetch, lookupA: (host: string) => Deno.resolveDns(host, 'A'), now: () => Date.now(), getKey: async (ref: string) => { const r = await admin.rpc('get_zica_wordpress_credential', { p_ref: ref }); return r.error || !r.data ? null : String(r.data); } } } });
     return json(result.body, result.status);
   } catch (e) {
     if (e instanceof RequestAuthError) return json({ error: e.code }, e.status);

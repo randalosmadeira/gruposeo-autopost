@@ -605,7 +605,9 @@ ARTIGOS DESTINO DISPONÍVEIS (para linkar dentro do snippet):
 ${targetDescs}
 
 REGRAS:
-- O snippet deve parecer PARTE NATURAL do artigo, não um apêndice
+- Escreva uma ponte honesta e útil ao leitor (pode soar como continuação, mas não finja que é parte do texto original)
+- Use SOMENTE as URLs da lista "ARTIGOS DESTINO DISPONÍVEIS"; nunca invente URL nem afirme algo sobre o artigo destino além do título e da keyword fornecidos
+- Você não leu o texto do artigo órfão (só título e palavra-chave): não faça afirmações factuais sobre o conteúdo dele
 - Anchor texts devem ser variados e contextuais (NUNCA "clique aqui" ou "leia mais")
 - Cada snippet deve ter 2-3 links internos
 - Se não houver artigo destino com relevância alta, sugira temas de artigos que DEVERIAM existir
@@ -626,7 +628,7 @@ JSON OBRIGATÓRIO:
 }`;
 
         const aiResult = await orchestrator.call("seo_analysis", [
-          { role: "system", content: `Redator SEO enterprise. Gere snippets de ponte semântica em português brasileiro. Nicho: ${project.nicho || "geral"}. APENAS JSON válido.` },
+          { role: "system", content: `Redator SEO. Gere snippets de ponte semântica no idioma dos artigos, em linguagem natural e sem fórmula repetida de abertura. Nicho: ${project.nicho || "geral"}. APENAS JSON válido.` },
           { role: "user", content: bridgePrompt },
         ], { maxTokens: 4000, temperature: 0.4 });
 

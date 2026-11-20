@@ -1,5 +1,7 @@
 import '../_shared/nexus-runtime-bootstrap.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { applyPluginVersionPush } from "../_shared/plugin-live-check.ts";
+import { recordEvents } from "../_shared/project-events.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -72,7 +74,18 @@ Deno.serve(async (req) => {
         updated_at: new Date().toISOString(),
       });
       if (error) throw error;
-      return json({ success: true, registered: true });
+      // O plugin chama "register" sozinho quando é atualizado (uma vez por versão). Antes isto só atualizava o registro de pareamento e o painel
+      // continuava mostrando a versão antiga: agora o projeto com esta chave passa a mostrar a versão nova na hora e o fato entra na linha do tempo.
+      let versionUpdated = 0;
+      try {
+        const push = await applyPluginVersionPush(admin, { keyHash, version: String(verified?.version || body.plugin_version || ""), nowIso: new Date().toISOString() });
+        versionUpdated = push.updated;
+        await recordEvents(admin, push.changed.filter((c) => c.organization_id).map((c) => ({
+          organization_id: String(c.organization_id), project_id: c.project_id, module: "projeto", kind: "conexao.plugin_atualizado",
+          subject: { source: "plugin" }, payload: { from: c.from, to: c.to },
+        })));
+      } catch { /* o pareamento já foi gravado; a conferência ao vivo do servidor corrige a versão na próxima leitura */ }
+      return json({ success: true, registered: true, projects_updated: versionUpdated });
     }
 
     const authHeader = req.headers.get("Authorization") || "";

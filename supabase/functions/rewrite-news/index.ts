@@ -8,6 +8,9 @@ import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
 import { RequestAuthError, resolveRequestActor } from "../_shared/request-auth.ts";
 import { normalizeEditorialHtml } from "../_shared/editorial-html.ts";
 import { distributeProjectCtas } from "../_shared/editorial-cta.ts";
+import { hasHumanVoiceBlock, humanVoiceBlock } from "../_shared/human-voice-guide.ts";
+import { PROMPT_LIBRARY, renderPromptVariables } from "../_shared/prompt-library.ts";
+import { promptLimits, resolveRuleProfile, type RuleProfile } from "../_shared/optimization-rules.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -104,14 +107,19 @@ async function resolveTemplate(admin: SupabaseClient, userId: string, projectId:
   }
   const { data: template } = await admin.from("prompt_templates").select("name,prompt,agent_name")
     .eq("user_id", userId).eq("name", templateName).maybeSingle();
+  // Modelo ausente no banco (o nome padrão nexus_news_v1 não existe em produção): usa o padrão neutro da biblioteca, em vez de texto vazio.
+  const fallback = PROMPT_LIBRARY.find((item) => item.id === "news-article")?.prompt || "";
   return {
     templateName,
-    prompt: String(template?.prompt || ""),
+    prompt: String(template?.prompt || "") || fallback,
     agentName: String(template?.agent_name || "NEXUS Editorial"),
   };
 }
 
-function generationPrompt(input: RewriteRequest, template: string, project: ProjectContext) {
+function generationPrompt(input: RewriteRequest, templateRaw: string, project: ProjectContext, rules: RuleProfile) {
+  const language = input.language || "pt-BR";
+  const template = renderPromptVariables(templateRaw, { title: input.sourceName || "", language, articleLength: promptLimits(rules).words, currentYear: new Date().getFullYear() });
+  const faqHeading = /^pt/i.test(language) ? "Perguntas Frequentes" : "FAQ";
   const source = String(input.sourceContent || "").slice(0, 60000);
   const context = JSON.stringify({
     name: project.name,
@@ -123,7 +131,7 @@ function generationPrompt(input: RewriteRequest, template: string, project: Proj
   return `${template}
 
 TAREFA OPERACIONAL
-Produza matéria original de 600 a 1.200 palavras para o projeto descrito em <project_context>${context}</project_context>.
+Produza matéria original, com o tamanho que o fato pede (${promptLimits(rules).words}), para o projeto descrito em <project_context>${context}</project_context>.
 Idioma: ${input.language || "pt-BR"}. Fonte: ${input.sourceName || "não informada"}. URL: ${input.sourceUrl || "texto fornecido pelo operador"}.
 O nicho, público, geografia, tom e CTA devem vir exclusivamente do projeto e do prompt mestre.
 
@@ -139,7 +147,7 @@ REGRAS OBRIGATÓRIAS
 9. Use links internos reais do projeto quando disponíveis. Nunca invente URL.
 10. image_prompt deve descrever imagem editorial horizontal com safe area para 1200x630, sem texto embutido.
 11. Não inclua resíduos de prompt, placeholders, JSON ou notas internas no artigo.
-12. Só inclua uma seção <h2>Perguntas Frequentes</h2> seguida de 2 ou mais pares
+12. Só inclua uma seção <h2>${faqHeading}</h2> seguida de 2 ou mais pares
     <h3>pergunta real</h3><p>resposta objetiva baseada apenas nos fatos já apresentados na matéria</p>
     se a fonte realmente sustentar 2 ou mais perguntas de leitor genuínas e não redundantes entre si.
     Caso contrário, omita a seção inteiramente. Nunca invente perguntas artificiais só para
@@ -197,10 +205,14 @@ paidLockedServe(async (req: Request) => {
 
     if (!hasText) return json({ success: false, error: "Envie o texto extraído da fonte; uma URL isolada não permite revisão factual.", code: "source_body_required", retryable: false, request_id: requestId }, 409);
     const template = await resolveTemplate(admin, userId, input.projectId, input.promptTemplate);
+    // Tamanho mínimo NÃO é regra fixa: só vale se o projeto, o artigo ou o prompt do agente o exigirem (optimization-rules.ts).
+    const ruleProfile = resolveRuleProfile({ projectIdentity: project.editorial_identity, projectStrategy: (project.nexus_strategy as Record<string, unknown> | null) || null, prompts: [template.prompt] });
+    const wordsRule = ruleProfile.rules.words;
+    const wordFloor = wordsRule.source !== "padrao_editavel" && wordsRule.level === "exigir" && wordsRule.value ? wordsRule.value : 0;
     const orchestrator = await getOrchestratorForUser(userId);
     const generation = await orchestrator.callWithMeta("news_rewrite", [
-      { role: "system", content: `Você é ${template.agentName}. Entregue somente JSON válido e HTML semântico sem H1.\n${buildNexusEditorialPolicy({ contentType: "news", projectConfig: project })}` },
-      { role: "user", content: generationPrompt(input, template.prompt, project as ProjectContext) },
+      { role: "system", content: `Você é ${template.agentName}. Entregue somente JSON válido e HTML semântico sem H1.\n${hasHumanVoiceBlock(template.prompt) ? "" : humanVoiceBlock(input.language || "pt-BR", { mode: "compact" }) + "\n"}${buildNexusEditorialPolicy({ contentType: "news", projectConfig: project })}` },
+      { role: "user", content: generationPrompt(input, template.prompt, project as ProjectContext, ruleProfile) },
     ], { preferredProvider: "openai", maxTokens: 14000, temperature: 0.25 });
 
     const draft = parseJson<ArticleDraft>(generation.content);
@@ -221,11 +233,11 @@ paidLockedServe(async (req: Request) => {
     const keyword = String(review.corrected_keyword || draft.keyword || title).trim();
     const wordCount = audit.metrics.wordCount;
     const needsPrimary = Boolean(review.needs_primary_source || draft.needs_primary_source || /\[VERIFICAR\]/i.test(content));
-    const enoughDepth = wordCount >= 600;
+    const enoughDepth = wordFloor > 0 ? wordCount >= wordFloor : wordCount > 0;
     const reviewPass = Boolean(review.pass && !needsPrimary && enoughDepth && audit.pass);
     const reviewIssues = [
       ...(review.issues || []), ...audit.issues, ...audit.fatalIssues.map((issue) => `HTML editorial: ${issue}`),
-      ...(enoughDepth ? [] : [`Conteúdo abaixo do piso editorial: ${wordCount}/600 palavras.`]),
+      ...(enoughDepth ? [] : [wordFloor > 0 ? `Conteúdo abaixo do tamanho definido pelo projeto ou pelo agente: ${wordCount}/${wordFloor} palavras.` : "Conteúdo vazio."]),
     ];
 
     const payload = {

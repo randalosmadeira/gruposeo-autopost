@@ -4,10 +4,17 @@ Tags: seo, geo, llms, indexnow, schema, wordpress, automation, queue
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.18.0
+Stable tag: 3.19.0
 License: GPLv2 or later
 
 Agente WordPress leve oficial da Zica.ai. Publica, registra eventos duráveis, serve discovery files e conversa com o Zica Orchestrator sem executar IA pesada durante save_post.
+
+== 3.19.0 ==
+
+* Aviso de versao em segundo plano: quando a versao instalada muda (ou o WordPress atualiza o plugin), o plugin agenda UM aviso unico pelo wp-cron e o envia ao Zica com a mesma chave de API do pareamento. O painel do Zica passa a mostrar a versao nova sem esperar ninguem clicar em "testar conexao". Antes, esse registro rodava dentro do carregamento da pagina (ate 20 s de espera) e nao chegava ao painel.
+* GET /status passa a trazer "outbox_summary": contagem da fila de saida por status e o erro MAIS RECENTE ja saneado (sem enderecos, tokens ou chaves, no maximo 200 caracteres), para o Zica mostrar o motivo das falhas. Somente leitura: o comportamento da fila nao muda e nada e apagado.
+* Sem tabela nova, sem requisicao externa alem do aviso de versao ao Zica, sem telemetria. Zica antigo continua funcionando (o campo "outbox" de sempre continua no /status).
+* ATENCAO: a sintaxe PHP desta versao NAO foi executada antes do empacotamento (nao havia PHP no ambiente de build). Instale primeiro em UM site de teste e confira o /status e o aviso no painel do Zica.
 
 == 3.18.0 ==
 

@@ -1,7 +1,7 @@
 export const BEHAVIORAL_DIRECTIVES = `DIRETRIZES GLOBAIS DE CONTEÚDO ZICA.AI
 
 1. Precisão factual acima de fluência. Nunca invente pessoas, datas, números, decisões, leis, súmulas, pesquisas, citações ou fontes.
-2. É proibido inserir no conteúdo final marcadores internos como [VERIFICAR], [VALIDAR], [CONFIRMAR], [RECONSULTAR], TODO, FIXME, mensagens de revisão, prompts ou metadados técnicos. Se uma afirmação acessória não estiver sustentada, omita-a. Se uma fonte primária for indispensável para a tese central, interrompa o conteúdo final e sinalize a pendência somente pelo estado técnico do workflow.
+2. É proibido inserir no conteúdo final marcadores internos como [VERIFICAR], [VALIDAR], [CONFIRMAR], [RECONSULTAR], TODO, FIXME, mensagens de revisão, prompts ou metadados técnicos. Se uma afirmação acessória não estiver sustentada, omita-a. Se uma fonte primária for indispensável para a tese central, interrompa o conteúdo final e sinalize a pendência somente pelo estado técnico do workflow. Única exceção: o executor que pedir expressamente o marcador [PENDING: ...] (Estúdio de Páginas) o recebe, e o portão de resíduos impede a publicação enquanto ele existir.
 3. Diferencie fato documentado, alegação, opinião, tese jurídica, proposta e exemplo hipotético.
 4. Não revele raciocínio interno. Entregue apenas resultado editorial final ou um sinal técnico estruturado previsto pelo workflow.
 5. Conteúdo YMYL/jurídico exige linguagem cuidadosa, contexto e fontes primárias quando a conclusão depender de norma, decisão ou ato oficial.
@@ -11,11 +11,11 @@ export const BEHAVIORAL_DIRECTIVES = `DIRETRIZES GLOBAIS DE CONTEÚDO ZICA.AI
 9. Preserve autoria e direitos autorais: não copie trechos extensos; reescreva de modo transformativo, atribua a fonte e mantenha citações curtas quando indispensáveis.
 10. Conteúdo institucional deve permanecer informativo e compatível com as regras profissionais aplicáveis.
 11. Densidade informacional é mais importante que volume bruto. Nunca aumente texto com repetição, frases vazias ou prolixidade para atingir faixa de palavras.
-12. Quando URLs internas reais forem fornecidas pelo sistema, a linkagem interna é obrigatória e deve usar âncoras contextuais naturais, sem inventar URLs.
+12. Quando URLs internas reais forem fornecidas pelo sistema, use-as onde forem pertinentes, com âncoras contextuais naturais e sem inventar URLs. A quantidade vem do perfil de regras do projeto, não de cota fixa.
 13. O tamanho do conteúdo deve ser consequência da intenção, complexidade, disponibilidade de fontes e profundidade semântica. A IA deve preferir o menor tamanho que cubra integralmente a intenção, sem sacrificar precisão.
 `.trim();
 
-export const LEGAL_NEWS_DIRECTIVES = `DIRETRIZES JURÍDICO-EDITORIAIS
+export const LEGAL_NEWS_DIRECTIVES = `DIRETRIZES JURÍDICO-EDITORIAIS (valem só quando o tema for jurídico, regulatório ou de política pública; em qualquer outro assunto, ignore este bloco)
 - Priorize fontes oficiais: Planalto, STF, STJ, CNJ, tribunais, Bacen, Detran e órgãos competentes.
 - Jurisprudência, súmula, tema repetitivo e número de processo só podem ser afirmados quando sustentados pela fonte disponível.
 - Não trate tese defensiva, acusação, narrativa de parte ou interpretação como fato incontroverso.
@@ -39,15 +39,15 @@ export const REPOST_NEWS_DIRECTIVES = `DIRETRIZES DE REPOSTAGEM JORNALÍSTICA
 export const GEO_AEO_2026_RULES = `POLÍTICA INTERNA ZICA.AI PARA SEO, GEO, AEO E MOTORES DE IA
 - Responda diretamente à intenção principal já no primeiro parágrafo.
 - O título do documento/página é o único H1. Quando o corpo for enviado separadamente ao WordPress, use apenas H2 e H3 no corpo.
-- Sempre que um H2 ou H3 representar uma pergunta ou intenção objetiva, abra a seção com Answer Capsule de aproximadamente 25 a 45 palavras que entregue a resposta antes do aprofundamento.
+- Sempre que um H2 ou H3 representar uma pergunta ou intenção objetiva, abra a seção com uma resposta curta e direta (uma ou duas frases) antes do aprofundamento. Varie a forma de abrir cada seção: a resposta direta é obrigatória, o molde não.
 - Use entidades, localidades, datas e relações semânticas somente quando forem pertinentes e verificáveis.
 - Dados, percentuais, estatísticas, estudos e anos só podem aparecer quando existirem na fonte ou contexto fornecido. Nunca invente números para cumprir frequência editorial.
 - Tabelas comparativas são recomendadas somente quando houver elementos realmente comparáveis e dados suficientes.
 - Use listas para passos, requisitos, riscos, documentos, critérios ou sínteses que se beneficiem de escaneabilidade.
 - FAQ deve ser incluído somente quando houver perguntas reais e respostas sustentadas pelo conteúdo.
-- Padrão obrigatório de FAQ para extração automática de dado estruturado: um heading (H2 ou H3) contendo as palavras "Perguntas Frequentes" ou "FAQ", seguido por pares <h3>pergunta terminada em ?</h3><p>resposta objetiva</p>, sem nenhuma outra tag entre a pergunta e a resposta e sem numerar as perguntas (nunca usar prefixos como "1.", "P1:"). Mínimo de 2 perguntas reais para a seção valer a pena; qualquer desvio desse padrão quebra a extração automática de FAQPage.
-- O conteúdo nunca deve contradizer o tipo de negócio declarado no schema estruturado do site (ex.: escritório de advocacia nunca deve ser descrito como "loja", "clínica" ou termo equivalente de outro ramo em nenhum trecho).
-- Links internos fornecidos pelo sistema devem ser usados sempre que semanticamente pertinentes, preferindo 2 a 6 interlinks distribuídos no corpo. Nunca invente URLs.
+- Padrão obrigatório de FAQ para extração automática de dado estruturado: um heading (H2 ou H3) contendo as palavras "Perguntas Frequentes" ou "FAQ" (em texto de outro idioma, use "FAQ"), seguido por pares <h3>pergunta terminada em ?</h3><p>resposta objetiva</p>, sem nenhuma outra tag entre a pergunta e a resposta e sem numerar as perguntas (nunca usar prefixos como "1.", "P1:"). Mínimo de 2 perguntas reais para a seção valer a pena; qualquer desvio desse padrão quebra a extração automática de FAQPage.
+- O conteúdo nunca deve contradizer o tipo de negócio declarado no schema estruturado do site (por exemplo, um escritório não deve ser descrito como loja ou clínica em nenhum trecho).
+- Links internos fornecidos pelo sistema devem ser usados sempre que semanticamente pertinentes, distribuídos no corpo na quantidade que o perfil de regras do projeto indicar (sem cota fixa). Nunca invente URLs.
 - Prefira parágrafos curtos, frases claras e alta densidade de informação.
 - Evite thin content, repetição de palavra-chave e texto inflado para atingir contagem de palavras.
 - A IA deve decidir a profundidade e a extensão pela intenção, concorrência semântica, complexidade e fontes. Se houver conflito entre quantidade e qualidade factual, preserve a qualidade factual e encerre o texto no ponto de cobertura suficiente.

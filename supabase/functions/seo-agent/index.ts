@@ -679,16 +679,16 @@ ${articlesList}
 
 REGRAS INEGOCIÁVEIS:
 - meta_title: 55-65 caracteres, keyword no início, sem cortar palavras
-- meta_description: 145-160 caracteres, keyword nos primeiros 60 chars, CTA sutil
+- meta_description: referência de 145 a 160 caracteres (cabe no resultado de busca), com a keyword de forma natural; sem promessa nem urgência
 - focus_keyword: se ausente, extrair do título
-- Flesch 60+: vocabulário simples e direto
+- vocabulário simples e direto, sem inventar informação além do título e da keyword
 - Nicho: ${project.nicho || "geral"} | Empresa: ${project.empresa_nome || project.name}
 - LIMPAR: remover parênteses órfãos, anos truncados, caracteres especiais pendentes
 
 JSON: {"fixes":[{"wp_post_id":123,"meta_title":"...","meta_description":"...","focus_keyword":"..."}]}`;
 
                   const aiResult = await orchestrator.call("seo_analysis", [
-                    { role: "system", content: "Especialista SEO brasileiro. Gere títulos e meta descriptions otimizadas. Máximo CTR. APENAS JSON válido." },
+                    { role: "system", content: "Especialista SEO. Gere títulos e meta descriptions fiéis ao tema do artigo, claros e sem exagero, sem promessa e sem fórmula de manchete. Você vê só título e palavra-chave: não invente fatos, números ou promessas; sem informação suficiente, mantenha o título atual. Escreva no idioma do título. APENAS JSON válido." },
                     { role: "user", content: metaPrompt },
                   ], { maxTokens: 4000, temperature: 0.3 });
 
@@ -1330,13 +1330,13 @@ ${project.empresa_nome ? `- Empresa: ${project.empresa_nome}` : ''}
 
 Para cada artigo, gere:
 1. meta_title otimizado (max 60 chars, incluir keyword, tom "${dnaEntry?.tone || 'profissional'}")
-2. meta_description otimizada (145-160 chars, keyword nos primeiros 60 chars, CTA implícito)
+2. meta_description fiel ao tema (referência de 145-160 chars, keyword de forma natural, sem promessa)
 3. focus_keyword sugerida (se ausente)
 
 REGRAS INEGOCIÁVEIS:
-- Meta-description SEMPRE entre 145-160 caracteres
+- Meta-description com referência de 145-160 caracteres (priorize fidelidade ao tema se o tamanho não couber)
 - Keyword nos primeiros 60 chars da meta-description
-- Flesch mínimo 60: vocabulário simples, frases curtas
+- Vocabulário simples e frases curtas
 - Adaptar tom ao nicho ${orchestration.nichoDetectado.nicho}
 ${orchestration.nichoDetectado.disclaimers.length > 0 ? `- Disclaimers obrigatórios: ${orchestration.nichoDetectado.disclaimers[0]}` : ''}
 
@@ -1353,7 +1353,7 @@ Retorne APENAS JSON:
 }`;
 
     const aiContent = await orchestrator.call('seo_analysis', [
-      { role: "system", content: `Você é um especialista SEO brasileiro seguindo a filosofia "Madeira Sem Verniz": linguagem simples, acessível, Flesch mínimo 60. Gere metas otimizadas para máximo CTR e ranqueamento. Meta-descriptions SEMPRE 145-160 caracteres. Responda APENAS com JSON válido.` },
+      { role: "system", content: `Você é um especialista SEO. Escreva em linguagem simples e acessível, no idioma do título. Gere metas fiéis ao assunto do artigo, claras e sem exagero ou promessa; você vê só título e palavra-chave, então não invente fatos nem números. Meta-descriptions de referência entre 145 e 160 caracteres. Responda APENAS com JSON válido.` },
       { role: "user", content: prompt },
     ], { maxTokens: 4000, temperature: 0.3 });
 

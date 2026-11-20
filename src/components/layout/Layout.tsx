@@ -7,11 +7,13 @@ import { Header } from './Header';
 import { MobileDock } from './MobileDock';
 import { NeuralEnergy } from '@/components/brand/NeuralEnergy';
 import { ElectoralOperationsDock } from '@/components/electoral/ElectoralOperationsDock';
+import { LivePulseBridge } from './LivePulseBridge';
 
 export const Layout = memo(function Layout() {
   return (
     <div className="neural-shell relative flex h-dvh min-h-screen overflow-hidden bg-background">
       <NexusFirstBusiness />
+      <LivePulseBridge />
       <NeuralEnergy variant="ambient" className="fixed inset-0 z-0" />
       <div className="relative z-20 hidden h-full shrink-0 md:block">
         <Sidebar />

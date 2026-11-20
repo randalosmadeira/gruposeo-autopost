@@ -83,6 +83,7 @@ export const EVENT_LABELS: Record<string, string> = {
   'indexacao.higiene': 'Higiene de indexação verificada',
   'indexacao.chave_indexnow': 'Chave do IndexNow cadastrada',
   'estrutura.mapa_atualizado': 'Mapa do domínio atualizado',
+  'conexao.plugin_atualizado': 'Plugin do WordPress atualizado (o plugin avisou)',
   'backlinks.verificados': 'Backlinks verificados',
   'radar.foco_criado': 'Foco de mercado criado',
   'radar.rodada_concluida': 'Rodada do radar concluída',

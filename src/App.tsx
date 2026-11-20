@@ -29,6 +29,7 @@ const Structure = lazy(() => import("./pages/Structure"));
 const Taxonomy = lazy(() => import("./pages/Taxonomy"));
 const Indexation = lazy(() => import("./pages/Indexation"));
 const Radar = lazy(() => import("./pages/Radar"));
+const Curadoria = lazy(() => import("./pages/Curadoria"));
 const PageStudio = lazy(() => import("./pages/PageStudio"));
 const ProjectProfile = lazy(() => import("./pages/ProjectProfile"));
 const ProjectsList = lazy(() => import("./pages/ProjectsList"));
@@ -131,6 +132,7 @@ const App = () => (
                 <Route path="/taxonomia" element={<Taxonomy />} />
                 <Route path="/indexacao" element={<Indexation />} />
                 <Route path="/radar" element={<Radar />} />
+                <Route path="/curadoria" element={<Curadoria />} />
                 <Route path="/estudio" element={<PageStudio />} />
                 <Route path="/business-profile" element={<BusinessProfile />} />
                 <Route path="/projects/:id/perfil" element={<ProjectProfile />} />
