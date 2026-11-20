@@ -17,6 +17,6 @@ describe('curadoria: regra "tira dúvidas" (regra primordial do dono, 20/11/2026
   });
   it('a regra entrou na curadoria como módulo bloqueante e as regras subiram de versão', () => {
     expect(CURATION_MODULES).toContain('duvidas');
-    expect(CURADORIA_VERSION).toBe(2);
+    expect(CURADORIA_VERSION).toBe(3);
   });
 });

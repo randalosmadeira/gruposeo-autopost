@@ -30,7 +30,7 @@ import type { ProfileFacts } from './studio-types.ts';
 type Any = any;
 
 /** Muda quando as regras da curadoria mudam: curadoria gravada com versão antiga deixa de valer. */
-export const CURADORIA_VERSION = 2;
+export const CURADORIA_VERSION = 3;
 
 /**
  * Espelho dos números de `image-policy.ts` (política de imagem 2026-09). O arquivo da política importa um codec por URL do Deno e não carrega fora dele,
@@ -49,7 +49,7 @@ export interface CurationItem {
   estado: ItemState;
   motivo_em_portugues: string;
   fonte: string;
-  /** só nos itens de imagens e de dúvidas: este item impede a publicação */
+  /** só nos itens de imagens, dúvidas e marcador interno: este item impede a publicação */
   bloqueia?: boolean;
   detalhes?: string[];
 }
@@ -395,9 +395,14 @@ function checkIndexacao(a: CurationArticle, c: CurationContext): CurationItem {
   return item('indexacao', 'sem_dados', 'Sem checagem de indexação para este endereço.', fonte);
 }
 
+/** título ou abertura que é marcador interno (ex.: "[AGUARDANDO FONTE PRIMÁRIA]"): nunca é conteúdo publicável */
+export const isPlaceholderText = (title: string | null | undefined, body?: string | null): boolean =>
+  /^\s*\[[^\]]{6,}\]/.test(String(title ?? '')) || /(aguardando fonte prim|conte[úu]do retido|fonte prim[áa]ria indispon[ií]vel|consulta [àa] fonte prim[áa]ria indispon)/i.test(`${title ?? ''} ${String(body ?? '').slice(0, 500)}`);
+
 function checkEstudio(a: CurationArticle, text: string): CurationItem {
   const fonte = 'Estúdio de Páginas: detector anti-IA (studio-ai-detector) e regras de publicação (resíduos, CTA quebrado)';
   if (!text) return item('estudio', 'pendencia', 'O artigo ainda não tem texto.', fonte);
+  if (isPlaceholderText(a.title, text)) return { ...item('estudio', 'pendencia', 'O título ou a abertura é um marcador interno (fonte primária pendente ou indisponível): não é conteúdo publicável.', fonte), bloqueia: true };
   const residues = findPublicationResidues({ title: a.title, content: a.content, excerpt: a.excerpt });
   const broken = findBrokenContactCtas(a.content);
   const lang = resolveLanguage({ configured: [a.language, (a.config as Any)?.language], text: text.slice(0, 4000) });

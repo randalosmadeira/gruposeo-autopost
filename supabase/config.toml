@@ -177,6 +177,10 @@ verify_jwt = false
 [functions.curadoria-publicacao]
 verify_jwt = false
 
+# curadoria-fontes: busca a materia original / a legislacao oficial e grava como fonte da revisao editorial; sem login, so a chave `curadoria-imagens`; custo zero
+[functions.curadoria-fontes]
+verify_jwt = false
+
 # site-overview: Visao Geral e Estrutura do negocio (Google, GA4, cliques de contato, arvore do dominio); login e papel conferidos dentro da funcao
 [functions.site-overview]
 verify_jwt = true
