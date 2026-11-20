@@ -169,6 +169,14 @@ verify_jwt = false
 [functions.curadoria-imagens]
 verify_jwt = false
 
+# curadoria-duvidas: lote 'Perguntas frequentes' (regra: todo conteudo tira duvidas); sem login, so a chave de automacao `curadoria-imagens`; todo gasto passa pela trava de gasto
+[functions.curadoria-duvidas]
+verify_jwt = false
+
+# curadoria-publicacao: reavaliar/revisar/publicar o lote validado (todos os portoes do publish-to-wordpress continuam valendo); sem login, so a chave de automacao `curadoria-imagens`
+[functions.curadoria-publicacao]
+verify_jwt = false
+
 # site-overview: Visao Geral e Estrutura do negocio (Google, GA4, cliques de contato, arvore do dominio); login e papel conferidos dentro da funcao
 [functions.site-overview]
 verify_jwt = true

@@ -30,7 +30,7 @@ import type { ProfileFacts } from './studio-types.ts';
 type Any = any;
 
 /** Muda quando as regras da curadoria mudam: curadoria gravada com versão antiga deixa de valer. */
-export const CURADORIA_VERSION = 1;
+export const CURADORIA_VERSION = 2;
 
 /**
  * Espelho dos números de `image-policy.ts` (política de imagem 2026-09). O arquivo da política importa um codec por URL do Deno e não carrega fora dele,
@@ -41,7 +41,7 @@ export const IMAGE_RULES = { min_width: 1200, min_pixels: 300_000, max_bytes: 15
 export type ItemState = 'ok' | 'aviso' | 'pendencia' | 'sem_dados';
 export type OverallState = 'aprovado' | 'precisa_correcao' | 'bloqueado';
 export type ImageState = 'ok' | 'aviso' | 'repetida' | 'ausente';
-export const CURATION_MODULES = ['perfil', 'funil', 'taxonomia', 'dominio', 'backlinks', 'mercado', 'radar', 'indexacao', 'estudio', 'piloto', 'observatorio', 'imagens'] as const;
+export const CURATION_MODULES = ['perfil', 'funil', 'taxonomia', 'dominio', 'backlinks', 'mercado', 'radar', 'indexacao', 'estudio', 'piloto', 'observatorio', 'imagens', 'duvidas'] as const;
 export type CurationModule = (typeof CURATION_MODULES)[number];
 
 export interface CurationItem {
@@ -49,7 +49,7 @@ export interface CurationItem {
   estado: ItemState;
   motivo_em_portugues: string;
   fonte: string;
-  /** só no item de imagens: este item impede a publicação */
+  /** só nos itens de imagens e de dúvidas: este item impede a publicação */
   bloqueia?: boolean;
   detalhes?: string[];
 }
@@ -444,6 +444,23 @@ function checkObservatorio(a: CurationArticle, c: CurationContext, focus: Set<st
     : item('observatorio', 'aviso', 'Não cobre nenhuma das perguntas ativas do Observatório de IA.', fonte);
 }
 
+/** mínimo de dúvidas respondidas (perguntas como subtítulo ou na seção de perguntas frequentes) para o conteúdo "tirar dúvidas" */
+export const MIN_DUVIDAS = 3;
+const FAQ_HEADING = /(perguntas\s+frequentes|d[uú]vidas\s+(frequentes|comuns)|\bfaq\b|tire\s+suas\s+d[uú]vidas)/i;
+
+/** Regra primordial do dono (20/11/2026): todo conteúdo tira dúvidas de quem pesquisa. Heurística: conta subtítulos em forma de pergunta. */
+export function countDuvidas(html: string | null | undefined): { perguntas: number; temSecaoFaq: boolean } {
+  const heads = [...String(html ?? '').matchAll(/<h[2-4][^>]*>([\s\S]*?)<\/h[2-4]>/gi)].map((m) => m[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim());
+  return { perguntas: heads.filter((h) => h.includes('?')).length, temSecaoFaq: heads.some((h) => FAQ_HEADING.test(h)) };
+}
+
+function checkDuvidas(a: CurationArticle): CurationItem {
+  const fonte = 'Regra do dono: todo conteúdo tira dúvidas (perguntas respondidas no texto); ' + HEUR;
+  const { perguntas, temSecaoFaq } = countDuvidas(a.content);
+  if (perguntas >= MIN_DUVIDAS) return item('duvidas', 'ok', `Tira dúvidas: ${perguntas} pergunta(s) respondida(s) no texto${temSecaoFaq ? ', com seção de perguntas frequentes' : ''}.`, fonte);
+  return { ...item('duvidas', 'pendencia', `O conteúdo ainda não tira dúvidas: ${perguntas} pergunta(s) respondida(s) no texto (o mínimo é ${MIN_DUVIDAS}). Acrescente "Perguntas frequentes" com as dúvidas reais de quem pesquisa o tema.`, fonte), bloqueia: true };
+}
+
 function checkImagens(img: ImageReport): CurationItem {
   const fonte = 'Política de imagens (image-policy) e uso da imagem no projeto; relevância: ' + HEUR;
   if (img.estado === 'ausente') return { ...item('imagens', 'pendencia', 'Sem imagem destacada: o artigo não pode ser publicado.', fonte, img.detalhes), bloqueia: true };
@@ -515,6 +532,7 @@ export async function curateArticle(a: CurationArticle, c: CurationContext): Pro
     piloto: piloto.item,
     observatorio: checkObservatorio(a, c, focus),
     imagens: checkImagens(img),
+    duvidas: checkDuvidas(a),
   };
   const itens = CURATION_MODULES.map((m) => byModule[m]);
   const { estado, bloqueios, faltando } = overallOf(itens);

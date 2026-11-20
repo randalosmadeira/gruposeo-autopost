@@ -20,7 +20,7 @@ const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')
 const IMG = (n: string) => `https://x.supabase.co/storage/v1/object/public/article-images/p1/${n}.webp`;
 
 const BODY = (topic: string) => `<h2>O que é ${topic}?</h2><p>${topic} é um tema que a defesa criminal acompanha desde o início do inquérito, conferindo documentos e orientando a família sem prometer resultado.</p>
-<p>Veja também <a href="/blog/audiencia-de-custodia">audiência de custódia</a> e <a href="/blog/habeas-corpus">habeas corpus</a>.</p><h2>Conclusão</h2><p>Se precisar de orientação sobre ${topic}, entre em contato com o escritório pelo WhatsApp.</p>`;
+<p>Veja também <a href="/blog/audiencia-de-custodia">audiência de custódia</a> e <a href="/blog/habeas-corpus">habeas corpus</a>.</p><h2>Quem pode pedir ${topic}?</h2><p>Em regra, o próprio investigado, a família ou o advogado, conforme a situação concreta.</p><h2>Como funciona na prática?</h2><p>Depende da fase do processo; a defesa confere os documentos e orienta os próximos passos.</p><h2>Conclusão</h2><p>Se precisar de orientação sobre ${topic}, entre em contato com o escritório pelo WhatsApp.</p>`;
 const article = (n: number, over: Row = {}): Row => ({
   id: id(n), project_id: P, organization_id: ORG, user_id: USER, status: 'draft', title: `Artigo número ${n} sobre defesa criminal`, keyword: `tema ${n} defesa criminal`, secondary_keywords: [], excerpt: `Resumo ${n}`,
   content: BODY(`tema ${n}`), slug: `artigo-numero-${n}-defesa-criminal`, language: 'pt-BR', type: 'blog', featured_image_url: IMG(`img-${n}`), image_prompt: `ilustração do tema ${n}`, image_source: 'generated',
@@ -104,7 +104,7 @@ describe('curadoria: ações do handler', () => {
     expect(by(2)).toMatchObject({ estado: 'aprovado', image_state: 'ok' });
     expect(by(5)).toMatchObject({ estado: 'aprovado' });
     expect(by(2).content_hash).toMatch(/^[0-9a-f]{64}$/);
-    expect((by(2).checks as { itens: unknown[] }).itens).toHaveLength(12);
+    expect((by(2).checks as { itens: unknown[] }).itens).toHaveLength(13);
   });
 
   it('rodar: em lotes (N por chamada), em ordem de prioridade Em criação > Na fila > Finalizado, e converge', async () => {
@@ -172,7 +172,7 @@ describe('curadoria: ações do handler', () => {
     const t = world('member');
     const fresh = await call('detalhe', { articleId: id(2) }, { tables: t });
     expect(fresh.body).toMatchObject({ gravado: false, calculado_agora: true });
-    expect((fresh.body.relatorio as { itens: unknown[] }).itens).toHaveLength(12);
+    expect((fresh.body.relatorio as { itens: unknown[] }).itens).toHaveLength(13);
     expect((t.article_curation as Row[]).length).toBe(0); // leitura nunca grava
     const t2 = world('editor');
     await call('rodar', { limit: 50 }, { tables: t2 });

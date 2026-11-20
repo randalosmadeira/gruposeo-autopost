@@ -13,7 +13,7 @@ export const STATE_LABEL: Record<CurState, string> = {
 };
 export const ITEM_LABEL: Record<string, string> = {
   perfil: 'Perfil do Projeto', funil: 'Funil de captação', taxonomia: 'Taxonomia', dominio: 'Estrutura do domínio', backlinks: 'Backlinks', mercado: 'Mercado', radar: 'Radar de mercado',
-  indexacao: 'Indexação', estudio: 'Estúdio de Páginas', piloto: 'Piloto Automático', observatorio: 'Observatório de IA', imagens: 'Imagens',
+  indexacao: 'Indexação', estudio: 'Estúdio de Páginas', piloto: 'Piloto Automático', observatorio: 'Observatório de IA', imagens: 'Imagens', duvidas: 'Tira dúvidas',
 };
 
 export interface StatusCounts { total: number; sem_curadoria: number; desatualizada: number; aprovado: number; precisa_correcao: number; bloqueado: number }

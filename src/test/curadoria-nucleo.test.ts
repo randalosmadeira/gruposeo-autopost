@@ -16,6 +16,8 @@ const BODY = `<h2>O que é prisão em flagrante?</h2>
 <p>Em seguida vem a audiência de custódia, em que o juiz verifica se a prisão foi legal e se há necessidade de manter a pessoa presa. Veja também <a href="/blog/audiencia-de-custodia">audiência de custódia</a>.</p>
 <h2>Como funciona a defesa criminal?</h2>
 <p>A defesa criminal acompanha o inquérito desde o início, confere os documentos e orienta a família sobre os próximos passos, sem prometer resultado.</p>
+<h2>Quem pode ser preso em flagrante?</h2>
+<p>Em regra, qualquer pessoa surpreendida na situação prevista em lei, e a autoridade deve comunicar a prisão ao juiz.</p>
 <h2>Conclusão</h2>
 <p>Se você precisa de orientação sobre prisão em flagrante, entre em contato com o escritório pelo WhatsApp e agende uma conversa.</p>`;
 

@@ -1,12 +1,13 @@
 import { serperRequest, serperRegionalInputs } from "../_shared/serper-request.ts";
 import { providerFetch } from '../_shared/nexus-provider-fetch.ts';
+import { bindSpendIdentity } from '../_shared/spend-gate.ts';
 import '../_shared/nexus-runtime-bootstrap.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {allowWordPressBase,scopedServe} from '../_shared/nexus-spend-lock.ts';
 import { PROVIDER_CATALOG, isProviderId, isCatalogId, validateCredentialFormat, secretFormatError, MAX_SECRET_LENGTH, runHealthChecks, buildProvidersOverview, executionGate, validateExecutionSettings, providersEnabledFrom } from '../_shared/nexus-providers.ts';
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveRequestActor, RequestAuthError } from "../_shared/request-auth.ts";
-import { parseSerp, parseAiObservation, SAMPLING_METHOD, AUTONOMOUS_REVIEW_PROMPT, validateAutonomousReview, validateLinkDestination, topicGroups, insertDraftLink } from "../_shared/nexus-intelligence.ts";
+import { parseSerp, parseAiObservation, SAMPLING_METHOD, AUTONOMOUS_REVIEW_PROMPT, validateAutonomousReview, isInformationalArticle, validateLinkDestination, topicGroups, insertDraftLink } from "../_shared/nexus-intelligence.ts";
 import { isObservationEngine, isExecutableEngine, engineKind, ENGINE_PROVIDER, normalizeObservation, manualRequestKey, runRequestKey, normalizePromptSet, normalizePrompt, normalizeOrigins, buildHomepageSchemaFromProfile, generateSiteId, generateSiteSecret, buildSignalsSnippet, parseGeminiObservation, parseClaudeObservation, parsePerplexityObservation } from "../_shared/nexus-intelligence.ts";
 import { isPluginModeProject, resolvePluginKey, resolvePluginNamespace, pluginRequest } from "../_shared/wordpress-plugin-client.ts";
 import { runCollector } from "../_shared/nexus-collectors.ts";
@@ -37,6 +38,8 @@ scopedServe(async req=>{
  const admin=createClient(Deno.env.get('SUPABASE_URL')||'',key,{auth:{persistSession:false,autoRefreshToken:false}});
  try{
   const body=await req.json(); const actor=await resolveRequestActor(req,body.userId);
+  // chamada interna (modo serviço): o corpo já foi lido, então as pistas de identidade do gasto são informadas aqui (lote da curadoria)
+  if(actor.mode==='service')bindSpendIdentity({userId:actor.userId,projectId:isUuid(body.projectId)?body.projectId:undefined});
   const action=typeof body.action==='string'?body.action:'';
   const mgmt=makeManagementStore(admin);
   let {data:project,error:projectError}=await admin.from('projects').select(PROJECT_COLS).eq('id',body.projectId).eq('user_id',actor.userId).maybeSingle();
@@ -486,7 +489,7 @@ scopedServe(async req=>{
    output={...collected.output,raw:collected.raw};
   }else if(operation.kind==='serp'){
    const response=await pf(serper!.url,{method:'POST',headers:{'X-API-KEY':credential,'Content-Type':'application/json'},body:JSON.stringify(serper!.payload),signal:AbortSignal.timeout(30000)});
-   if(!response.ok)throw new Error('provider_request_failed');
+   if(!response.ok)throw new Error(`provider_request_failed_${response.status}`);
    const raw=await response.json();output={...parseSerp(raw,host),raw,collected_at:new Date().toISOString(),query:input.query,context:input,provider:'serper'};
   }else if(operation.kind==='ai_observation'&&['gemini_api','claude_api','perplexity_api'].includes(engine)){
    const variants:string[]=Array.isArray(input.variants)?input.variants:[];
@@ -495,7 +498,7 @@ scopedServe(async req=>{
    if(engine==='gemini_api')response=await pf(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:'POST',headers:{'x-goog-api-key':credential,'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:input.query}]}],tools:[{google_search:{}}]}),signal:AbortSignal.timeout(90000)});
    else if(engine==='claude_api')response=await pf('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':credential,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model,max_tokens:4000,messages:[{role:'user',content:input.query}],tools:[{type:'web_search_20250305',name:'web_search',max_uses:3,user_location:{type:'approximate',country,city:input.city||undefined}}]}),signal:AbortSignal.timeout(90000)});
    else response=await pf('https://api.perplexity.ai/search',{method:'POST',headers:{Authorization:`Bearer ${credential}`,'Content-Type':'application/json'},body:JSON.stringify({query:input.query,country,max_results:10}),signal:AbortSignal.timeout(30000)});
-   if(!response.ok)throw new Error('provider_request_failed');
+   if(!response.ok)throw new Error(`provider_request_failed_${response.status}`);
    const raw=await response.json();
    const parsed=engine==='gemini_api'?parseGeminiObservation(raw,host,variants):engine==='claude_api'?parseClaudeObservation(raw,host,variants):parsePerplexityObservation(raw,host,variants);
    output={...parsed,raw,collected_at:new Date().toISOString(),query:input.query,context:input,engine,provider:ENGINE_PROVIDER[engine],method:SAMPLING_METHOD};
@@ -507,13 +510,13 @@ scopedServe(async req=>{
    }
    const snapshot=article?await editorialFingerprint(article,project):null;
    const response=await pf('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${credential}`,'Content-Type':'application/json'},body:JSON.stringify({model,max_output_tokens:4000,store:false,
-    ...(article?{instructions:AUTONOMOUS_REVIEW_PROMPT,text:{format:{type:'json_object'}},input:JSON.stringify({article:{title:article.title,content:String(article.content||'').slice(0,50000)},sources:String(article.config?.sourcesContext||'').slice(0,8000),project:{strategy:project.nexus_strategy,strategy_version:project.nexus_strategy_version,identity:project.editorial_identity,sector:project.nicho,description:project.description,compliance:project.compliance_rules},offer:project.commercial_info,brief:article.config?.conversionBrief,segment:article.config?.segment,intent:article.config?.intentType,goal:article.config?.goal})}:{tools:[{type:'web_search',user_location:{type:'approximate',country:String(input.country).toUpperCase(),city:input.city||undefined}}],input:input.query})}),signal:AbortSignal.timeout(90000)});
-   if(!response.ok)throw new Error('provider_request_failed');
+    ...(article?{instructions:AUTONOMOUS_REVIEW_PROMPT,text:{format:{type:'json_object'}},input:'DADOS PARA REVISÃO (JSON): '+JSON.stringify({article:{title:article.title,content:String(article.content||'').slice(0,50000)},sources:String(article.config?.sourcesContext||'').slice(0,8000),project:{strategy:project.nexus_strategy,strategy_version:project.nexus_strategy_version,identity:project.editorial_identity,sector:project.nicho,description:project.description,compliance:project.compliance_rules},offer:project.commercial_info,brief:article.config?.conversionBrief,segment:article.config?.segment,intent:article.config?.intentType,goal:article.config?.goal})}:{tools:[{type:'web_search',user_location:{type:'approximate',country:String(input.country).toUpperCase(),city:input.city||undefined}}],input:input.query})}),signal:AbortSignal.timeout(90000)});
+   if(!response.ok){const detail=await response.clone().json().then((d:any)=>String(d?.error?.message||d?.error?.code||'').slice(0,200)).catch(()=>'');throw new Error(`provider_request_failed_${response.status}:${detail}`);}
    const raw=await response.json();
    if(!article)output={...parseAiObservation(raw,host,input.variants),raw,collected_at:new Date().toISOString(),query:input.query,context:input,provider:'openai',method:SAMPLING_METHOD};
    else{
     const resultText=(raw.output||[]).filter((o:any)=>o.type==='message').flatMap((o:any)=>o.content||[]).map((c:any)=>c.text||'').join('');
-    const verdict=validateAutonomousReview(JSON.parse(resultText),String(article.config?.sourcesContext||''));
+    const verdict=validateAutonomousReview(JSON.parse(resultText),String(article.config?.sourcesContext||''),{requireConversion:!isInformationalArticle(article,project)});
     const audit=normalizeEditorialHtml(String(article.content||''));
     output={...verdict,pass:verdict.pass&&audit.pass,method:'autonomous_model_review_plus_deterministic_gates',evaluated_at:new Date().toISOString(),raw};
     if(output.pass&&program.review_mode==='autonomous'){
@@ -528,6 +531,7 @@ scopedServe(async req=>{
   const {error:finishError}=await admin.rpc('nexus_finish_operation',{p_operation:operation.id,p_output:output});if(finishError)throw finishError;
   return json({success:true,output});
  }catch(error){
+  if(reserved&&operationId)console.error('[nexus-intelligence] execute_failed',error instanceof Error?`${error.name}:${error.message}`.slice(0,240):'unknown');
   if(reserved&&operationId)await admin.from('nexus_operations').update({status:'uncertain',output:{error:'execution_or_recording_failed',reservation_retained:true}}).eq('id',operationId);
   if(error instanceof RequestAuthError)return json({error:error.code},error.status);
   return json({error:'operation_failed',reservation_retained:reserved},500);
