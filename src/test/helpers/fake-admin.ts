@@ -52,12 +52,17 @@ export function fakeAdmin(tables: Record<string, Row[]>, rpcs: Record<string, Rp
       }
       if (op === 'upsert') {
         const keys = conflict.split(',');
+        const touched: Row[] = [];
+        // índice por chave de conflito: upsert de milhares de linhas não vira O(n²)
+        const keyOf = (r: Row) => keys.map((k) => String(r[k])).join('');
+        const index = new Map<string, Row>(rows().map((r) => [keyOf(r), r] as const));
         for (const p of (Array.isArray(payload) ? payload : [payload]) as Row[]) {
-          const found = rows().find((r) => keys.every((k) => r[k] === p[k]));
-          if (found) Object.assign(found, p); else rows().push({ ...p });
+          const found = index.get(keyOf(p));
+          if (found) { Object.assign(found, p); touched.push(found); }
+          else { const row = { id: `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`, ...p }; rows().push(row); index.set(keyOf(row), row); touched.push(row); }
         }
         log.push(`upsert:${name}`);
-        return { data: null, error: null };
+        return { data: touched, error: null };
       }
       let out = matched();
       if (orderBy) out = [...out].sort((a, b) => (String(a[orderBy!.col]) < String(b[orderBy!.col]) ? -1 : String(a[orderBy!.col]) > String(b[orderBy!.col]) ? 1 : 0) * (orderBy!.asc ? 1 : -1));
@@ -72,6 +77,7 @@ export function fakeAdmin(tables: Record<string, Row[]>, rpcs: Record<string, Rp
       eq: (c: string, v: unknown) => { filters.push((r) => r[c] === v); return q; },
       gte: (c: string, v: unknown) => { filters.push((r) => String(r[c]) >= String(v)); return q; },
       lte: (c: string, v: unknown) => { filters.push((r) => String(r[c]) <= String(v)); return q; },
+      gt: (c: string, v: unknown) => { filters.push((r) => String(r[c]) > String(v)); return q; },
       lt: (c: string, v: unknown) => { filters.push((r) => String(r[c]) < String(v)); return q; },
       in: (c: string, vs: unknown[]) => { filters.push((r) => vs.includes(r[c])); return q; },
       is: (c: string, v: unknown) => { filters.push((r) => (v === null ? r[c] === null || r[c] === undefined : r[c] === v)); return q; },

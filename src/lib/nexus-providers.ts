@@ -304,7 +304,7 @@ const OPENAI: ProviderCatalogEntry = {
 const GEMINI: ProviderCatalogEntry = {
   id: 'gemini', name: 'Gemini API + Grounding com Google Search', category: 'ai_citations', credentialKind: 'api_key',
   credentialLabel: 'Chave de API', credentialExample: 'AIza…',
-  formatHint: 'A chave do Gemini começa com "AIza".',
+  formatHint: 'A chave do Gemini começa com "AIza" ou tem o formato novo do Google AI Studio (30 caracteres ou mais, sem espaços).',
   contractUrl: 'https://aistudio.google.com/apikey', docsUrl: 'https://ai.google.dev/gemini-api/docs/google-search', keyUrl: 'https://aistudio.google.com/apikey', extraLinks: [],
   costLabel: 'Gemini 2.5: ~US$ 35 por mil prompts com grounding.', testCost: null, hasTest: true,
   doc: {
@@ -315,7 +315,7 @@ const GEMINI: ProviderCatalogEntry = {
       'Para usar em execuções pagas, habilite o provedor no painel Liberação de execução paga.',
     ],
     keyLocation: 'aistudio.google.com/apikey → Criar chave de API.',
-    credentialFormat: 'Começa com "AIza".',
+    credentialFormat: 'Começa com "AIza" ou tem o formato novo do AI Studio (30 caracteres ou mais, sem espaços).',
     endpoints: [{ label: 'Lista de modelos (teste de saúde)', method: 'GET', url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', note: 'Chave no cabeçalho x-goog-api-key.' }],
     params: 'Sem parâmetro de país explícito.',
     limits: 'Cotas do plano do Gemini API; grounding é cobrado à parte.',
@@ -624,7 +624,8 @@ export function validateSecretFormat(providerId: string, rawSecret: string): str
   switch (providerId) {
     case 'openai': return secret.startsWith('sk-') ? null : fail;
     case 'anthropic': return secret.startsWith('sk-ant-') ? null : fail;
-    case 'gemini': return secret.startsWith('AIza') ? null : fail;
+    // Chaves antigas começam com "AIza"; o Google AI Studio também emite chaves em formato novo (sem esse prefixo).
+    case 'gemini': return secret.startsWith('AIza') || (secret.length >= 30 && /^[\x21-\x7E]+$/.test(secret)) ? null : fail;
     case 'perplexity': return secret.startsWith('pplx-') ? null : fail;
     case 'serper': case 'serpapi': case 'bing_webmaster': case 'brave':
       return /^[A-Za-z0-9_-]{16,200}$/.test(secret) ? null : fail;

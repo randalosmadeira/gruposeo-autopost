@@ -62,7 +62,7 @@ export async function bingRequest(fetchFn: typeof fetch, apiKey: string, method:
 
 export async function bingGetUserSites(fetchFn: typeof fetch, apiKey: string, opts: BingOptions = {}): Promise<{ ok: true; sites: BingSite[] } | BingFailure> {
   const r = await bingRequest(fetchFn, apiKey, 'GetUserSites', {}, opts);
-  if (!r.ok) return r;
+  if (r.ok === false) return r;
   const list = Array.isArray(r.d) ? r.d as Array<{ Url?: unknown; IsVerified?: unknown }> : [];
   return { ok: true, sites: list.flatMap(s => typeof s?.Url === 'string' && s.Url ? [{ url: s.Url, isVerified: s.IsVerified === true }] : []) };
 }
@@ -85,14 +85,14 @@ function toStatRows(d: unknown): BingStatRow[] {
 
 export async function bingGetQueryStats(fetchFn: typeof fetch, apiKey: string, siteUrl: string, opts: BingOptions = {}): Promise<{ ok: true; rows: BingStatRow[] } | BingFailure> {
   const r = await bingRequest(fetchFn, apiKey, 'GetQueryStats', { siteUrl }, opts);
-  return r.ok ? { ok: true, rows: toStatRows(r.d) } : r;
+  return r.ok === true ? { ok: true, rows: toStatRows(r.d) } : r;
 }
 export async function bingGetPageStats(fetchFn: typeof fetch, apiKey: string, siteUrl: string, opts: BingOptions = {}): Promise<{ ok: true; rows: BingStatRow[] } | BingFailure> {
   const r = await bingRequest(fetchFn, apiKey, 'GetPageStats', { siteUrl }, opts);
-  return r.ok ? { ok: true, rows: toStatRows(r.d) } : r;
+  return r.ok === true ? { ok: true, rows: toStatRows(r.d) } : r;
 }
 export async function bingGetRankAndTrafficStats(fetchFn: typeof fetch, apiKey: string, siteUrl: string, opts: BingOptions = {}): Promise<{ ok: true; rows: BingTrafficRow[] } | BingFailure> {
   const r = await bingRequest(fetchFn, apiKey, 'GetRankAndTrafficStats', { siteUrl }, opts);
-  if (!r.ok) return r;
+  if (r.ok === false) return r;
   return { ok: true, rows: toStatRows(r.d).map(({ day, clicks, impressions }) => ({ day, clicks, impressions })) };
 }

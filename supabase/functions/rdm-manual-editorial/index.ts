@@ -1,8 +1,8 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveRequestActor, RequestAuthError } from "../_shared/request-auth.ts";
-import { installSpendLock } from "../_shared/nexus-spend-lock.ts";
+import { installSpendLock, makeProviderFetch, scopedServe as scopedServeBase } from "../_shared/nexus-spend-lock.ts";
 
-const providerFetch = globalThis.fetch.bind(globalThis);
+const providerFetch = makeProviderFetch(globalThis.fetch.bind(globalThis)); // true = fetch original (como hoje); false = fetch guardado pelo Teto Diário de Gasto
 installSpendLock();
 
 const organization = "04f16755-dedb-4f1b-a0a3-1a83054b36a0";
@@ -28,7 +28,8 @@ const cors = {
 };
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: cors });
 
-Deno.serve(async (req) => {
+const scopedServe = (h: (req: Request) => Response | Promise<Response>) => scopedServeBase(h, { module: "rdm-manual-editorial", orgId: organization });
+scopedServe(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 

@@ -1,4 +1,5 @@
 import {PAID_SERVICES_BLOCKED} from './nexus-spend-lock.ts';
+import { coverTextCall, SpendDeniedError, type CallCover } from './spend-gate.ts';
 import { getDirectivesForTask } from './behavioral-directives.ts';
 import { ANTHROPIC_PRIMARY_MODEL, ANTHROPIC_ECONOMY_MODEL } from './anthropic-model-policy.ts';
 
@@ -125,8 +126,11 @@ export class AIOrchestrator {
   private apiKeys: Record<string, string>;
   private platformKeys: Record<string, string>;
   private usageSink?: UsageSink;
+  // Interruptor mestre: a constante PAID_SERVICES_BLOCKED. O parâmetro só existe para os testes exercitarem o teto sem mudar a constante.
+  private readonly blockedOverride?: boolean;
 
-  constructor() {
+  constructor(opts: { blocked?: boolean } = {}) {
+    this.blockedOverride = opts.blocked;
     const openaiKey = Deno.env.get('OPENAI_API_KEY') || '';
     this.apiKeys = {
       openai: openaiKey.startsWith('sk-') ? openaiKey : '',
@@ -146,6 +150,43 @@ export class AIOrchestrator {
     if (keys.openai?.startsWith('sk-')) this.apiKeys.openai = keys.openai;
     if (keys.anthropic) this.apiKeys.anthropic = keys.anthropic;
     if (keys.gemini) this.apiKeys.gemini = keys.gemini;
+  }
+
+  private isBlocked(): boolean {
+    return this.blockedOverride ?? PAID_SERVICES_BLOCKED;
+  }
+
+  /** Teto Diário de Gasto: reserva o valor máximo da chamada antes de sair e confirma com o uso real depois. Negado = SpendDeniedError (sem tentar outro provedor). */
+  private cover(taskType: TaskType, provider: AIProvider, messages: AIMessage[], options?: AICallOptions): Promise<CallCover> {
+    const chars = messages.reduce((n, m) => n + m.content.length, 0);
+    const maxOut = provider.name === 'openai' ? Math.min(options?.maxTokens || 16384, 16384) : options?.maxTokens || 16384;
+    const models = provider.name === 'openai' && provider.model === 'gpt-4.1' ? ['gpt-4.1', 'gpt-4o'] : [provider.model];
+    return coverTextCall({
+      provider: provider.name, models, inputChars: chars, maxOutputTokens: maxOut,
+      articleId: options?.articleId, correlationId: options?.correlationId, operation: taskType,
+    });
+  }
+
+  /** Executa uma chamada de provedor sob reserva. O consumo vai ao ledger pelo usageSink (token_usage_logs); sem sink ou com falha, o gate grava. */
+  private async coveredCall(taskType: TaskType, provider: AIProvider, key: string, messages: AIMessage[], options?: AICallOptions): Promise<{ content: string; usage: AIUsage; model?: string }> {
+    const cover = await this.cover(taskType, provider, messages, options);
+    try {
+      const result = await cover.run(() => this.callProvider(provider, key, messages, options));
+      let ledgerRecorded = false;
+      if (this.usageSink) {
+        try {
+          await this.usageSink({ taskType, provider: provider.name, model: result.model || provider.model, usage: result.usage, options });
+          ledgerRecorded = true;
+        } catch (error) {
+          console.error(`[AIOrchestrator] Falha não bloqueante ao registrar consumo: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      await cover.commit(result.usage, result.model || provider.model, ledgerRecorded);
+      return result;
+    } catch (error) {
+      await cover.release(); // sem efeito se já confirmada
+      throw error;
+    }
   }
 
   setUsageSink(sink: UsageSink) {
@@ -191,7 +232,7 @@ export class AIOrchestrator {
   }
 
   async callWithMeta(taskType: TaskType, messages: AIMessage[], options?: AICallOptions): Promise<AICallResult> {
-    if (PAID_SERVICES_BLOCKED) throw new Error('global_paid_services_blocked');
+    if (this.isBlocked()) throw new Error('global_paid_services_blocked');
     const enriched = this.injectDirectives(taskType, messages);
     const names = this.getAvailableProviders();
     let providers = (AI_PROVIDERS[taskType] || AI_PROVIDERS.article_generation)
@@ -203,15 +244,11 @@ export class AIOrchestrator {
     for (const provider of providers) {
       for (const key of this.getKeysForProvider(provider.name)) {
         try {
-          const result = await this.callProvider(provider, key, enriched, options);
+          const result = await this.coveredCall(taskType, provider, key, enriched, options);
           const effectiveModel = result.model || provider.model;
-          if (this.usageSink) {
-            await this.usageSink({ taskType, provider: provider.name, model: effectiveModel, usage: result.usage, options }).catch((error) => {
-              console.error(`[AIOrchestrator] Falha não bloqueante ao registrar consumo: ${error instanceof Error ? error.message : String(error)}`);
-            });
-          }
           return { content: result.content, provider: provider.name, model: effectiveModel, usage: result.usage };
         } catch (error) {
+          if (error instanceof SpendDeniedError) throw error; // teto/falha de leitura: não adianta tentar outro provedor
           lastError = error instanceof Error ? error : new Error(String(error));
           console.warn(`[AIOrchestrator] ${provider.name}/${provider.model} falhou: ${lastError.message}`);
         }
@@ -221,7 +258,7 @@ export class AIOrchestrator {
   }
 
   async callDualWithMeta(taskType: TaskType, messages: AIMessage[], options?: AICallOptions): Promise<AICallResult> {
-    if (PAID_SERVICES_BLOCKED) throw new Error('global_paid_services_blocked');
+    if (this.isBlocked()) throw new Error('global_paid_services_blocked');
     const enriched = this.injectDirectives(taskType, messages);
     let providers = (AI_PROVIDERS[taskType] || AI_PROVIDERS.article_generation)
       .filter((provider) => ['openai', 'anthropic'].includes(provider.name))
@@ -236,14 +273,11 @@ export class AIOrchestrator {
       let lastError: Error | null = null;
       for (const key of keys) {
         try {
-          const result = await this.callProvider(provider, key, enriched, options);
-          if (this.usageSink) {
-            await this.usageSink({ taskType, provider: provider.name, model: result.model || provider.model, usage: result.usage, options }).catch((error) => {
-              console.error(`[AIOrchestrator] Falha não bloqueante ao registrar consumo: ${error instanceof Error ? error.message : String(error)}`);
-            });
-          }
+          // Falha não bloqueante ao registrar consumo: tratada dentro de coveredCall (o gate grava o gasto se o sink falhar).
+          const result = await this.coveredCall(taskType, provider, key, enriched, options);
           return { ...result, provider };
         } catch (error) {
+          if (error instanceof SpendDeniedError) throw error;
           lastError = error instanceof Error ? error : new Error(`${provider.name}_failed`);
         }
       }
@@ -251,6 +285,8 @@ export class AIOrchestrator {
     }));
     const successful = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
     if (!successful.length) {
+      const spendDenied = settled.find((result) => result.status === 'rejected' && result.reason instanceof SpendDeniedError);
+      if (spendDenied && spendDenied.status === 'rejected') throw spendDenied.reason;
       const failureCodes = settled.flatMap((result) => result.status === 'rejected'
         ? [result.reason instanceof Error ? result.reason.message : 'provider_failed']
         : []);

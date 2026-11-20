@@ -130,7 +130,7 @@ export const clearGoogleTokenCache = () => tokenCache.clear();
 
 async function gscCall(fetchFn: typeof fetch, serviceAccountJson: string, url: string, init: RequestInit, opts: GscOptions): Promise<{ ok: true; json: unknown } | GscFailure> {
   const tok = await getGscAccessToken(fetchFn, serviceAccountJson, opts);
-  if (!tok.ok) return tok;
+  if (tok.ok === false) return tok;
   let res: Response;
   try {
     res = await fetchFn(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${tok.token}`, Accept: 'application/json' }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
@@ -145,7 +145,7 @@ async function gscCall(fetchFn: typeof fetch, serviceAccountJson: string, url: s
 /** Lista as propriedades acessíveis à conta de serviço (teste de saúde gratuito). */
 export async function gscListSites(fetchFn: typeof fetch, serviceAccountJson: string, opts: GscOptions = {}): Promise<{ ok: true; sites: GscSite[] } | GscFailure> {
   const r = await gscCall(fetchFn, serviceAccountJson, `${GSC_API}/sites`, { method: 'GET' }, opts);
-  if (!r.ok) return r;
+  if (r.ok === false) return r;
   const entries = (r.json as { siteEntry?: Array<{ siteUrl?: unknown; permissionLevel?: unknown }> }).siteEntry;
   const sites = (Array.isArray(entries) ? entries : []).flatMap(e => typeof e?.siteUrl === 'string' && e.siteUrl ? [{ siteUrl: e.siteUrl, permissionLevel: typeof e.permissionLevel === 'string' ? e.permissionLevel : '' }] : []);
   return { ok: true, sites };
@@ -162,7 +162,7 @@ export async function gscQuery(fetchFn: typeof fetch, serviceAccountJson: string
   const body = { startDate: params.startDate, endDate: params.endDate, dimensions: params.dimensions, rowLimit: Math.min(Math.max(params.rowLimit ?? 1000, 1), 25_000), startRow: Math.max(params.startRow ?? 0, 0) };
   const url = `${GSC_API}/sites/${encodeURIComponent(property.trim())}/searchAnalytics/query`;
   const r = await gscCall(fetchFn, serviceAccountJson, url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, opts);
-  if (!r.ok) return r;
+  if (r.ok === false) return r;
   const rows = (r.json as { rows?: unknown }).rows;
   return { ok: true, rows: Array.isArray(rows) ? rows as GscRawRow[] : [] };
 }

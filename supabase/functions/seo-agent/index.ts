@@ -2,6 +2,8 @@ import '../_shared/nexus-runtime-bootstrap.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { getOrchestrator } from "../_shared/ai-orchestrator.ts";
 import { getOrchestratorForUser } from "../_shared/byok-resolver.ts";
+import { scopedServe } from "../_shared/nexus-spend-lock.ts";
+import { bindSpendIdentity } from "../_shared/spend-gate.ts";
 import { orchestrate, resolveVernizDNA } from "../_shared/verniz-orchestrator.ts";
 import { PLUGIN_VERSION } from "../_shared/plugin-version.ts";
 import { AI_CRAWLER_BOTS } from "../_shared/ai-crawler-bots.ts";
@@ -306,7 +308,7 @@ const LIMIT_MULTIPLIER = 2;
 function elapsedMs(): number { return Date.now() - requestStart; }
 function hasTimeLeft(reserveMs = 15_000): boolean { return elapsedMs() + reserveMs < MAX_EXECUTION_MS; }
 
-Deno.serve(async (req) => {
+scopedServe(async (req) => {
   // Reset timer for each request (critical for warm instances)
   requestStart = Date.now();
 
@@ -376,6 +378,7 @@ Deno.serve(async (req) => {
 
     for (const project of projects) {
       try {
+        bindSpendIdentity({ projectId: project.id }); // Teto Diário de Gasto: cada projeto do lote paga na sua organização (no-op com o bloqueio total)
         orchestrator = await getOrchestratorForUser(project.user_id);
       } catch (byokErr) {
         console.warn(`[SEO Agent] BYOK load failed for ${project.user_id}, using defaults`);

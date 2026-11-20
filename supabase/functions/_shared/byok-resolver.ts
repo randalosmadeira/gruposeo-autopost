@@ -10,6 +10,8 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { AIOrchestrator } from "./ai-orchestrator.ts";
 import { isPlatformAiAllowed, mergeProviderKeys, PLATFORM_AI_BLOCKED_MESSAGE } from "./platform-ai-gate.ts";
+import { bindSpendIdentity, currentSpendOrgId } from "./spend-gate.ts";
+import { DEFAULT_PRICE_BOOK, textCostMicros, textPriceFor } from "./spend-gate-core.ts";
 
 export interface UserAIKeys {
   gemini: string;
@@ -71,6 +73,8 @@ export async function fetchUserKeys(userId: string): Promise<UserAIKeys> {
 }
 
 export async function getOrchestratorForUser(userId: string): Promise<AIOrchestrator> {
+  // Teto Diário de Gasto: o usuário já foi autenticado pela função; o contexto da requisição passa a saber quem paga (no-op sem contexto).
+  bindSpendIdentity({ userId });
   const orchestrator = new AIOrchestrator();
   const userKeys = await fetchUserKeys(userId);
   // sem autorização para a IA da plataforma: o orquestrador não pode cair nas chaves do ambiente (só vale o que for do usuário)
@@ -91,6 +95,13 @@ export async function getOrchestratorForUser(userId: string): Promise<AIOrchestr
       // (migration 20260917010000_token_cost_governance.sql) from
       // model_pricing_catalog, not computed here - this keeps pricing in one
       // place instead of duplicated across every caller of this sink.
+      // Com o teto ligado, a organização que paga já está resolvida no contexto: grava-a explicitamente (o gatilho só a deduz do artigo
+      // ou da organização própria do usuário, e sem organização o ledger não recebe o gasto) e dá um custo de reserva para modelo fora do
+      // catálogo (o gatilho só substitui o custo quando o modelo está em model_pricing_catalog).
+      const spendOrg = currentSpendOrgId();
+      const spendFields = spendOrg
+        ? { organization_id: spendOrg, estimated_cost_usd: textCostMicros(textPriceFor(DEFAULT_PRICE_BOOK, model), usage.inputTokens, usage.outputTokens) / 1_000_000 }
+        : {};
       const { error } = await admin.from("token_usage_logs").insert({
         user_id: userId,
         article_id: options?.articleId || null,
@@ -99,6 +110,7 @@ export async function getOrchestratorForUser(userId: string): Promise<AIOrchestr
         operation: taskType,
         input_tokens: usage.inputTokens,
         output_tokens: usage.outputTokens,
+        ...spendFields,
         metadata: {
           source: "provider_reported_usage",
           correlation_id: options?.correlationId || null,

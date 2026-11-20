@@ -1,18 +1,38 @@
+import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from './use-toast';
-import { retryQuery, withRetry } from '@/lib/supabase-retry';
-import { PROJECT_COLUMNS } from '@/lib/project-columns';
+import { retryQuery } from '@/lib/supabase-retry';
+import { PROJECT_COLUMNS, type ProjectLifecycleStatus } from '@/lib/project-columns';
+import { callLifecycle, lifecycleErrorMessage } from '@/lib/project-center-api';
 import { applyProjectJsonMerge, mergeColumnsPresent } from '@/lib/json-merge';
 import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
-type Project = Tables<'projects'> & { wordpress_credential_ref?: string | null; wordpress_connector_mode?: string | null };
+type Project = Tables<'projects'> & {
+  wordpress_credential_ref?: string | null; wordpress_connector_mode?: string | null;
+  /** Ciclo de vida (Central de Projetos). Ausente = 'ativo' (migração ainda não aplicada). */
+  lifecycle_status?: ProjectLifecycleStatus; archived_at?: string | null; paused_reason?: string | null;
+};
+type Lifecycle = { lifecycle_status: ProjectLifecycleStatus; archived_at: string | null; paused_reason: string | null };
+
+/** Lê o ciclo de vida à parte: se a migração ainda não existe (ou a leitura falha), todos os projetos contam como ativos. */
+async function fetchLifecycle(): Promise<Map<string, Lifecycle>> {
+  const out = new Map<string, Lifecycle>();
+  try {
+    const res = (await supabase.from('projects').select('id,lifecycle_status,archived_at,paused_reason' as never)) as unknown as { data?: Array<Lifecycle & { id: string }>; error?: unknown };
+    if (res?.error || !Array.isArray(res?.data)) return out;
+    for (const r of res.data) out.set(r.id, { lifecycle_status: r.lifecycle_status === 'arquivado' || r.lifecycle_status === 'pausado' ? r.lifecycle_status : 'ativo', archived_at: r.archived_at ?? null, paused_reason: r.paused_reason ?? null });
+  } catch { /* sem a migração: tudo ativo */ }
+  return out;
+}
 type ProjectInsert = TablesInsert<'projects'>;
 type ProjectUpdate = TablesUpdate<'projects'>;
 
-export function useProjects() {
+/** `includeArchived`: por padrão os projetos arquivados ficam de fora de listas e seletores. */
+export function useProjects(options: { includeArchived?: boolean } = {}) {
+  const includeArchived = options.includeArchived === true;
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -28,12 +48,16 @@ export function useProjects() {
           .select(PROJECT_COLUMNS)
           .order('created_at', { ascending: false })
       );
-      return data as unknown as Project[];
+      const lifecycle = await fetchLifecycle();
+      return (data as unknown as Project[]).map((p) => ({ ...p, ...(lifecycle.get(p.id) ?? { lifecycle_status: 'ativo' as const, archived_at: null, paused_reason: null }) }));
     },
     enabled: !!user,
     retry: 2,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
   });
+
+  // Mesma referência enquanto os dados não mudam (várias telas usam `projects` como dependência de efeito).
+  const visibleProjects = useMemo(() => (projects ?? []).filter((p) => includeArchived || p.lifecycle_status !== 'arquivado'), [projects, includeArchived]);
 
   const createProject = useMutation({
     mutationFn: async (project: Omit<ProjectInsert, 'user_id'>) => {
@@ -109,38 +133,32 @@ export function useProjects() {
     },
   });
 
-  const deleteProject = useMutation({
-    mutationFn: async (id: string) => {
-      await withRetry(async () => {
-        const { error } = await supabase
-          .from('projects')
-          .delete()
-          .eq('id', id);
-        if (error) throw error;
-      });
-    },
+  // Nunca mais excluir direto: arquivar é reversível (Restaurar na Central de Projetos); a exclusão definitiva só passa pela Central.
+  const archiveProject = useMutation({
+    mutationFn: async (id: string) => callLifecycle<{ lifecycle_status: string }>('archive', { projectId: id }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['project-center'] });
       toast({
-        title: 'Projeto excluído',
-        description: 'O projeto foi removido.',
+        title: 'Projeto arquivado',
+        description: 'Ele saiu das listas, mas nada foi apagado. Restaure ou exclua definitivamente na Central de Projetos.',
       });
     },
     onError: (error) => {
       toast({
-        title: 'Erro ao excluir projeto',
-        description: error.message,
+        title: 'Não consegui arquivar o projeto',
+        description: lifecycleErrorMessage(error),
         variant: 'destructive',
       });
     },
   });
 
   return {
-    projects: projects ?? [],
+    projects: visibleProjects,
     isLoading,
     error,
     createProject,
     updateProject,
-    deleteProject,
+    archiveProject,
   };
 }

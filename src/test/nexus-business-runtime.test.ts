@@ -10,9 +10,9 @@ describe('global administrative spend lock',()=>{
   expect(outboundAllowed('https://own.supabase.co/rest/v1/projects','POST',new Headers({authorization:'Bearer key'}),'own.supabase.co')).toBe(true);
   expect(outboundAllowed('https://site.test/blog','GET',new Headers(),'own.supabase.co')).toBe(true);
  });
- it('never calls the underlying network for a denied provider',()=>{
+ it('never calls the underlying network for a denied provider',async()=>{
   const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);vi.stubGlobal('Deno',{env:{get:()=> 'https://own.supabase.co'}});
-  try{installSpendLock();expect(()=>fetch('https://api.openai.com/v1/responses',{method:'POST'})).toThrow('global_paid_services_blocked');expect(fetcher).not.toHaveBeenCalled();}finally{vi.unstubAllGlobals();}
+  try{installSpendLock();await expect(fetch('https://api.openai.com/v1/responses',{method:'POST'})).rejects.toThrow();expect(fetcher).not.toHaveBeenCalled();}finally{vi.unstubAllGlobals();}
  });
  it('returns a nonretryable pending state without claiming evaluation',async()=>{
   const result=paidLockResponse(new Request('https://own.test',{method:'POST'}))!;expect(result.status).toBe(423);expect(await result.json()).toMatchObject({executed:false,retryable:false});

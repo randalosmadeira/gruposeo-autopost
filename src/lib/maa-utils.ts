@@ -1,3 +1,4 @@
+import { resolveLanguage, textStats } from '../../supabase/functions/_shared/language-packs';
 /**
  * MAA (Meus Artigos Automáticos) - Utilities
  * Compliance OAB, SEO Scores, and Content Validation
@@ -343,60 +344,54 @@ export function calculateSEOScore(article: ArticleData): SEOScoreResult {
 // ==================== READABILITY (Flesch) ====================
 
 interface ReadabilityResult {
-  fleschScore: number;
+  /** nota pela fórmula do idioma; null = idioma sem fórmula (nunca 0 de mentira) */
+  fleschScore: number | null;
   level: string;
   wordCount: number;
   sentenceCount: number;
   avgWordsPerSentence: number;
   isEasyToRead: boolean;
+  scored: boolean;
+  /** mínimo e alvo da escala da fórmula (ou os do projeto/prompt, se informados) */
+  min: number;
+  target: number;
+  formula: { id: string; label: string; status: 'documentada' | 'referencia' } | null;
+  language: string;
 }
 
-export function calculateReadability(text: string): ReadabilityResult {
-  // Remove HTML tags
+export interface ReadabilityOptions { language?: string | null; minimum?: number | null; target?: number | null }
+
+/** Legibilidade pela fórmula do idioma do texto (configurado ou detectado): pt Flesch adaptado, en Flesch, es Fernández-Huerta, fr Kandel-Moles, it Gulpease, de Amstad, nl Douma. */
+export function calculateReadability(text: string, opts: ReadabilityOptions = {}): ReadabilityResult {
   const cleanText = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  
-  // Count words
-  const words = cleanText.split(/\s+/).filter(w => w.length > 0);
-  const wordCount = words.length;
-  
-  // Count sentences (approximate)
-  const sentences = cleanText.split(/[.!?]+/).filter(s => s.trim().length > 0);
-  const sentenceCount = Math.max(sentences.length, 1);
-  
-  // Count syllables (Portuguese approximation)
-  const syllableCount = words.reduce((total, word) => {
-    return total + countSyllablesPortuguese(word);
-  }, 0);
-  
-  // Flesch Reading Ease (adapted for Portuguese)
-  // Formula: 206.835 - 1.015 * (words/sentences) - 84.6 * (syllables/words)
-  const avgWordsPerSentence = wordCount / sentenceCount;
-  const avgSyllablesPerWord = syllableCount / Math.max(wordCount, 1);
-  
-  const fleschScore = Math.round(
-    206.835 - (1.015 * avgWordsPerSentence) - (84.6 * avgSyllablesPerWord)
-  );
-  
-  // Clamp between 0-100
-  const normalizedScore = Math.max(0, Math.min(100, fleschScore));
-  
-  // Determine level (full Flesch scale)
+  const lang = resolveLanguage({ configured: [opts.language], text: cleanText });
+  const stats = textStats(cleanText, lang.code);
+  const formula = lang.profile?.readability ?? null;
+  const score = formula && stats.words > 0 ? formula.compute(stats) : null;
+  const min = opts.minimum ?? formula?.defaultMin ?? 60;
+  const target = Math.max(min, opts.target ?? formula?.defaultTarget ?? 70);
+
   let level: string;
-  if (normalizedScore >= 90) level = 'Muito Fácil (5º ano)';
-  else if (normalizedScore >= 80) level = 'Fácil (6º ano)';
-  else if (normalizedScore >= 70) level = 'Bastante Fácil (8º ano)';
-  else if (normalizedScore >= 60) level = 'Padrão (8º-9º ano)';
-  else if (normalizedScore >= 50) level = 'Difícil ⚠️';
-  else if (normalizedScore >= 30) level = 'Muito Difícil ❌';
-  else level = 'Extremamente Difícil ❌';
-  
+  if (score === null) level = 'Sem fórmula para este idioma';
+  else if (score >= 90) level = 'Muito fácil';
+  else if (score >= 80) level = 'Fácil';
+  else if (score >= 70) level = 'Bastante fácil';
+  else if (score >= min) level = 'Padrão';
+  else if (score >= min - 10) level = 'Difícil';
+  else level = 'Muito difícil';
+
   return {
-    fleschScore: normalizedScore,
+    fleschScore: score,
     level,
-    wordCount,
-    sentenceCount,
-    avgWordsPerSentence: Math.round(avgWordsPerSentence * 10) / 10,
-    isEasyToRead: normalizedScore >= 60
+    wordCount: stats.words,
+    sentenceCount: stats.sentences,
+    avgWordsPerSentence: Math.round((stats.words / Math.max(stats.sentences, 1)) * 10) / 10,
+    isEasyToRead: score === null ? true : score >= min,
+    scored: score !== null,
+    min,
+    target,
+    formula: formula ? { id: formula.id, label: formula.label, status: formula.status } : null,
+    language: lang.tag,
   };
 }
 
